@@ -5,8 +5,12 @@ import io
 import os
 import time
 
-def generate_image(prompt, index, topic_folder="default_topic"):
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
+    final_api_key = api_key or os.getenv("OPENAI_API_KEY")
+    if not final_api_key:
+        raise EnvironmentError("OpenAI API 키가 제공되지 않았습니다.")
+    
+    client = OpenAI(api_key=final_api_key)
 
     if not prompt or not prompt.strip():
         raise ValueError(f"[DALL·E 이미지 오류] 프롬프트가 비어 있습니다 (index={index})")

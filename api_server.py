@@ -4,7 +4,8 @@ import io
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, Request
-from fastapi.responses import EventSourceResponse
+from fastapi.responses import JSONResponse
+from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMaps, CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -31,10 +32,12 @@ app.add_middleware(
 
 class GenerateRequest(BaseModel):
     topic: str
+    apiKey: str = None
 
 @app.post("/api/generate")
 async def generate_video_endpoint(req: GenerateRequest):
     topic = req.topic
+    api_key_override = req.apiKey
     
     async def sse_generator():
         try:
@@ -42,7 +45,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             
             # 단계 1: GPT 기획
             loop = asyncio.get_event_loop()
-            cuts, topic_folder = await loop.run_in_executor(None, generate_cuts, topic)
+            cuts, topic_folder = await loop.run_in_executor(None, generate_cuts, topic, api_key_override)
             cuts = cuts[:3] # 데모를 위해 3컷으로 제한 (속도 최적화)
             
             yield {"data": f"[기획 완료] 총 {len(cuts)}컷 기획 완료!\n"}
@@ -56,8 +59,8 @@ async def generate_video_endpoint(req: GenerateRequest):
             
             # 병렬 처리를 위한 작업 정의
             def process_cut(i, cut):
-                img_path = generate_image(cut["prompt"], i, topic_folder)
-                aud_path = generate_tts(cut["script"], i, topic_folder)
+                img_path = generate_image(cut["prompt"], i, topic_folder, api_key_override)
+                aud_path = generate_tts(cut["script"], i, topic_folder, api_key_override)
                 return i, img_path, aud_path
 
             with ThreadPoolExecutor(max_workers=5) as executor:

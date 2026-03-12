@@ -2,7 +2,7 @@ import os
 from openai import OpenAI
 
 # 하위 호환성을 위해 이름 유지 (실제로는 OpenAI 기반 동작)
-def generate_tts(text, index, topic_folder):
+def generate_tts(text, index, topic_folder, api_key=None):
     # 예: assets/주제/audio
     output_dir = os.path.join("assets", topic_folder, "audio")
     os.makedirs(output_dir, exist_ok=True)
@@ -16,10 +16,10 @@ def generate_tts(text, index, topic_folder):
         print(f"-> [오디오 디렉터] 컷 {index+1} 내레이션 렌더링 중 (다큐멘터리 성우 톤)...")
         
         # 클라이언트 초기화
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise EnvironmentError("환경변수 OPENAI_API_KEY가 설정되어 있지 않습니다.")
-        client = OpenAI(api_key=api_key)
+        final_api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not final_api_key:
+            raise EnvironmentError("환경변수 OPENAI_API_KEY가 제공되지 않았습니다.")
+        client = OpenAI(api_key=final_api_key)
 
         # 내셔널 지오그래픽 감성: 'onyx' (중저음, 신뢰감 있고 웅장한 목소리)
         response = client.audio.speech.create(

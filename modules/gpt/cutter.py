@@ -5,7 +5,7 @@ from openai import OpenAI
 from modules.utils.slugify import slugify_topic
 
 # ✅ 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - JSON 구조 도입)
-def generate_cuts(topic: str, lang: str = "ko") -> tuple[list[dict[str, Any]], str]:
+def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") -> tuple[list[dict[str, Any]], str]:
     topic_folder = slugify_topic(topic, lang)
 
     # ✅ 저장 폴더 구조 생성
@@ -45,11 +45,12 @@ def generate_cuts(topic: str, lang: str = "ko") -> tuple[list[dict[str, Any]], s
 
     print("-> [기획 전문가] 스크립트 및 기획안 작성 중...")
     model = os.getenv("OPENAI_MODEL", "gpt-4o")
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("환경변수 OPENAI_API_KEY가 설정되어 있지 않습니다.")
+    
+    final_api_key = api_key_override or os.getenv("OPENAI_API_KEY")
+    if not final_api_key:
+        raise EnvironmentError("OpenAI API 키가 제공되지 않았습니다. UI에서 입력하거나 .env 파일에 추가하세요.")
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=final_api_key)
 
     # ✅ JSON Mode 및 System/User 메시지 분리 (프로페셔널 표준)
     response = client.chat.completions.create(

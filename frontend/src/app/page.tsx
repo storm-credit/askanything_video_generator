@@ -2,13 +2,21 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Play, Download, Loader2, CheckCircle2 } from "lucide-react";
+import { Sparkles, Play, Download, Loader2, CheckCircle2, KeyRound } from "lucide-react";
 
 export default function Home() {
   const [topic, setTopic] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [isKeySaved, setIsKeySaved] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+
+  const handleKeySave = () => {
+    if (apiKey.trim().length > 0) {
+      setIsKeySaved(true);
+    }
+  };
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +30,7 @@ export default function Home() {
       const response = await fetch("http://localhost:8000/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic }),
+        body: JSON.stringify({ topic, apiKey: apiKey.trim() }),
       });
 
       if (!response.body) throw new Error("No response body");
@@ -62,6 +70,42 @@ export default function Home() {
   return (
     <main className="min-h-screen relative flex flex-col items-center justify-center p-6 sm:p-24 bg-black overflow-hidden">
       
+      {/* 우측 상단 API Key 세팅 패널 (Apple Style 미니멀리즘) */}
+      <div className="absolute top-6 right-6 z-50">
+        <div 
+          className={`flex items-center gap-2 p-1.5 rounded-full border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] backdrop-blur-md 
+          ${isKeySaved 
+            ? 'border-green-500/40 bg-green-500/10 w-[44px] cursor-pointer hover:bg-green-500/20 hover:scale-105' 
+            : 'border-white/10 bg-white/5 w-64 shadow-2xl'}`}
+          onClick={() => {
+            if (isKeySaved) setIsKeySaved(false);
+          }}
+          title={isKeySaved ? "API Key Saved. Click to edit." : ""}
+        >
+          {isKeySaved ? (
+            <div className="w-full h-[32px] flex items-center justify-center text-green-400">
+              <KeyRound className="w-4 h-4" />
+            </div>
+          ) : (
+            <>
+              <div className="pl-3 text-gray-400 flex-shrink-0">
+                <KeyRound className="w-4 h-4" />
+              </div>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onBlur={handleKeySave}
+                onKeyDown={(e) => e.key === 'Enter' && handleKeySave()}
+                placeholder="OpenAI API Key"
+                autoFocus
+                className="bg-transparent border-none text-white text-sm focus:outline-none w-full placeholder-gray-500"
+              />
+            </>
+          )}
+        </div>
+      </div>
+
       {/* 백그라운드 앰비언트 라이트 */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none" />
 
