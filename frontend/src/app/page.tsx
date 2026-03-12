@@ -1,0 +1,163 @@
+"use client";
+
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles, Play, Download, Loader2, CheckCircle2 } from "lucide-react";
+
+export default function Home() {
+  const [topic, setTopic] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [logs, setLogs] = useState<string[]>([]);
+
+  const handleGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!topic.trim()) return;
+    
+    setIsGenerating(true);
+    setVideoUrl(null);
+    setLogs([]);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic }),
+      });
+
+      if (!response.body) throw new Error("No response body");
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+        
+        lines.forEach(line => {
+          if (line.startsWith("data:")) {
+            const rawData = line.slice(5).trim();
+            if (!rawData) return;
+            
+            if (rawData.startsWith("DONE|")) {
+               // 렌더링 폴더 오픈(Next.js static은 별도 처리해야 하므로 경로만 표시)
+               setVideoUrl("비디오 생성 성공! 서버의 프로젝트 폴더 /assets를 확인해주세요.");
+               setIsGenerating(false);
+            } else {
+               setLogs(prev => [...prev, rawData]);
+            }
+          }
+        });
+      }
+    } catch (error: any) {
+      console.error(error);
+      setLogs(prev => [...prev, `[시스템 오류] ${error.message}`]);
+      setIsGenerating(false);
+    }
+  };
+
+  return (
+    <main className="min-h-screen relative flex flex-col items-center justify-center p-6 sm:p-24 bg-black overflow-hidden">
+      
+      {/* 백그라운드 앰비언트 라이트 */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none" />
+
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="z-10 w-full max-w-2xl text-center space-y-8"
+      >
+        <div className="space-y-4">
+          <motion.div 
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse" }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel text-sm text-gray-300"
+          >
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+            <span>프리미엄 AI 비디오 스튜디오</span>
+          </motion.div>
+          <h1 className="text-5xl sm:text-7xl font-bold tracking-tight text-gradient">
+            당신의 상상을<br />영상으로.
+          </h1>
+          <p className="text-gray-400 text-lg sm:text-xl">
+            단 하나의 주제만 입력하세요. 기획, 디자인, 편집을 AI 전문가들이 알아서 완성합니다.
+          </p>
+        </div>
+
+        <form onSubmit={handleGenerate} className="relative max-w-xl mx-auto mt-12">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              disabled={isGenerating}
+              placeholder="예: 블랙홀에 떨어지면 어떻게 될까?"
+              className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-6 pr-32 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-lg backdrop-blur-md"
+            />
+            <button
+              type="submit"
+              disabled={isGenerating || !topic.trim()}
+              className="absolute right-2 bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
+            >
+              {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : "생성하기"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+
+      <AnimatePresence>
+        {isGenerating && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="mt-16 w-full max-w-xl glass-panel p-6 rounded-2xl space-y-3 z-10 max-h-48 overflow-y-auto custom-scrollbar"
+          >
+            {logs.length === 0 ? (
+               <div className="flex items-center text-indigo-400 gap-3">
+                  <Loader2 className="w-4 h-4 animate-spin"/> 서버 응답 대기 중...
+               </div>
+            ) : (
+               logs.map((log, idx) => (
+                  <motion.div 
+                     key={idx} 
+                     initial={{ opacity: 0, x: -10 }} 
+                     animate={{ opacity: 1, x: 0 }} 
+                     className={`flex items-start text-sm ${idx === logs.length -1 ? 'text-indigo-400 font-medium' : 'text-gray-500'}`}
+                  >
+                     {idx === logs.length - 1 ? <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0"/> : <CheckCircle2 className="w-4 h-4 mr-2 text-green-500 shrink-0"/>}
+                     <span className="break-all">{log}</span>
+                  </motion.div>
+               ))
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {videoUrl && !isGenerating && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mt-16 w-full max-w-sm glass-panel p-6 rounded-[2.5rem] relative z-10 flex flex-col justify-center items-center shadow-2xl shadow-indigo-500/20 text-center space-y-4"
+          >
+            <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
+            <h3 className="text-xl text-white font-bold">생성 성공!</h3>
+            <p className="text-gray-400 text-sm">로컬 컴퓨터의 /assets 폴더에 최고 수준의 완성본 숏폼 비디오가 제작되었습니다.</p>
+            
+            <button 
+                onClick={() => {setTopic(''); setVideoUrl(null); setLogs([])}}
+                className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-4 rounded-2xl transition-colors">
+              한 번 더 만들기
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </main>
+  );
+}
