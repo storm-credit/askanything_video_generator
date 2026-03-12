@@ -1,10 +1,42 @@
 import streamlit as st
 import sys
 import os
+import shutil
 from dotenv import load_dotenv
 
 # 환경변수 로드
 load_dotenv()
+
+
+def _ensure_imagemagick_binary() -> str | None:
+    """
+    IMAGEMAGICK_BINARY가 비어 있으면 일반 경로를 자동 탐색해 설정합니다.
+    (레거시 MoviePy/TextClip 경로 호환용)
+    """
+    configured = os.getenv("IMAGEMAGICK_BINARY")
+    if configured and os.path.exists(configured):
+        return configured
+
+    candidates = [
+        r"C:\Program Files\ImageMagick-7.1.1-Q16-HDRI\magick.exe",
+        r"C:\Program Files\ImageMagick-7.1.0-Q16-HDRI\magick.exe",
+    ]
+
+    for path in candidates:
+        if os.path.exists(path):
+            os.environ["IMAGEMAGICK_BINARY"] = path
+            return path
+
+    for cmd in ["magick", "convert"]:
+        found = shutil.which(cmd)
+        if found:
+            os.environ["IMAGEMAGICK_BINARY"] = found
+            return found
+
+    return None
+
+
+imagemagick_path = _ensure_imagemagick_binary()
 
 # 🔁 시스템 경로에 상위 디렉토리 추가 (모듈 import 용도)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -12,14 +44,18 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 # 📦 커스텀 모듈 import
 from modules.gpt.cutter import generate_cuts
 from modules.image.dalle import generate_image
-from modules.tts.google import generate_tts  # ✅ 오디오 생성 모듈
-from modules.utils.slugify import slugify_topic
-from modules.video.ffmpeg import create_video  # ✅ 영상 생성 모듈
+from modules.tts.google import generate_tts
+from modules.video.ffmpeg import create_video
 
 # 🖥️ Streamlit 설정
 st.set_page_config(page_title="AskAnything 컷 생성기", layout="centered")
 st.title("📋 AskAnything 컷 & 스크립트 생성기")
 st.markdown("💡 **영상 흐름에 따라 컷 수는 자동으로 결정**됩니다.")
+
+if imagemagick_path:
+    st.caption(f"✅ ImageMagick 자동 설정: `{imagemagick_path}`")
+else:
+    st.caption("⚠️ IMAGEMAGICK_BINARY 미탐지 (현재 FFmpeg 자막 경로는 동작 가능, 레거시 MoviePy 경로 사용 시 설치 필요)")
 
 # 🔹 사용자 입력
 topic = st.text_input("주제를 입력하세요", "벌은 잠을 잘까?")
@@ -38,6 +74,7 @@ if st.button("생성 시작"):
     image_paths = []
     audio_paths = []
     scripts = []
+    word_timestamps_list = []
     progress_bar = st.progress(0)
 
     # ✅ 이미지 및 스크립트 생성 반복
@@ -67,6 +104,7 @@ if st.button("생성 시작"):
         image_paths.append(image_path)
         audio_paths.append(audio_path)
         scripts.append(script_text)
+        word_timestamps_list.append([])
 
         progress_bar.progress((i + 1) / len(cuts))
 
@@ -81,7 +119,7 @@ if st.button("생성 시작"):
         st.download_button("자막용 스크립트 다운로드", f, file_name="scripts.txt")
 
     # ✅ 영상 자동 생성
-    video_path = create_video(image_paths, audio_paths, scripts, topic_folder)
+    video_path = create_video(image_paths, audio_paths, scripts, word_timestamps_list, topic_folder)
     if video_path:
         with open(video_path, "rb") as f:
             st.download_button("최종 영상 다운로드", f, file_name="final.mp4")
