@@ -3,6 +3,7 @@ import json
 from typing import Any
 from openai import OpenAI
 from modules.utils.slugify import slugify_topic
+from modules.gpt.search import get_fact_check_context
 
 # ✅ 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - JSON 구조 도입)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") -> tuple[list[dict[str, Any]], str]:
@@ -58,6 +59,13 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") ->
 """
 
     print("-> [기획 전문가] 스크립트 및 기획안 작성 중...")
+    
+    # RAG 기법: 실시간 검색 팩트체크 주입
+    fact_context = get_fact_check_context(topic)
+    user_content = f"주제: '{topic}'에 대한 숏폼 기획안을 작성해주세요."
+    if fact_context:
+        user_content += f"\n\n{fact_context}"
+
     model = os.getenv("OPENAI_MODEL", "gpt-4o")
     
     final_api_key = api_key_override or os.getenv("OPENAI_API_KEY")
@@ -71,7 +79,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") ->
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"주제: '{topic}'에 대한 숏폼 기획안을 작성해주세요."}
+            {"role": "user", "content": user_content}
         ],
         response_format={ "type": "json_object" }
     )
