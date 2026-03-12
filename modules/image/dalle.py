@@ -17,7 +17,7 @@ def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
 
     # ✅ 업계 최고 수준의 DALL-E 3 마스터 아트 디렉터 프리셋 (슈퍼 렌더 퀄리티 보장 및 텍스트 타이포그래피 금지)
     master_style = (
-        "Award-winning 3D animation, Disney Pixar style, hyper-detailed, Octane Render, "
+        "Award-winning cinematic photograph, National Geographic high-end documentary style, Unreal Engine 5 render, hyper-detailed, "
         "global illumination, ray tracing, bright, vibrant, uplifting, and cheerful lighting, breathtaking aesthetic, "
         "8k resolution, perfect center focus for vertical aspect ratio, family-friendly tone, NO scary or horror elements. "
         "Absolutely NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS in the image. "
@@ -58,7 +58,7 @@ def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
                 if 'content_policy_violation' in error_msg:
                     print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 아주 안전하고 추상적인 대체 프롬프트로 재시도합니다... ({attempt+1}/{max_retries})")
                     # DALL-E 3 가 무조건 통과시킬 만한 완전 기초적인 대체(fallback) 프롬프트로 강제 치환
-                    enhanced_prompt = "A very safe, beautiful, abstract and highly detailed 3D cinematic masterpiece illustrating the related concept, Disney Pixar style, atmospheric lighting, strictly NO TEXT, NO LETTERS, NO WORDS."
+                    enhanced_prompt = "A very safe, beautiful, abstract and highly detailed cinematic visualization illustrating the related concept, National Geographic high-end documentary style, atmospheric lighting, strictly NO TEXT, NO LETTERS, NO WORDS."
                 else:
                     print(f"  [DALL·E 경고] 컷 {index+1} 렌더링 실패. 서버 지연으로 3초 후 재시도합니다... ({attempt+1}/{max_retries}) | 사유: {e}")
                 time.sleep(3)

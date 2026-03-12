@@ -27,18 +27,26 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") ->
 3. [Cut 3~4] Climax (결정적 해답 및 반전): 시청자가 가장 기다려온 '정답'이나 '반전'을 터뜨립니다. 지루한 설명은 빼고 팩트(Fact) 기반의 직관적인 비유로 결과를 명확히 제시하세요. (거짓 정보 절대 금지)
 4. [Cut 5] Conclusion & CTA (결론 및 마무리): 결과를 짧게 요약하거나 재치 있는 멘트("구독하고 우주 상식 알아가세요!")로 깔끔하게 떨어지게 마무리합니다.
 
-* 길이 제약: 숏폼은 속도감이 생명입니다. 각 컷 대본은 성우가 3~5초 내에 읽도록 평균 20~30자(최대 50자)로 쳐내어 총 4~6컷으로 구성하세요.
+* 길이 제약: 숏폼은 속도감이 생명입니다. 각 컷 대본은 성우가 3~5초 내에 읽도록 평균 20~30자(최대 50자)로 쳐내어 총 6~10컷으로 구성하세요.
+
+[Expert Validation Check (자가 검증)]
+최종 대본을 출력하기 전, 다음 4가지를 스스로 깐깐하게 검증(Self-Correction)하십시오.
+1. Hook Test: 첫 대사에 "이게 무슨 소리야?" 하고 스크롤을 멈출 충격적인 반전이나 호기심이 있는가?
+2. Pacing Test: 문장에 불필요한 접속사나 부연 설명이 많아 이탈 위험이 있는가? (극단적 요약)
+3. Climax Test: 질문에 대한 가장 중요한 해답이 영상 후반부에 카타르시스와 함께 터지는가?
+4. Fact Test: 위키피디아 교차 검증 수준의 확실한 과학적/역사적 사실인가?
 
 [Image Engineering Rules: DALL-E 3 시각화]
 1. Camera & Lighting: 구도(Extreme Close-up, Wide shot 등)와 조명(Cinematic volumetric lighting, Neon glow 등)을 구체적인 영어로 명시.
-2. Consistency: 상업용 극장판 3D 애니메이션 퀄리티(Disney Pixar 3D style, Action-packed) 유지.
+2. Consistency: 하이엔드 시네마틱 다큐멘터리 느낌의 초현실주의(Cinematic realism, National Geographic high-end documentary style, hyper-detailed) 퀄리티 유지.
 3. Vertical Framing: 'centered composition', 'vertical layout' 명시. 
 4. [CRITICAL] Safety Rule: 피, 폭력, 잔인함, 선정성, 특정 상표나 저작권 캐릭터(예: 미키마우스, 스파이더맨), 실존 인물을 절대 프롬프트에 포함하지 마십시오. DALL-E 3 스펙에 맞춰 추상적이고 비유적으로 안전하게(family-friendly) 묘사하세요.
 
 [Output Format Constraint]
-반드시 통일된 흐름을 지닌 4~6컷으로 구성하며, 다음 JSON 스키마 구조로만 정확하게 응답하십시오.
+반드시 통일된 흐름을 지닌 6~10컷으로 구성하며, 다음 JSON 스키마 구조로만 정확하게 응답하십시오.
 
 {
+  "expert_validation": "[대본을 작성하기 전, 당신이 만든 스토리가 Hook, Pacing, Climax, Fact 측면에서 바이럴 숏폼 기준을 만족하는지 스스로 냉정하게 평가한 1~2줄의 커멘트]",
   "cuts": [
     {
       "description": "[컷 묘사 문장 (한국어)]",
