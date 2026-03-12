@@ -21,8 +21,9 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") ->
 
 [Writing Rules: 대본 기획]
 1. 1초 Hook (최우선): 첫 대사는 시청자의 스크롤 무조건 멈춰야 합니다. 파격적인 질문, 극적인 대비로 시작하세요.
-2. Time Constraint (시간 제약, 가장 중요): 숏폼은 속도감이 생명이며 60초를 넘으면 안 됩니다. 각 컷의 대본은 성우가 3~5초 내에 빠르게 읽을 수 있도록 평균 20~30자(최대 50자)로 극단적으로 압축하세요.
-3. Pacing & Retention: 지루한 설명은 철저히 배제하고, 직관적인 비유와 반전 장치를 통해 끝까지 시청하도록 유도하세요.
+2. Fact-Check & No Hallucination (거짓 검증, 매우 중요): 만약 주제가 과학적, 역사적, 사실적 지식을 요구하는 내용이라면 절대 거짓 정보나 지어낸 사실을 말하지 마십시오. 오직 교차 검증된 확실한 팩트(Fact) 기반으로만 답변해야 합니다. 만약 모호한 내용이라면 단정 짓지 마십시오.
+3. Time Constraint & Pacing: 숏폼은 속도감이 생명입니다. 각 컷의 대본은 성우가 3~5초 내에 읽을 수 있도록 평균 20~30자(최대 50자)로 쳐내세요.
+4. 완벽한 기승전결(Completeness): 스토리는 중간에 끊기면 안 됩니다. 반드시 도입(Hook) - 전개(Body) - 명확한 결론/반전(Conclusion)으로 이어지는 기승전결을 갖춘 4~6컷의 완벽한 서사 구조를 만들어야 합니다.
 
 [Image Engineering Rules: DALL-E 3 시각화]
 1. Camera & Lighting: 구도(Extreme Close-up, Wide shot 등)와 조명(Cinematic volumetric lighting, Neon glow 등)을 구체적인 영어로 명시.
