@@ -41,3 +41,11 @@
 - `modules/image/dalle.py`: DALL-E 3를 이용한 쇼츠용 세로형 이미지 생성
 - `modules/tts/google.py`: Google TTS 오디오 변환
 - `modules/video/ffmpeg.py`: MoviePy + ImageMagick을 이용해 이미지, 자막, 오디오를 병합해 최종 영상 합성
+
+## 업데이트 후 장애 점검 가이드 (Phase 4)
+최근 Remotion/Kling/ElevenLabs/Tavily 통합 이후 점검 순서와 보강 포인트는 `MASTER_TROUBLESHOOTING_PLAN.md`를 참고하세요.
+
+- 컷 수 부족(3~4컷) 진단
+- 최종 다운로드 404 진단
+- 서버 재시작/의존성 설치 표준 절차
+- "동시버전 4(Remotion v4)" 적용 시 장단점
