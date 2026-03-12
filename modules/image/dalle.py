@@ -18,8 +18,8 @@ def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
     # ✅ 업계 최고 수준의 DALL-E 3 마스터 아트 디렉터 프리셋 (슈퍼 렌더 퀄리티 보장 및 텍스트 타이포그래피 금지)
     master_style = (
         "Award-winning 3D animation, Disney Pixar style, hyper-detailed, Octane Render, "
-        "global illumination, ray tracing, cinematic dramatic lighting, breathtaking aesthetic, "
-        "8k resolution, perfect center focus for vertical aspect ratio. "
+        "global illumination, ray tracing, bright, vibrant, uplifting, and cheerful lighting, breathtaking aesthetic, "
+        "8k resolution, perfect center focus for vertical aspect ratio, family-friendly tone, NO scary or horror elements. "
         "Absolutely NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS in the image. "
     )
     enhanced_prompt = master_style + prompt
