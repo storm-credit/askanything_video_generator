@@ -47,24 +47,41 @@ export default function Home() {
         const chunk = decoder.decode(value);
         const lines = chunk.split("\n");
         
-        lines.forEach(line => {
+        for (const line of lines) {
           if (line.startsWith("data:")) {
             const rawData = line.slice(5).trim();
-            if (!rawData) return;
+            if (!rawData) continue;
             
             if (rawData.startsWith("DONE|")) {
                const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
-               const downloadUrl = `http://localhost:8000/${videoPath}`;
+               const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
+               const downloadUrl = `http://localhost:8000/${encodedPath}`;
                
-               // 브라우저 네이티브 다운로드 강제 실행 (a 태그 트릭)
-               const link = document.createElement("a");
-               link.href = downloadUrl;
-               link.setAttribute("download", "AskAnything_Shorts.mp4"); // 다운로드 속성 부여
-               document.body.appendChild(link);
-               link.click();
-               link.parentNode?.removeChild(link);
+               // 브라우저 404 방지 및 네이티브 다운로드를 위해 Blob으로 처리
+               try {
+                 const vidRes = await fetch(downloadUrl);
+                 if (!vidRes.ok) throw new Error("Video not found");
+                 const blob = await vidRes.blob();
+                 const url = window.URL.createObjectURL(blob);
+                 const link = document.createElement("a");
+                 link.href = url;
+                 link.setAttribute("download", "AskAnything_Shorts.mp4");
+                 document.body.appendChild(link);
+                 link.click();
+                 link.parentNode?.removeChild(link);
+                 window.URL.revokeObjectURL(url);
+               } catch (e) {
+                 console.error("Download failed, using fallback:", e);
+                 // Fallback
+                 const link = document.createElement("a");
+                 link.href = downloadUrl;
+                 link.setAttribute("download", "AskAnything_Shorts.mp4");
+                 document.body.appendChild(link);
+                 link.click();
+                 link.parentNode?.removeChild(link);
+               }
 
-               setVideoUrl("비디오 생성 성공! 렌더링된 영상이 다운로드 폴더에 저장되었습니다.");
+               setVideoUrl("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
                setIsGenerating(false);
             } else if (rawData.startsWith("ERROR|")) {
                setLogs(prev => [...prev, rawData.slice(6)]);
@@ -76,7 +93,7 @@ export default function Home() {
                setLogs(prev => [...prev, rawData]);
             }
           }
-        });
+        }
       }
     } catch (error: any) {
       console.error(error);
@@ -230,13 +247,7 @@ export default function Home() {
           >
             <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
             <h3 className="text-xl text-white font-bold">생성 성공!</h3>
-            <p className="text-gray-400 text-sm">로컬 컴퓨터의 /assets 폴더에 최고 수준의 완성본 숏폼 비디오가 제작되었습니다.</p>
-            
-            <button 
-                onClick={() => {setTopic(''); setVideoUrl(null); setLogs([])}}
-                className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-4 rounded-2xl transition-colors">
-              한 번 더 만들기
-            </button>
+            <p className="text-gray-400 text-sm">최고 수준의 숏폼 비디오가 성공적으로 기기 다운로드 폴더에 저장되었습니다.</p>
           </motion.div>
         )}
       </AnimatePresence>

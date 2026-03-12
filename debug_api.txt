@@ -1,0 +1,22 @@
+Connecting to http://localhost:8000/api/generate...
+Status code: 200
+data: [기획 전문가] '블랙홀 생존 시나리오 10컷 영상 생성' 쇼츠 기획 시작...
+data: 
+data: [기획 완료] 총 3컷 기획 완료!
+data: 
+data: [생성 엔진] 아트 디렉터(DALL-E)와 성우(TTS) 동시 작업 중...
+data: 
+data:   -> 컷 1 이미지 및 음성 생성 완료
+data: 
+data:   -> 컷 2 이미지 및 음성 생성 완료
+data: 
+data:   -> 컷 3 이미지 및 음성 생성 완료
+data: 
+data: [렌더링 마스터] FFmpeg 동적 화면(Zoom) 및 자막 렌더링 시작...
+data: 
+: ping - 2026-03-12 13:34:20.907753+00:00
+data: [완료] 최종 비디오 렌더링 대성공! 경로: c:\ProjectS\askanything_video_generator\assets\블랙홀_생존\video\final_video.mp4
+data: 
+data: DONE|c:\ProjectS\askanything_video_generator\assets\블랙홀_생존\video\final_video.mp4
+data: 
+Finished.

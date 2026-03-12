@@ -63,14 +63,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         
     return ass_filename  
 
-def create_video(image_paths, audio_paths, scripts, word_timestamps_list, topic_folder):
+def create_video(visual_paths, audio_paths, scripts, word_timestamps_list, topic_folder):
     output_dir = os.path.join("assets", topic_folder, "video")
     os.makedirs(output_dir, exist_ok=True)
     
     cut_videos = []
     cwd = os.path.abspath(output_dir)
     
-    for i, (img_path, audio_path, script, word_timestamps) in enumerate(zip(image_paths, audio_paths, scripts, word_timestamps_list)):
+    for i, (visual_path, audio_path, script, word_timestamps) in enumerate(zip(visual_paths, audio_paths, scripts, word_timestamps_list)):
         cut_video_filename = f"cut_{i}.mp4"
         
         duration = None
@@ -82,24 +82,32 @@ def create_video(image_paths, audio_paths, scripts, word_timestamps_list, topic_
             
         ass_filename = create_dynamic_ass_for_cut(script, word_timestamps, duration, output_dir, i)
         
-        # FFmpeg 기반 렌더링 호출 (Zoom-in 켄번 효과 + ASS 자막)
-        img_abs = os.path.abspath(img_path)
-        
-        # 1.0 -> 1.15 로 서서히 줌인되는 필터 (fps=24 강제 고정으로 잔상 방지)
+        visual_abs = os.path.abspath(visual_path)
         fps = 24
-        frames = int(duration * fps)
-        zoom_filter = f"zoompan=z='min(zoom+0.0015,1.15)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps={fps}"
         
-        cmd = [
-            "ffmpeg", "-y",
-            "-loop", "1", "-i", img_abs
-        ]
+        is_video = visual_abs.lower().endswith('.mp4')
+        
+        if is_video:
+            # Kling AI가 생성한 비디오의 경우: 비디오 루프 및 9:16 크롭 스케일링
+            cmd = [
+                "ffmpeg", "-y",
+                "-stream_loop", "-1", "-i", visual_abs
+            ]
+            video_filter = f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps={fps}"
+        else:
+            # DALL-E 이미지의 경우: 1.0 -> 1.15 로 서서히 줌인되는 켄번 필터
+            frames = int(duration * fps)
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1", "-i", visual_abs
+            ]
+            video_filter = f"zoompan=z='min(zoom+0.0015,1.15)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps={fps}"
         
         if audio_path and os.path.exists(audio_path):
             cmd.extend(["-i", os.path.abspath(audio_path)])
             
         cmd.extend([
-            "-vf", f"{zoom_filter},ass='{ass_filename}'",
+            "-vf", f"{video_filter},ass='{ass_filename}'",
             "-t", str(duration),
             "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k",
