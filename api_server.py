@@ -41,13 +41,14 @@ async def generate_video_endpoint(req: GenerateRequest):
     
     async def sse_generator():
         try:
+            yield {"data": "PROG|10\n"}
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작...\n"}
             
             # 단계 1: GPT 기획
             loop = asyncio.get_event_loop()
             cuts, topic_folder = await loop.run_in_executor(None, generate_cuts, topic, api_key_override)
-            cuts = cuts[:3] # 데모를 위해 3컷으로 제한 (속도 최적화)
             
+            yield {"data": "PROG|30\n"}
             yield {"data": f"[기획 완료] 총 {len(cuts)}컷 기획 완료!\n"}
             
             # 단계 2 & 3: DALL-E와 TTS 병렬 처리 (Threading)
@@ -69,8 +70,13 @@ async def generate_video_endpoint(req: GenerateRequest):
                     i, img_path, aud_path = future.result()
                     image_paths[i] = img_path
                     audio_paths[i] = aud_path
+                    
+                    # 진행률: 30% ~ 80% 사이를 분배
+                    prog = 30 + int(50 * (len([p for p in image_paths if p is not None]) / len(cuts)))
+                    yield {"data": f"PROG|{prog}\n"}
                     yield {"data": f"  -> 컷 {i+1} 이미지 및 음성 생성 완료\n"}
 
+            yield {"data": "PROG|85\n"}
             yield {"data": "[렌더링 마스터] FFmpeg 동적 화면(Zoom) 및 자막 렌더링 시작...\n"}
             
             # 단계 4: FFmpeg 병합
@@ -80,11 +86,14 @@ async def generate_video_endpoint(req: GenerateRequest):
                 image_paths, audio_paths, scripts, topic_folder
             )
             
+            yield {"data": "PROG|100\n"}
             yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 경로: {video_path}\n"}
             yield {"data": f"DONE|{video_path}\n"}
             
         except Exception as e:
-            yield {"data": f"[오류 발생] {str(e)}\n"}
+            import traceback
+            traceback.print_exc()
+            yield {"data": f"ERROR|[시스템 오류] {str(e)}\n"}
 
     return EventSourceResponse(sse_generator())
 

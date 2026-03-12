@@ -9,6 +9,7 @@ export default function Home() {
   const [apiKey, setApiKey] = useState("");
   const [isKeySaved, setIsKeySaved] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
@@ -23,6 +24,7 @@ export default function Home() {
     if (!topic.trim()) return;
     
     setIsGenerating(true);
+    setProgress(0);
     setVideoUrl(null);
     setLogs([]);
 
@@ -51,9 +53,14 @@ export default function Home() {
             if (!rawData) return;
             
             if (rawData.startsWith("DONE|")) {
-               // 렌더링 폴더 오픈(Next.js static은 별도 처리해야 하므로 경로만 표시)
                setVideoUrl("비디오 생성 성공! 서버의 프로젝트 폴더 /assets를 확인해주세요.");
                setIsGenerating(false);
+            } else if (rawData.startsWith("ERROR|")) {
+               setLogs(prev => [...prev, rawData.slice(6)]);
+               setIsGenerating(false);
+            } else if (rawData.startsWith("PROG|")) {
+               const p = parseInt(rawData.slice(5), 10);
+               if (!isNaN(p)) setProgress(p);
             } else {
                setLogs(prev => [...prev, rawData]);
             }
@@ -62,7 +69,8 @@ export default function Home() {
       }
     } catch (error: any) {
       console.error(error);
-      setLogs(prev => [...prev, `[시스템 오류] ${error.message}`]);
+      setLogs(prev => [...prev, `[네트워크/응답 오류] ${error.message}`]);
+    } finally {
       setIsGenerating(false);
     }
   };
@@ -160,25 +168,44 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="mt-16 w-full max-w-xl glass-panel p-6 rounded-2xl space-y-3 z-10 max-h-48 overflow-y-auto custom-scrollbar"
+            className="mt-16 w-full max-w-xl space-y-4 z-10"
           >
-            {logs.length === 0 ? (
-               <div className="flex items-center text-indigo-400 gap-3">
-                  <Loader2 className="w-4 h-4 animate-spin"/> 서버 응답 대기 중...
+            {/* 진행률 상태바 (Apple Style) */}
+            <div className="glass-panel p-4 rounded-2xl">
+               <div className="flex justify-between items-center mb-2 text-sm font-medium">
+                  <span className="text-gray-300">생성 진행률</span>
+                  <span className="text-indigo-400 font-bold">{progress}%</span>
                </div>
-            ) : (
-               logs.map((log, idx) => (
+               <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
                   <motion.div 
-                     key={idx} 
-                     initial={{ opacity: 0, x: -10 }} 
-                     animate={{ opacity: 1, x: 0 }} 
-                     className={`flex items-start text-sm ${idx === logs.length -1 ? 'text-indigo-400 font-medium' : 'text-gray-500'}`}
-                  >
-                     {idx === logs.length - 1 ? <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0"/> : <CheckCircle2 className="w-4 h-4 mr-2 text-green-500 shrink-0"/>}
-                     <span className="break-all">{log}</span>
-                  </motion.div>
-               ))
-            )}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ ease: "easeInOut", duration: 0.5 }}
+                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
+                  />
+               </div>
+            </div>
+
+            {/* 실시간 로그 패널 */}
+            <div className="glass-panel p-6 rounded-2xl space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
+              {logs.length === 0 ? (
+                 <div className="flex items-center text-indigo-400 gap-3">
+                    <Loader2 className="w-4 h-4 animate-spin"/> 서버 응답 대기 중...
+                 </div>
+              ) : (
+                 logs.map((log, idx) => (
+                    <motion.div 
+                       key={idx} 
+                       initial={{ opacity: 0, x: -10 }} 
+                       animate={{ opacity: 1, x: 0 }} 
+                       className={`flex items-start text-sm ${idx === logs.length -1 ? 'text-indigo-400 font-medium' : 'text-gray-500'}`}
+                    >
+                       {idx === logs.length - 1 ? <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0"/> : <CheckCircle2 className="w-4 h-4 mr-2 text-green-500 shrink-0"/>}
+                       <span className="break-all">{log}</span>
+                    </motion.div>
+                 ))
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
