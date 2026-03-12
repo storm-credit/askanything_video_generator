@@ -10,3 +10,7 @@ assets/
 # IDE files
 .vscode/
 .idea/
+
+# Node/React
+node_modules/
+remotion/node_modules/
