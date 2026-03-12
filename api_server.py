@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
-from fastapi.middleware.cors import CORSMaps, CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 

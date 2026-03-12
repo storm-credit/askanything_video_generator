@@ -52,8 +52,15 @@ def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
             return filename
 
         except Exception as e:
+            error_msg = str(e)
             if attempt < max_retries - 1:
-                print(f"  [DALL·E 경고] 컷 {index+1} 렌더링 실패. 서버 지연으로 3초 후 재시도합니다... ({attempt+1}/{max_retries}) | 사유: {e}")
+                # 안전 정책 위반(Safety Policy) 에러 처리 로직
+                if 'content_policy_violation' in error_msg:
+                    print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 아주 안전하고 추상적인 대체 프롬프트로 재시도합니다... ({attempt+1}/{max_retries})")
+                    # DALL-E 3 가 무조건 통과시킬 만한 완전 기초적인 대체(fallback) 프롬프트로 강제 치환
+                    enhanced_prompt = "A very safe, beautiful, abstract and highly detailed 3D cinematic masterpiece illustrating the related concept, Disney Pixar style, atmospheric lighting, strictly NO TEXT, NO LETTERS, NO WORDS."
+                else:
+                    print(f"  [DALL·E 경고] 컷 {index+1} 렌더링 실패. 서버 지연으로 3초 후 재시도합니다... ({attempt+1}/{max_retries}) | 사유: {e}")
                 time.sleep(3)
             else:
-                raise RuntimeError(f"[DALL·E 이미지 생성 최종 실패] index={index}, 3회 재시도 실패. 오류: {str(e)}")
+                raise RuntimeError(f"[DALL·E 이미지 생성 최종 실패] index={index}, 3회 재시도 실패. 오류: {error_msg}")

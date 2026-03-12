@@ -28,6 +28,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") ->
 1. Camera & Lighting: 구도(Extreme Close-up, Wide shot 등)와 조명(Cinematic volumetric lighting, Neon glow 등)을 구체적인 영어로 명시.
 2. Consistency: 상업용 극장판 3D 애니메이션 퀄리티(Disney Pixar 3D style, Action-packed) 유지.
 3. Vertical Framing: 'centered composition', 'vertical layout' 명시. 
+4. [CRITICAL] Safety Rule: 피, 폭력, 잔인함, 선정성, 특정 상표나 저작권 캐릭터(예: 미키마우스, 스파이더맨), 실존 인물을 절대 프롬프트에 포함하지 마십시오. DALL-E 3 스펙에 맞춰 추상적이고 비유적으로 안전하게(family-friendly) 묘사하세요.
 
 [Output Format Constraint]
 반드시 통일된 흐름을 지닌 4~6컷으로 구성하며, 다음 JSON 스키마 구조로만 정확하게 응답하십시오.
