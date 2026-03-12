@@ -68,17 +68,20 @@ async def generate_video_endpoint(req: GenerateRequest):
                 aud_path = generate_tts(cut["script"], i, topic_folder, api_key_override)
                 return i, img_path, aud_path
 
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                futures = [executor.submit(process_cut, i, cut) for i, cut in enumerate(cuts)]
-                for future in futures:
-                    i, img_path, aud_path = future.result()
-                    image_paths[i] = img_path
-                    audio_paths[i] = aud_path
-                    
-                    # 진행률: 30% ~ 80% 사이를 분배
-                    prog = 30 + int(50 * (len([p for p in image_paths if p is not None]) / len(cuts)))
-                    yield {"data": f"PROG|{prog}\n"}
-                    yield {"data": f"  -> 컷 {i+1} 이미지 및 음성 생성 완료\n"}
+            # 비동기 Non-blocking 이벤트 루프 실행 (SSE flush 보장)
+            tasks = [loop.run_in_executor(None, process_cut, i, cut) for i, cut in enumerate(cuts)]
+            completed_count = 0
+            
+            import asyncio
+            for future in asyncio.as_completed(tasks):
+                i, img_path, aud_path = await future
+                image_paths[i] = img_path
+                audio_paths[i] = aud_path
+                
+                completed_count += 1
+                prog = 30 + int(50 * (completed_count / len(cuts)))
+                yield {"data": f"PROG|{prog}\n"}
+                yield {"data": f"  -> 컷 {i+1} 이미지 및 음성 생성 완료\n"}
 
             yield {"data": "PROG|85\n"}
             yield {"data": "[렌더링 마스터] FFmpeg 동적 화면(Zoom) 및 자막 렌더링 시작...\n"}
@@ -91,8 +94,13 @@ async def generate_video_endpoint(req: GenerateRequest):
             )
             
             yield {"data": "PROG|100\n"}
-            yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 경로: {video_path}\n"}
-            yield {"data": f"DONE|{video_path}\n"}
+            
+            # 절대 경로를 프론트엔드 라우팅용 상대 경로로 변환 (Windows 역슬래시 방어)
+            final_filename = os.path.basename(video_path)
+            relative_video_path = f"assets/{topic_folder}/video/{final_filename}"
+            
+            yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 경로: {relative_video_path}\n"}
+            yield {"data": f"DONE|{relative_video_path}\n"}
             
         except Exception as e:
             import traceback
