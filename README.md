@@ -41,3 +41,43 @@
 - `modules/image/dalle.py`: DALL-E 3를 이용한 쇼츠용 세로형 이미지 생성
 - `modules/tts/google.py`: Google TTS 오디오 변환
 - `modules/video/ffmpeg.py`: MoviePy + ImageMagick을 이용해 이미지, 자막, 오디오를 병합해 최종 영상 합성
+## FastAPI + Remotion 트러블슈팅 체크리스트 (404 / 컷 수 부족 대응)
+
+아래 순서대로 점검하면 `3컷만 생성`, `final video 404` 문제를 빠르게 분리할 수 있습니다.
+
+1. **서버 코드 최신 반영 확인**
+   ```bash
+   pkill -f api_server.py || true
+   python api_server.py
+   ```
+
+2. **Remotion 의존성 설치 확인**
+   ```bash
+   cd remotion
+   npm install
+   cd ..
+   ```
+
+3. **사전 진단 API 실행 (신규)**
+   ```bash
+   curl -s http://localhost:8000/api/preflight
+   ```
+   - `ready: true`여야 렌더 준비 완료입니다.
+   - `remotion_node_modules: false`면 `npm install`이 누락된 상태입니다.
+
+4. **컷 수 규격 확인**
+   - 현재 파이프라인은 `6~10컷`이 아니면 자동 재요청 후, 그래도 실패 시 에러를 발생시킵니다.
+   - 즉, 3~4컷으로 내려앉는 문제를 서버 레벨에서 차단합니다.
+
+## "동시버전 4"(= GPT-4 계열) 사용 시 장점
+
+질문하신 "동시버전 4"는 보통 `OPENAI_MODEL=gpt-4o` 또는 GPT-4 계열 모델 사용을 의미합니다.
+
+- **장점**
+  - 프롬프트 규칙(컷 수, JSON 스키마) 준수율이 상대적으로 높습니다.
+  - 사실 기반 설명/문맥 유지가 더 안정적입니다.
+  - 쇼츠용 문장 톤(후킹 → 빌드업 → 결말) 일관성이 좋아집니다.
+
+- **주의점**
+  - 모델을 바꾼다고 100% 해결되진 않습니다.
+  - 그래서 현재 코드는 모델 성능 + 서버 강제 검증(6~10컷) 두 겹으로 막도록 보강되어 있습니다.

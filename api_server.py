@@ -39,6 +39,24 @@ class GenerateRequest(BaseModel):
     topic: str
     apiKey: str = None
 
+
+@app.get("/api/preflight")
+def preflight_check():
+    """현재 실행 환경에서 자주 막히는 포인트를 빠르게 진단합니다."""
+    checks = {
+        "openai_key": bool(os.getenv("OPENAI_API_KEY")),
+        "elevenlabs_key": bool(os.getenv("ELEVENLABS_API_KEY")),
+        "tavily_key": bool(os.getenv("TAVILY_API_KEY")),
+        "remotion_package_json": os.path.exists(os.path.join("remotion", "package.json")),
+        "remotion_node_modules": os.path.exists(os.path.join("remotion", "node_modules")),
+    }
+    checks["ready"] = all([
+        checks["openai_key"],
+        checks["remotion_package_json"],
+        checks["remotion_node_modules"],
+    ])
+    return JSONResponse(content=checks)
+
 @app.post("/api/generate")
 async def generate_video_endpoint(req: GenerateRequest):
     topic = req.topic

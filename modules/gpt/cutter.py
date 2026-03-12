@@ -6,6 +6,23 @@ from modules.utils.slugify import slugify_topic
 from modules.gpt.search import get_fact_check_context
 
 # ✅ 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - JSON 구조 도입)
+def _request_cuts(client: OpenAI, model: str, system_prompt: str, user_content: str) -> list[dict[str, Any]]:
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
+        ],
+        response_format={"type": "json_object"}
+    )
+    content = response.choices[0].message.content.strip()
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError("GPT 응답이 올바른 JSON 형식이 아닙니다.") from exc
+    return data.get("cuts", [])
+
+
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") -> tuple[list[dict[str, Any]], str]:
     topic_folder = slugify_topic(topic, lang)
 
@@ -77,23 +94,18 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") ->
     client = OpenAI(api_key=final_api_key)
 
     # ✅ JSON Mode 및 System/User 메시지 분리 (프로페셔널 표준)
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content}
-        ],
-        response_format={ "type": "json_object" }
-    )
+    cuts_data = _request_cuts(client, model, system_prompt, user_content)
+
+    # 컷 수 보강: 모델이 조건(6~10컷)을 어길 경우 1회 재시도
+    if len(cuts_data) < 6 or len(cuts_data) > 10:
+        print(f"-> [재시도] 컷 수 {len(cuts_data)}개 감지. 규격(6~10컷) 강제 재요청 실행.")
+        retry_instruction = (
+            "\n\n[RETRY HARD CONSTRAINT] 직전 응답은 컷 수 규격 위반입니다. "
+            "반드시 cuts 배열을 6~10개로만 구성해 JSON을 다시 생성하세요."
+        )
+        cuts_data = _request_cuts(client, model, system_prompt, user_content + retry_instruction)
+
     print("OK [기획 전문가] 기획안 완성!")
-
-    content = response.choices[0].message.content.strip()
-
-    try:
-        data = json.loads(content)
-        cuts_data = data.get("cuts", [])
-    except json.JSONDecodeError:
-        raise ValueError("GPT 응답이 올바른 JSON 형식이 아닙니다.")
 
     cuts = []
     for cut in cuts_data:
@@ -108,9 +120,8 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko") ->
     if not cuts:
         raise ValueError("파싱된 컷 데이터가 없습니다. JSON 출력 형식을 확인해주세요.")
         
-    # 강제 검증: 만약 GPT가 5컷 미만으로 작성했다면, 치명적 오류로 간주하고 재귀 호출(1회 한정)하거나 에러를 발생시킬 수 있습니다.
-    # 여기서는 파이프라인의 안정성을 위해 에러 대신 강력한 경고를 띄웁니다.
-    if len(cuts) < 5:
-        print(f"-> [경고!!!] GPT가 지시를 무시하고 {len(cuts)}컷만 생성했습니다. 퀄리티 점검이 필요합니다.")
+    # 강제 검증: 최종 출력은 반드시 6~10컷
+    if len(cuts) < 6 or len(cuts) > 10:
+        raise ValueError(f"컷 수 규격 위반: {len(cuts)}컷 생성됨 (필수: 6~10컷).")
         
     return cuts, topic_folder
