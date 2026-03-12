@@ -6,3 +6,9 @@ Pillow
 gTTS
 konlpy
 moviepy
+fastapi
+uvicorn
+sse-starlette
+pydantic
+tavily-python
+httpx
