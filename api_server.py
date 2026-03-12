@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -20,6 +21,9 @@ from modules.tts.google import generate_tts
 from modules.video.ffmpeg import create_video
 
 app = FastAPI()
+
+# 정적 파일 서빙 (비디오 다운로드용)
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # CORS 설정 (프론트엔드 연동)
 app.add_middleware(

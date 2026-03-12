@@ -53,7 +53,18 @@ export default function Home() {
             if (!rawData) return;
             
             if (rawData.startsWith("DONE|")) {
-               setVideoUrl("비디오 생성 성공! 서버의 프로젝트 폴더 /assets를 확인해주세요.");
+               const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
+               const downloadUrl = `http://localhost:8000/${videoPath}`;
+               
+               // 브라우저 네이티브 다운로드 강제 실행 (a 태그 트릭)
+               const link = document.createElement("a");
+               link.href = downloadUrl;
+               link.setAttribute("download", "AskAnything_Shorts.mp4"); // 다운로드 속성 부여
+               document.body.appendChild(link);
+               link.click();
+               link.parentNode?.removeChild(link);
+
+               setVideoUrl("비디오 생성 성공! 렌더링된 영상이 다운로드 폴더에 저장되었습니다.");
                setIsGenerating(false);
             } else if (rawData.startsWith("ERROR|")) {
                setLogs(prev => [...prev, rawData.slice(6)]);
