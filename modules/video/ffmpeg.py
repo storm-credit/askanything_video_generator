@@ -105,7 +105,10 @@ def create_video(visual_paths, audio_paths, scripts, word_timestamps_list, topic
         
         if audio_path and os.path.exists(audio_path):
             cmd.extend(["-i", os.path.abspath(audio_path)])
-            
+        else:
+            # 오디오 생성 실패 컷은 무음 트랙으로 대체해 렌더 중단을 방지
+            cmd.extend(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
+
         cmd.extend([
             "-vf", f"{video_filter},ass='{ass_filename}'",
             "-t", str(duration),
@@ -115,16 +118,23 @@ def create_video(visual_paths, audio_paths, scripts, word_timestamps_list, topic
         ])
         
         print(f"-> [편집 전문가] 컷 {i+1} 렌더링 (Zoom-in & 자막) 중...")
-        subprocess.run(cmd, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = subprocess.run(cmd, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if result.returncode != 0:
+            print(f"[편집 전문가 오류] 컷 {i+1} 렌더링 실패")
+            continue
         cut_videos.append(cut_video_filename)
         
     # Concat
     concat_filename = "concat.txt"
     concat_filepath = os.path.join(cwd, concat_filename)
+    if not cut_videos:
+        print("[편집 전문가 오류] 생성된 컷 비디오가 없어 최종 병합을 진행할 수 없습니다.")
+        return None
+
     with open(concat_filepath, "w", encoding="utf-8") as f:
         for cv in cut_videos:
             f.write(f"file '{cv}'\n")
-            
+
     final_output_filename = "final_video.mp4"
     final_output_path = os.path.join(cwd, final_output_filename)
     
@@ -137,7 +147,10 @@ def create_video(visual_paths, audio_paths, scripts, word_timestamps_list, topic
     ]
     
     print("-> [편집 전문가] 컷 연결 및 최종 영상 병합 중...")
-    subprocess.run(concat_cmd, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    concat_result = subprocess.run(concat_cmd, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if concat_result.returncode != 0 or not os.path.exists(final_output_path):
+        print("[편집 전문가 오류] 최종 병합 실패")
+        return None
     
     # ✅ 시네마틱 BGM 오디오 믹싱 처리 (상용화 기술)
     # 루트 폴더의 assets/bgm.mp3 파일이 존재하면 자동으로 배경음악을 깔아줌

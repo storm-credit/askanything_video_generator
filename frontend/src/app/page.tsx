@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Play, Download, Loader2, CheckCircle2, KeyRound } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, KeyRound } from "lucide-react";
 
 export default function Home() {
   const [topic, setTopic] = useState("");
@@ -55,7 +55,8 @@ export default function Home() {
             if (rawData.startsWith("DONE|")) {
                const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
                const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
-               const downloadUrl = `http://localhost:8000/${encodedPath}`;
+               const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
+               const downloadUrl = `http://localhost:8000${normalizedPath}`;
                
                // 브라우저 404 방지 및 네이티브 다운로드를 위해 Blob으로 처리
                try {
@@ -95,9 +96,10 @@ export default function Home() {
           }
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
-      setLogs(prev => [...prev, `[네트워크/응답 오류] ${error.message}`]);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setLogs(prev => [...prev, `[네트워크/응답 오류] ${message}`]);
     } finally {
       setIsGenerating(false);
     }
