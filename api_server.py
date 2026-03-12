@@ -18,6 +18,7 @@ load_dotenv(override=True)
 from modules.gpt.cutter import generate_cuts
 from modules.image.dalle import generate_image
 from modules.tts.google import generate_tts
+from modules.transcription.whisper import generate_word_timestamps
 from modules.video.ffmpeg import create_video
 
 app = FastAPI()
@@ -60,13 +61,15 @@ async def generate_video_endpoint(req: GenerateRequest):
             
             image_paths = [None] * len(cuts)
             audio_paths = [None] * len(cuts)
+            word_timestamps_list = [None] * len(cuts)
             scripts = [cut["script"] for cut in cuts]
             
             # 병렬 처리를 위한 작업 정의
             def process_cut(i, cut):
                 img_path = generate_image(cut["prompt"], i, topic_folder, api_key_override)
                 aud_path = generate_tts(cut["script"], i, topic_folder, api_key_override)
-                return i, img_path, aud_path
+                words = generate_word_timestamps(aud_path, api_key_override) if aud_path else []
+                return i, img_path, aud_path, words
 
             # 비동기 Non-blocking 이벤트 루프 실행 (SSE flush 보장)
             tasks = [loop.run_in_executor(None, process_cut, i, cut) for i, cut in enumerate(cuts)]
@@ -74,9 +77,10 @@ async def generate_video_endpoint(req: GenerateRequest):
             
             import asyncio
             for future in asyncio.as_completed(tasks):
-                i, img_path, aud_path = await future
+                i, img_path, aud_path, words = await future
                 image_paths[i] = img_path
                 audio_paths[i] = aud_path
+                word_timestamps_list[i] = words
                 
                 completed_count += 1
                 prog = 30 + int(50 * (completed_count / len(cuts)))
@@ -90,7 +94,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             video_path = await loop.run_in_executor(
                 None, 
                 create_video, 
-                image_paths, audio_paths, scripts, topic_folder
+                image_paths, audio_paths, scripts, word_timestamps_list, topic_folder
             )
             
             yield {"data": "PROG|100\n"}

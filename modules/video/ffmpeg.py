@@ -17,14 +17,11 @@ def get_audio_duration(audio_path):
     except:
         return None
 
-def create_ass_for_cut(script, output_dir, index):
+def create_dynamic_ass_for_cut(script, word_timestamps, duration, output_dir, index):
     ass_filename = f"cut_{index}.ass"
     ass_path = os.path.join(output_dir, ass_filename)
     
-    # 세로형 쇼츠를 위해 글자 래핑 짧게 (12자)
-    wrapped_script = "\\N".join(textwrap.wrap(script, width=12))
-    
-    # ASS 포맷 (K-Pop 쇼츠 스타일 트렌디 자막 - 노란색, 두꺼운 그림자)
+    # 숏폼 전용 다이내믹 캡션 (크고 두꺼운 노란색 아웃라인 폰트, 화면 하단-중앙)
     ass_content = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -32,25 +29,48 @@ PlayResY: 1920
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Malgun Gothic,110,&H0000FFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,8,6,2,10,10,400,1
+Style: Default,Malgun Gothic,140,&H0000FFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,12,10,2,20,20,600,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,0:59:59.99,Default,,0,0,0,,{wrapped_script}
 """
+    def format_time(seconds):
+        if seconds is None: seconds = 0.0
+        h, m, s = int(seconds // 3600), int((seconds % 3600) // 60), int(seconds % 60)
+        cs = int((seconds % 1) * 100)
+        return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+    events = []
+    
+    if not word_timestamps:
+        # 타임스탬프 없을 경우 기본 래핑 처리
+        wrapped_script = "\\N".join(textwrap.wrap(script, width=12))
+        events.append(f"Dialogue: 0,0:00:00.00,{format_time(duration)},Default,,0,0,0,,{wrapped_script}")
+    else:
+        # 단어를 2개씩 묶어서 빠르게 팝업 (Alex Hormozi 스타일)
+        for i in range(0, len(word_timestamps), 2):
+            chunk = word_timestamps[i:i+2]
+            start_t = chunk[0].get('start', 0.0)
+            end_t = chunk[-1].get('end', start_t + 0.5)
+            text = " ".join([w.get('word', '') for w in chunk])
+            
+            # 애니메이션: 등장할 때 크기가 100% -> 115% 로 짧게 튀어오름 (Pop-up effect)
+            text_ass = f"{{\\t(0,150,\\fscx115\\fscy115)}}{text}"
+            events.append(f"Dialogue: 0,{format_time(start_t)},{format_time(end_t)},Default,,0,0,0,,{text_ass}")
+
     with open(ass_path, "w", encoding="utf-8-sig") as f:
-        f.write(ass_content)
+        f.write(ass_content + "\n".join(events) + "\n")
         
     return ass_filename  
 
-def create_video(image_paths, audio_paths, scripts, topic_folder):
+def create_video(image_paths, audio_paths, scripts, word_timestamps_list, topic_folder):
     output_dir = os.path.join("assets", topic_folder, "video")
     os.makedirs(output_dir, exist_ok=True)
     
     cut_videos = []
     cwd = os.path.abspath(output_dir)
     
-    for i, (img_path, audio_path, script) in enumerate(zip(image_paths, audio_paths, scripts)):
+    for i, (img_path, audio_path, script, word_timestamps) in enumerate(zip(image_paths, audio_paths, scripts, word_timestamps_list)):
         cut_video_filename = f"cut_{i}.mp4"
         
         duration = None
@@ -60,7 +80,7 @@ def create_video(image_paths, audio_paths, scripts, topic_folder):
         if not duration:
             duration = estimate_duration_by_text(script)
             
-        ass_filename = create_ass_for_cut(script, output_dir, i)
+        ass_filename = create_dynamic_ass_for_cut(script, word_timestamps, duration, output_dir, i)
         
         # FFmpeg 기반 렌더링 호출 (Zoom-in 켄번 효과 + ASS 자막)
         img_abs = os.path.abspath(img_path)
