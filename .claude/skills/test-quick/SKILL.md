@@ -9,14 +9,14 @@ Run a quick smoke test to verify the pipeline code loads and API connections wor
 Steps:
 1. **Import checks** - verify all modules load without error:
    ```
-   python -c "from modules.gpt.cutter import plan_cuts; print('cutter OK')"
+   python -c "from modules.gpt.cutter import generate_cuts; print('cutter OK')"
    python -c "from modules.image.dalle import generate_image; print('dalle OK')"
    python -c "from modules.image.imagen import generate_image_imagen; print('imagen OK')"
    python -c "from modules.video.veo import generate_video_veo; print('veo OK')"
-   python -c "from modules.video.kling import generate_video_kling; print('kling OK')"
+   python -c "from modules.video.kling import generate_video_from_image; print('kling OK')"
    python -c "from modules.video.engines import get_available_engines; print('engines OK')"
    python -c "from modules.tts.elevenlabs import generate_tts; print('tts OK')"
-   python -c "from modules.transcription.whisper import transcribe_audio; print('whisper OK')"
+   python -c "from modules.transcription.whisper import generate_word_timestamps; print('whisper OK')"
    python -c "from modules.video.remotion import create_remotion_video; print('remotion OK')"
    python -c "from modules.utils.keys import get_google_key, get_key_usage_stats; print('keys OK')"
    python -c "import api_server; print('api_server OK')"
