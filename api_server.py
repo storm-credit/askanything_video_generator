@@ -263,18 +263,23 @@ async def generate_video_endpoint(req: GenerateRequest):
             word_timestamps_list = [None] * len(cuts)
             scripts = [cut["script"] for cut in cuts]
 
-            cut_executor = ThreadPoolExecutor(max_workers=2)
+            # 이미지/TTS 동시성 제한 (API 레이트 리밋 방지)
+            import threading
+            image_semaphore = threading.Semaphore(2)  # 이미지 최대 2개 동시
+            cut_executor = ThreadPoolExecutor(max_workers=4)
 
             # 이미지 엔진에 따라 생성 함수 선택
             gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
             image_api_key = (llm_key_override or os.getenv("GEMINI_API_KEY")) if image_engine == "imagen" else api_key_override
 
             def process_cut(i, cut):
-                try:
-                    img_path = gen_image_fn(cut["prompt"], i, topic_folder, image_api_key)
-                except Exception as exc:
-                    print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
-                    img_path = None
+                # 이미지 생성 (세마포어로 동시성 제한)
+                img_path = None
+                with image_semaphore:
+                    try:
+                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, image_api_key)
+                    except Exception as exc:
+                        print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
 
                 # 이미지 완료 후 비디오 변환과 TTS를 병렬 실행
                 video_future = None
