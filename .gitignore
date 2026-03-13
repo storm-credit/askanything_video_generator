@@ -14,3 +14,10 @@ assets/
 # Node/React
 node_modules/
 remotion/node_modules/
+remotion/public/
+
+# Next.js
+.next/
+
+# Claude Code local settings
+.claude/settings.local.json
