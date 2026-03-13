@@ -190,9 +190,13 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             break  # 성공
         except Exception as e:
             err_str = str(e)
-            is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower() or "rate_limit" in err_str.lower()
+            is_retryable = (
+                "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                or "503" in err_str or "UNAVAILABLE" in err_str
+                or "quota" in err_str.lower() or "rate_limit" in err_str.lower()
+            )
 
-            if is_quota and llm_provider == "gemini":
+            if is_retryable and llm_provider == "gemini":
                 mark_key_exhausted(current_key, service="gemini")
                 exhausted_keys.add(current_key)
                 next_key = get_google_key(None, service="gemini", exclude=exhausted_keys)
