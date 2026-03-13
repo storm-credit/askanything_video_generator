@@ -11,7 +11,6 @@ INTRO_IMAGE = "intro.png"
 OUTRO_IMAGE = "outro.jpg"
 BGM_FILE = "bgm.mp3"
 INTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
-TITLE_DURATION_FRAMES = 72         # 3초 @ 24fps
 OUTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
 
 
@@ -89,10 +88,9 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         total_duration_in_frames += INTRO_DURATION_FRAMES
         print(f"-> [인트로] 브랜드 인트로 {INTRO_DURATION_FRAMES}프레임 (1초) 추가")
 
-    # 제목 카드: 인트로 뒤, 본편 앞 (3초)
+    # 제목: 첫 번째 컷 위 오버레이로 표시 (별도 시간 추가 없음)
     if title:
-        total_duration_in_frames += TITLE_DURATION_FRAMES
-        print(f"-> [제목] '{title}' — {TITLE_DURATION_FRAMES}프레임 (3초) 추가")
+        print(f"-> [제목] '{title}' — 첫 컷 위 오버레이로 표시")
 
     if os.path.exists(os.path.join("assets", OUTRO_IMAGE)):
         outro_image_path = OUTRO_IMAGE
