@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, CheckCircle2, KeyRound, Film } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, KeyRound, Film, AlertCircle, XCircle } from "lucide-react";
 
 export default function Home() {
   const [topic, setTopic] = useState("");
@@ -13,6 +13,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleKeySave = () => {
     if (apiKey.trim().length > 0) {
@@ -27,6 +28,7 @@ export default function Home() {
     setIsGenerating(true);
     setProgress(0);
     setVideoUrl(null);
+    setErrorMessage(null);
     setLogs([]);
 
     try {
@@ -86,7 +88,9 @@ export default function Home() {
                setVideoUrl("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
                setIsGenerating(false);
             } else if (rawData.startsWith("ERROR|")) {
-               setLogs(prev => [...prev, rawData.slice(6)]);
+               const errMsg = rawData.slice(6);
+               setLogs(prev => [...prev, `ERROR:${errMsg}`]);
+               setErrorMessage(errMsg);
                setIsGenerating(false);
             } else if (rawData.startsWith("PROG|")) {
                const p = parseInt(rawData.slice(5), 10);
@@ -100,7 +104,11 @@ export default function Home() {
     } catch (error) {
       console.error(error);
       const message = error instanceof Error ? error.message : "Unknown error";
-      setLogs(prev => [...prev, `[네트워크/응답 오류] ${message}`]);
+      const userMsg = message === "Failed to fetch"
+        ? "[연결 실패] 백엔드 서버(localhost:8000)에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
+        : `[네트워크 오류] ${message}`;
+      setLogs(prev => [...prev, `ERROR:${userMsg}`]);
+      setErrorMessage(userMsg);
     } finally {
       setIsGenerating(false);
     }
@@ -212,8 +220,8 @@ export default function Home() {
       </motion.div>
 
       <AnimatePresence>
-        {isGenerating && (
-          <motion.div 
+        {(isGenerating || errorMessage) && (
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9 }}
@@ -242,17 +250,27 @@ export default function Home() {
                     <Loader2 className="w-4 h-4 animate-spin"/> 서버 응답 대기 중...
                  </div>
               ) : (
-                 logs.map((log, idx) => (
-                    <motion.div 
-                       key={idx} 
-                       initial={{ opacity: 0, x: -10 }} 
-                       animate={{ opacity: 1, x: 0 }} 
-                       className={`flex items-start text-sm ${idx === logs.length -1 ? 'text-indigo-400 font-medium' : 'text-gray-500'}`}
-                    >
-                       {idx === logs.length - 1 ? <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0"/> : <CheckCircle2 className="w-4 h-4 mr-2 text-green-500 shrink-0"/>}
-                       <span className="break-all">{log}</span>
-                    </motion.div>
-                 ))
+                 logs.map((log, idx) => {
+                    const isError = log.startsWith("ERROR:");
+                    const displayText = isError ? log.slice(6) : log;
+                    const isLast = idx === logs.length - 1;
+                    return (
+                      <motion.div
+                         key={idx}
+                         initial={{ opacity: 0, x: -10 }}
+                         animate={{ opacity: 1, x: 0 }}
+                         className={`flex items-start text-sm ${
+                           isError ? 'text-red-400 font-medium' :
+                           isLast ? 'text-indigo-400 font-medium' : 'text-gray-500'
+                         }`}
+                      >
+                         {isError ? <XCircle className="w-4 h-4 mr-2 text-red-500 shrink-0"/> :
+                          isLast ? <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0"/> :
+                          <CheckCircle2 className="w-4 h-4 mr-2 text-green-500 shrink-0"/>}
+                         <span className="break-all">{displayText}</span>
+                      </motion.div>
+                    );
+                 })
               )}
             </div>
           </motion.div>
@@ -260,8 +278,8 @@ export default function Home() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {videoUrl && !isGenerating && (
-          <motion.div 
+        {videoUrl && !isGenerating && !errorMessage && (
+          <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             className="mt-16 w-full max-w-sm glass-panel p-6 rounded-[2.5rem] relative z-10 flex flex-col justify-center items-center shadow-2xl shadow-indigo-500/20 text-center space-y-4"
@@ -269,6 +287,30 @@ export default function Home() {
             <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
             <h3 className="text-xl text-white font-bold">생성 성공!</h3>
             <p className="text-gray-400 text-sm">최고 수준의 숏폼 비디오가 성공적으로 기기 다운로드 폴더에 저장되었습니다.</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {errorMessage && !isGenerating && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mt-6 w-full max-w-xl glass-panel p-6 rounded-2xl relative z-10 border border-red-500/30 shadow-2xl shadow-red-500/10"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <h3 className="text-lg text-red-400 font-bold">오류 발생</h3>
+                <p className="text-gray-300 text-sm">{errorMessage}</p>
+                <button
+                  onClick={() => { setErrorMessage(null); setLogs([]); }}
+                  className="mt-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-300 text-sm rounded-xl transition-colors"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

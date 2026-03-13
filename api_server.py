@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -49,14 +49,77 @@ app.add_middleware(
 
 
 class GenerateRequest(BaseModel):
-    topic: str
+    topic: str = Field(..., min_length=1, max_length=500)
     apiKey: str | None = None
     videoEngine: str = "kling"
+
+    @field_validator("topic")
+    @classmethod
+    def topic_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("주제(topic)가 비어 있습니다.")
+        return v.strip()
+
+    @field_validator("videoEngine")
+    @classmethod
+    def valid_engine(cls, v: str) -> str:
+        allowed = {"kling", "sora2", "veo3", "hailuo", "wan", "none"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
+        return v
 
 
 @app.get("/api/engines")
 async def list_engines():
     return get_available_engines()
+
+
+@app.get("/api/health")
+async def health_check():
+    """필수 API 키 상태를 확인합니다."""
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
+    missing = []
+    if not openai_key or openai_key.startswith("sk-proj-YOUR"):
+        missing.append("OPENAI_API_KEY")
+    if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
+        missing.append("ELEVENLABS_API_KEY")
+    return {
+        "status": "ok" if not missing else "missing_keys",
+        "missing": missing,
+    }
+
+
+def _validate_keys(api_key_override: str | None, video_engine: str) -> list[str]:
+    """파이프라인 시작 전 필수 키 검증. 누락된 키 이름 목록을 반환."""
+    errors = []
+    openai_key = api_key_override or os.getenv("OPENAI_API_KEY", "")
+    if not openai_key or openai_key.startswith("sk-proj-YOUR"):
+        errors.append("OPENAI_API_KEY (GPT 기획 + DALL-E 이미지 생성에 필수)")
+
+    elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
+    if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
+        errors.append("ELEVENLABS_API_KEY (TTS 음성 생성에 필수)")
+
+    if video_engine in ("kling", "veo3", "hailuo", "wan"):
+        hf_key = os.getenv("HIGGSFIELD_API_KEY", "")
+        hf_id = os.getenv("HIGGSFIELD_ACCOUNT_ID", "")
+        if not hf_key or hf_key.startswith("YOUR"):
+            if video_engine == "kling":
+                kling_ak = os.getenv("KLING_ACCESS_KEY", "")
+                if not kling_ak or kling_ak.startswith("YOUR"):
+                    errors.append(f"HIGGSFIELD_API_KEY 또는 KLING_ACCESS_KEY ({video_engine} 비디오 엔진에 필수)")
+            else:
+                errors.append(f"HIGGSFIELD_API_KEY ({video_engine} 비디오 엔진에 필수)")
+        elif not hf_id or hf_id.startswith("YOUR"):
+            errors.append("HIGGSFIELD_ACCOUNT_ID (Higgsfield 엔진에 필수)")
+
+    if video_engine == "sora2":
+        openai_check = api_key_override or os.getenv("OPENAI_API_KEY", "")
+        if not openai_check or openai_check.startswith("sk-proj-YOUR"):
+            errors.append("OPENAI_API_KEY (Sora 2 비디오 엔진에 필수)")
+
+    return errors
 
 
 @app.post("/api/generate")
@@ -67,6 +130,15 @@ async def generate_video_endpoint(req: GenerateRequest):
 
     async def sse_generator():
         try:
+            # 사전 검증: 필수 API 키 확인
+            missing = _validate_keys(api_key_override, video_engine)
+            if missing:
+                yield {"data": "ERROR|[환경 설정 오류] 다음 API 키가 누락되었거나 유효하지 않습니다:\n"}
+                for m in missing:
+                    yield {"data": f"ERROR|  - {m}\n"}
+                yield {"data": "ERROR|.env 파일을 확인하거나, 프론트엔드에서 API Key를 입력해주세요.\n"}
+                return
+
             yield {"data": "PROG|10\n"}
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작...\n"}
 
@@ -86,16 +158,34 @@ async def generate_video_endpoint(req: GenerateRequest):
             scripts = [cut["script"] for cut in cuts]
 
             def process_cut(i, cut):
-                img_path = generate_image(cut["prompt"], i, topic_folder, api_key_override)
+                try:
+                    img_path = generate_image(cut["prompt"], i, topic_folder, api_key_override)
+                except Exception as exc:
+                    print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
+                    img_path = None
+
                 video_path = None
                 if img_path and video_engine != "none":
-                    video_path = generate_video_from_image(img_path, cut["prompt"], i, topic_folder, engine=video_engine)
+                    try:
+                        video_path = generate_video_from_image(img_path, cut["prompt"], i, topic_folder, engine=video_engine)
+                    except Exception as exc:
+                        print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
 
                 # 비디오 변환 실패 시 기존 이미지로 폴백
                 final_visual_path = video_path if video_path else img_path
 
-                aud_path = generate_tts(cut["script"], i, topic_folder)
-                words = generate_word_timestamps(aud_path, api_key_override) if aud_path else []
+                try:
+                    aud_path = generate_tts(cut["script"], i, topic_folder)
+                except Exception as exc:
+                    print(f"[컷 {i+1} TTS 생성 실패] {exc}")
+                    aud_path = None
+
+                words = []
+                if aud_path:
+                    try:
+                        words = generate_word_timestamps(aud_path, api_key_override)
+                    except Exception as exc:
+                        print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
                 return i, final_visual_path, aud_path, words
 
             tasks = [loop.run_in_executor(None, process_cut, i, cut) for i, cut in enumerate(cuts)]
@@ -113,8 +203,15 @@ async def generate_video_endpoint(req: GenerateRequest):
                 engine_label = video_engine if video_engine != "none" else "이미지"
                 yield {"data": f"  -> 컷 {i+1} 시각 소스({engine_label}/DALL-E) 및 음성 생성 완료\n"}
 
-            if any(p is None for p in visual_paths) or any(p is None for p in audio_paths):
-                yield {"data": "ERROR|[소스 생성 오류] 일부 컷의 이미지/오디오 생성이 실패했습니다. API 키 및 네트워크 상태를 확인해주세요.\n"}
+            failed_visual = [i+1 for i, p in enumerate(visual_paths) if p is None]
+            failed_audio = [i+1 for i, p in enumerate(audio_paths) if p is None]
+            if failed_visual or failed_audio:
+                details = []
+                if failed_visual:
+                    details.append(f"이미지 실패: 컷 {failed_visual}")
+                if failed_audio:
+                    details.append(f"오디오 실패: 컷 {failed_audio}")
+                yield {"data": f"ERROR|[소스 생성 오류] {', '.join(details)}. API 키 및 네트워크 상태를 확인해주세요.\n"}
                 return
 
             yield {"data": "PROG|85\n"}
@@ -153,7 +250,17 @@ async def generate_video_endpoint(req: GenerateRequest):
             import traceback
 
             traceback.print_exc()
-            yield {"data": f"ERROR|[시스템 오류] {str(e)}\n"}
+            err_str = str(e)
+            if "401" in err_str or "invalid_api_key" in err_str or "Incorrect API key" in err_str:
+                yield {"data": "ERROR|[인증 오류] API 키가 만료되었거나 유효하지 않습니다. .env 파일의 키를 확인하거나, 프론트엔드에서 새 키를 입력해주세요.\n"}
+            elif "429" in err_str or "rate_limit" in err_str or "quota" in err_str:
+                yield {"data": "ERROR|[할당량 초과] API 사용량 한도에 도달했습니다. 잠시 후 다시 시도하거나 요금제를 확인해주세요.\n"}
+            elif "timeout" in err_str.lower() or "timed out" in err_str.lower():
+                yield {"data": "ERROR|[타임아웃] API 응답 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.\n"}
+            elif "connection" in err_str.lower() or "network" in err_str.lower():
+                yield {"data": "ERROR|[네트워크 오류] API 서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.\n"}
+            else:
+                yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
 
     return EventSourceResponse(sse_generator())
 

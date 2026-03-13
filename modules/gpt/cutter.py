@@ -27,14 +27,21 @@ def _request_cuts(client: OpenAI, model: str, system_prompt: str, user_content: 
         ],
         response_format={"type": "json_object"},
     )
+    if not response.choices:
+        raise ValueError("GPT 응답에 choices가 비어 있습니다. 모델 설정을 확인하세요.")
     content = (response.choices[0].message.content or "").strip()
+    if not content:
+        raise ValueError("GPT 응답 content가 비어 있습니다.")
 
     try:
         data = json.loads(content)
     except json.JSONDecodeError as exc:
-        raise ValueError("GPT 응답이 올바른 JSON 형식이 아닙니다.") from exc
+        raise ValueError(f"GPT 응답이 올바른 JSON 형식이 아닙니다: {content[:200]}") from exc
 
-    return _sanitize_cuts(data.get("cuts", []))
+    cuts = _sanitize_cuts(data.get("cuts", []))
+    if not cuts:
+        raise ValueError("GPT 응답에 유효한 cuts가 없습니다. prompt/script 필드를 확인하세요.")
+    return cuts
 
 
 # ✅ 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - JSON 구조 도입)

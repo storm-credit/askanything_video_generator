@@ -11,7 +11,11 @@ def generate_word_timestamps(audio_path, api_key=None):
         
     client = OpenAI(api_key=final_api_key)
     
-    if not os.path.exists(audio_path):
+    if not audio_path or not os.path.exists(audio_path):
+        print(f"[Whisper 오류] 오디오 파일이 없습니다: {audio_path}")
+        return []
+    if os.path.getsize(audio_path) == 0:
+        print(f"[Whisper 오류] 오디오 파일이 비어 있습니다: {audio_path}")
         return []
         
     try:

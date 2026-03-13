@@ -6,9 +6,13 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
     ElevenLabs API를 사용하여 매우 사실적인 다큐멘터리/쇼츠용 음성(.mp3)을 생성합니다.
     (OpenAI TTS 'onyx' 스타일을 대체)
     """
+    if not text or not text.strip():
+        print(f"[ElevenLabs 오류] 컷 {index} 텍스트가 비어 있습니다.")
+        return None
+
     api_key = api_key_override or os.getenv("ELEVENLABS_API_KEY")
-    if not api_key:
-        print("[ElevenLabs 오류] API Key가 제공되지 않았습니다.")
+    if not api_key or api_key == "YOUR_ELEVENLABS_API_KEY_HERE":
+        print("[ElevenLabs 오류] ELEVENLABS_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
         return None
 
     # 가장 다큐멘터리/내레이션에 적합한 Voice ID (예: 'Brian' 또는 'Drew' 같은 깊고 중후한 남성 목소리)
@@ -48,10 +52,19 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                 for chunk in response.iter_content(chunk_size=1024):
                     if chunk:
                         f.write(chunk)
+            if os.path.getsize(audio_path) == 0:
+                print(f"[ElevenLabs 오류] 컷 {index+1} 음성 파일이 비어 있습니다.")
+                return None
             print(f"OK [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 음성 생성 완료!")
             return audio_path
+        elif response.status_code == 401:
+            print(f"[ElevenLabs 인증 오류] API Key가 유효하지 않습니다. .env 파일을 확인하세요.")
+            return None
+        elif response.status_code == 429:
+            print(f"[ElevenLabs 할당량 초과] API 사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.")
+            return None
         else:
-            print(f"[ElevenLabs 오류] 요청 실패 ({response.status_code}): {response.text}")
+            print(f"[ElevenLabs 오류] 요청 실패 ({response.status_code}): {response.text[:200]}")
             return None
     except Exception as e:
         print(f"[ElevenLabs 통신 오류] {e}")

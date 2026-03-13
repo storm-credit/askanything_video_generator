@@ -80,13 +80,23 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
     try:
         # Windows에서는 shell=True가 안정적, Unix에서는 False 권장
         shell_mode = os.name == "nt"
-        subprocess.run(cmd, cwd=remotion_dir, check=True, shell=shell_mode)
+        result = subprocess.run(
+            cmd, cwd=remotion_dir, check=True, shell=shell_mode,
+            capture_output=True, text=True, timeout=600,
+        )
 
         if not os.path.exists(final_video_path):
             print(f"[Remotion 렌더링 실패] 렌더 명령은 끝났지만 결과 파일이 없습니다: {final_video_path}")
+            if result.stderr:
+                print(f"  stderr: {result.stderr[:500]}")
             return None
         return final_video_path
 
+    except subprocess.TimeoutExpired:
+        print("[Remotion 렌더링 실패] 10분 타임아웃 초과. 렌더링이 너무 오래 걸립니다.")
+        return None
     except subprocess.CalledProcessError as e:
-        print(f"[Remotion 렌더링 실패] {e}")
+        print(f"[Remotion 렌더링 실패] 종료 코드: {e.returncode}")
+        if e.stderr:
+            print(f"  stderr: {e.stderr[:500]}")
         return None
