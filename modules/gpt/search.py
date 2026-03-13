@@ -31,7 +31,7 @@ def get_fact_check_context(topic: str) -> str:
 
         # GPT에게 전달할 요약 컨텍스트 생성
         context = "### [실시간 웹 검색 팩트체크 자료 (Tavily Search API)] ###\n"
-        context += "아래의 검색된 팩트 자료를 100% 신뢰할 수 있는 사실로 취급하여 대본의 'Climax'나 'Context'를 작성하는 데 참고하십시오.\n\n"
+        context += "아래의 검색 결과를 참고 자료로 활용하되, 사실 여부를 교차 검증하여 대본의 'Climax'나 'Context'를 작성하는 데 참고하십시오.\n\n"
 
         if "answer" in response and response["answer"]:
             context += f"💡 [AI 요약 답변]: {response['answer']}\n\n"

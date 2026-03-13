@@ -76,7 +76,7 @@ export const KEY_CONFIGS: KeyConfig[] = [
   {
     id: "higgsfield_key",
     label: "Higgsfield API Key",
-    description: "Kling, Veo3, Hailuo, Wan 비디오 엔진에 사용",
+    description: "Kling, Hailuo, Wan 비디오 엔진에 사용",
     envName: "HIGGSFIELD_API_KEY",
     statusKey: "higgsfield_key",
     required: false,

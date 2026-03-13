@@ -355,8 +355,9 @@ async def generate_video_endpoint(req: GenerateRequest):
                 return api_key_override
 
             def process_cut(i, cut):
-                # 에러 수집 (SSE로 전달할 상세 정보)
+                # 에러 수집 (SSE로 전달할 상세 정보) — 멀티스레드 안전
                 errors = []
+                errors_lock = threading.Lock()
 
                 # 이미지 생성 (세마포어로 동시성 제한)
                 img_path = None
@@ -365,7 +366,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                         cut_image_key = _get_image_key()
                         img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
                     except Exception as exc:
-                        errors.append(f"이미지: {exc}")
+                        with errors_lock:
+                            errors.append(f"이미지: {exc}")
                         print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
 
                 # 비디오 변환과 TTS를 threading으로 병렬 실행 (데드락 방지: 직접 스레드 사용)
@@ -379,30 +381,34 @@ async def generate_video_endpoint(req: GenerateRequest):
                             img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key
                         )
                     except Exception as exc:
-                        errors.append(f"비디오: {exc}")
+                        with errors_lock:
+                            errors.append(f"비디오: {exc}")
                         print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
 
                 def _run_tts():
                     try:
                         tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language)
                     except Exception as exc:
-                        errors.append(f"TTS: {exc}")
+                        with errors_lock:
+                            errors.append(f"TTS: {exc}")
                         print(f"[컷 {i+1} TTS 생성 실패] {exc}")
 
                 threads = []
                 if img_path and active_video_engine != "none":
-                    t = threading.Thread(target=_run_video, daemon=True)
+                    t = threading.Thread(target=_run_video, name=f"video-cut{i}", daemon=True)
                     t.start()
                     threads.append(t)
-                t_tts = threading.Thread(target=_run_tts, daemon=True)
+                t_tts = threading.Thread(target=_run_tts, name=f"tts-cut{i}", daemon=True)
                 t_tts.start()
                 threads.append(t_tts)
 
                 # 완료 대기 (비디오: 최대 5분, TTS: 최대 1분)
                 for t in threads:
-                    t.join(timeout=300)
+                    timeout = 300 if "video" in t.name.lower() else 60
+                    t.join(timeout=timeout)
                     if t.is_alive():
-                        errors.append(f"타임아웃: {t.name} 스레드가 5분 내 완료되지 않음")
+                        with errors_lock:
+                            errors.append(f"타임아웃: {t.name} 스레드가 {timeout}초 내 완료되지 않음")
                         print(f"[컷 {i+1} 타임아웃] {t.name} 스레드가 응답 없음")
 
                 final_visual_path = video_result[0] if video_result[0] else img_path
@@ -414,7 +420,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                     try:
                         words = generate_word_timestamps(aud_path, api_key_override, language=language)
                     except Exception as exc:
-                        errors.append(f"타임스탬프: {exc}")
+                        with errors_lock:
+                            errors.append(f"타임스탬프: {exc}")
                         print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
                 return i, final_visual_path, aud_path, words, errors
 

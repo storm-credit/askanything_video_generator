@@ -131,7 +131,7 @@ def get_google_key(override: str = None, service: str = None, exclude: set = Non
                 # exclude에 있는 키 제외
                 candidates = [k for k in keys if k not in exclude]
                 if not candidates:
-                    candidates = keys  # 전부 exclude면 원본으로 폴백
+                    return None  # 모든 키가 소진됨
 
                 # 3단계 분류
                 active_keys = []

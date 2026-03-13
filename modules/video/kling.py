@@ -83,41 +83,35 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     
     print(f"-> [Kling AI] 컷 {index+1} 렌더링 클라우드 진행 상태 대기 중 (약 2~3분 소요 예상)...")
     
-    max_retries = 90 # 90 * 5초 = 450초 (7.5분)
-    token_refresh_interval = 25 * 60  # 25분마다 토큰 갱신 (만료 30분)
-    last_token_time = time.time()
+    max_retries = 90  # 90 * 5초 = 450초 (7.5분)
+    timed_out = True
     for poll_iter in range(max_retries):
         time.sleep(5)
 
         try:
-            # 토큰 만료 방지: 25분 경과 시 갱신 (매번 갱신 대신)
-            if time.time() - last_token_time > token_refresh_interval:
-                current_token = _generate_jwt(ak, sk)
-                headers["Authorization"] = f"Bearer {current_token}"
-                last_token_time = time.time()
-            
             poll_resp = requests.get(poll_url, headers=headers, timeout=10)
             poll_resp.raise_for_status()
             poll_data = poll_resp.json()
-            
+
             status = poll_data.get("data", {}).get("task_status")
-            
+
             if status == "succeed":
                 videos = poll_data.get("data", {}).get("task_result", {}).get("videos", [])
                 if videos:
                     video_url = videos[0].get("url") or videos[0].get("video_url")
+                timed_out = False
                 break
             elif status == "failed":
                 reason = poll_data.get("data", {}).get("task_status_msg", "알 수 없는 오류")
                 print(f"[Kling AI 오류] 컷 {index+1} 클라우드 렌더링 실패: {reason}")
                 return None
-                
+
         except Exception as e:
             print(f"[Kling AI 대기 중 오류] {e}")
             continue
-            
+
     if not video_url:
-        if poll_iter >= max_retries - 1:
+        if timed_out:
             print(f"[Kling AI 오류] 컷 {index+1} 렌더링 타임아웃 (최대 {max_retries * 5}초 초과).")
         else:
             print(f"[Kling AI 오류] 컷 {index+1} 렌더링 성공했으나 비디오 URL이 비어 있습니다.")

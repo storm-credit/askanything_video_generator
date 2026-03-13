@@ -153,5 +153,3 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                 time.sleep(RETRY_DELAYS[attempt])
                 continue
             return None
-
-    return None
