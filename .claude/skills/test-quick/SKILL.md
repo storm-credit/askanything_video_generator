@@ -28,14 +28,28 @@ Steps:
    curl -s http://localhost:8000/api/key-usage
    ```
 
-3. **Dry run** - test SSE endpoint with videoEngine=none (no actual image/video generation):
+3. **Dry run (Korean)** - test SSE endpoint with videoEngine=none, language=ko:
    ```
    curl -s -N -X POST http://localhost:8000/api/generate \
      -H "Content-Type: application/json" \
-     -d '{"topic":"test","videoEngine":"none"}'
+     -d '{"topic":"test","videoEngine":"none","language":"ko"}'
    ```
    Verify SSE protocol: PROG|, DONE| or ERROR| messages received.
 
-4. **Report**: PASS/FAIL per check, with error details for any failures.
+4. **Dry run (English)** - test language parameter:
+   ```
+   curl -s -N -X POST http://localhost:8000/api/generate \
+     -H "Content-Type: application/json" \
+     -d '{"topic":"test","videoEngine":"none","language":"en"}'
+   ```
+   Verify English script is generated (not Korean).
+
+5. **Brand assets** - verify BGM and brand files exist:
+   ```
+   ls -la brand/bgm.mp3 brand/intro.png brand/outro.png
+   ```
+   Check that bgm.mp3 is non-empty (used as background music in all videos).
+
+6. **Report**: PASS/FAIL per check, with error details for any failures.
 
 This test does NOT consume API quota (uses videoEngine=none for dry run).
