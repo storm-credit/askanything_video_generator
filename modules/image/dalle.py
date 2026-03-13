@@ -5,6 +5,8 @@ import io
 import os
 import time
 
+from modules.utils.constants import MASTER_STYLE
+
 def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
     final_api_key = api_key or os.getenv("OPENAI_API_KEY")
     if not final_api_key:
@@ -15,14 +17,7 @@ def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
     if not prompt or not prompt.strip():
         raise ValueError(f"[DALL·E 이미지 오류] 프롬프트가 비어 있습니다 (index={index})")
 
-    # ✅ 업계 최고 수준의 DALL-E 3 마스터 아트 디렉터 프리셋 (슈퍼 렌더 퀄리티 보장 및 텍스트 타이포그래피 금지)
-    master_style = (
-        "Award-winning cinematic photograph, National Geographic high-end documentary style, Unreal Engine 5 render, hyper-detailed, "
-        "global illumination, ray tracing, bright, vibrant, uplifting, and cheerful lighting, breathtaking aesthetic, "
-        "8k resolution, perfect center focus for vertical aspect ratio, family-friendly tone, NO scary or horror elements. "
-        "Absolutely NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS in the image. "
-    )
-    enhanced_prompt = master_style + prompt
+    enhanced_prompt = MASTER_STYLE + prompt
 
     max_retries = 3
     for attempt in range(max_retries):

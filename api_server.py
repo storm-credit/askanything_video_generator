@@ -3,6 +3,8 @@ import sys
 import io
 import shutil
 import asyncio
+import threading
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
 from sse_starlette.sse import EventSourceResponse
@@ -15,13 +17,19 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 load_dotenv(override=True)
 
 from modules.gpt.cutter import generate_cuts
-from modules.image.dalle import generate_image
-from modules.video.engines import generate_video_from_image, get_available_engines
+from modules.image.dalle import generate_image as generate_image_dalle
+from modules.image.imagen import generate_image_imagen
+from modules.video.engines import generate_video_from_image, get_available_engines, check_engine_available
 from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs_quota
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
+from modules.utils.constants import PROVIDER_LABELS
+from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats
 
 app = FastAPI()
+
+# 동시 생성 요청 제한 (GPU/API 과부하 방지)
+_generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "2")))
 
 
 @app.get("/")
@@ -41,9 +49,10 @@ os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # CORS 설정 (프론트엔드 연동)
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in _cors_origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,7 +63,10 @@ class GenerateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     apiKey: str | None = None
     elevenlabsKey: str | None = None
-    videoEngine: str = "kling"
+    videoEngine: str = "veo3"
+    imageEngine: str = "imagen"
+    llmProvider: str = "gemini"
+    llmKey: str | None = None
     outputPath: str | None = None
 
     @field_validator("topic")
@@ -72,10 +84,37 @@ class GenerateRequest(BaseModel):
             raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
         return v
 
+    @field_validator("imageEngine")
+    @classmethod
+    def valid_image_engine(cls, v: str) -> str:
+        allowed = {"dalle", "imagen"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 이미지 엔진: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("llmProvider")
+    @classmethod
+    def valid_llm_provider(cls, v: str) -> str:
+        allowed = {"openai", "gemini", "claude"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}. 허용: {allowed}")
+        return v
+
 
 @app.get("/api/engines")
 async def list_engines():
     return get_available_engines()
+
+
+@app.get("/api/key-usage")
+async def key_usage():
+    """Google API 키별 사용량 통계 (세션 내 추적)."""
+    stats = get_key_usage_stats()
+    return {
+        "total_keys": count_google_keys(),
+        "keys": stats,
+        "note": "서버 재시작 시 카운터가 초기화됩니다. Veo 3는 유료 계정 기준 일일 한도가 있습니다.",
+    }
 
 
 @app.get("/api/health")
@@ -92,6 +131,8 @@ async def health_check():
 
     openai_key = os.getenv("OPENAI_API_KEY", "")
     elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    claude_key = os.getenv("ANTHROPIC_API_KEY", "")
     hf_key = os.getenv("HIGGSFIELD_API_KEY", "")
     hf_id = os.getenv("HIGGSFIELD_ACCOUNT_ID", "")
     kling_ak = os.getenv("KLING_ACCESS_KEY", "")
@@ -100,6 +141,8 @@ async def health_check():
     keys = {
         "openai": _is_set(openai_key, ["sk-proj-YOUR"]),
         "elevenlabs": _is_set(elevenlabs_key, ["YOUR_ELEVENLABS_API_KEY_HERE"]),
+        "gemini": _is_set(gemini_key),
+        "claude_key": _is_set(claude_key),
         "higgsfield_key": _is_set(hf_key, ["YOUR"]),
         "higgsfield_account": _is_set(hf_id, ["YOUR"]),
         "kling_access": _is_set(kling_ak, ["YOUR"]),
@@ -107,34 +150,73 @@ async def health_check():
     }
 
     missing = [k for k, v in keys.items() if not v]
+    google_key_count = count_google_keys()
     return {
         "status": "ok" if not missing else "missing_keys",
         "keys": keys,
         "missing": missing,
+        "google_key_count": google_key_count,
     }
 
 
-def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | None, video_engine: str) -> list[str]:
+def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | None, video_engine: str,
+                    image_engine: str = "imagen", llm_provider: str = "gemini", llm_key_override: str | None = None) -> list[str]:
     """파이프라인 시작 전 필수 키 검증. 누락된 키 이름 목록을 반환."""
     errors = []
+
+    # OpenAI 키: DALL-E 사용 시 또는 Whisper 자막에 필요
     openai_key = api_key_override or os.getenv("OPENAI_API_KEY", "")
-    if not openai_key or openai_key.startswith("sk-proj-YOUR"):
-        errors.append("OPENAI_API_KEY (GPT 기획 + DALL-E 이미지 생성에 필수)")
+    openai_needed_for = []
+    if image_engine == "dalle":
+        openai_needed_for.append("DALL-E 이미지")
+    openai_needed_for.append("Whisper 자막")
+    if llm_provider == "openai":
+        openai_needed_for.insert(0, "GPT 기획")
+
+    if (image_engine == "dalle" or llm_provider == "openai") and (not openai_key or openai_key.startswith("sk-proj-YOUR")):
+        errors.append(f"OPENAI_API_KEY ({' + '.join(openai_needed_for)}에 필수)")
+    elif not openai_key or openai_key.startswith("sk-proj-YOUR"):
+        # Whisper만 필요 - 경고 수준 (나중에 WARN으로 처리 가능)
+        errors.append("OPENAI_API_KEY (Whisper 자막 타임스탬프에 필수)")
+
+    # Imagen 사용 시 Google 키 필요
+    if image_engine == "imagen":
+        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+        if not gemini_key:
+            errors.append("GEMINI_API_KEY (Imagen 4 이미지 생성에 필수)")
+
+    # LLM 프로바이더별 키 검증
+    if llm_provider == "gemini":
+        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "")
+        if not gemini_key:
+            errors.append("GEMINI_API_KEY (Gemini 기획 엔진에 필수)")
+    elif llm_provider == "claude":
+        claude_key = llm_key_override or os.getenv("ANTHROPIC_API_KEY", "")
+        if not claude_key:
+            errors.append("ANTHROPIC_API_KEY (Claude 기획 엔진에 필수)")
 
     elevenlabs_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
     if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
         errors.append("ELEVENLABS_API_KEY (TTS 음성 생성에 필수)")
 
-    if video_engine in ("kling", "veo3", "hailuo", "wan"):
+    # Veo 3: Google API 직접 연동 (GEMINI_API_KEYS 로테이션)
+    if video_engine == "veo3":
+        google_key = llm_key_override or get_google_key() or ""
+        if not google_key:
+            errors.append("GEMINI_API_KEY 또는 GEMINI_API_KEYS (Veo 3 비디오 엔진에 필수)")
+
+    # Kling: 직접 API 또는 Higgsfield
+    if video_engine == "kling":
+        kling_ak = os.getenv("KLING_ACCESS_KEY", "")
+        if not kling_ak or kling_ak.startswith("YOUR"):
+            errors.append("KLING_ACCESS_KEY (Kling 비디오 엔진에 필수)")
+
+    # Higgsfield 전용 엔진 (hailuo, wan 등)
+    if video_engine in ("hailuo", "wan"):
         hf_key = os.getenv("HIGGSFIELD_API_KEY", "")
         hf_id = os.getenv("HIGGSFIELD_ACCOUNT_ID", "")
         if not hf_key or hf_key.startswith("YOUR"):
-            if video_engine == "kling":
-                kling_ak = os.getenv("KLING_ACCESS_KEY", "")
-                if not kling_ak or kling_ak.startswith("YOUR"):
-                    errors.append(f"HIGGSFIELD_API_KEY 또는 KLING_ACCESS_KEY ({video_engine} 비디오 엔진에 필수)")
-            else:
-                errors.append(f"HIGGSFIELD_API_KEY ({video_engine} 비디오 엔진에 필수)")
+            errors.append(f"HIGGSFIELD_API_KEY ({video_engine} 비디오 엔진에 필수)")
         elif not hf_id or hf_id.startswith("YOUR"):
             errors.append("HIGGSFIELD_ACCOUNT_ID (Higgsfield 엔진에 필수)")
 
@@ -152,12 +234,19 @@ async def generate_video_endpoint(req: GenerateRequest):
     api_key_override = req.apiKey
     elevenlabs_key_override = req.elevenlabsKey
     video_engine = req.videoEngine
+    image_engine = req.imageEngine
+    llm_provider = req.llmProvider
+    llm_key_override = req.llmKey
     output_path = req.outputPath
 
     async def sse_generator():
+        # 동시 요청 제한: 슬롯 부족 시 대기 안내
+        if _generate_semaphore.locked():
+            yield {"data": "WARN|[대기열] 다른 비디오가 생성 중입니다. 순서를 기다리는 중...\n"}
+        await _generate_semaphore.acquire()
         try:
             # 사전 검증: 필수 API 키 확인
-            missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine)
+            missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine, image_engine, llm_provider, llm_key_override)
             if missing:
                 yield {"data": "ERROR|[환경 설정 오류] 다음 API 키가 누락되었거나 유효하지 않습니다:\n"}
                 for m in missing:
@@ -177,40 +266,89 @@ async def generate_video_endpoint(req: GenerateRequest):
                 elif pct < 20:
                     yield {"data": f"WARN|[ElevenLabs 크레딧 경고] {remaining:,}/{limit:,}자 남음 ({pct:.0f}%).\n"}
 
-            yield {"data": "PROG|10\n"}
-            yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작...\n"}
+            # Google 키 가용성 경고
+            total_keys = count_google_keys()
+            avail_keys = count_available_keys()
+            if total_keys > 0 and avail_keys < total_keys:
+                blocked_count = total_keys - avail_keys
+                if avail_keys == 0:
+                    yield {"data": f"WARN|[Google 키 경고] 모든 {total_keys}개 키가 429 차단됨. 쿼터 초과 가능성 높음.\n"}
+                else:
+                    yield {"data": f"WARN|[Google 키 상태] {avail_keys}/{total_keys}개 사용 가능 ({blocked_count}개 24시간 차단 중)\n"}
 
-            # 단계 1: GPT 기획
+            provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
+
+            # Google 키 로테이션 (Gemini, Imagen, Veo 공유)
+            google_key_for_video = get_google_key(llm_key_override)
+
+            # 비디오 엔진 사전 검증
+            active_video_engine = video_engine
+            if active_video_engine != "none":
+                engine_ok, engine_reason = check_engine_available(active_video_engine, google_key_for_video)
+                if not engine_ok:
+                    yield {"data": f"WARN|[비디오 엔진 경고] {active_video_engine}: {engine_reason}. 정지 이미지로 대체됩니다.\n"}
+                    active_video_engine = "none"
+
+            yield {"data": "PROG|10\n"}
+            yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
+
+            # 단계 1: LLM 기획 (Gemini / ChatGPT / Claude 선택)
+            # Gemini 프로바이더일 때 키 로테이션 적용
+            llm_key_for_request = get_google_key(llm_key_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
-            cuts, topic_folder = await loop.run_in_executor(None, generate_cuts, topic, api_key_override)
+            cuts, topic_folder = await loop.run_in_executor(
+                None,
+                lambda: generate_cuts(
+                    topic,
+                    api_key_override=api_key_override,
+                    llm_provider=llm_provider,
+                    llm_key_override=llm_key_for_request,
+                ),
+            )
 
             yield {"data": "PROG|30\n"}
             yield {"data": f"[기획 완료] 총 {len(cuts)}컷 기획 완료!\n"}
 
-            # 단계 2 & 3: DALL-E와 TTS 병렬 처리 (Threading)
-            yield {"data": "[생성 엔진] 아트 디렉터(DALL-E)와 성우(TTS) 동시 작업 중...\n"}
+            # 단계 2 & 3: 이미지와 TTS 병렬 처리 (Threading)
+            image_label = "Imagen 4" if image_engine == "imagen" else "DALL-E"
+            yield {"data": f"[생성 엔진] 아트 디렉터({image_label})와 성우(TTS) 동시 작업 중...\n"}
 
             visual_paths = [None] * len(cuts)
             audio_paths = [None] * len(cuts)
             word_timestamps_list = [None] * len(cuts)
             scripts = [cut["script"] for cut in cuts]
 
-            cut_executor = ThreadPoolExecutor(max_workers=2)
+            # 이미지/TTS 동시성 제한 (API 레이트 리밋 방지)
+            image_semaphore = threading.Semaphore(2)  # 이미지 최대 2개 동시
+            cut_executor = ThreadPoolExecutor(max_workers=4)
+
+            # 이미지 엔진에 따라 생성 함수 선택
+            gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
+
+            def _get_image_key():
+                """이미지 생성 시마다 다른 키 사용 (로테이션)"""
+                if image_engine == "imagen":
+                    return get_google_key(llm_key_override)
+                return api_key_override
 
             def process_cut(i, cut):
-                try:
-                    img_path = generate_image(cut["prompt"], i, topic_folder, api_key_override)
-                except Exception as exc:
-                    print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
-                    img_path = None
+                # 이미지 생성 (세마포어로 동시성 제한)
+                img_path = None
+                with image_semaphore:
+                    try:
+                        cut_image_key = _get_image_key()
+                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
+                    except Exception as exc:
+                        print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
 
                 # 이미지 완료 후 비디오 변환과 TTS를 병렬 실행
                 video_future = None
                 tts_future = None
 
-                if img_path and video_engine != "none":
+                if img_path and active_video_engine != "none":
+                    cut_video_key = get_google_key(llm_key_override)
                     video_future = cut_executor.submit(
-                        generate_video_from_image, img_path, cut["prompt"], i, topic_folder, video_engine
+                        generate_video_from_image, img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key
                     )
                 tts_future = cut_executor.submit(
                     generate_tts, cut["script"], i, topic_folder, elevenlabs_key_override
@@ -253,8 +391,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                 completed_count += 1
                 prog = 30 + int(50 * (completed_count / len(cuts)))
                 yield {"data": f"PROG|{prog}\n"}
-                engine_label = video_engine if video_engine != "none" else "이미지"
-                yield {"data": f"  -> 컷 {i+1} 시각 소스({engine_label}/DALL-E) 및 음성 생성 완료\n"}
+                engine_label = active_video_engine if active_video_engine != "none" else "이미지"
+                yield {"data": f"  -> 컷 {i+1} 시각 소스({engine_label}/{image_label}) 및 음성 생성 완료\n"}
 
             failed_visual = [i+1 for i, p in enumerate(visual_paths) if p is None]
             failed_audio = [i+1 for i, p in enumerate(audio_paths) if p is None]
@@ -311,8 +449,6 @@ async def generate_video_endpoint(req: GenerateRequest):
             yield {"data": f"DONE|{relative_video_path}\n"}
 
         except Exception as e:
-            import traceback
-
             traceback.print_exc()
             err_str = str(e)
             if "401" in err_str or "invalid_api_key" in err_str or "Incorrect API key" in err_str:
@@ -325,6 +461,13 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": "ERROR|[네트워크 오류] API 서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.\n"}
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
+        finally:
+            # ThreadPoolExecutor 리소스 정리
+            try:
+                cut_executor.shutdown(wait=False)
+            except Exception:
+                pass
+            _generate_semaphore.release()
 
     return EventSourceResponse(sse_generator())
 

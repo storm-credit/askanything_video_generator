@@ -2,87 +2,16 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, CheckCircle2, Film, AlertCircle, XCircle, Settings, X, Plus, Trash2, Eye, EyeOff } from "lucide-react";
-
-interface KeyStatus {
-  openai: boolean;
-  elevenlabs: boolean;
-  higgsfield_key: boolean;
-  higgsfield_account: boolean;
-  kling_access: boolean;
-  kling_secret: boolean;
-}
-
-interface KeyConfig {
-  id: string;
-  label: string;
-  description: string;
-  envName: string;
-  statusKey: keyof KeyStatus;
-  required: boolean;
-  multiKey: boolean;
-}
-
-const KEY_CONFIGS: KeyConfig[] = [
-  {
-    id: "openai",
-    label: "OpenAI API Key",
-    description: "GPT 기획, DALL-E 이미지, Whisper 자막, Sora 2 비디오에 사용",
-    envName: "OPENAI_API_KEY",
-    statusKey: "openai",
-    required: true,
-    multiKey: true,
-  },
-  {
-    id: "elevenlabs",
-    label: "ElevenLabs API Key",
-    description: "TTS 음성 내레이션 생성에 사용",
-    envName: "ELEVENLABS_API_KEY",
-    statusKey: "elevenlabs",
-    required: true,
-    multiKey: true,
-  },
-  {
-    id: "higgsfield_key",
-    label: "Higgsfield API Key",
-    description: "Kling, Veo3, Hailuo, Wan 비디오 엔진에 사용",
-    envName: "HIGGSFIELD_API_KEY",
-    statusKey: "higgsfield_key",
-    required: false,
-    multiKey: false,
-  },
-  {
-    id: "higgsfield_account",
-    label: "Higgsfield Account ID",
-    description: "Higgsfield 엔진 계정 식별자",
-    envName: "HIGGSFIELD_ACCOUNT_ID",
-    statusKey: "higgsfield_account",
-    required: false,
-    multiKey: false,
-  },
-  {
-    id: "kling_access",
-    label: "Kling Access Key",
-    description: "Kling AI 직접 연동 (Higgsfield 실패 시 폴백)",
-    envName: "KLING_ACCESS_KEY",
-    statusKey: "kling_access",
-    required: false,
-    multiKey: false,
-  },
-  {
-    id: "kling_secret",
-    label: "Kling Secret Key",
-    description: "Kling AI 시크릿 키",
-    envName: "KLING_SECRET_KEY",
-    statusKey: "kling_secret",
-    required: false,
-    multiKey: false,
-  },
-];
+import { Sparkles, Loader2, CheckCircle2, Film, AlertCircle, Settings, Brain, ImageIcon } from "lucide-react";
+import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
+import { SettingsModal } from "../components/SettingsModal";
+import { ProgressPanel } from "../components/ProgressPanel";
 
 export default function Home() {
   const [topic, setTopic] = useState("");
-  const [videoEngine, setVideoEngine] = useState("kling");
+  const [llmProvider, setLlmProvider] = useState("gemini");
+  const [imageEngine, setImageEngine] = useState("imagen");
+  const [videoEngine, setVideoEngine] = useState("veo3");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -94,17 +23,28 @@ export default function Home() {
   const [serverKeyStatus, setServerKeyStatus] = useState<KeyStatus | null>(null);
 
   // 멀티키 저장소: { openai: ["sk-..."], elevenlabs: ["sk_..."], ... }
-  const [savedKeys, setSavedKeys] = useState<Record<string, string[]>>({});
+  const [savedKeys, setSavedKeys] = useState<Record<string, string[]>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const stored = localStorage.getItem("askanything_keys");
+      return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
+  });
   // 입력 중인 키 값
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   // 비밀번호 표시 토글
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
   // 저장 경로 설정
-  const [outputPath, setOutputPath] = useState("");
+  const [outputPath, setOutputPath] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("askanything_output_path") || "";
+  });
+  // 키 사용량 통계
+  const [keyUsageStats, setKeyUsageStats] = useState<KeyUsageStats | null>(null);
 
   const fetchKeyStatus = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:8000/api/health");
+      const res = await fetch(`${API_BASE}/api/health`);
       if (res.ok) {
         const data = await res.json();
         setServerKeyStatus(data.keys || null);
@@ -118,10 +58,33 @@ export default function Home() {
     fetchKeyStatus();
   }, [fetchKeyStatus]);
 
+  // localStorage 영속화
+  useEffect(() => {
+    try { localStorage.setItem("askanything_keys", JSON.stringify(savedKeys)); } catch {}
+  }, [savedKeys]);
+  useEffect(() => {
+    try { localStorage.setItem("askanything_output_path", outputPath); } catch {}
+  }, [outputPath]);
+
+  const fetchKeyUsage = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/key-usage`);
+      if (res.ok) {
+        const data = await res.json();
+        setKeyUsageStats(data);
+      }
+    } catch {
+      // 서버 미실행 시 무시
+    }
+  }, []);
+
   // 모달 열릴 때마다 최신 서버 상태 조회
   useEffect(() => {
-    if (isSettingsOpen) fetchKeyStatus();
-  }, [isSettingsOpen, fetchKeyStatus]);
+    if (isSettingsOpen) {
+      fetchKeyStatus();
+      fetchKeyUsage();
+    }
+  }, [isSettingsOpen, fetchKeyStatus, fetchKeyUsage]);
 
   const addKey = (configId: string) => {
     const value = (inputValues[configId] || "").trim();
@@ -162,15 +125,29 @@ export default function Home() {
     const selectedOpenaiKey = pickKey("openai");
     const selectedElevenlabsKey = pickKey("elevenlabs");
 
+    // LLM 프로바이더별 키 선택
+    let llmKeyOverride: string | undefined;
+    if (llmProvider === "gemini") {
+      llmKeyOverride = pickKey("gemini");
+    } else if (llmProvider === "claude") {
+      llmKeyOverride = pickKey("claude_key");
+    }
+
+    const abortController = new AbortController();
+
     try {
-      const response = await fetch("http://localhost:8000/api/generate", {
+      const response = await fetch(`${API_BASE}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           topic,
           apiKey: selectedOpenaiKey || undefined,
           elevenlabsKey: selectedElevenlabsKey || undefined,
           videoEngine,
+          imageEngine,
+          llmProvider,
+          llmKey: llmKeyOverride || undefined,
           outputPath: outputPath.trim() || undefined,
         }),
       });
@@ -179,53 +156,65 @@ export default function Home() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
+      let buffer = "";  // chunk 경계에서 잘린 메시지 버퍼
+
+      const processLine = (line: string) => {
+        if (!line.startsWith("data:")) return;
+        const rawData = line.slice(5).trim();
+        if (!rawData) return;
+
+        if (rawData.startsWith("DONE|")) {
+          const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
+          const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
+          const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
+          const downloadUrl = `${API_BASE}${normalizedPath}`;
+
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          const fileName = videoPath.split('/').pop() || "AskAnything_Shorts.mp4";
+          link.setAttribute("download", fileName);
+          document.body.appendChild(link);
+          link.click();
+          link.parentNode?.removeChild(link);
+
+          setVideoUrl("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
+          setIsGenerating(false);
+        } else if (rawData.startsWith("ERROR|")) {
+          const errMsg = rawData.slice(6);
+          setLogs(prev => [...prev.slice(-99), `ERROR:${errMsg}`]);
+          setErrorMessage(errMsg);
+          setIsGenerating(false);
+        } else if (rawData.startsWith("WARN|")) {
+          const warnMsg = rawData.slice(5);
+          setLogs(prev => [...prev.slice(-99), `WARN:${warnMsg}`]);
+        } else if (rawData.startsWith("PROG|")) {
+          const p = parseInt(rawData.slice(5), 10);
+          if (!isNaN(p)) setProgress(p);
+        } else {
+          setLogs(prev => [...prev.slice(-99), rawData]);
+        }
+      };
 
       while (true) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          // 스트림 종료 시 버퍼에 남은 데이터 처리
+          if (buffer.trim()) processLine(buffer);
+          break;
+        }
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
+        // stream: true → 멀티바이트 문자(한글) chunk 경계 깨짐 방지
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        // 마지막 줄은 불완전할 수 있으므로 버퍼에 보관
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (line.startsWith("data:")) {
-            const rawData = line.slice(5).trim();
-            if (!rawData) continue;
-
-            if (rawData.startsWith("DONE|")) {
-               const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
-               const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
-               const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
-               const downloadUrl = `http://localhost:8000${normalizedPath}`;
-
-               const link = document.createElement("a");
-               link.href = downloadUrl;
-               const fileName = videoPath.split('/').pop() || "AskAnything_Shorts.mp4";
-               link.setAttribute("download", fileName);
-               document.body.appendChild(link);
-               link.click();
-               link.parentNode?.removeChild(link);
-
-               setVideoUrl("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
-               setIsGenerating(false);
-            } else if (rawData.startsWith("ERROR|")) {
-               const errMsg = rawData.slice(6);
-               setLogs(prev => [...prev.slice(-99), `ERROR:${errMsg}`]);
-               setErrorMessage(errMsg);
-               setIsGenerating(false);
-            } else if (rawData.startsWith("WARN|")) {
-               const warnMsg = rawData.slice(5);
-               setLogs(prev => [...prev.slice(-99), `WARN:${warnMsg}`]);
-            } else if (rawData.startsWith("PROG|")) {
-               const p = parseInt(rawData.slice(5), 10);
-               if (!isNaN(p)) setProgress(p);
-            } else {
-               setLogs(prev => [...prev.slice(-99), rawData]);
-            }
-          }
+          processLine(line);
         }
       }
     } catch (error) {
+      if (abortController.signal.aborted) return;  // 사용자 취소 시 무시
       console.error(error);
       const message = error instanceof Error ? error.message : "Unknown error";
       const userMsg = message === "Failed to fetch"
@@ -269,112 +258,22 @@ export default function Home() {
       {/* 설정 모달 */}
       <AnimatePresence>
         {isSettingsOpen && (
-          <>
-            {/* 오버레이 */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsSettingsOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
-            />
-            {/* 모달 */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[560px] sm:max-h-[85vh] z-[70] bg-gray-900/95 border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
-            >
-              {/* 모달 헤더 */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
-                <div>
-                  <h2 className="text-lg font-bold text-white">API 키 설정</h2>
-                  <p className="text-xs text-gray-500 mt-1">.env에 설정된 키는 자동 사용됩니다. 브라우저에서 추가 키를 등록하면 로테이션됩니다.</p>
-                </div>
-                <button
-                  onClick={() => setIsSettingsOpen(false)}
-                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* 모달 바디 */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
-                {/* 필수 키 */}
-                <div>
-                  <h3 className="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-3">필수 키</h3>
-                  {KEY_CONFIGS.filter((c) => c.required).map((config) => (
-                    <KeySection
-                      key={config.id}
-                      config={config}
-                      serverStatus={serverKeyStatus?.[config.statusKey] ?? null}
-                      savedKeys={savedKeys[config.id] || []}
-                      inputValue={inputValues[config.id] || ""}
-                      isVisible={visibleKeys[config.id] || false}
-                      onInputChange={(v) => setInputValues((prev) => ({ ...prev, [config.id]: v }))}
-                      onAdd={() => addKey(config.id)}
-                      onRemove={(idx) => removeKey(config.id, idx)}
-                      onToggleVisible={() => setVisibleKeys((prev) => ({ ...prev, [config.id]: !prev[config.id] }))}
-                    />
-                  ))}
-                </div>
-
-                {/* 선택 키 (비디오 엔진) */}
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">비디오 엔진 키 (선택)</h3>
-                  {KEY_CONFIGS.filter((c) => !c.required).map((config) => (
-                    <KeySection
-                      key={config.id}
-                      config={config}
-                      serverStatus={serverKeyStatus?.[config.statusKey] ?? null}
-                      savedKeys={savedKeys[config.id] || []}
-                      inputValue={inputValues[config.id] || ""}
-                      isVisible={visibleKeys[config.id] || false}
-                      onInputChange={(v) => setInputValues((prev) => ({ ...prev, [config.id]: v }))}
-                      onAdd={() => addKey(config.id)}
-                      onRemove={(idx) => removeKey(config.id, idx)}
-                      onToggleVisible={() => setVisibleKeys((prev) => ({ ...prev, [config.id]: !prev[config.id] }))}
-                    />
-                  ))}
-                </div>
-
-                {/* 저장 경로 설정 */}
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">출력 설정</h3>
-                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <span className="text-sm font-medium text-white">저장 경로</span>
-                        <p className="text-xs text-gray-500 mt-0.5">비어있으면 브라우저 다운로드 폴더에 저장됩니다</p>
-                      </div>
-                    </div>
-                    <input
-                      type="text"
-                      value={outputPath}
-                      onChange={(e) => setOutputPath(e.target.value)}
-                      placeholder={"예: C:\\Users\\사용자\\Desktop\\output.mp4"}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 모달 푸터 */}
-              <div className="px-6 py-4 border-t border-white/10 flex items-center justify-between">
-                <p className="text-xs text-gray-600">
-                  서버 키 {totalServerKeys}개 | 브라우저 키 {totalSavedKeys}개
-                </p>
-                <button
-                  onClick={() => setIsSettingsOpen(false)}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-xl transition-colors"
-                >
-                  완료
-                </button>
-              </div>
-            </motion.div>
-          </>
+          <SettingsModal
+            serverKeyStatus={serverKeyStatus}
+            savedKeys={savedKeys}
+            inputValues={inputValues}
+            visibleKeys={visibleKeys}
+            outputPath={outputPath}
+            keyUsageStats={keyUsageStats}
+            totalServerKeys={totalServerKeys}
+            totalSavedKeys={totalSavedKeys}
+            onClose={() => setIsSettingsOpen(false)}
+            onInputChange={(id, v) => setInputValues((prev) => ({ ...prev, [id]: v }))}
+            onAddKey={addKey}
+            onRemoveKey={removeKey}
+            onToggleVisible={(id) => setVisibleKeys((prev) => ({ ...prev, [id]: !prev[id] }))}
+            onOutputPathChange={setOutputPath}
+          />
         )}
       </AnimatePresence>
 
@@ -424,87 +323,66 @@ export default function Home() {
             </button>
           </div>
 
-          {/* 비디오 엔진 선택 */}
-          <div className="flex items-center justify-center gap-2">
-            <Film className="w-4 h-4 text-gray-500" />
-            <select
-              value={videoEngine}
-              onChange={(e) => setVideoEngine(e.target.value)}
-              disabled={isGenerating}
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-            >
-              <option value="kling" className="bg-gray-900">Kling 3.0 - 시네마틱 모션 (기본)</option>
-              <option value="sora2" className="bg-gray-900">Sora 2 - 최고 품질 (OpenAI)</option>
-              <option value="veo3" className="bg-gray-900">Veo 3.1 - 4K 시네마틱 (Google)</option>
-              <option value="hailuo" className="bg-gray-900">Hailuo 2.3 - 가성비 (Minimax)</option>
-              <option value="wan" className="bg-gray-900">Wan 2.5 - 빠른 생성 (Alibaba)</option>
-              <option value="none" className="bg-gray-900">비디오 없음 - 정지 이미지만</option>
-            </select>
+          {/* 엔진 선택 (LLM + 이미지 + 비디오) */}
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            {/* LLM 기획 엔진 */}
+            <div className="flex items-center gap-1">
+              <Brain className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={llmProvider}
+                onChange={(e) => setLlmProvider(e.target.value)}
+                disabled={isGenerating}
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="gemini" className="bg-gray-900">Gemini 2.5 Pro</option>
+                <option value="openai" className="bg-gray-900">GPT-4o</option>
+                <option value="claude" className="bg-gray-900">Claude Sonnet 4</option>
+              </select>
+            </div>
+
+            {/* 이미지 엔진 */}
+            <div className="flex items-center gap-1">
+              <ImageIcon className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={imageEngine}
+                onChange={(e) => setImageEngine(e.target.value)}
+                disabled={isGenerating}
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="imagen" className="bg-gray-900">Imagen 4 (Google)</option>
+                <option value="dalle" className="bg-gray-900">DALL-E 3 (OpenAI)</option>
+              </select>
+            </div>
+
+            {/* 비디오 엔진 */}
+            <div className="flex items-center gap-1">
+              <Film className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={videoEngine}
+                onChange={(e) => setVideoEngine(e.target.value)}
+                disabled={isGenerating}
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="veo3" className="bg-gray-900">Veo 3 (Google)</option>
+                <option value="kling" className="bg-gray-900">Kling 3.0</option>
+                <option value="sora2" className="bg-gray-900">Sora 2</option>
+                <option value="hailuo" className="bg-gray-900">Hailuo 2.3</option>
+                <option value="wan" className="bg-gray-900">Wan 2.5</option>
+                <option value="none" className="bg-gray-900">없음</option>
+              </select>
+            </div>
           </div>
         </form>
       </motion.div>
 
+      {/* 진행률 + 로그 패널 */}
       <AnimatePresence>
         {(isGenerating || errorMessage) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="mt-16 w-full max-w-xl space-y-4 z-10"
-          >
-            {/* 진행률 상태바 */}
-            <div className="glass-panel p-4 rounded-2xl">
-               <div className="flex justify-between items-center mb-2 text-sm font-medium">
-                  <span className="text-gray-300">생성 진행률</span>
-                  <span className="text-indigo-400 font-bold">{progress}%</span>
-               </div>
-               <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ ease: "easeInOut", duration: 0.5 }}
-                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
-                  />
-               </div>
-            </div>
-
-            {/* 실시간 로그 패널 */}
-            <div className="glass-panel p-6 rounded-2xl space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
-              {logs.length === 0 ? (
-                 <div className="flex items-center text-indigo-400 gap-3">
-                    <Loader2 className="w-4 h-4 animate-spin"/> 서버 응답 대기 중...
-                 </div>
-              ) : (
-                 logs.map((log, idx) => {
-                    const isError = log.startsWith("ERROR:");
-                    const isWarn = log.startsWith("WARN:");
-                    const displayText = isError ? log.slice(6) : isWarn ? log.slice(5) : log;
-                    const isLast = idx === logs.length - 1;
-                    return (
-                      <motion.div
-                         key={idx}
-                         initial={{ opacity: 0, x: -10 }}
-                         animate={{ opacity: 1, x: 0 }}
-                         className={`flex items-start text-sm ${
-                           isError ? 'text-red-400 font-medium' :
-                           isWarn ? 'text-amber-400 font-medium' :
-                           isLast ? 'text-indigo-400 font-medium' : 'text-gray-500'
-                         }`}
-                      >
-                         {isError ? <XCircle className="w-4 h-4 mr-2 text-red-500 shrink-0"/> :
-                          isWarn ? <AlertCircle className="w-4 h-4 mr-2 text-amber-500 shrink-0"/> :
-                          isLast ? <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0"/> :
-                          <CheckCircle2 className="w-4 h-4 mr-2 text-green-500 shrink-0"/>}
-                         <span className="break-all">{displayText}</span>
-                      </motion.div>
-                    );
-                 })
-              )}
-            </div>
-          </motion.div>
+          <ProgressPanel progress={progress} logs={logs} />
         )}
       </AnimatePresence>
 
+      {/* 성공 패널 */}
       <AnimatePresence>
         {videoUrl && !isGenerating && !errorMessage && (
           <motion.div
@@ -519,6 +397,7 @@ export default function Home() {
         )}
       </AnimatePresence>
 
+      {/* 오류 패널 */}
       <AnimatePresence>
         {errorMessage && !isGenerating && (
           <motion.div
@@ -543,104 +422,5 @@ export default function Home() {
         )}
       </AnimatePresence>
     </main>
-  );
-}
-
-/* ─── 키 섹션 컴포넌트 ─── */
-function KeySection({
-  config,
-  serverStatus,
-  savedKeys,
-  inputValue,
-  isVisible,
-  onInputChange,
-  onAdd,
-  onRemove,
-  onToggleVisible,
-}: {
-  config: KeyConfig;
-  serverStatus: boolean | null;
-  savedKeys: string[];
-  inputValue: string;
-  isVisible: boolean;
-  onInputChange: (v: string) => void;
-  onAdd: () => void;
-  onRemove: (idx: number) => void;
-  onToggleVisible: () => void;
-}) {
-  const maskKey = (key: string) => {
-    if (key.length <= 8) return "****";
-    return key.slice(0, 4) + "..." + key.slice(-4);
-  };
-
-  return (
-    <div className="mb-4 p-4 rounded-2xl bg-white/[0.03] border border-white/5">
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-white">{config.label}</span>
-            {config.required && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-medium">필수</span>
-            )}
-            {config.multiKey && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 font-medium">멀티키</span>
-            )}
-          </div>
-          <p className="text-xs text-gray-500 mt-0.5">{config.description}</p>
-        </div>
-        {/* 서버 상태 표시 */}
-        <div className="flex items-center gap-1.5 shrink-0 ml-3">
-          <div className={`w-2 h-2 rounded-full ${serverStatus === true ? "bg-green-500" : serverStatus === false ? "bg-gray-600" : "bg-gray-700 animate-pulse"}`} />
-          <span className="text-[10px] text-gray-500">
-            {serverStatus === true ? ".env 설정됨" : serverStatus === false ? "미설정" : "확인 중"}
-          </span>
-        </div>
-      </div>
-
-      {/* 저장된 키 목록 */}
-      {savedKeys.length > 0 && (
-        <div className="space-y-1.5 mb-2">
-          {savedKeys.map((key, idx) => (
-            <div key={idx} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-              <span className="text-xs text-blue-300 font-mono flex-1">
-                {isVisible ? key : maskKey(key)}
-              </span>
-              <button onClick={onToggleVisible} className="text-gray-500 hover:text-gray-300 transition-colors">
-                {isVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-              </button>
-              <button onClick={() => onRemove(idx)} className="text-gray-500 hover:text-red-400 transition-colors">
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 키 입력 */}
-      <div className="flex items-center gap-2">
-        <input
-          type="password"
-          value={inputValue}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onAdd()}
-          placeholder={`${config.envName} 입력...`}
-          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-mono"
-        />
-        <button
-          onClick={onAdd}
-          disabled={!inputValue.trim()}
-          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 flex items-center justify-center text-gray-400 hover:text-white transition-all"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
-
-      {config.multiKey && savedKeys.length > 0 && (
-        <p className="text-[10px] text-gray-600 mt-1.5">
-          등록된 {savedKeys.length}개의 키 중 랜덤으로 선택되어 사용됩니다 (무료 티어 로테이션)
-        </p>
-      )}
-    </div>
   );
 }
