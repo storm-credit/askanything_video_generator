@@ -116,10 +116,4 @@ def _generate_imagen(api_key, prompt):
     if hasattr(gen_image, "image_bytes") and gen_image.image_bytes:
         return gen_image.image_bytes
 
-    # 대체: PIL 이미지로 변환
-    if hasattr(gen_image, "_pil_image") and gen_image._pil_image:
-        buf = io.BytesIO()
-        gen_image._pil_image.save(buf, format="PNG")
-        return buf.getvalue()
-
-    raise ValueError("Imagen API 이미지 데이터를 추출할 수 없습니다.")
+    raise ValueError("Imagen API 이미지 데이터를 추출할 수 없습니다 (image_bytes 없음).")
