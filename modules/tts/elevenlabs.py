@@ -1,25 +1,28 @@
 import os
+import time
 import requests
+
+
+MAX_RETRIES = 3
+RETRY_DELAYS = [2, 5, 10]  # 초 단위 백오프
+
 
 def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None) -> str:
     """
     ElevenLabs API를 사용하여 매우 사실적인 다큐멘터리/쇼츠용 음성(.mp3)을 생성합니다.
-    (OpenAI TTS 'onyx' 스타일을 대체)
+    빈 텍스트 → 기본 문구로 대체, 타임아웃/네트워크 오류 → 최대 3회 재시도.
     """
+    # 빈 스크립트 폴백: 무음 대신 기본 문구로 대체
     if not text or not text.strip():
-        print(f"[ElevenLabs 오류] 컷 {index} 텍스트가 비어 있습니다.")
-        return None
+        text = "..."
+        print(f"[ElevenLabs 경고] 컷 {index+1} 스크립트가 비어 있어 기본 문구로 대체합니다.")
 
     api_key = api_key_override or os.getenv("ELEVENLABS_API_KEY")
     if not api_key or api_key == "YOUR_ELEVENLABS_API_KEY_HERE":
         print("[ElevenLabs 오류] ELEVENLABS_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
         return None
 
-    # 가장 다큐멘터리/내레이션에 적합한 Voice ID (예: 'Brian' 또는 'Drew' 같은 깊고 중후한 남성 목소리)
-    # 여기서는 ElevenLabs에서 기본 제공하는 대중적인 내레이션 목소리 ID 중 하나를 사용합니다. 
-    # 'pNInz6obpgDQGcFmaJcg' = Adam (중후하고 신뢰감 있는 목소리)
-    # 'cjVigY5qzO86Huf0OWal' = Eric (다큐멘터리 톤)
-    VOICE_ID = "cjVigY5qzO86Huf0OWal" # Eric
+    VOICE_ID = "cjVigY5qzO86Huf0OWal"  # Eric (다큐멘터리 톤)
     URL = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
 
     headers = {
@@ -43,29 +46,69 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
     os.makedirs(output_dir, exist_ok=True)
     audio_path = os.path.join(output_dir, f"cut_{index}.mp3")
 
-    print(f"-> [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 내레이션 렌더링 중...")
-    try:
-        response = requests.post(URL, json=data, headers=headers, timeout=30)
-        
-        if response.status_code == 200:
-            with open(audio_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
-            if os.path.getsize(audio_path) == 0:
-                print(f"[ElevenLabs 오류] 컷 {index+1} 음성 파일이 비어 있습니다.")
+    for attempt in range(MAX_RETRIES):
+        try:
+            label = f"(시도 {attempt+1}/{MAX_RETRIES})" if attempt > 0 else ""
+            print(f"-> [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 내레이션 렌더링 중... {label}")
+
+            response = requests.post(URL, json=data, headers=headers, timeout=30)
+
+            if response.status_code == 200:
+                with open(audio_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=1024):
+                        if chunk:
+                            f.write(chunk)
+                if os.path.getsize(audio_path) == 0:
+                    print(f"[ElevenLabs 오류] 컷 {index+1} 음성 파일이 비어 있습니다.")
+                    # 빈 파일은 재시도
+                    if attempt < MAX_RETRIES - 1:
+                        time.sleep(RETRY_DELAYS[attempt])
+                        continue
+                    return None
+                print(f"OK [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 음성 생성 완료!")
+                return audio_path
+
+            elif response.status_code == 401:
+                # 인증 오류는 재시도 무의미
+                print("[ElevenLabs 인증 오류] API Key가 유효하지 않습니다. .env 파일을 확인하세요.")
                 return None
-            print(f"OK [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 음성 생성 완료!")
-            return audio_path
-        elif response.status_code == 401:
-            print(f"[ElevenLabs 인증 오류] API Key가 유효하지 않습니다. .env 파일을 확인하세요.")
+
+            elif response.status_code == 429:
+                # 할당량 초과: 대기 후 재시도
+                wait = RETRY_DELAYS[attempt] if attempt < len(RETRY_DELAYS) else 10
+                print(f"[ElevenLabs 할당량 초과] {wait}초 후 재시도... ({attempt+1}/{MAX_RETRIES})")
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(wait)
+                    continue
+                print("[ElevenLabs 할당량 초과] 최대 재시도 횟수 도달. API 요금제를 확인하세요.")
+                return None
+
+            else:
+                print(f"[ElevenLabs 오류] 요청 실패 ({response.status_code}): {response.text[:200]}")
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(RETRY_DELAYS[attempt])
+                    continue
+                return None
+
+        except requests.exceptions.Timeout:
+            print(f"[ElevenLabs 타임아웃] 컷 {index+1} 응답 시간 초과 ({attempt+1}/{MAX_RETRIES})")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAYS[attempt])
+                continue
             return None
-        elif response.status_code == 429:
-            print(f"[ElevenLabs 할당량 초과] API 사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.")
+
+        except requests.exceptions.ConnectionError:
+            print(f"[ElevenLabs 연결 오류] 컷 {index+1} 서버 연결 실패 ({attempt+1}/{MAX_RETRIES})")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAYS[attempt])
+                continue
             return None
-        else:
-            print(f"[ElevenLabs 오류] 요청 실패 ({response.status_code}): {response.text[:200]}")
+
+        except Exception as e:
+            print(f"[ElevenLabs 통신 오류] 컷 {index+1}: {e} ({attempt+1}/{MAX_RETRIES})")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAYS[attempt])
+                continue
             return None
-    except Exception as e:
-        print(f"[ElevenLabs 통신 오류] {e}")
-        return None
+
+    return None
