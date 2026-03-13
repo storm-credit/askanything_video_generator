@@ -2,7 +2,8 @@ import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile, useCurrentFrame,
 import React, { useMemo } from 'react';
 import { Captions } from './Captions';
 
-const INTRO_DURATION_FRAMES = 48; // 2초 @ 24fps
+const INTRO_DURATION_FRAMES = 48;  // 2초 @ 24fps
+const OUTRO_DURATION_FRAMES = 48;  // 2초 @ 24fps
 
 type WordProps = {
   word: string;
@@ -94,19 +95,43 @@ const BrandIntro: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
-export const Main: React.FC<{ cuts: CutProps[]; introImagePath?: string }> = ({ cuts, introImagePath }) => {
+// 브랜드 아웃트로 화면 (페이드인 + 정지)
+const BrandOutro: React.FC<{ src: string }> = ({ src }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // 0→0.5초: 페이드인
+  const opacity = interpolate(frame, [0, fps * 0.5], [0, 1], { extrapolateRight: 'clamp' });
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: 'black' }}>
+      <Img
+        src={src}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          opacity,
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
+
+export const Main: React.FC<{ cuts: CutProps[]; introImagePath?: string; outroImagePath?: string }> = ({ cuts, introImagePath, outroImagePath }) => {
 
   const introFrames = introImagePath ? INTRO_DURATION_FRAMES : 0;
+  const outroFrames = outroImagePath ? OUTRO_DURATION_FRAMES : 0;
 
   // Precompute start frames (인트로 길이만큼 오프셋)
-  const startFrames = useMemo(() => {
+  const { startFrames, contentEndFrame } = useMemo(() => {
     const frames: number[] = [];
     let acc = introFrames;
     for (const cut of cuts) {
       frames.push(acc);
       acc += cut.duration_in_frames;
     }
-    return frames;
+    return { startFrames: frames, contentEndFrame: acc };
   }, [cuts, introFrames]);
 
   return (
@@ -146,6 +171,13 @@ export const Main: React.FC<{ cuts: CutProps[]; introImagePath?: string }> = ({ 
           </Sequence>
         );
       })}
+
+      {/* 브랜드 아웃트로 (있을 때만) */}
+      {outroImagePath && (
+        <Sequence from={contentEndFrame} durationInFrames={OUTRO_DURATION_FRAMES}>
+          <BrandOutro src={staticFile(outroImagePath)} />
+        </Sequence>
+      )}
     </AbsoluteFill>
   );
 };

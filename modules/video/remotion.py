@@ -5,7 +5,9 @@ import subprocess
 from datetime import datetime
 
 INTRO_IMAGE = "intro.png"          # assets/ 기준 상대 경로
+OUTRO_IMAGE = "outro.jpg"          # assets/ 기준 상대 경로
 INTRO_DURATION_FRAMES = 48         # 2초 @ 24fps
+OUTRO_DURATION_FRAMES = 48         # 2초 @ 24fps
 
 
 def _to_relative(p: str) -> str:
@@ -67,18 +69,27 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             }
         )
 
-    # 인트로 이미지가 있으면 총 길이에 인트로 추가
+    # 인트로/아웃트로 이미지 체크 → 총 길이에 반영
     intro_path = os.path.join("assets", INTRO_IMAGE)
+    outro_path = os.path.join("assets", OUTRO_IMAGE)
     intro_image_path = None
+    outro_image_path = None
+
     if os.path.exists(intro_path):
         intro_image_path = INTRO_IMAGE
         total_duration_in_frames += INTRO_DURATION_FRAMES
         print(f"-> [인트로] 브랜드 인트로 {INTRO_DURATION_FRAMES}프레임 (2초) 추가")
 
+    if os.path.exists(outro_path):
+        outro_image_path = OUTRO_IMAGE
+        total_duration_in_frames += OUTRO_DURATION_FRAMES
+        print(f"-> [아웃트로] 브랜드 아웃트로 {OUTRO_DURATION_FRAMES}프레임 (2초) 추가")
+
     props_data = {
         "cuts": cuts_data,
         "totalDurationInFrames": total_duration_in_frames,
         "introImagePath": intro_image_path,
+        "outroImagePath": outro_image_path,
     }
 
     with open(props_json_path, "w", encoding="utf-8") as f:
