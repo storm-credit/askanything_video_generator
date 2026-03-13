@@ -107,7 +107,7 @@ def generate_video_veo(
                     continue  # 다음 키로 재시도
                 else:
                     print(f"[{model_label} 오류] 컷 {index+1} 요청 실패: {e}")
-                    return None
+                    break  # 이 모델 포기 → 다음 모델로 폴백
 
             # 폴링 대기
             print(f"-> [{model_label}] 컷 {index+1} 클라우드 렌더링 대기 중 (약 1~3분 소요)...")

@@ -27,12 +27,13 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
         if not model_chain:
             model_chain = [{"id": "imagen-4.0-generate-001", "tag": "standard", "label": "Imagen 4"}]
 
-    enhanced_prompt = MASTER_STYLE + prompt
-
     for model_idx, model in enumerate(model_chain):
         model_id = model["id"]
         model_label = model["label"]
         service_tag = get_service_tag("imagen", model_id)
+
+        # 모델 체인 반복마다 프롬프트 초기화 (safety 폴백으로 변경된 프롬프트 리셋)
+        enhanced_prompt = MASTER_STYLE + prompt
 
         tried_keys: set[str] = set()
         current_key = api_key
