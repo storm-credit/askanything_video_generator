@@ -17,7 +17,7 @@ load_dotenv(override=True)
 from modules.gpt.cutter import generate_cuts
 from modules.image.dalle import generate_image
 from modules.video.engines import generate_video_from_image, get_available_engines
-from modules.tts.elevenlabs import generate_tts
+from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs_quota
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
 
@@ -164,6 +164,18 @@ async def generate_video_endpoint(req: GenerateRequest):
                     yield {"data": f"ERROR|  - {m}\n"}
                 yield {"data": "ERROR|.env 파일을 확인하거나, 프론트엔드에서 API Key를 입력해주세요.\n"}
                 return
+
+            # 사전 검증: API 쿼터 체크 (경고만, 차단 안 함)
+            el_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
+            quota_info = check_elevenlabs_quota(el_key)
+            if quota_info:
+                remaining = quota_info["remaining"]
+                limit = quota_info["limit"]
+                pct = (remaining / limit * 100) if limit > 0 else 0
+                if remaining < 500:
+                    yield {"data": f"WARN|[ElevenLabs 잔여 크레딧 부족] {remaining:,}/{limit:,}자 남음 ({pct:.0f}%). 생성이 중단될 수 있습니다.\n"}
+                elif pct < 20:
+                    yield {"data": f"WARN|[ElevenLabs 크레딧 경고] {remaining:,}/{limit:,}자 남음 ({pct:.0f}%).\n"}
 
             yield {"data": "PROG|10\n"}
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작...\n"}

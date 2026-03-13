@@ -1,6 +1,7 @@
 import os
 import json
 import subprocess
+from datetime import datetime
 
 
 def _validate_inputs(visual_paths, audio_paths, scripts, word_timestamps_list):
@@ -27,7 +28,8 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
     output_dir = os.path.join("assets", topic_folder, "video")
     os.makedirs(output_dir, exist_ok=True)
 
-    final_video_path = os.path.join(output_dir, "final_shorts.mp4")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    final_video_path = os.path.join(output_dir, f"{topic_folder}_{timestamp}.mp4")
     props_json_path = os.path.join(output_dir, "remotion_props.json")
 
     cuts_data = []
@@ -98,6 +100,8 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
         return None
     except subprocess.CalledProcessError as e:
         print(f"[Remotion 렌더링 실패] 종료 코드: {e.returncode}")
+        if e.stdout:
+            print(f"  stdout: {e.stdout[-500:]}")
         if e.stderr:
-            print(f"  stderr: {e.stderr[:500]}")
+            print(f"  stderr: {e.stderr[-500:]}")
         return None

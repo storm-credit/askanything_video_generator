@@ -200,7 +200,8 @@ export default function Home() {
 
                const link = document.createElement("a");
                link.href = downloadUrl;
-               link.setAttribute("download", "AskAnything_Shorts.mp4");
+               const fileName = videoPath.split('/').pop() || "AskAnything_Shorts.mp4";
+               link.setAttribute("download", fileName);
                document.body.appendChild(link);
                link.click();
                link.parentNode?.removeChild(link);
@@ -212,6 +213,9 @@ export default function Home() {
                setLogs(prev => [...prev.slice(-99), `ERROR:${errMsg}`]);
                setErrorMessage(errMsg);
                setIsGenerating(false);
+            } else if (rawData.startsWith("WARN|")) {
+               const warnMsg = rawData.slice(5);
+               setLogs(prev => [...prev.slice(-99), `WARN:${warnMsg}`]);
             } else if (rawData.startsWith("PROG|")) {
                const p = parseInt(rawData.slice(5), 10);
                if (!isNaN(p)) setProgress(p);
@@ -238,17 +242,25 @@ export default function Home() {
   const totalSavedKeys = Object.values(savedKeys).reduce((sum, arr) => sum + arr.length, 0);
   const totalServerKeys = serverKeyStatus ? Object.values(serverKeyStatus).filter(Boolean).length : 0;
 
+  // 필수 키 상태 판정: 초록(전체) / 노랑(일부) / 회색(없음)
+  const hasOpenai = !!(serverKeyStatus?.openai || (savedKeys["openai"]?.length ?? 0) > 0);
+  const hasElevenlabs = !!(serverKeyStatus?.elevenlabs || (savedKeys["elevenlabs"]?.length ?? 0) > 0);
+  const requiredAllSet = hasOpenai && hasElevenlabs;
+  const requiredSomeSet = hasOpenai || hasElevenlabs || totalServerKeys > 0 || totalSavedKeys > 0;
+
+  const iconStyle = requiredAllSet
+    ? "border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20"
+    : requiredSomeSet
+      ? "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+      : "border-white/20 bg-white/5 text-gray-400 hover:bg-white/10";
+
   return (
     <main className="min-h-screen relative flex flex-col items-center justify-center p-6 sm:p-24 bg-black overflow-hidden">
 
       {/* 우측 상단 설정 버튼 */}
       <button
         onClick={() => setIsSettingsOpen(true)}
-        className={`absolute top-6 right-6 z-50 w-11 h-11 rounded-full border backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:scale-110 ${
-          totalSavedKeys > 0 || totalServerKeys > 0
-            ? "border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20"
-            : "border-white/20 bg-white/5 text-gray-400 hover:bg-white/10"
-        }`}
+        className={`absolute top-6 right-6 z-50 w-11 h-11 rounded-full border backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:scale-110 ${iconStyle}`}
         title="API 키 설정"
       >
         <Settings className="w-5 h-5" />
@@ -465,7 +477,8 @@ export default function Home() {
               ) : (
                  logs.map((log, idx) => {
                     const isError = log.startsWith("ERROR:");
-                    const displayText = isError ? log.slice(6) : log;
+                    const isWarn = log.startsWith("WARN:");
+                    const displayText = isError ? log.slice(6) : isWarn ? log.slice(5) : log;
                     const isLast = idx === logs.length - 1;
                     return (
                       <motion.div
@@ -474,10 +487,12 @@ export default function Home() {
                          animate={{ opacity: 1, x: 0 }}
                          className={`flex items-start text-sm ${
                            isError ? 'text-red-400 font-medium' :
+                           isWarn ? 'text-amber-400 font-medium' :
                            isLast ? 'text-indigo-400 font-medium' : 'text-gray-500'
                          }`}
                       >
                          {isError ? <XCircle className="w-4 h-4 mr-2 text-red-500 shrink-0"/> :
+                          isWarn ? <AlertCircle className="w-4 h-4 mr-2 text-amber-500 shrink-0"/> :
                           isLast ? <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0"/> :
                           <CheckCircle2 className="w-4 h-4 mr-2 text-green-500 shrink-0"/>}
                          <span className="break-all">{displayText}</span>

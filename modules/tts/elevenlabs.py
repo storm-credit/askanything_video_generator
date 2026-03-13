@@ -7,6 +7,28 @@ MAX_RETRIES = 3
 RETRY_DELAYS = [2, 5, 10]  # 초 단위 백오프
 
 
+def check_quota(api_key: str = None) -> dict | None:
+    """ElevenLabs 구독 정보를 조회하여 잔여 크레딧을 반환합니다."""
+    key = api_key or os.getenv("ELEVENLABS_API_KEY")
+    if not key or key == "YOUR_ELEVENLABS_API_KEY_HERE":
+        return None
+    try:
+        resp = requests.get(
+            "https://api.elevenlabs.io/v1/user/subscription",
+            headers={"xi-api-key": key},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            used = data.get("character_count", 0)
+            limit = data.get("character_limit", 0)
+            remaining = max(0, limit - used)
+            return {"used": used, "limit": limit, "remaining": remaining}
+    except Exception:
+        pass
+    return None
+
+
 def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None) -> str:
     """
     ElevenLabs API를 사용하여 매우 사실적인 다큐멘터리/쇼츠용 음성(.mp3)을 생성합니다.
