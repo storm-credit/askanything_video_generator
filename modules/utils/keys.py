@@ -31,7 +31,11 @@ _BLOCK_DURATION = 24 * 60 * 60  # 24시간
 # ── 경고 임계값 (하루 기준) ──
 _WARN_THRESHOLD = {
     "veo3": 3,      # Veo 3: 키당 ~3회/일 → 넘으면 경고
+    "veo3:standard": 3,
+    "veo3:fast": 3,
     "imagen": 20,    # Imagen 4: 키당 ~20회/일 → 넘으면 경고
+    "imagen:standard": 20,
+    "imagen:fast": 20,
     "gemini": 50,    # Gemini: 키당 ~50회/일 → 넘으면 경고
 }
 _DEFAULT_WARN_THRESHOLD = 10
@@ -177,7 +181,12 @@ def get_key_usage_stats() -> list[dict]:
     with _usage_lock:
         for key in all_keys:
             masked = mask_key(key)
-            usage = dict(_key_usage[key]) if key in _key_usage else {}
+            raw_usage = dict(_key_usage[key]) if key in _key_usage else {}
+            # 모델 변형 태그 집계: "imagen:standard" + "imagen:fast" → "imagen"
+            usage: dict[str, int] = {}
+            for svc, cnt in raw_usage.items():
+                base_svc = svc.split(":")[0] if ":" in svc else svc
+                usage[base_svc] = usage.get(base_svc, 0) + cnt
             total = sum(usage.values())
 
             # 서비스별 차단 상태

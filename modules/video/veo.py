@@ -10,6 +10,7 @@ import requests
 
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
 from modules.utils.constants import is_key_rotation_error
+from modules.utils.models import get_model_chain, get_service_tag
 
 # Veo 모델 옵션 (환경변수로 오버라이드 가능)
 DEFAULT_MODEL = "veo-3.0-generate-001"
@@ -27,7 +28,7 @@ def generate_video_veo(
 ) -> str | None:
     """
     Google Veo 3로 이미지를 비디오로 변환합니다.
-    429 에러 시 다른 키로 자동 전환하여 재시도합니다 (최대 3회).
+    429 에러 시 다른 키로 자동 전환, 전 키 소진 시 Fast 모델로 자동 폴백.
     """
     if not os.path.exists(image_path):
         print(f"[Veo 3 오류] 이미지 파일을 찾을 수 없습니다: {image_path}")
@@ -46,115 +47,131 @@ def generate_video_veo(
     ext = os.path.splitext(image_path)[1].lower()
     mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/png")
-    model_name = os.getenv("VEO_MODEL", DEFAULT_MODEL)
 
-    tried_keys: set[str] = set()
-    current_key = api_key
+    # 모델 체인: 환경변수 오버라이드 시 단일 모델, 아니면 Standard → Fast
+    override_model = os.getenv("VEO_MODEL")
+    if override_model:
+        model_chain = [{"id": override_model, "tag": "override", "label": override_model}]
+    else:
+        model_chain = get_model_chain("veo3")
+        if not model_chain:
+            model_chain = [{"id": DEFAULT_MODEL, "tag": "standard", "label": "Veo 3"}]
 
-    for attempt in range(MAX_KEY_RETRIES):
-        # 키 선택 (이전에 실패한 키 제외)
-        if attempt == 0:
-            final_key = current_key or get_google_key(service="veo3")
-        else:
-            final_key = get_google_key(service="veo3", exclude=tried_keys)
+    for model_idx, model in enumerate(model_chain):
+        model_id = model["id"]
+        model_label = model["label"]
+        service_tag = get_service_tag("veo3", model_id)
 
-        if not final_key:
-            print("[Veo 3 오류] 사용 가능한 API 키가 없습니다.")
-            return None
+        tried_keys: set[str] = set()
+        current_key = api_key
 
-        if final_key in tried_keys:
-            # 새 키를 못 찾음 (전부 소진)
-            print(f"[Veo 3] 컷 {index+1}: 사용 가능한 키가 더 이상 없습니다. ({len(tried_keys)}개 소진)")
-            return None
-
-        tried_keys.add(final_key)
-        client = genai.Client(api_key=final_key)
-
-        if attempt > 0:
-            print(f"-> [Veo 3] 컷 {index+1} 다른 키로 재시도 중... (시도 {attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_key)})")
-        else:
-            print(f"-> [Veo 3] 컷 {index+1} 이미지-투-비디오 렌더링 요청 중... ({model_name})")
-
-        try:
-            operation = client.models.generate_videos(
-                model=model_name,
-                prompt=f"Cinematic movement, smooth camera motion, 4K quality. {prompt}",
-                image=types.Image(image_bytes=img_bytes, mime_type=mime_type),
-                config=types.GenerateVideosConfig(
-                    numberOfVideos=1,
-                    durationSeconds=8,
-                    aspectRatio="9:16",
-                ),
-            )
-        except Exception as e:
-            err_str = str(e)
-            if is_key_rotation_error(err_str):
-                mark_key_exhausted(final_key, "veo3")
-                print(f"[Veo 3 쿼터 초과] 컷 {index+1}: 키 차단됨 → 다른 키로 전환 시도...")
-                continue  # 다음 키로 재시도
+        for attempt in range(MAX_KEY_RETRIES):
+            # 키 선택 (이전에 실패한 키 제외)
+            if attempt == 0:
+                final_key = current_key or get_google_key(service=service_tag)
             else:
-                print(f"[Veo 3 오류] 컷 {index+1} 요청 실패: {e}")
-                return None
+                final_key = get_google_key(service=service_tag, exclude=tried_keys)
 
-        # 폴링 대기
-        print(f"-> [Veo 3] 컷 {index+1} 클라우드 렌더링 대기 중 (약 1~3분 소요)...")
-        start = time.time()
+            if not final_key:
+                break  # 이 모델에 사용 가능한 키 없음 → 다음 모델로
 
-        try:
-            while not operation.done:
-                time.sleep(POLL_INTERVAL)
-                operation = client.operations.get(operation)
-                elapsed = time.time() - start
-                if elapsed > MAX_WAIT:
-                    print(f"[Veo 3 타임아웃] 컷 {index+1}: {MAX_WAIT}초 초과")
+            if final_key in tried_keys:
+                break  # 새 키 없음 → 다음 모델로
+
+            tried_keys.add(final_key)
+            client = genai.Client(api_key=final_key)
+
+            if attempt > 0:
+                print(f"-> [{model_label}] 컷 {index+1} 다른 키로 재시도 중... (시도 {attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_key)})")
+            elif model_idx == 0:
+                print(f"-> [{model_label}] 컷 {index+1} 이미지-투-비디오 렌더링 요청 중... ({model_id})")
+            else:
+                print(f"-> [{model_label}] 컷 {index+1} 폴백 렌더링 요청 중... ({model_id})")
+
+            try:
+                operation = client.models.generate_videos(
+                    model=model_id,
+                    prompt=f"Cinematic movement, smooth camera motion, 4K quality. {prompt}",
+                    image=types.Image(image_bytes=img_bytes, mime_type=mime_type),
+                    config=types.GenerateVideosConfig(
+                        numberOfVideos=1,
+                        durationSeconds=8,
+                        aspectRatio="9:16",
+                    ),
+                )
+            except Exception as e:
+                err_str = str(e)
+                if is_key_rotation_error(err_str):
+                    mark_key_exhausted(final_key, service_tag)
+                    print(f"[{model_label} 쿼터 초과] 컷 {index+1}: 키 차단됨 → 다른 키로 전환 시도...")
+                    continue  # 다음 키로 재시도
+                else:
+                    print(f"[{model_label} 오류] 컷 {index+1} 요청 실패: {e}")
                     return None
 
-            result = operation.result
-            if not hasattr(result, "generated_videos") or not result.generated_videos:
-                print(f"[Veo 3 오류] 컷 {index+1}: 비디오가 생성되지 않았습니다.")
+            # 폴링 대기
+            print(f"-> [{model_label}] 컷 {index+1} 클라우드 렌더링 대기 중 (약 1~3분 소요)...")
+            start = time.time()
+
+            try:
+                while not operation.done:
+                    time.sleep(POLL_INTERVAL)
+                    operation = client.operations.get(operation)
+                    elapsed = time.time() - start
+                    if elapsed > MAX_WAIT:
+                        print(f"[{model_label} 타임아웃] 컷 {index+1}: {MAX_WAIT}초 초과")
+                        return None
+
+                result = operation.result
+                if not hasattr(result, "generated_videos") or not result.generated_videos:
+                    print(f"[{model_label} 오류] 컷 {index+1}: 비디오가 생성되지 않았습니다.")
+                    return None
+
+                video_obj = result.generated_videos[0]
+            except Exception as e:
+                err_str = str(e)
+                if is_key_rotation_error(err_str):
+                    mark_key_exhausted(final_key, service_tag)
+                    continue
+                print(f"[{model_label} 오류] 컷 {index+1} 폴링 실패: {e}")
                 return None
 
-            video_obj = result.generated_videos[0]
-        except Exception as e:
-            err_str = str(e)
-            if is_key_rotation_error(err_str):
-                mark_key_exhausted(final_key, "veo3")
-                continue
-            print(f"[Veo 3 오류] 컷 {index+1} 폴링 실패: {e}")
-            return None
+            # 비디오 다운로드
+            output_dir = os.path.join("assets", topic_folder, "video_clips")
+            os.makedirs(output_dir, exist_ok=True)
+            final_path = os.path.join(output_dir, f"veo3_cut_{index:02d}.mp4")
 
-        # 비디오 다운로드
-        output_dir = os.path.join("assets", topic_folder, "video_clips")
-        os.makedirs(output_dir, exist_ok=True)
-        final_path = os.path.join(output_dir, f"veo3_cut_{index:02d}.mp4")
+            try:
+                if hasattr(video_obj, "video") and video_obj.video:
+                    vid = video_obj.video
+                    if hasattr(vid, "video_bytes") and vid.video_bytes:
+                        with open(final_path, "wb") as f:
+                            f.write(vid.video_bytes)
+                        record_key_usage(final_key, service_tag)
+                        elapsed = time.time() - start
+                        print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
+                        return final_path
+                    elif hasattr(vid, "uri") and vid.uri:
+                        print(f"-> [{model_label}] 컷 {index+1} 비디오 다운로드 중...")
+                        resp = requests.get(vid.uri, stream=True, timeout=60)
+                        resp.raise_for_status()
+                        with open(final_path, "wb") as f:
+                            for chunk in resp.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                        record_key_usage(final_key, service_tag)
+                        elapsed = time.time() - start
+                        print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
+                        return final_path
 
-        try:
-            if hasattr(video_obj, "video") and video_obj.video:
-                vid = video_obj.video
-                if hasattr(vid, "video_bytes") and vid.video_bytes:
-                    with open(final_path, "wb") as f:
-                        f.write(vid.video_bytes)
-                    record_key_usage(final_key, "veo3")
-                    elapsed = time.time() - start
-                    print(f"OK [Veo 3] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
-                    return final_path
-                elif hasattr(vid, "uri") and vid.uri:
-                    print(f"-> [Veo 3] 컷 {index+1} 비디오 다운로드 중...")
-                    resp = requests.get(vid.uri, stream=True, timeout=60)
-                    resp.raise_for_status()
-                    with open(final_path, "wb") as f:
-                        for chunk in resp.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    record_key_usage(final_key, "veo3")
-                    elapsed = time.time() - start
-                    print(f"OK [Veo 3] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
-                    return final_path
+                print(f"[{model_label} 오류] 컷 {index+1}: 비디오 데이터를 찾을 수 없습니다.")
+                return None
+            except Exception as e:
+                print(f"[{model_label} 다운로드 오류] 컷 {index+1}: {e}")
+                return None
 
-            print(f"[Veo 3 오류] 컷 {index+1}: 비디오 데이터를 찾을 수 없습니다.")
-            return None
-        except Exception as e:
-            print(f"[Veo 3 다운로드 오류] 컷 {index+1}: {e}")
-            return None
+        # 이 모델의 키 전부 소진 → 다음 모델로 폴백
+        if model_idx < len(model_chain) - 1:
+            print(f"  [모델 체인] {model_label} 전 키 소진 → {model_chain[model_idx + 1]['label']}로 전환...")
 
-    print(f"[Veo 3] 컷 {index+1}: {MAX_KEY_RETRIES}개 키 모두 쿼터 초과. 비디오 생성 불가.")
+    print(f"[Veo] 컷 {index+1}: 모든 모델 체인 및 키 소진. 비디오 생성 불가.")
     return None
