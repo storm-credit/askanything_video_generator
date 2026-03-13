@@ -58,6 +58,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     print(f"-> [Kling AI] 컷 {index+1} 이미지-투-비디오 렌더링 요청 중...")
     try:
         resp = requests.post(submit_url, headers=headers, json=payload, timeout=30)
+        resp.raise_for_status()
         resp_data = resp.json()
         
         if resp_data.get("code") != 0:
@@ -79,13 +80,17 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     print(f"-> [Kling AI] 컷 {index+1} 렌더링 클라우드 진행 상태 대기 중 (약 2~3분 소요 예상)...")
     
     max_retries = 90 # 90 * 5초 = 450초 (7.5분)
-    for _ in range(max_retries):
+    token_refresh_interval = 25 * 60  # 25분마다 토큰 갱신 (만료 30분)
+    last_token_time = time.time()
+    for poll_iter in range(max_retries):
         time.sleep(5)
-        
+
         try:
-            # 토큰 만료 방지를 위해 매번 갱신
-            current_token = _generate_jwt(ak, sk)
-            headers["Authorization"] = f"Bearer {current_token}"
+            # 토큰 만료 방지: 25분 경과 시 갱신 (매번 갱신 대신)
+            if time.time() - last_token_time > token_refresh_interval:
+                current_token = _generate_jwt(ak, sk)
+                headers["Authorization"] = f"Bearer {current_token}"
+                last_token_time = time.time()
             
             poll_resp = requests.get(poll_url, headers=headers, timeout=10)
             poll_data = poll_resp.json()
@@ -118,6 +123,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     try:
         print(f"-> [Kling AI] 컷 {index+1} 렌더링 완료! 비디오 다운로드 중...")
         vid_resp = requests.get(video_url, stream=True, timeout=30)
+        vid_resp.raise_for_status()
         with open(final_video_path, "wb") as f:
             for chunk in vid_resp.iter_content(chunk_size=8192):
                 f.write(chunk)

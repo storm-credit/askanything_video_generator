@@ -33,7 +33,9 @@ def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
                 quality="standard"
             )
             image_url = response.data[0].url
-            image_data = requests.get(image_url, timeout=30).content
+            img_resp = requests.get(image_url, timeout=30)
+            img_resp.raise_for_status()
+            image_data = img_resp.content
 
             image = Image.open(io.BytesIO(image_data)).convert("RGB")
             target_size = (1080, 1920)

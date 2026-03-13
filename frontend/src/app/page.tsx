@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, CheckCircle2, Film, AlertCircle, Settings, Brain, ImageIcon } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, Film, AlertCircle, Settings, Brain, ImageIcon, XCircle } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -41,6 +41,8 @@ export default function Home() {
   });
   // 키 사용량 통계
   const [keyUsageStats, setKeyUsageStats] = useState<KeyUsageStats | null>(null);
+  // AbortController (생성 취소용)
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchKeyStatus = useCallback(async () => {
     try {
@@ -134,6 +136,7 @@ export default function Home() {
     }
 
     const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     try {
       const response = await fetch(`${API_BASE}/api/generate`, {
@@ -214,7 +217,10 @@ export default function Home() {
         }
       }
     } catch (error) {
-      if (abortController.signal.aborted) return;  // 사용자 취소 시 무시
+      if (abortController.signal.aborted) {
+        setLogs(prev => [...prev.slice(-99), "WARN:사용자에 의해 생성이 취소되었습니다."]);
+        return;
+      }
       console.error(error);
       const message = error instanceof Error ? error.message : "Unknown error";
       const userMsg = message === "Failed to fetch"
@@ -224,7 +230,13 @@ export default function Home() {
       setErrorMessage(userMsg);
     } finally {
       setIsGenerating(false);
+      abortControllerRef.current = null;
     }
+  };
+
+  const handleCancel = () => {
+    abortControllerRef.current?.abort();
+    setIsGenerating(false);
   };
 
   // 설정된 키 개수 계산
@@ -314,13 +326,24 @@ export default function Home() {
               placeholder="예: 블랙홀에 떨어지면 어떻게 될까?"
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-6 pr-32 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-lg backdrop-blur-md"
             />
-            <button
-              type="submit"
-              disabled={isGenerating || !topic.trim()}
-              className="absolute right-2 bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
-            >
-              {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : "생성하기"}
-            </button>
+            {isGenerating ? (
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="absolute right-2 bg-red-600 text-white hover:bg-red-500 font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
+              >
+                <XCircle className="w-5 h-5" />
+                취소
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!topic.trim()}
+                className="absolute right-2 bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
+              >
+                생성하기
+              </button>
+            )}
           </div>
 
           {/* 엔진 선택 (LLM + 이미지 + 비디오) */}
@@ -375,9 +398,9 @@ export default function Home() {
         </form>
       </motion.div>
 
-      {/* 진행률 + 로그 패널 */}
+      {/* 진행률 + 로그 패널 (에러 전용 패널과 중복 방지) */}
       <AnimatePresence>
-        {(isGenerating || errorMessage) && (
+        {isGenerating && (
           <ProgressPanel progress={progress} logs={logs} />
         )}
       </AnimatePresence>

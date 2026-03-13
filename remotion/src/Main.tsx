@@ -17,6 +17,16 @@ type CutProps = {
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov'];
 
+// URL에서 쿼리 파라미터/프래그먼트 제거 후 확장자 검사
+function isVideoPath(path: string): boolean {
+  try {
+    const pathname = new URL(path, 'http://dummy').pathname;
+    return VIDEO_EXTENSIONS.some(ext => pathname.toLowerCase().endsWith(ext));
+  } catch {
+    return VIDEO_EXTENSIONS.some(ext => path.toLowerCase().endsWith(ext));
+  }
+}
+
 export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
 
   // Precompute start frames to avoid side-effects during render
@@ -38,7 +48,7 @@ export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
         // staticFile()로 public dir (assets/) 기준 상대 경로 로드
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
         const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
-        const isVideo = VIDEO_EXTENSIONS.some(ext => visualSrc.toLowerCase().endsWith(ext));
+        const isVideo = isVideoPath(visualSrc);
 
         return (
           <Sequence key={index} from={startFrame} durationInFrames={cut.duration_in_frames}>

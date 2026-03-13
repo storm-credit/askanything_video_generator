@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 
@@ -9,6 +10,13 @@ interface ProgressPanelProps {
 }
 
 export function ProgressPanel({ progress, logs }: ProgressPanelProps) {
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // 로그 추가 시 자동 스크롤
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs.length]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -45,10 +53,8 @@ export function ProgressPanel({ progress, logs }: ProgressPanelProps) {
             const displayText = isError ? log.slice(6) : isWarn ? log.slice(5) : log;
             const isLast = idx === logs.length - 1;
             return (
-              <motion.div
+              <div
                 key={idx}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
                 className={`flex items-start text-sm ${
                   isError ? 'text-red-400 font-medium' :
                   isWarn ? 'text-amber-400 font-medium' :
@@ -60,10 +66,11 @@ export function ProgressPanel({ progress, logs }: ProgressPanelProps) {
                  isLast ? <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0"/> :
                  <CheckCircle2 className="w-4 h-4 mr-2 text-green-500 shrink-0"/>}
                 <span className="break-all">{displayText}</span>
-              </motion.div>
+              </div>
             );
           })
         )}
+        <div ref={logsEndRef} />
       </div>
     </motion.div>
   );

@@ -99,6 +99,7 @@ def _generate_imagen(api_key, prompt):
     from google.genai import types
 
     model_name = os.getenv("IMAGEN_MODEL", "imagen-4.0-generate-001")
+    safety_level = os.getenv("IMAGEN_SAFETY_FILTER", "BLOCK_MEDIUM_AND_ABOVE")
     client = genai.Client(api_key=api_key)
     response = client.models.generate_images(
         model=model_name,
@@ -106,7 +107,7 @@ def _generate_imagen(api_key, prompt):
         config=types.GenerateImagesConfig(
             number_of_images=1,
             aspect_ratio="9:16",
-            safety_filter_level="BLOCK_LOW_AND_ABOVE",
+            safety_filter_level=safety_level,
         ),
     )
 

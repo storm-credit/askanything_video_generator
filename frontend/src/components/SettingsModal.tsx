@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, Plus, Trash2, Eye, EyeOff, BarChart3 } from "lucide-react";
 import { KeyConfig, KeyStatus, KeyUsageStats, KEY_CONFIGS } from "./types";
@@ -37,6 +38,15 @@ export function SettingsModal({
   onToggleVisible,
   onOutputPathChange,
 }: SettingsModalProps) {
+  // Escape 키로 모달 닫기
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <>
       {/* 오버레이 */}

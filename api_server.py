@@ -341,36 +341,42 @@ async def generate_video_endpoint(req: GenerateRequest):
                     except Exception as exc:
                         print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
 
-                # 이미지 완료 후 비디오 변환과 TTS를 병렬 실행
-                video_future = None
-                tts_future = None
+                # 비디오 변환과 TTS를 threading으로 병렬 실행 (데드락 방지: 직접 스레드 사용)
+                video_result = [None]  # mutable container for thread result
+                tts_result = [None]
 
-                if img_path and active_video_engine != "none":
-                    cut_video_key = get_google_key(llm_key_override)
-                    video_future = cut_executor.submit(
-                        generate_video_from_image, img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key
-                    )
-                tts_future = cut_executor.submit(
-                    generate_tts, cut["script"], i, topic_folder, elevenlabs_key_override
-                )
-
-                # 비디오 결과 수집
-                video_path = None
-                if video_future:
+                def _run_video():
                     try:
-                        video_path = video_future.result(timeout=300)
+                        cut_video_key = get_google_key(llm_key_override)
+                        video_result[0] = generate_video_from_image(
+                            img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key
+                        )
                     except Exception as exc:
                         print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
-                final_visual_path = video_path if video_path else img_path
 
-                # TTS 결과 수집
-                aud_path = None
-                try:
-                    aud_path = tts_future.result(timeout=60)
-                except Exception as exc:
-                    print(f"[컷 {i+1} TTS 생성 실패] {exc}")
+                def _run_tts():
+                    try:
+                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override)
+                    except Exception as exc:
+                        print(f"[컷 {i+1} TTS 생성 실패] {exc}")
+
+                threads = []
+                if img_path and active_video_engine != "none":
+                    t = threading.Thread(target=_run_video, daemon=True)
+                    t.start()
+                    threads.append(t)
+                t_tts = threading.Thread(target=_run_tts, daemon=True)
+                t_tts.start()
+                threads.append(t_tts)
+
+                # 완료 대기 (비디오: 최대 5분, TTS: 최대 1분)
+                for t in threads:
+                    t.join(timeout=300)
+
+                final_visual_path = video_result[0] if video_result[0] else img_path
 
                 # Whisper 타임스탬프 (TTS 완료 후 순차)
+                aud_path = tts_result[0]
                 words = []
                 if aud_path:
                     try:
@@ -379,7 +385,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                         print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
                 return i, final_visual_path, aud_path, words
 
-            tasks = [loop.run_in_executor(None, process_cut, i, cut) for i, cut in enumerate(cuts)]
+            tasks = [loop.run_in_executor(cut_executor, process_cut, i, cut) for i, cut in enumerate(cuts)]
             completed_count = 0
 
             for future in asyncio.as_completed(tasks):
@@ -430,16 +436,23 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             yield {"data": "PROG|100\n"}
 
-            # 사용자 지정 저장 경로가 있으면 복사
+            # 사용자 지정 저장 경로가 있으면 복사 (경로 검증 포함)
             if output_path:
-                try:
-                    out_dir = os.path.dirname(output_path)
-                    if out_dir:
-                        os.makedirs(out_dir, exist_ok=True)
-                    shutil.copy2(final_abs_path, output_path)
-                    yield {"data": f"[저장] 지정 경로에 복사 완료: {output_path}\n"}
-                except Exception as copy_err:
-                    yield {"data": f"ERROR|[저장 오류] 지정 경로 복사 실패: {copy_err}\n"}
+                abs_output = os.path.abspath(output_path)
+                safe_base = os.path.abspath("assets")
+                home_dir = os.path.expanduser("~")
+                # 허용: assets/ 내부 또는 사용자 홈 디렉토리 하위
+                if not (abs_output.startswith(safe_base + os.sep) or abs_output.startswith(home_dir + os.sep)):
+                    yield {"data": "ERROR|[보안 오류] 지정 경로가 허용 범위(assets/ 또는 홈 디렉토리)를 벗어납니다.\n"}
+                else:
+                    try:
+                        out_dir = os.path.dirname(abs_output)
+                        if out_dir:
+                            os.makedirs(out_dir, exist_ok=True)
+                        shutil.copy2(final_abs_path, abs_output)
+                        yield {"data": f"[저장] 지정 경로에 복사 완료: {abs_output}\n"}
+                    except Exception as copy_err:
+                        yield {"data": f"ERROR|[저장 오류] 지정 경로 복사 실패: {copy_err}\n"}
 
             # 프론트엔드 라우팅용 경로 (StaticFiles mount 기준)
             final_filename = os.path.basename(video_path)
@@ -462,9 +475,9 @@ async def generate_video_endpoint(req: GenerateRequest):
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
         finally:
-            # ThreadPoolExecutor 리소스 정리
+            # ThreadPoolExecutor 리소스 정리 (대기 + 미완료 작업 취소)
             try:
-                cut_executor.shutdown(wait=False)
+                cut_executor.shutdown(wait=True, cancel_futures=True)
             except Exception:
                 pass
             _generate_semaphore.release()
