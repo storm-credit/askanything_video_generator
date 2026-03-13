@@ -12,3 +12,5 @@ sse-starlette
 pydantic
 tavily-python
 httpx
+google-genai
+anthropic

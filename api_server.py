@@ -15,7 +15,8 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 load_dotenv(override=True)
 
 from modules.gpt.cutter import generate_cuts
-from modules.image.dalle import generate_image
+from modules.image.dalle import generate_image as generate_image_dalle
+from modules.image.imagen import generate_image_imagen
 from modules.video.engines import generate_video_from_image, get_available_engines
 from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs_quota
 from modules.transcription.whisper import generate_word_timestamps
@@ -55,6 +56,9 @@ class GenerateRequest(BaseModel):
     apiKey: str | None = None
     elevenlabsKey: str | None = None
     videoEngine: str = "kling"
+    imageEngine: str = "imagen"
+    llmProvider: str = "gemini"
+    llmKey: str | None = None
     outputPath: str | None = None
 
     @field_validator("topic")
@@ -70,6 +74,22 @@ class GenerateRequest(BaseModel):
         allowed = {"kling", "sora2", "veo3", "hailuo", "wan", "none"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("imageEngine")
+    @classmethod
+    def valid_image_engine(cls, v: str) -> str:
+        allowed = {"dalle", "imagen"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 이미지 엔진: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("llmProvider")
+    @classmethod
+    def valid_llm_provider(cls, v: str) -> str:
+        allowed = {"openai", "gemini", "claude"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}. 허용: {allowed}")
         return v
 
 
@@ -92,6 +112,8 @@ async def health_check():
 
     openai_key = os.getenv("OPENAI_API_KEY", "")
     elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    claude_key = os.getenv("ANTHROPIC_API_KEY", "")
     hf_key = os.getenv("HIGGSFIELD_API_KEY", "")
     hf_id = os.getenv("HIGGSFIELD_ACCOUNT_ID", "")
     kling_ak = os.getenv("KLING_ACCESS_KEY", "")
@@ -100,6 +122,8 @@ async def health_check():
     keys = {
         "openai": _is_set(openai_key, ["sk-proj-YOUR"]),
         "elevenlabs": _is_set(elevenlabs_key, ["YOUR_ELEVENLABS_API_KEY_HERE"]),
+        "gemini": _is_set(gemini_key),
+        "claude_key": _is_set(claude_key),
         "higgsfield_key": _is_set(hf_key, ["YOUR"]),
         "higgsfield_account": _is_set(hf_id, ["YOUR"]),
         "kling_access": _is_set(kling_ak, ["YOUR"]),
@@ -114,12 +138,41 @@ async def health_check():
     }
 
 
-def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | None, video_engine: str) -> list[str]:
+def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | None, video_engine: str,
+                    image_engine: str = "imagen", llm_provider: str = "gemini", llm_key_override: str | None = None) -> list[str]:
     """파이프라인 시작 전 필수 키 검증. 누락된 키 이름 목록을 반환."""
     errors = []
+
+    # OpenAI 키: DALL-E 사용 시 또는 Whisper 자막에 필요
     openai_key = api_key_override or os.getenv("OPENAI_API_KEY", "")
-    if not openai_key or openai_key.startswith("sk-proj-YOUR"):
-        errors.append("OPENAI_API_KEY (GPT 기획 + DALL-E 이미지 생성에 필수)")
+    openai_needed_for = []
+    if image_engine == "dalle":
+        openai_needed_for.append("DALL-E 이미지")
+    openai_needed_for.append("Whisper 자막")
+    if llm_provider == "openai":
+        openai_needed_for.insert(0, "GPT 기획")
+
+    if (image_engine == "dalle" or llm_provider == "openai") and (not openai_key or openai_key.startswith("sk-proj-YOUR")):
+        errors.append(f"OPENAI_API_KEY ({' + '.join(openai_needed_for)}에 필수)")
+    elif not openai_key or openai_key.startswith("sk-proj-YOUR"):
+        # Whisper만 필요 - 경고 수준 (나중에 WARN으로 처리 가능)
+        errors.append("OPENAI_API_KEY (Whisper 자막 타임스탬프에 필수)")
+
+    # Imagen 사용 시 Google 키 필요
+    if image_engine == "imagen":
+        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+        if not gemini_key:
+            errors.append("GEMINI_API_KEY (Imagen 3 이미지 생성에 필수)")
+
+    # LLM 프로바이더별 키 검증
+    if llm_provider == "gemini":
+        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "")
+        if not gemini_key:
+            errors.append("GEMINI_API_KEY (Gemini 기획 엔진에 필수)")
+    elif llm_provider == "claude":
+        claude_key = llm_key_override or os.getenv("ANTHROPIC_API_KEY", "")
+        if not claude_key:
+            errors.append("ANTHROPIC_API_KEY (Claude 기획 엔진에 필수)")
 
     elevenlabs_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
     if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
@@ -152,12 +205,15 @@ async def generate_video_endpoint(req: GenerateRequest):
     api_key_override = req.apiKey
     elevenlabs_key_override = req.elevenlabsKey
     video_engine = req.videoEngine
+    image_engine = req.imageEngine
+    llm_provider = req.llmProvider
+    llm_key_override = req.llmKey
     output_path = req.outputPath
 
     async def sse_generator():
         try:
             # 사전 검증: 필수 API 키 확인
-            missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine)
+            missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine, image_engine, llm_provider, llm_key_override)
             if missing:
                 yield {"data": "ERROR|[환경 설정 오류] 다음 API 키가 누락되었거나 유효하지 않습니다:\n"}
                 for m in missing:
@@ -177,18 +233,30 @@ async def generate_video_endpoint(req: GenerateRequest):
                 elif pct < 20:
                     yield {"data": f"WARN|[ElevenLabs 크레딧 경고] {remaining:,}/{limit:,}자 남음 ({pct:.0f}%).\n"}
 
-            yield {"data": "PROG|10\n"}
-            yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작...\n"}
+            provider_labels = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
+            provider_label = provider_labels.get(llm_provider, "ChatGPT")
 
-            # 단계 1: GPT 기획
+            yield {"data": "PROG|10\n"}
+            yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
+
+            # 단계 1: LLM 기획 (Gemini / ChatGPT / Claude 선택)
             loop = asyncio.get_running_loop()
-            cuts, topic_folder = await loop.run_in_executor(None, generate_cuts, topic, api_key_override)
+            cuts, topic_folder = await loop.run_in_executor(
+                None,
+                lambda: generate_cuts(
+                    topic,
+                    api_key_override=api_key_override,
+                    llm_provider=llm_provider,
+                    llm_key_override=llm_key_override,
+                ),
+            )
 
             yield {"data": "PROG|30\n"}
             yield {"data": f"[기획 완료] 총 {len(cuts)}컷 기획 완료!\n"}
 
-            # 단계 2 & 3: DALL-E와 TTS 병렬 처리 (Threading)
-            yield {"data": "[생성 엔진] 아트 디렉터(DALL-E)와 성우(TTS) 동시 작업 중...\n"}
+            # 단계 2 & 3: 이미지와 TTS 병렬 처리 (Threading)
+            image_label = "Imagen 3" if image_engine == "imagen" else "DALL-E"
+            yield {"data": f"[생성 엔진] 아트 디렉터({image_label})와 성우(TTS) 동시 작업 중...\n"}
 
             visual_paths = [None] * len(cuts)
             audio_paths = [None] * len(cuts)
@@ -197,9 +265,13 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             cut_executor = ThreadPoolExecutor(max_workers=2)
 
+            # 이미지 엔진에 따라 생성 함수 선택
+            gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
+            image_api_key = (llm_key_override or os.getenv("GEMINI_API_KEY")) if image_engine == "imagen" else api_key_override
+
             def process_cut(i, cut):
                 try:
-                    img_path = generate_image(cut["prompt"], i, topic_folder, api_key_override)
+                    img_path = gen_image_fn(cut["prompt"], i, topic_folder, image_api_key)
                 except Exception as exc:
                     print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
                     img_path = None
@@ -254,7 +326,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 prog = 30 + int(50 * (completed_count / len(cuts)))
                 yield {"data": f"PROG|{prog}\n"}
                 engine_label = video_engine if video_engine != "none" else "이미지"
-                yield {"data": f"  -> 컷 {i+1} 시각 소스({engine_label}/DALL-E) 및 음성 생성 완료\n"}
+                yield {"data": f"  -> 컷 {i+1} 시각 소스({engine_label}/{image_label}) 및 음성 생성 완료\n"}
 
             failed_visual = [i+1 for i, p in enumerate(visual_paths) if p is None]
             failed_audio = [i+1 for i, p in enumerate(audio_paths) if p is None]

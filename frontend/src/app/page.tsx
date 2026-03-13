@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, CheckCircle2, Film, AlertCircle, XCircle, Settings, X, Plus, Trash2, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, Film, AlertCircle, XCircle, Settings, X, Plus, Trash2, Eye, EyeOff, Brain, ImageIcon } from "lucide-react";
 
 interface KeyStatus {
   openai: boolean;
   elevenlabs: boolean;
+  gemini: boolean;
+  claude_key: boolean;
   higgsfield_key: boolean;
   higgsfield_account: boolean;
   kling_access: boolean;
@@ -41,6 +43,24 @@ const KEY_CONFIGS: KeyConfig[] = [
     statusKey: "elevenlabs",
     required: true,
     multiKey: true,
+  },
+  {
+    id: "gemini",
+    label: "Gemini API Key",
+    description: "Gemini 기획 엔진에 사용 (Google AI Studio에서 발급)",
+    envName: "GEMINI_API_KEY",
+    statusKey: "gemini",
+    required: false,
+    multiKey: false,
+  },
+  {
+    id: "claude_key",
+    label: "Claude API Key",
+    description: "Claude 기획 엔진에 사용 (Anthropic Console에서 발급)",
+    envName: "ANTHROPIC_API_KEY",
+    statusKey: "claude_key",
+    required: false,
+    multiKey: false,
   },
   {
     id: "higgsfield_key",
@@ -82,6 +102,8 @@ const KEY_CONFIGS: KeyConfig[] = [
 
 export default function Home() {
   const [topic, setTopic] = useState("");
+  const [llmProvider, setLlmProvider] = useState("gemini");
+  const [imageEngine, setImageEngine] = useState("imagen");
   const [videoEngine, setVideoEngine] = useState("kling");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -162,6 +184,14 @@ export default function Home() {
     const selectedOpenaiKey = pickKey("openai");
     const selectedElevenlabsKey = pickKey("elevenlabs");
 
+    // LLM 프로바이더별 키 선택
+    let llmKeyOverride: string | undefined;
+    if (llmProvider === "gemini") {
+      llmKeyOverride = pickKey("gemini");
+    } else if (llmProvider === "claude") {
+      llmKeyOverride = pickKey("claude_key");
+    }
+
     try {
       const response = await fetch("http://localhost:8000/api/generate", {
         method: "POST",
@@ -171,6 +201,9 @@ export default function Home() {
           apiKey: selectedOpenaiKey || undefined,
           elevenlabsKey: selectedElevenlabsKey || undefined,
           videoEngine,
+          imageEngine,
+          llmProvider,
+          llmKey: llmKeyOverride || undefined,
           outputPath: outputPath.trim() || undefined,
         }),
       });
@@ -321,10 +354,29 @@ export default function Home() {
                   ))}
                 </div>
 
+                {/* 기획 엔진 키 (Gemini / Claude) */}
+                <div>
+                  <h3 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-3">기획 엔진 키 (LLM)</h3>
+                  {KEY_CONFIGS.filter((c) => ["gemini", "claude_key"].includes(c.id)).map((config) => (
+                    <KeySection
+                      key={config.id}
+                      config={config}
+                      serverStatus={serverKeyStatus?.[config.statusKey] ?? null}
+                      savedKeys={savedKeys[config.id] || []}
+                      inputValue={inputValues[config.id] || ""}
+                      isVisible={visibleKeys[config.id] || false}
+                      onInputChange={(v) => setInputValues((prev) => ({ ...prev, [config.id]: v }))}
+                      onAdd={() => addKey(config.id)}
+                      onRemove={(idx) => removeKey(config.id, idx)}
+                      onToggleVisible={() => setVisibleKeys((prev) => ({ ...prev, [config.id]: !prev[config.id] }))}
+                    />
+                  ))}
+                </div>
+
                 {/* 선택 키 (비디오 엔진) */}
                 <div>
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">비디오 엔진 키 (선택)</h3>
-                  {KEY_CONFIGS.filter((c) => !c.required).map((config) => (
+                  {KEY_CONFIGS.filter((c) => !c.required && !["gemini", "claude_key"].includes(c.id)).map((config) => (
                     <KeySection
                       key={config.id}
                       config={config}
@@ -424,22 +476,54 @@ export default function Home() {
             </button>
           </div>
 
-          {/* 비디오 엔진 선택 */}
-          <div className="flex items-center justify-center gap-2">
-            <Film className="w-4 h-4 text-gray-500" />
-            <select
-              value={videoEngine}
-              onChange={(e) => setVideoEngine(e.target.value)}
-              disabled={isGenerating}
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-            >
-              <option value="kling" className="bg-gray-900">Kling 3.0 - 시네마틱 모션 (기본)</option>
-              <option value="sora2" className="bg-gray-900">Sora 2 - 최고 품질 (OpenAI)</option>
-              <option value="veo3" className="bg-gray-900">Veo 3.1 - 4K 시네마틱 (Google)</option>
-              <option value="hailuo" className="bg-gray-900">Hailuo 2.3 - 가성비 (Minimax)</option>
-              <option value="wan" className="bg-gray-900">Wan 2.5 - 빠른 생성 (Alibaba)</option>
-              <option value="none" className="bg-gray-900">비디오 없음 - 정지 이미지만</option>
-            </select>
+          {/* 엔진 선택 (LLM + 이미지 + 비디오) */}
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            {/* LLM 기획 엔진 */}
+            <div className="flex items-center gap-1">
+              <Brain className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={llmProvider}
+                onChange={(e) => setLlmProvider(e.target.value)}
+                disabled={isGenerating}
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="gemini" className="bg-gray-900">Gemini 2.5 Pro</option>
+                <option value="openai" className="bg-gray-900">GPT-4o</option>
+                <option value="claude" className="bg-gray-900">Claude Sonnet 4</option>
+              </select>
+            </div>
+
+            {/* 이미지 엔진 */}
+            <div className="flex items-center gap-1">
+              <ImageIcon className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={imageEngine}
+                onChange={(e) => setImageEngine(e.target.value)}
+                disabled={isGenerating}
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="imagen" className="bg-gray-900">Imagen 3 (Google)</option>
+                <option value="dalle" className="bg-gray-900">DALL-E 3 (OpenAI)</option>
+              </select>
+            </div>
+
+            {/* 비디오 엔진 */}
+            <div className="flex items-center gap-1">
+              <Film className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={videoEngine}
+                onChange={(e) => setVideoEngine(e.target.value)}
+                disabled={isGenerating}
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="kling" className="bg-gray-900">Kling 3.0</option>
+                <option value="sora2" className="bg-gray-900">Sora 2</option>
+                <option value="veo3" className="bg-gray-900">Veo 3.1</option>
+                <option value="hailuo" className="bg-gray-900">Hailuo 2.3</option>
+                <option value="wan" className="bg-gray-900">Wan 2.5</option>
+                <option value="none" className="bg-gray-900">없음</option>
+              </select>
+            </div>
           </div>
         </form>
       </motion.div>

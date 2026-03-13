@@ -43,16 +43,35 @@ def generate_word_timestamps(audio_path, api_key=None):
                     timestamp_granularities=["word"]
                 )
 
+            # OpenAI SDK v1.x: TranscriptionWord는 Pydantic 모델 (속성/딕셔너리 접근 모두 가능)
+            raw_words = None
             if hasattr(transcript, "words") and transcript.words:
-                return [{"word": w["word"], "start": w["start"], "end": w["end"]} for w in transcript.words]
+                raw_words = transcript.words
             elif isinstance(transcript, dict) and "words" in transcript:
-                return transcript["words"]
+                raw_words = transcript["words"]
             else:
                 try:
                     data = transcript.model_dump()
-                    return data.get("words", [])
+                    raw_words = data.get("words", [])
                 except Exception:
-                    return []
+                    pass
+
+            words = []
+            if raw_words:
+                for w in raw_words:
+                    try:
+                        if isinstance(w, dict):
+                            words.append({"word": str(w["word"]), "start": float(w["start"]), "end": float(w["end"])})
+                        else:
+                            words.append({"word": str(w.word), "start": float(w.start), "end": float(w.end)})
+                    except Exception:
+                        continue
+
+            if words:
+                print(f"OK [동적 자막] {len(words)}개 단어 타임스탬프 추출 완료 ({os.path.basename(audio_path)})")
+            else:
+                print(f"[Whisper 경고] 단어 타임스탬프가 비어 있습니다 ({os.path.basename(audio_path)})")
+            return words
 
         except Exception as e:
             print(f"[Whisper 오류] {e} ({attempt+1}/{MAX_RETRIES})")
