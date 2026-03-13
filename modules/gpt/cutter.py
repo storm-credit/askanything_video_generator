@@ -173,16 +173,46 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     if fact_context:
         user_content += f"\n\n{fact_context}"
 
-    cuts = _request_cuts(llm_provider, final_api_key, system_prompt, user_content)
+    # 429 자동 키 전환: 실패한 키를 차단하고 다른 키로 재시도
+    exhausted_keys: set[str] = set()
+    current_key = final_api_key
+    cuts: list[dict[str, str]] = []
 
-    # 1차 실패 시 재시도 프롬프트 보강 (Gemini는 키 로테이션 시도)
+    if llm_provider == "gemini":
+        from modules.utils.keys import get_google_key, mark_key_exhausted, mask_key
+        max_key_attempts = 10  # 최대 키 전환 횟수
+    else:
+        max_key_attempts = 1  # Gemini 외 프로바이더는 단일 키
+
+    for attempt in range(max_key_attempts):
+        try:
+            cuts = _request_cuts(llm_provider, current_key, system_prompt, user_content)
+            break  # 성공
+        except Exception as e:
+            err_str = str(e)
+            is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower() or "rate_limit" in err_str.lower()
+
+            if is_quota and llm_provider == "gemini":
+                mark_key_exhausted(current_key, service="gemini")
+                exhausted_keys.add(current_key)
+                next_key = get_google_key(None, service="gemini", exclude=exhausted_keys)
+
+                if next_key and next_key not in exhausted_keys:
+                    print(f"  [키 전환] {mask_key(current_key)} → {mask_key(next_key)} (gemini 429 자동 전환)")
+                    current_key = next_key
+                    continue
+                else:
+                    raise RuntimeError(f"[Gemini 할당량 초과] 등록된 모든 키({len(exhausted_keys)}개)의 쿼터가 소진되었습니다.") from e
+            else:
+                raise  # 429가 아닌 에러는 그대로 전파
+
+    # 컷 수 검증 (1차 실패 시 재시도 프롬프트 보강)
     if not (6 <= len(cuts) <= 10):
         print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 1회 재요청합니다.")
         if llm_provider == "gemini":
-            from modules.utils.keys import get_google_key
-            retry_key = get_google_key(None, service="gemini", exclude={final_api_key}) or final_api_key
+            retry_key = get_google_key(None, service="gemini", exclude=exhausted_keys) or current_key
         else:
-            retry_key = final_api_key
+            retry_key = current_key
         retry_user = user_content + "\n\n중요: 이번 응답은 반드시 cuts 배열 길이를 6~10으로 맞추세요."
         cuts = _request_cuts(llm_provider, retry_key, system_prompt, retry_user)
 
