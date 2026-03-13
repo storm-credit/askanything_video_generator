@@ -51,6 +51,7 @@ app.add_middleware(
 class GenerateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     apiKey: str | None = None
+    elevenlabsKey: str | None = None
     videoEngine: str = "kling"
 
     @field_validator("topic")
@@ -76,28 +77,48 @@ async def list_engines():
 
 @app.get("/api/health")
 async def health_check():
-    """필수 API 키 상태를 확인합니다."""
+    """각 API 키의 설정 상태를 개별적으로 반환합니다."""
+
+    def _is_set(val: str | None, placeholders: list[str] | None = None) -> bool:
+        if not val or not val.strip():
+            return False
+        for ph in (placeholders or []):
+            if val.startswith(ph) or val == ph:
+                return False
+        return True
+
     openai_key = os.getenv("OPENAI_API_KEY", "")
     elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
-    missing = []
-    if not openai_key or openai_key.startswith("sk-proj-YOUR"):
-        missing.append("OPENAI_API_KEY")
-    if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
-        missing.append("ELEVENLABS_API_KEY")
+    hf_key = os.getenv("HIGGSFIELD_API_KEY", "")
+    hf_id = os.getenv("HIGGSFIELD_ACCOUNT_ID", "")
+    kling_ak = os.getenv("KLING_ACCESS_KEY", "")
+    kling_sk = os.getenv("KLING_SECRET_KEY", "")
+
+    keys = {
+        "openai": _is_set(openai_key, ["sk-proj-YOUR"]),
+        "elevenlabs": _is_set(elevenlabs_key, ["YOUR_ELEVENLABS_API_KEY_HERE"]),
+        "higgsfield_key": _is_set(hf_key, ["YOUR"]),
+        "higgsfield_account": _is_set(hf_id, ["YOUR"]),
+        "kling_access": _is_set(kling_ak, ["YOUR"]),
+        "kling_secret": _is_set(kling_sk, ["YOUR"]),
+    }
+
+    missing = [k for k, v in keys.items() if not v]
     return {
         "status": "ok" if not missing else "missing_keys",
+        "keys": keys,
         "missing": missing,
     }
 
 
-def _validate_keys(api_key_override: str | None, video_engine: str) -> list[str]:
+def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | None, video_engine: str) -> list[str]:
     """파이프라인 시작 전 필수 키 검증. 누락된 키 이름 목록을 반환."""
     errors = []
     openai_key = api_key_override or os.getenv("OPENAI_API_KEY", "")
     if not openai_key or openai_key.startswith("sk-proj-YOUR"):
         errors.append("OPENAI_API_KEY (GPT 기획 + DALL-E 이미지 생성에 필수)")
 
-    elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
+    elevenlabs_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
     if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
         errors.append("ELEVENLABS_API_KEY (TTS 음성 생성에 필수)")
 
@@ -126,12 +147,13 @@ def _validate_keys(api_key_override: str | None, video_engine: str) -> list[str]
 async def generate_video_endpoint(req: GenerateRequest):
     topic = req.topic
     api_key_override = req.apiKey
+    elevenlabs_key_override = req.elevenlabsKey
     video_engine = req.videoEngine
 
     async def sse_generator():
         try:
             # 사전 검증: 필수 API 키 확인
-            missing = _validate_keys(api_key_override, video_engine)
+            missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine)
             if missing:
                 yield {"data": "ERROR|[환경 설정 오류] 다음 API 키가 누락되었거나 유효하지 않습니다:\n"}
                 for m in missing:
@@ -175,7 +197,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 final_visual_path = video_path if video_path else img_path
 
                 try:
-                    aud_path = generate_tts(cut["script"], i, topic_folder)
+                    aud_path = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override)
                 except Exception as exc:
                     print(f"[컷 {i+1} TTS 생성 실패] {exc}")
                     aud_path = None
