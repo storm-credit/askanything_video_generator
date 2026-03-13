@@ -378,7 +378,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 def _run_tts():
                     try:
-                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override)
+                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language)
                     except Exception as exc:
                         errors.append(f"TTS: {exc}")
                         print(f"[컷 {i+1} TTS 생성 실패] {exc}")

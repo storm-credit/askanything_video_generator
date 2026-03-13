@@ -44,10 +44,11 @@ def check_quota(api_key: str = None) -> dict | None:
     return None
 
 
-def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None) -> str | None:
+def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko") -> str | None:
     """
     ElevenLabs API를 사용하여 매우 사실적인 다큐멘터리/쇼츠용 음성(.mp3)을 생성합니다.
     빈 텍스트 → 기본 문구로 대체, 타임아웃/네트워크 오류 → 최대 3회 재시도.
+    eleven_multilingual_v2 모델이 텍스트 언어를 자동 감지하므로 별도 언어 설정 불필요.
     """
     # 빈 스크립트: 1초 무음 WAV 생성 (API 호출 절약)
     if not text or not text.strip() or text.strip() == "...":
@@ -90,7 +91,8 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
     for attempt in range(MAX_RETRIES):
         try:
             label = f"(시도 {attempt+1}/{MAX_RETRIES})" if attempt > 0 else ""
-            print(f"-> [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 내레이션 렌더링 중... {label}")
+            lang_label = "EN" if language == "en" else "KO"
+            print(f"-> [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 내레이션 렌더링 중... [{lang_label}] {label}")
 
             response = requests.post(URL, json=data, headers=headers, timeout=30)
 
