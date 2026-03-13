@@ -1,10 +1,25 @@
 import os
 import time
+import struct
 import requests
 
 
 MAX_RETRIES = 3
 RETRY_DELAYS = [2, 5, 10]  # 초 단위 백오프
+
+
+def _write_silent_wav(path: str, duration_sec: float = 1.0, sample_rate: int = 22050):
+    """무음 WAV 파일을 생성합니다 (API 호출 없이 빈 스크립트 처리용)."""
+    num_samples = int(sample_rate * duration_sec)
+    data_size = num_samples * 2  # 16-bit mono
+    with open(path, "wb") as f:
+        f.write(b"RIFF")
+        f.write(struct.pack("<I", 36 + data_size))
+        f.write(b"WAVEfmt ")
+        f.write(struct.pack("<IHHIIHH", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16))
+        f.write(b"data")
+        f.write(struct.pack("<I", data_size))
+        f.write(b"\x00" * data_size)
 
 
 def check_quota(api_key: str = None) -> dict | None:
@@ -34,10 +49,14 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
     ElevenLabs API를 사용하여 매우 사실적인 다큐멘터리/쇼츠용 음성(.mp3)을 생성합니다.
     빈 텍스트 → 기본 문구로 대체, 타임아웃/네트워크 오류 → 최대 3회 재시도.
     """
-    # 빈 스크립트 폴백: 무음 대신 기본 문구로 대체
-    if not text or not text.strip():
-        text = "..."
-        print(f"[ElevenLabs 경고] 컷 {index+1} 스크립트가 비어 있어 기본 문구로 대체합니다.")
+    # 빈 스크립트: 1초 무음 WAV 생성 (API 호출 절약)
+    if not text or not text.strip() or text.strip() == "...":
+        print(f"[ElevenLabs 경고] 컷 {index+1} 스크립트가 비어 있어 무음 오디오를 생성합니다.")
+        output_dir = os.path.join("assets", topic_folder, "audio")
+        os.makedirs(output_dir, exist_ok=True)
+        silent_path = os.path.join(output_dir, f"cut_{index:02d}.wav")
+        _write_silent_wav(silent_path, duration_sec=1.0)
+        return silent_path
 
     api_key = api_key_override or os.getenv("ELEVENLABS_API_KEY")
     if not api_key or api_key == "YOUR_ELEVENLABS_API_KEY_HERE":
@@ -66,7 +85,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
 
     output_dir = os.path.join("assets", topic_folder, "audio")
     os.makedirs(output_dir, exist_ok=True)
-    audio_path = os.path.join(output_dir, f"cut_{index}.mp3")
+    audio_path = os.path.join(output_dir, f"cut_{index:02d}.mp3")
 
     for attempt in range(MAX_RETRIES):
         try:

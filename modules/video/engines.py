@@ -8,6 +8,7 @@
 
 import os
 import time
+import mimetypes
 import requests
 import base64
 
@@ -146,10 +147,14 @@ def _generate_via_higgsfield(
 
     try:
         import higgsfield_client
-        # Higgsfield 인증 설정
-        os.environ["HF_API_KEY"] = hf_key
-        if hf_account:
-            os.environ["HF_API_SECRET"] = hf_account
+        # Higgsfield 인증: 스레드 안전을 위해 클라이언트 설정 사용
+        if hasattr(higgsfield_client, "configure"):
+            higgsfield_client.configure(api_key=hf_key, account_id=hf_account or "")
+        else:
+            # 폴백: 환경변수 설정 (레거시 SDK)
+            os.environ["HF_API_KEY"] = hf_key
+            if hf_account:
+                os.environ["HF_API_SECRET"] = hf_account
     except ImportError:
         print("[Higgsfield 오류] higgsfield-client 패키지가 없습니다. (pip install higgsfield-client)")
         return None
@@ -217,11 +222,13 @@ def _generate_via_openai_sora(
     with open(image_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode("utf-8")
 
+    mime_type = mimetypes.guess_type(image_path)[0] or "image/png"
+
     try:
         response = client.responses.create(
             model="sora",
             input=[
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
                 {"type": "text", "text": f"Generate a 5-second cinematic video with smooth camera movement. {prompt}"},
             ],
             tools=[{"type": "video_generation", "resolution": "1080p", "duration": 5}],
@@ -240,7 +247,13 @@ def _generate_via_openai_sora(
                                 break
                         if video_url:
                             break
-                    except Exception:
+                    except (ConnectionError, TimeoutError):
+                        continue
+                    except Exception as poll_err:
+                        err_msg = str(poll_err)
+                        if "401" in err_msg or "403" in err_msg or "invalid_api_key" in err_msg:
+                            print(f"[Sora 2 인증 오류] 폴링 중 인증 실패 — 중단합니다: {poll_err}")
+                            return None
                         continue
 
         if not video_url:

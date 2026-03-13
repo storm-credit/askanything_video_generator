@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import subprocess
 from datetime import datetime
@@ -41,7 +42,7 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
     ):
         # Whisper 타임스탬프 중 마지막 단어 기준으로 컷 길이 계산 (단어가 없을 시 기본값 5초)
         duration_sec = 5.0
-        if word_timestamps and len(word_timestamps) > 0:
+        if word_timestamps:
             duration_sec = max(1.5, word_timestamps[-1].get("end", 0) + 0.3)
 
         frames = int(duration_sec * fps)
@@ -73,16 +74,24 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
         print("[Remotion 렌더링 실패] remotion/node_modules가 없습니다. `npm --prefix remotion install` 실행 필요")
         return None
 
+    # 입력 검증: topic_folder에 위험 문자가 없는지 확인 (shell injection 방지)
+    if not re.match(r'^[\w\-]+$', topic_folder):
+        print(f"[Remotion 보안 오류] topic_folder에 허용되지 않는 문자가 포함됨: {topic_folder}")
+        return None
+
     assets_dir = os.path.abspath("assets")
+    abs_video_path = os.path.abspath(final_video_path)
+    abs_props_path = os.path.abspath(props_json_path)
+
     cmd = [
         "npx",
         "remotion",
         "render",
         "src/index.ts",
         "Main",
-        os.path.abspath(final_video_path),
+        abs_video_path,
         "--props",
-        os.path.abspath(props_json_path),
+        abs_props_path,
         "--public-dir",
         assets_dir,
     ]

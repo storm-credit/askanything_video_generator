@@ -28,6 +28,9 @@ from modules.utils.keys import get_google_key, count_google_keys, count_availabl
 
 app = FastAPI()
 
+# 동시 생성 요청 제한 (GPU/API 과부하 방지)
+_generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "2")))
+
 
 @app.get("/")
 async def root():
@@ -46,9 +49,10 @@ os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # CORS 설정 (프론트엔드 연동)
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in _cors_origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -236,6 +240,10 @@ async def generate_video_endpoint(req: GenerateRequest):
     output_path = req.outputPath
 
     async def sse_generator():
+        # 동시 요청 제한: 슬롯 부족 시 대기 안내
+        if _generate_semaphore.locked():
+            yield {"data": "WARN|[대기열] 다른 비디오가 생성 중입니다. 순서를 기다리는 중...\n"}
+        await _generate_semaphore.acquire()
         try:
             # 사전 검증: 필수 API 키 확인
             missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine, image_engine, llm_provider, llm_key_override)
@@ -459,6 +467,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 cut_executor.shutdown(wait=False)
             except Exception:
                 pass
+            _generate_semaphore.release()
 
     return EventSourceResponse(sse_generator())
 

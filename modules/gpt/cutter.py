@@ -46,7 +46,7 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str) -> str:
     """OpenAI GPT API로 기획안을 생성합니다."""
     from openai import OpenAI
     model = os.getenv("OPENAI_MODEL", "gpt-4o")
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, timeout=120)
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -72,6 +72,7 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str) -> str:
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
             response_mime_type="application/json",
+            http_options=types.HttpOptions(timeout=120_000),
         ),
     )
     return (response.text or "").strip()
@@ -81,7 +82,7 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str) -> str:
     """Anthropic Claude API로 기획안을 생성합니다."""
     import anthropic
     model_name = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
-    client = anthropic.Anthropic(api_key=api_key)
+    client = anthropic.Anthropic(api_key=api_key, timeout=120)
     json_instruction = "\n\n[CRITICAL] 반드시 순수 JSON만 출력하세요. 마크다운 코드블록이나 설명 텍스트 없이 JSON 객체만 반환하십시오."
     response = client.messages.create(
         model=model_name,
@@ -172,11 +173,16 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
     cuts = _request_cuts(llm_provider, final_api_key, system_prompt, user_content)
 
-    # 1차 실패 시 재시도 프롬프트 보강
+    # 1차 실패 시 재시도 프롬프트 보강 (Gemini는 키 로테이션 시도)
     if not (6 <= len(cuts) <= 10):
         print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 1회 재요청합니다.")
+        if llm_provider == "gemini":
+            from modules.utils.keys import get_google_key
+            retry_key = get_google_key(llm_key_override, service="gemini") or final_api_key
+        else:
+            retry_key = final_api_key
         retry_user = user_content + "\n\n중요: 이번 응답은 반드시 cuts 배열 길이를 6~10으로 맞추세요."
-        cuts = _request_cuts(llm_provider, final_api_key, system_prompt, retry_user)
+        cuts = _request_cuts(llm_provider, retry_key, system_prompt, retry_user)
 
     if not (6 <= len(cuts) <= 10):
         raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 6~10).")
