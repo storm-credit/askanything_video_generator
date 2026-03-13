@@ -22,6 +22,16 @@ SUPPORTED_ENGINES = {
     "none": {"name": "비디오 없음", "desc": "정지 이미지만 사용", "provider": "none"},
 }
 
+# Sora 2 폴링 설정
+SORA_POLL_INTERVAL = 5       # 초 (초기)
+SORA_POLL_INTERVAL_SLOW = 10 # 초 (1분 이후)
+SORA_MAX_POLLS = 60          # 최대 폴링 횟수
+SORA_SLOWDOWN_AT = 12        # 이 횟수 이후 폴링 간격 확대
+
+# 비디오 다운로드 설정
+VIDEO_DOWNLOAD_TIMEOUT = 60  # 초
+MAX_IMAGE_SIZE_MB = 20       # Base64 인코딩 전 최대 이미지 크기
+
 
 def get_available_engines() -> list[dict]:
     """프론트엔드에 표시할 사용 가능한 엔진 목록을 반환합니다."""
@@ -217,10 +227,10 @@ def _generate_via_openai_sora(
 
     print(f"-> [Sora 2] 컷 {index+1} 이미지-투-비디오 렌더링 요청 중...")
 
-    # 이미지 크기 제한 (20MB)
+    # 이미지 크기 제한
     file_size = os.path.getsize(image_path)
-    if file_size > 20 * 1024 * 1024:
-        print(f"[Sora 2 오류] 이미지가 너무 큽니다 ({file_size // 1024 // 1024}MB, 최대 20MB)")
+    if file_size > MAX_IMAGE_SIZE_MB * 1024 * 1024:
+        print(f"[Sora 2 오류] 이미지가 너무 큽니다 ({file_size // 1024 // 1024}MB, 최대 {MAX_IMAGE_SIZE_MB}MB)")
         return None
 
     with open(image_path, "rb") as f:
@@ -241,9 +251,8 @@ def _generate_via_openai_sora(
         video_url = None
         for output in response.output:
             if hasattr(output, "type") and output.type == "video_generation_call":
-                poll_interval = 5
-                max_polls = 60  # 최대 5분 (5초 간격 → 점진적 증가)
-                for poll_count in range(max_polls):
+                poll_interval = SORA_POLL_INTERVAL
+                for poll_count in range(SORA_MAX_POLLS):
                     time.sleep(poll_interval)
                     try:
                         status = client.responses.retrieve(response.id)
@@ -265,9 +274,9 @@ def _generate_via_openai_sora(
                     if (poll_count + 1) % 6 == 0:
                         elapsed = (poll_count + 1) * poll_interval
                         print(f"  [Sora 2] 컷 {index+1} 렌더링 대기 중... ({elapsed}초 경과)")
-                    # 1분 이후 폴링 간격 확대 (5초 → 10초)
-                    if poll_count == 12:
-                        poll_interval = 10
+                    # 1분 이후 폴링 간격 확대
+                    if poll_count == SORA_SLOWDOWN_AT:
+                        poll_interval = SORA_POLL_INTERVAL_SLOW
 
         if not video_url:
             print(f"[Sora 2 오류] 컷 {index+1} 비디오 생성 실패 또는 타임아웃.")
@@ -299,7 +308,7 @@ def _download_video(
     engine_name = SUPPORTED_ENGINES.get(engine, {}).get("name", engine)
     try:
         print(f"-> [{engine_name}] 컷 {index+1} 렌더링 완료! 비디오 다운로드 중...")
-        vid_resp = requests.get(video_url, stream=True, timeout=60)
+        vid_resp = requests.get(video_url, stream=True, timeout=VIDEO_DOWNLOAD_TIMEOUT)
         vid_resp.raise_for_status()
         with open(final_path, "wb") as f:
             for chunk in vid_resp.iter_content(chunk_size=8192):

@@ -289,10 +289,10 @@ function KeySection({
               <span className="text-xs text-blue-300 font-mono flex-1">
                 {isVisible ? key : maskKey(key)}
               </span>
-              <button onClick={onToggleVisible} className="text-gray-500 hover:text-gray-300 transition-colors">
+              <button onClick={onToggleVisible} aria-label={isVisible ? "API 키 숨기기" : "API 키 보기"} className="text-gray-500 hover:text-gray-300 transition-colors">
                 {isVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
               </button>
-              <button onClick={() => onRemove(idx)} className="text-gray-500 hover:text-red-400 transition-colors">
+              <button onClick={() => onRemove(idx)} aria-label="API 키 삭제" className="text-gray-500 hover:text-red-400 transition-colors">
                 <Trash2 className="w-3 h-3" />
               </button>
             </div>
@@ -303,11 +303,12 @@ function KeySection({
       {/* 키 입력 */}
       <div className="flex items-center gap-2">
         <input
-          type="password"
+          type={isVisible ? "text" : "password"}
           value={inputValue}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onAdd()}
           placeholder={`${config.envName} 입력...`}
+          aria-label={`${config.label} 키 입력`}
           className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-mono"
         />
         <button

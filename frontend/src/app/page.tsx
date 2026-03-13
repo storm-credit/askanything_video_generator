@@ -14,7 +14,7 @@ export default function Home() {
   const [videoEngine, setVideoEngine] = useState("veo3");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [successMessage, setVideoUrl] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -120,7 +120,7 @@ export default function Home() {
 
     setIsGenerating(true);
     setProgress(0);
-    setVideoUrl(null);
+    setSuccessMessage(null);
     setErrorMessage(null);
     setLogs([]);
 
@@ -180,7 +180,7 @@ export default function Home() {
           link.click();
           link.parentNode?.removeChild(link);
 
-          setVideoUrl("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
+          setSuccessMessage("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
           setIsGenerating(false);
         } else if (rawData.startsWith("ERROR|")) {
           const errMsg = rawData.slice(6);
@@ -237,6 +237,11 @@ export default function Home() {
   const handleCancel = () => {
     abortControllerRef.current?.abort();
     setIsGenerating(false);
+  };
+
+  const handleClearError = () => {
+    setErrorMessage(null);
+    setLogs([]);
   };
 
   // 설정된 키 개수 계산
@@ -439,7 +444,7 @@ export default function Home() {
                 <h3 className="text-lg text-red-400 font-bold">오류 발생</h3>
                 <p className="text-gray-300 text-sm">{errorMessage}</p>
                 <button
-                  onClick={() => { setErrorMessage(null); setLogs([]); }}
+                  onClick={handleClearError}
                   className="mt-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-300 text-sm rounded-xl transition-colors"
                 >
                   닫기
