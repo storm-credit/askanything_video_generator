@@ -9,8 +9,8 @@ from datetime import datetime
 BRAND_DIR = "brand"
 INTRO_IMAGE = "intro.png"
 OUTRO_IMAGE = "outro.jpg"
+BGM_FILE = "bgm.mp3"
 INTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
-TITLE_DURATION_FRAMES = 72         # 3초 @ 24fps
 OUTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
 
 
@@ -77,32 +77,38 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     intro_image_path = None
     outro_image_path = None
 
-    for img_name, label in [(INTRO_IMAGE, "인트로"), (OUTRO_IMAGE, "아웃트로")]:
-        brand_src = os.path.join(BRAND_DIR, img_name)
-        assets_dst = os.path.join("assets", img_name)
+    for asset_name in [INTRO_IMAGE, OUTRO_IMAGE, BGM_FILE]:
+        brand_src = os.path.join(BRAND_DIR, asset_name)
+        assets_dst = os.path.join("assets", asset_name)
         if os.path.exists(brand_src):
             shutil.copy2(brand_src, assets_dst)
 
     if os.path.exists(os.path.join("assets", INTRO_IMAGE)):
         intro_image_path = INTRO_IMAGE
         total_duration_in_frames += INTRO_DURATION_FRAMES
-        print(f"-> [인트로] 브랜드 인트로 {INTRO_DURATION_FRAMES}프레임 (2초) 추가")
+        print(f"-> [인트로] 브랜드 인트로 {INTRO_DURATION_FRAMES}프레임 (1초) 추가")
 
-    # 제목 카드: 인트로 뒤, 본편 앞 (3초)
+    # 제목: 첫 번째 컷 위 오버레이로 표시 (별도 시간 추가 없음)
     if title:
-        total_duration_in_frames += TITLE_DURATION_FRAMES
-        print(f"-> [제목] '{title}' — {TITLE_DURATION_FRAMES}프레임 (3초) 추가")
+        print(f"-> [제목] '{title}' — 첫 컷 위 오버레이로 표시")
 
     if os.path.exists(os.path.join("assets", OUTRO_IMAGE)):
         outro_image_path = OUTRO_IMAGE
         total_duration_in_frames += OUTRO_DURATION_FRAMES
-        print(f"-> [아웃트로] 브랜드 아웃트로 {OUTRO_DURATION_FRAMES}프레임 (2초) 추가")
+        print(f"-> [아웃트로] 브랜드 아웃트로 {OUTRO_DURATION_FRAMES}프레임 (1초) 추가")
+
+    # BGM: brand/bgm.mp3 → 전체 영상 배경음악 (있을 때만)
+    bgm_path = None
+    if os.path.exists(os.path.join("assets", BGM_FILE)):
+        bgm_path = BGM_FILE
+        print(f"-> [BGM] 배경음악 '{BGM_FILE}' 전체 영상에 적용")
 
     props_data = {
         "cuts": cuts_data,
         "totalDurationInFrames": total_duration_in_frames,
         "introImagePath": intro_image_path,
         "outroImagePath": outro_image_path,
+        "bgmPath": bgm_path,
         "title": title or None,
     }
 

@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { Captions } from './Captions';
 
 const INTRO_DURATION_FRAMES = 24;  // 1초 @ 24fps
-const TITLE_DURATION_FRAMES = 72;  // 3초 @ 24fps
+const TITLE_OVERLAY_FRAMES = 60;  // 2.5초 @ 24fps (첫 컷 위 오버레이)
 const OUTRO_DURATION_FRAMES = 24;  // 1초 @ 24fps
 
 type WordProps = {
@@ -96,26 +96,26 @@ const BrandIntro: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
-// 제목 카드 (페이드인 + 글로우 + 페이드아웃)
-const TitleCard: React.FC<{ title: string }> = ({ title }) => {
+// 제목 오버레이 (첫 번째 컷 위에 표시 — 투명 배경)
+const TitleOverlay: React.FC<{ title: string }> = ({ title }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // 0→0.4초: 페이드인, 마지막 0.5초: 페이드아웃
-  const fadeIn = interpolate(frame, [0, fps * 0.4], [0, 1], { extrapolateRight: 'clamp' });
+  // 0→0.3초: 페이드인, 마지막 0.4초: 페이드아웃
+  const fadeIn = interpolate(frame, [0, fps * 0.3], [0, 1], { extrapolateRight: 'clamp' });
   const fadeOut = interpolate(
     frame,
-    [TITLE_DURATION_FRAMES - fps * 0.5, TITLE_DURATION_FRAMES],
+    [TITLE_OVERLAY_FRAMES - fps * 0.4, TITLE_OVERLAY_FRAMES],
     [1, 0],
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
   );
   const opacity = fadeIn * fadeOut;
 
   // 살짝 위로 올라오는 애니메이션
-  const translateY = interpolate(frame, [0, fps * 0.6], [30, 0], { extrapolateRight: 'clamp' });
+  const translateY = interpolate(frame, [0, fps * 0.5], [20, 0], { extrapolateRight: 'clamp' });
 
-  // 밑줄 확장 애니메이션 (0.3→1.0초)
-  const lineWidth = interpolate(frame, [fps * 0.3, fps * 1.0], [0, 100], {
+  // 밑줄 확장 애니메이션 (0.2→0.8초)
+  const lineWidth = interpolate(frame, [fps * 0.2, fps * 0.8], [0, 100], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
@@ -123,7 +123,6 @@ const TitleCard: React.FC<{ title: string }> = ({ title }) => {
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: 'black',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
@@ -138,31 +137,42 @@ const TitleCard: React.FC<{ title: string }> = ({ title }) => {
           transform: `translateY(${translateY}px)`,
         }}
       >
+        {/* 반투명 배경 박스 */}
         <div
           style={{
-            color: 'white',
-            fontSize: title.length > 10 ? 72 : 88,
-            fontWeight: 900,
-            fontFamily: 'sans-serif',
-            textAlign: 'center',
-            lineHeight: 1.3,
-            padding: '0 60px',
-            textShadow: '0 0 40px rgba(99, 102, 241, 0.6), 0 0 80px rgba(99, 102, 241, 0.3)',
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            borderRadius: 16,
+            padding: '24px 48px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
           }}
         >
-          {title}
+          <div
+            style={{
+              color: 'white',
+              fontSize: title.length > 10 ? 64 : 80,
+              fontWeight: 900,
+              fontFamily: 'sans-serif',
+              textAlign: 'center',
+              lineHeight: 1.3,
+              textShadow: '0 0 30px rgba(99, 102, 241, 0.7), 0 2px 8px rgba(0,0,0,0.8)',
+            }}
+          >
+            {title}
+          </div>
+          {/* 하단 장식 라인 */}
+          <div
+            style={{
+              marginTop: 20,
+              height: 3,
+              width: `${lineWidth}%`,
+              maxWidth: 360,
+              background: 'linear-gradient(90deg, transparent, #818cf8, #6366f1, #818cf8, transparent)',
+              borderRadius: 2,
+            }}
+          />
         </div>
-        {/* 하단 장식 라인 */}
-        <div
-          style={{
-            marginTop: 28,
-            height: 4,
-            width: `${lineWidth}%`,
-            maxWidth: 400,
-            background: 'linear-gradient(90deg, transparent, #818cf8, #6366f1, #818cf8, transparent)',
-            borderRadius: 2,
-          }}
-        />
       </div>
     </AbsoluteFill>
   );
@@ -190,26 +200,29 @@ const BrandOutro: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
+const BGM_VOLUME = 0.15;  // TTS 대비 15% 볼륨
+
 export const Main: React.FC<{
   cuts: CutProps[];
   introImagePath?: string;
   outroImagePath?: string;
+  bgmPath?: string;
   title?: string;
-}> = ({ cuts, introImagePath, outroImagePath, title }) => {
+}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title }) => {
 
   const introFrames = introImagePath ? INTRO_DURATION_FRAMES : 0;
-  const titleFrames = title ? TITLE_DURATION_FRAMES : 0;
+  const outroFrames = outroImagePath ? OUTRO_DURATION_FRAMES : 0;
 
-  // Precompute start frames (인트로 + 제목 길이만큼 오프셋)
-  const { startFrames, contentEndFrame } = useMemo(() => {
+  // Precompute start frames (인트로 직후 본편 시작)
+  const { startFrames, contentEndFrame, totalFrames } = useMemo(() => {
     const frames: number[] = [];
-    let acc = introFrames + titleFrames;
+    let acc = introFrames;
     for (const cut of cuts) {
       frames.push(acc);
       acc += cut.duration_in_frames;
     }
-    return { startFrames: frames, contentEndFrame: acc };
-  }, [cuts, introFrames, titleFrames]);
+    return { startFrames: frames, contentEndFrame: acc, totalFrames: acc + outroFrames };
+  }, [cuts, introFrames, outroFrames]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
@@ -217,13 +230,6 @@ export const Main: React.FC<{
       {introImagePath && (
         <Sequence from={0} durationInFrames={INTRO_DURATION_FRAMES}>
           <BrandIntro src={staticFile(introImagePath)} />
-        </Sequence>
-      )}
-
-      {/* 제목 카드 (있을 때만) — 인트로 직후 */}
-      {title && (
-        <Sequence from={introFrames} durationInFrames={TITLE_DURATION_FRAMES}>
-          <TitleCard title={title} />
         </Sequence>
       )}
 
@@ -260,6 +266,20 @@ export const Main: React.FC<{
       {outroImagePath && (
         <Sequence from={contentEndFrame} durationInFrames={OUTRO_DURATION_FRAMES}>
           <BrandOutro src={staticFile(outroImagePath)} />
+        </Sequence>
+      )}
+
+      {/* 제목 오버레이 — 첫 번째 컷 위에 표시 */}
+      {title && cuts.length > 0 && (
+        <Sequence from={introFrames} durationInFrames={TITLE_OVERLAY_FRAMES}>
+          <TitleOverlay title={title} />
+        </Sequence>
+      )}
+
+      {/* BGM 배경음악 — 전체 영상에 낮은 볼륨으로 루프 */}
+      {bgmPath && (
+        <Sequence from={0} durationInFrames={totalFrames}>
+          <Audio src={staticFile(bgmPath)} volume={BGM_VOLUME} loop />
         </Sequence>
       )}
     </AbsoluteFill>
