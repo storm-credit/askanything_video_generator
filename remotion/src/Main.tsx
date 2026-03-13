@@ -190,26 +190,31 @@ const BrandOutro: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
+const BGM_VOLUME = 0.15;  // TTS 대비 15% 볼륨
+
 export const Main: React.FC<{
   cuts: CutProps[];
   introImagePath?: string;
   outroImagePath?: string;
+  bgmPath?: string;
   title?: string;
-}> = ({ cuts, introImagePath, outroImagePath, title }) => {
+}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title }) => {
 
   const introFrames = introImagePath ? INTRO_DURATION_FRAMES : 0;
   const titleFrames = title ? TITLE_DURATION_FRAMES : 0;
 
+  const outroFrames = outroImagePath ? OUTRO_DURATION_FRAMES : 0;
+
   // Precompute start frames (인트로 + 제목 길이만큼 오프셋)
-  const { startFrames, contentEndFrame } = useMemo(() => {
+  const { startFrames, contentEndFrame, totalFrames } = useMemo(() => {
     const frames: number[] = [];
     let acc = introFrames + titleFrames;
     for (const cut of cuts) {
       frames.push(acc);
       acc += cut.duration_in_frames;
     }
-    return { startFrames: frames, contentEndFrame: acc };
-  }, [cuts, introFrames, titleFrames]);
+    return { startFrames: frames, contentEndFrame: acc, totalFrames: acc + outroFrames };
+  }, [cuts, introFrames, titleFrames, outroFrames]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
@@ -260,6 +265,13 @@ export const Main: React.FC<{
       {outroImagePath && (
         <Sequence from={contentEndFrame} durationInFrames={OUTRO_DURATION_FRAMES}>
           <BrandOutro src={staticFile(outroImagePath)} />
+        </Sequence>
+      )}
+
+      {/* BGM 배경음악 — 전체 영상에 낮은 볼륨으로 루프 */}
+      {bgmPath && (
+        <Sequence from={0} durationInFrames={totalFrames}>
+          <Audio src={staticFile(bgmPath)} volume={BGM_VOLUME} loop />
         </Sequence>
       )}
     </AbsoluteFill>
