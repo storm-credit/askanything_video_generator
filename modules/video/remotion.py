@@ -1,11 +1,14 @@
 import os
 import re
 import json
+import shutil
 import subprocess
 from datetime import datetime
 
-INTRO_IMAGE = "intro.png"          # assets/ 기준 상대 경로
-OUTRO_IMAGE = "outro.jpg"          # assets/ 기준 상대 경로
+# 브랜드 이미지 (brand/ → assets/로 자동 복사하여 Remotion에서 접근)
+BRAND_DIR = "brand"
+INTRO_IMAGE = "intro.png"
+OUTRO_IMAGE = "outro.jpg"
 INTRO_DURATION_FRAMES = 48         # 2초 @ 24fps
 OUTRO_DURATION_FRAMES = 48         # 2초 @ 24fps
 
@@ -69,18 +72,22 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             }
         )
 
-    # 인트로/아웃트로 이미지 체크 → 총 길이에 반영
-    intro_path = os.path.join("assets", INTRO_IMAGE)
-    outro_path = os.path.join("assets", OUTRO_IMAGE)
+    # 브랜드 이미지: brand/ → assets/로 복사 (Remotion publicDir = assets/)
     intro_image_path = None
     outro_image_path = None
 
-    if os.path.exists(intro_path):
+    for img_name, label in [(INTRO_IMAGE, "인트로"), (OUTRO_IMAGE, "아웃트로")]:
+        brand_src = os.path.join(BRAND_DIR, img_name)
+        assets_dst = os.path.join("assets", img_name)
+        if os.path.exists(brand_src):
+            shutil.copy2(brand_src, assets_dst)
+
+    if os.path.exists(os.path.join("assets", INTRO_IMAGE)):
         intro_image_path = INTRO_IMAGE
         total_duration_in_frames += INTRO_DURATION_FRAMES
         print(f"-> [인트로] 브랜드 인트로 {INTRO_DURATION_FRAMES}프레임 (2초) 추가")
 
-    if os.path.exists(outro_path):
+    if os.path.exists(os.path.join("assets", OUTRO_IMAGE)):
         outro_image_path = OUTRO_IMAGE
         total_duration_in_frames += OUTRO_DURATION_FRAMES
         print(f"-> [아웃트로] 브랜드 아웃트로 {OUTRO_DURATION_FRAMES}프레임 (2초) 추가")
