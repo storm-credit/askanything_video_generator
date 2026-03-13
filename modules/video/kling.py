@@ -117,7 +117,10 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
             continue
             
     if not video_url:
-        print(f"[Kling AI 오류] 컷 {index+1} 렌더링 타임아웃.")
+        if poll_iter >= max_retries - 1:
+            print(f"[Kling AI 오류] 컷 {index+1} 렌더링 타임아웃 (최대 {max_retries * 5}초 초과).")
+        else:
+            print(f"[Kling AI 오류] 컷 {index+1} 렌더링 성공했으나 비디오 URL이 비어 있습니다.")
         return None
         
     # 3. 비디오 로컬 다운로드
