@@ -14,7 +14,7 @@ load_dotenv(override=True)
 
 from modules.gpt.cutter import generate_cuts
 from modules.image.dalle import generate_image
-from modules.video.kling import generate_video_from_image
+from modules.video.engines import generate_video_from_image, get_available_engines
 from modules.tts.elevenlabs import generate_tts
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
@@ -38,12 +38,19 @@ app.add_middleware(
 class GenerateRequest(BaseModel):
     topic: str
     apiKey: str | None = None
+    videoEngine: str = "kling"
+
+
+@app.get("/api/engines")
+async def list_engines():
+    return get_available_engines()
 
 
 @app.post("/api/generate")
 async def generate_video_endpoint(req: GenerateRequest):
     topic = req.topic
     api_key_override = req.apiKey
+    video_engine = req.videoEngine
 
     async def sse_generator():
         try:
@@ -67,13 +74,12 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             def process_cut(i, cut):
                 img_path = generate_image(cut["prompt"], i, topic_folder, api_key_override)
-                kling_path = None
-                if img_path:
-                    # DALL-E 이미지 -> Kling 시네마틱 비디오 클라우드 렌더링
-                    kling_path = generate_video_from_image(img_path, cut["prompt"], i, topic_folder)
+                video_path = None
+                if img_path and video_engine != "none":
+                    video_path = generate_video_from_image(img_path, cut["prompt"], i, topic_folder, engine=video_engine)
 
-                # Kling 변환 실패 시 기존 이미지로 폴백
-                final_visual_path = kling_path if kling_path else img_path
+                # 비디오 변환 실패 시 기존 이미지로 폴백
+                final_visual_path = video_path if video_path else img_path
 
                 aud_path = generate_tts(cut["script"], i, topic_folder)
                 words = generate_word_timestamps(aud_path, api_key_override) if aud_path else []
@@ -91,7 +97,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                 completed_count += 1
                 prog = 30 + int(50 * (completed_count / len(cuts)))
                 yield {"data": f"PROG|{prog}\n"}
-                yield {"data": f"  -> 컷 {i+1} 시각 소스(Kling/DALL-E) 및 음성 생성 완료\n"}
+                engine_label = video_engine if video_engine != "none" else "이미지"
+                yield {"data": f"  -> 컷 {i+1} 시각 소스({engine_label}/DALL-E) 및 음성 생성 완료\n"}
 
             if any(p is None for p in visual_paths) or any(p is None for p in audio_paths):
                 yield {"data": "ERROR|[소스 생성 오류] 일부 컷의 이미지/오디오 생성이 실패했습니다. API 키 및 네트워크 상태를 확인해주세요.\n"}
