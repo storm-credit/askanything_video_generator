@@ -10,8 +10,8 @@
  │  Frontend    │       │  api_server.py    │──────│ OpenAI DALL-E 3│
  │              │       │                  │──────│ OpenAI Whisper  │
  │  React +     │       │  Pipeline        │──────│ ElevenLabs TTS │
- │  Framer      │       │  Orchestrator    │──────│ Higgsfield API │
- │  Motion      │       │                  │──────│ Kling AI       │
+ │  Framer      │       │  Orchestrator    │──────│ Kling AI       │
+ │  Motion      │       │                  │──────│ Google Veo 3   │
  └──────────────┘       └────────┬─────────┘      └────────────────┘
                                  │
                          ┌───────▼─────────┐
@@ -74,8 +74,8 @@ askanything_video_generator/
 │   ├── transcription/
 │   │   └── whisper.py         # Whisper 단어 타임스탬프
 │   ├── video/
-│   │   ├── engines.py         # 멀티 비디오 엔진 통합 (Higgsfield)
-│   │   ├── kling.py           # Kling AI 직접 연동 (폴백)
+│   │   ├── engines.py         # 멀티 비디오 엔진 통합 (Kling/Veo3/Sora2)
+│   │   ├── kling.py           # Kling AI 직접 연동
 │   │   └── remotion.py        # Remotion CLI 호출
 │   └── utils/
 │       └── slugify.py         # 토픽 → 폴더명 변환
@@ -136,11 +136,9 @@ askanything_video_generator/
        ▼
   engines.py (라우터)
        │
-       ├── kling ──→ Higgsfield API ──→ 실패 시 ──→ Kling 직접 API (kling.py)
+       ├── kling ──→ Kling AI 직접 API (kling.py)
        ├── sora2 ──→ OpenAI Sora 2 API
-       ├── veo3  ──→ Higgsfield API
-       ├── hailuo ─→ Higgsfield API
-       ├── wan   ──→ Higgsfield API
+       ├── veo3  ──→ Google Veo 3 API (veo.py)
        └── none  ──→ (이미지만 사용, 비디오 변환 건너뜀)
 ```
 
@@ -165,7 +163,7 @@ askanything_video_generator/
 | videoEngine 유효성 | Pydantic validator | 허용 목록 체크 |
 | OpenAI API Key | `_validate_keys()` | 필수 |
 | ElevenLabs API Key | `_validate_keys()` | 필수 |
-| Higgsfield/Kling Key | `_validate_keys()` | 엔진 선택 시 필수 |
+| Kling/Veo3/Sora2 Key | `_validate_keys()` | 엔진 선택 시 필수 |
 | GPT 응답 구조 | `cutter.py` | choices 존재, JSON 파싱, cuts 유효성 |
 | 이미지 다운로드 | `dalle.py` | 타임아웃 30초, 3회 재시도 |
 | TTS 텍스트 비어있음 | `elevenlabs.py` | 빈 텍스트 차단 |
@@ -180,5 +178,5 @@ askanything_video_generator/
 | Frontend | Next.js 16, React, TypeScript, Tailwind CSS, Framer Motion |
 | Backend | Python, FastAPI, Uvicorn, SSE (Server-Sent Events) |
 | Video Render | Remotion 4 (React → MP4), FFmpeg |
-| AI Services | OpenAI (GPT-4o, DALL-E 3, Whisper, Sora 2), ElevenLabs, Higgsfield, Kling AI |
+| AI Services | OpenAI (GPT-4o, DALL-E 3, Whisper, Sora 2), ElevenLabs, Kling AI, Google Veo 3 |
 | Infra | Claude Code (Skills, Hooks, launch.json) |
