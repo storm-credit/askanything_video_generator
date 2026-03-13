@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, Film, AlertCircle, Settings, Brain, ImageIcon, Square } from "lucide-react";
+import { Sparkles, CheckCircle2, Film, AlertCircle, Settings, Brain, ImageIcon, Square, Globe } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -11,7 +11,8 @@ export default function Home() {
   const [topic, setTopic] = useState("");
   const [llmProvider, setLlmProvider] = useState("gemini");
   const [imageEngine, setImageEngine] = useState("imagen");
-  const [videoEngine, setVideoEngine] = useState("veo3");
+  const [videoEngine, setVideoEngine] = useState("none");
+  const [language, setLanguage] = useState("ko");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -150,6 +151,7 @@ export default function Home() {
           videoEngine,
           imageEngine,
           llmProvider,
+          language,
           llmKey: llmKeyOverride || undefined,
           outputPath: outputPath.trim() || undefined,
         }),
@@ -353,8 +355,23 @@ export default function Home() {
             )}
           </div>
 
-          {/* 엔진 선택 (LLM + 이미지 + 비디오) */}
+          {/* 엔진 선택 (언어 + LLM + 이미지) */}
           <div className="flex items-center justify-center gap-2 flex-wrap">
+            {/* 언어 선택 */}
+            <div className="flex items-center gap-1">
+              <Globe className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                disabled={isGenerating}
+                aria-label="언어 선택"
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="ko" className="bg-gray-900">한국어</option>
+                <option value="en" className="bg-gray-900">English</option>
+              </select>
+            </div>
+
             {/* LLM 기획 엔진 */}
             <div className="flex items-center gap-1">
               <Brain className="w-3.5 h-3.5 text-gray-500" />
@@ -383,25 +400,6 @@ export default function Home() {
               >
                 <option value="imagen" className="bg-gray-900">Imagen 4 (Google)</option>
                 <option value="dalle" className="bg-gray-900">DALL-E 3 (OpenAI)</option>
-              </select>
-            </div>
-
-            {/* 비디오 엔진 */}
-            <div className="flex items-center gap-1">
-              <Film className="w-3.5 h-3.5 text-gray-500" />
-              <select
-                value={videoEngine}
-                onChange={(e) => setVideoEngine(e.target.value)}
-                disabled={isGenerating}
-                aria-label="비디오 엔진 선택"
-                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-              >
-                <option value="veo3" className="bg-gray-900">Veo 3 (Google)</option>
-                <option value="kling" className="bg-gray-900">Kling 3.0</option>
-                <option value="sora2" className="bg-gray-900">Sora 2</option>
-                <option value="hailuo" className="bg-gray-900">Hailuo 2.3</option>
-                <option value="wan" className="bg-gray-900">Wan 2.5</option>
-                <option value="none" className="bg-gray-900">없음</option>
               </select>
             </div>
           </div>
