@@ -4,9 +4,9 @@ from PIL import Image, ImageOps
 import io
 
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
-from modules.utils.constants import MASTER_STYLE, is_quota_error
+from modules.utils.constants import MASTER_STYLE, is_key_rotation_error
 
-MAX_KEY_RETRIES = 3  # 429 시 최대 키 전환 횟수
+MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
 
 def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=None):
@@ -66,13 +66,18 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
 
             except Exception as e:
                 error_msg = str(e)
-                # 429 쿼터 초과 → 키 차단 후 다른 키로 전환
-                if is_quota_error(error_msg):
+                # 429/503/유료전용 → 키 차단 후 다른 키로 전환
+                if is_key_rotation_error(error_msg):
                     mark_key_exhausted(final_api_key, "imagen")
-                    print(f"  [Imagen 4 쿼터 초과] 컷 {index+1}: 키 차단됨 → 다른 키로 전환...")
+                    print(f"  [Imagen 4 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → 다른 키로 전환...")
                     break  # 내부 retry 루프 탈출 → 외부 key_attempt 루프로
                 if attempt < max_retries - 1:
-                    if "safety" in error_msg.lower() or "blocked" in error_msg.lower() or "SAFETY" in error_msg:
+                    is_safety = (
+                        "safety" in error_msg.lower() or "blocked" in error_msg.lower()
+                        or "SAFETY" in error_msg
+                        or "이미지가 없습니다" in error_msg  # 빈 응답 = 안전 필터 차단
+                    )
+                    if is_safety:
                         enhanced_prompt = (
                             "A safe, beautiful abstract cinematic visualization, "
                             "National Geographic documentary style, atmospheric lighting, "
@@ -95,7 +100,7 @@ def _generate_imagen(api_key, prompt):
     from google.genai import types
 
     model_name = os.getenv("IMAGEN_MODEL", "imagen-4.0-generate-001")
-    safety_level = os.getenv("IMAGEN_SAFETY_FILTER", "BLOCK_MEDIUM_AND_ABOVE")
+    safety_level = os.getenv("IMAGEN_SAFETY_FILTER", "BLOCK_LOW_AND_ABOVE")
     client = genai.Client(api_key=api_key)
     response = client.models.generate_images(
         model=model_name,

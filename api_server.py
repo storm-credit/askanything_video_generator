@@ -334,10 +334,13 @@ async def generate_video_endpoint(req: GenerateRequest):
             def _get_image_key():
                 """이미지 생성 시마다 다른 키 사용 (로테이션)"""
                 if image_engine == "imagen":
-                    return get_google_key(llm_key_override)
+                    return get_google_key(llm_key_override, service="imagen")
                 return api_key_override
 
             def process_cut(i, cut):
+                # 에러 수집 (SSE로 전달할 상세 정보)
+                errors = []
+
                 # 이미지 생성 (세마포어로 동시성 제한)
                 img_path = None
                 with image_semaphore:
@@ -345,6 +348,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                         cut_image_key = _get_image_key()
                         img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
                     except Exception as exc:
+                        errors.append(f"이미지: {exc}")
                         print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
 
                 # 비디오 변환과 TTS를 threading으로 병렬 실행 (데드락 방지: 직접 스레드 사용)
@@ -353,17 +357,19 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 def _run_video():
                     try:
-                        cut_video_key = get_google_key(llm_key_override)
+                        cut_video_key = get_google_key(llm_key_override, service=active_video_engine)
                         video_result[0] = generate_video_from_image(
                             img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key
                         )
                     except Exception as exc:
+                        errors.append(f"비디오: {exc}")
                         print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
 
                 def _run_tts():
                     try:
                         tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override)
                     except Exception as exc:
+                        errors.append(f"TTS: {exc}")
                         print(f"[컷 {i+1} TTS 생성 실패] {exc}")
 
                 threads = []
@@ -388,23 +394,38 @@ async def generate_video_endpoint(req: GenerateRequest):
                     try:
                         words = generate_word_timestamps(aud_path, api_key_override)
                     except Exception as exc:
+                        errors.append(f"타임스탬프: {exc}")
                         print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
-                return i, final_visual_path, aud_path, words
+                return i, final_visual_path, aud_path, words, errors
 
             tasks = [loop.run_in_executor(_cut_executor, process_cut, i, cut) for i, cut in enumerate(cuts)]
             completed_count = 0
 
+            all_cut_errors: dict[int, list[str]] = {}
+
             for future in asyncio.as_completed(tasks):
-                i, final_visual_path, aud_path, words = await future
+                i, final_visual_path, aud_path, words, errors = await future
                 visual_paths[i] = final_visual_path
                 audio_paths[i] = aud_path
                 word_timestamps_list[i] = words
+                if errors:
+                    all_cut_errors[i + 1] = errors
 
                 completed_count += 1
                 prog = 30 + int(50 * (completed_count / len(cuts)))
                 yield {"data": f"PROG|{prog}\n"}
+
                 engine_label = active_video_engine if active_video_engine != "none" else "이미지"
-                yield {"data": f"  -> 컷 {i+1} 시각 소스({engine_label}/{image_label}) 및 음성 생성 완료\n"}
+                if final_visual_path and aud_path:
+                    yield {"data": f"  -> 컷 {i+1} 시각 소스({engine_label}/{image_label}) 및 음성 생성 완료\n"}
+                else:
+                    fail_parts = []
+                    if not final_visual_path:
+                        fail_parts.append("이미지")
+                    if not aud_path:
+                        fail_parts.append("음성")
+                    err_detail = f" ({errors[0]})" if errors else ""
+                    yield {"data": f"WARN|  -> 컷 {i+1} {'+'.join(fail_parts)} 생성 실패{err_detail}\n"}
 
             failed_visual = [i+1 for i, p in enumerate(visual_paths) if p is None]
             failed_audio = [i+1 for i, p in enumerate(audio_paths) if p is None]
@@ -414,7 +435,10 @@ async def generate_video_endpoint(req: GenerateRequest):
                     details.append(f"이미지 실패: 컷 {failed_visual}")
                 if failed_audio:
                     details.append(f"오디오 실패: 컷 {failed_audio}")
-                yield {"data": f"ERROR|[소스 생성 오류] {', '.join(details)}. API 키 및 네트워크 상태를 확인해주세요.\n"}
+                # 첫 번째 에러 상세 정보 포함
+                first_err = next(iter(all_cut_errors.values()), [])
+                err_hint = f" 원인: {first_err[0]}" if first_err else ""
+                yield {"data": f"ERROR|[소스 생성 오류] {', '.join(details)}.{err_hint}\n"}
                 return
 
             yield {"data": "PROG|85\n"}

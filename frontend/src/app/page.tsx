@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, Film, AlertCircle, Settings, Brain, ImageIcon, XCircle } from "lucide-react";
+import { Sparkles, CheckCircle2, Film, AlertCircle, Settings, Brain, ImageIcon, Square } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -339,7 +339,7 @@ export default function Home() {
                 aria-label="생성 취소"
                 className="absolute right-2 bg-red-600 text-white hover:bg-red-500 font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
               >
-                <XCircle className="w-5 h-5" />
+                <Square className="w-4 h-4 fill-current" />
                 취소
               </button>
             ) : (

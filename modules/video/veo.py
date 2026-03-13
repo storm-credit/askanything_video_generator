@@ -9,13 +9,13 @@ import time
 import requests
 
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
-from modules.utils.constants import is_quota_error
+from modules.utils.constants import is_key_rotation_error
 
 # Veo 모델 옵션 (환경변수로 오버라이드 가능)
 DEFAULT_MODEL = "veo-3.0-generate-001"
 POLL_INTERVAL = 10  # 초
 MAX_WAIT = 300  # 5분
-MAX_KEY_RETRIES = 3  # 429 시 최대 키 전환 횟수
+MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
 
 def generate_video_veo(
@@ -88,7 +88,7 @@ def generate_video_veo(
             )
         except Exception as e:
             err_str = str(e)
-            if is_quota_error(err_str):
+            if is_key_rotation_error(err_str):
                 mark_key_exhausted(final_key, "veo3")
                 print(f"[Veo 3 쿼터 초과] 컷 {index+1}: 키 차단됨 → 다른 키로 전환 시도...")
                 continue  # 다음 키로 재시도
@@ -117,7 +117,7 @@ def generate_video_veo(
             video_obj = result.generated_videos[0]
         except Exception as e:
             err_str = str(e)
-            if is_quota_error(err_str):
+            if is_key_rotation_error(err_str):
                 mark_key_exhausted(final_key, "veo3")
                 continue
             print(f"[Veo 3 오류] 컷 {index+1} 폴링 실패: {e}")
