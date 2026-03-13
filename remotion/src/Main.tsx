@@ -1,4 +1,4 @@
-import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile } from 'remotion';
+import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile, useCurrentFrame, interpolate } from 'remotion';
 import React, { useMemo } from 'react';
 import { Captions } from './Captions';
 
@@ -27,6 +27,39 @@ function isVideoPath(path: string): boolean {
   }
 }
 
+// Ken Burns 효과 프리셋: 컷마다 다른 줌/패닝 적용
+const KEN_BURNS_PRESETS = [
+  { startScale: 1.0, endScale: 1.15, startX: 0, endX: -3, startY: 0, endY: -2 },   // 줌인 + 좌상향
+  { startScale: 1.12, endScale: 1.0, startX: -2, endX: 2, startY: -1, endY: 1 },    // 줌아웃 + 우하향
+  { startScale: 1.0, endScale: 1.1, startX: 2, endX: -2, startY: 0, endY: 0 },      // 줌인 + 좌패닝
+  { startScale: 1.08, endScale: 1.0, startX: 0, endX: 0, startY: 2, endY: -2 },     // 줌아웃 + 상향패닝
+  { startScale: 1.0, endScale: 1.18, startX: -1, endX: 1, startY: -1, endY: 1 },    // 대각선 줌인
+  { startScale: 1.15, endScale: 1.02, startX: 3, endX: -1, startY: 0, endY: -1 },   // 줌아웃 + 좌패닝
+];
+
+const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: number }> = ({ src, durationInFrames, index }) => {
+  const frame = useCurrentFrame();
+  const preset = KEN_BURNS_PRESETS[index % KEN_BURNS_PRESETS.length];
+
+  const progress = interpolate(frame, [0, durationInFrames], [0, 1], { extrapolateRight: 'clamp' });
+
+  const scale = interpolate(progress, [0, 1], [preset.startScale, preset.endScale]);
+  const translateX = interpolate(progress, [0, 1], [preset.startX, preset.endX]);
+  const translateY = interpolate(progress, [0, 1], [preset.startY, preset.endY]);
+
+  return (
+    <Img
+      src={src}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        transform: `scale(${scale}) translate(${translateX}%, ${translateY}%)`,
+      }}
+    />
+  );
+};
+
 export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
 
   // Precompute start frames to avoid side-effects during render
@@ -44,7 +77,7 @@ export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
       {cuts.map((cut, index) => {
         const startFrame = startFrames[index];
-        
+
         // staticFile()로 public dir (assets/) 기준 상대 경로 로드
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
         const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
@@ -61,12 +94,7 @@ export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
                       muted
                     />
                 ) : (
-                    // 켄번 (줌인) 효과는 CSS 애니메이션 또는 Remotion의 interpolate로 구현 가능
-                    // 단순화를 위해 objectFit: cover 적용
-                    <Img 
-                      src={visualSrc} 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                    />
+                    <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} />
                 )}
                 <Audio src={audioSrc} />
                 <Captions wordTimestamps={cut.word_timestamps} />
