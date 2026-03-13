@@ -263,7 +263,8 @@ def _generate_via_openai_sora(
                                 break
                         if video_url:
                             break
-                    except (ConnectionError, TimeoutError):
+                    except (ConnectionError, TimeoutError, OSError):
+                        # OSError: 네트워크 오류 상위 클래스 (OpenAI SDK 래핑 포함)
                         continue
                     except Exception as poll_err:
                         err_msg = str(poll_err)

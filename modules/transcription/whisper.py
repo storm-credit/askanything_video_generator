@@ -19,7 +19,7 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None, langua
     client = OpenAI(api_key=final_api_key)
 
     if not audio_path:
-        print(f"[Whisper 오류] 오디오 경로가 비어 있습니다.")
+        print("[Whisper 오류] 오디오 경로가 비어 있습니다.")
         return []
     try:
         file_stat = os.stat(audio_path)
@@ -81,5 +81,3 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None, langua
                 time.sleep(RETRY_DELAY)
                 continue
             return []
-
-    return []

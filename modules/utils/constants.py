@@ -17,8 +17,7 @@ MASTER_STYLE = (
 def is_quota_error(err_str: str) -> bool:
     """429/503/쿼터 관련 에러인지 판별 (Imagen, Veo 공용)."""
     lower = err_str.lower()
-    return any(kw in err_str for kw in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")) or \
-           any(kw in lower for kw in ("quota", "rate_limit", "rate limit"))
+    return any(kw in lower for kw in ("429", "503", "resource_exhausted", "unavailable", "quota", "rate_limit", "rate limit"))
 
 
 def is_key_rotation_error(err_str: str) -> bool:

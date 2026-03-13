@@ -40,7 +40,7 @@ _DEFAULT_WARN_THRESHOLD = 10
 # ═══════════════════════ 상태 조회 ═══════════════════════
 
 def _is_key_blocked(key: str, service: str = None) -> bool:
-    """키가 특정 서비스에 대해 차단 상태인지 확인."""
+    """키가 특정 서비스에 대해 차단 상태인지 확인. 반드시 _usage_lock 내부에서 호출할 것."""
     if key not in _blocked_keys:
         return False
 
@@ -72,7 +72,7 @@ def _is_key_warned(key: str, service: str = None) -> bool:
 
 
 def get_key_state(key: str, service: str = None) -> str:
-    """키 상태 반환: 'blocked', 'warning', 'active'"""
+    """키 상태 반환: 'blocked', 'warning', 'active'. 반드시 _usage_lock 내부에서 호출할 것."""
     if _is_key_blocked(key, service):
         return "blocked"
     if _is_key_warned(key, service):
@@ -131,7 +131,7 @@ def get_google_key(override: str = None, service: str = None, exclude: set = Non
                 # exclude에 있는 키 제외
                 candidates = [k for k in keys if k not in exclude]
                 if not candidates:
-                    candidates = keys  # 전부 exclude면 원본으로 폴백
+                    return None  # 모든 키가 소진됨
 
                 # 3단계 분류
                 active_keys = []
@@ -148,10 +148,8 @@ def get_google_key(override: str = None, service: str = None, exclude: set = Non
                     else:
                         blocked_keys_list.append((svc_usage, k))
 
-                # 우선순위: active → warning → blocked
+                # 우선순위: active → warning → blocked (반드시 하나 이상 존재)
                 pool = active_keys or warning_keys or blocked_keys_list
-                if not pool:
-                    return candidates[0]  # 최후의 수단
 
                 pool.sort(key=lambda x: x[0])
                 min_usage = pool[0][0]

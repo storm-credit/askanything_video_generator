@@ -35,9 +35,9 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
         textAlign: 'center'
       }}>
         {visibleWords.map((w) => {
-          const isActive = currentTime >= w.start && currentTime <= w.end;
-          const hasPassed = currentTime > w.end;
-          const isVisible = currentTime >= w.start - 0.5;
+          const isActive = quantizedTime >= w.start && quantizedTime <= w.end;
+          const hasPassed = quantizedTime > w.end;
+          const isVisible = quantizedTime >= w.start - 0.5;
 
           if (!isVisible && !hasPassed && !isActive) return null;
 

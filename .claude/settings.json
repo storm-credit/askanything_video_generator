@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$TOOL_INPUT\" | grep -q '\\.py'; then python -m py_compile \"$(echo \"$TOOL_INPUT\" | grep -oP '(?<=\"file_path\":\"|file_path\": \")([^\"]+\\.py)')\" 2>&1 || echo 'Python syntax error detected'; fi"
+            "command": "python -c \"import sys,json,py_compile,re; m=re.search(r'\\\"file_path\\\"\\s*:\\s*\\\"([^\\\"]+\\\\.py)', sys.argv[1]); py_compile.compile(m.group(1), doraise=True) if m else None\" \"$TOOL_INPUT\" 2>&1 || echo 'Python syntax error detected'"
           }
         ]
       }

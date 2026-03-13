@@ -12,9 +12,10 @@ Steps:
 2. For each changed file, check:
    - **Security**: No command injection, no hardcoded secrets, proper input validation
    - **Correctness**: Logic errors, off-by-one, null handling, async/await correctness
-   - **Python**: No bare except, proper type hints, no deprecated APIs
-   - **TypeScript/React**: No side-effects in render, proper key props, no memory leaks
-   - **Performance**: No unnecessary network calls, proper timeout values
+   - **Python**: No bare except, proper type hints, no deprecated APIs, no dead code (unreachable returns)
+   - **TypeScript/React**: No side-effects in render, proper key props, no memory leaks, Remotion-compatible (no CSS transitions)
+   - **Performance**: No unnecessary network calls, proper timeout values, thread safety (shared state needs locks)
+   - **Pipeline**: language parameter flow (ko/en), BGM/brand assets auto-copy, title overlay rendering
 3. Report issues by severity: CRITICAL > WARNING > INFO
 4. For each issue: file:line, description, suggested fix
 
