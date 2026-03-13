@@ -106,18 +106,18 @@ def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content:
     return _parse_cuts(content)
 
 
-# ✅ 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
+# 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None) -> tuple[list[dict[str, Any]], str]:
     topic_folder = slugify_topic(topic, lang)
 
-    # ✅ 저장 폴더 구조 생성
+    # 저장 폴더 구조 생성
     base_path = os.path.join("assets", topic_folder)
     os.makedirs(os.path.join(base_path, "images"), exist_ok=True)
     os.makedirs(os.path.join(base_path, "audio"), exist_ok=True)
     os.makedirs(os.path.join(base_path, "video"), exist_ok=True)
 
-    # ✅ System Prompt (역할 부여 및 엄격한 규칙 강제)
+    # System Prompt (역할 부여 및 엄격한 규칙 강제)
     system_prompt = """
 당신은 구독자 100만 명 이상을 보유한 유튜브 쇼츠(Shorts) 및 틱톡(TikTok) 수석 콘텐츠 디렉터이자, 최상급 DALL-E 3 프롬프트 엔지니어입니다.
 당신의 임무는 1분 미만의 세로형 숏폼 영상을 위한 완벽한 기획안을 JSON 포맷으로 작성하는 것입니다.

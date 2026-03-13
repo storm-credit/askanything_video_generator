@@ -84,11 +84,7 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
                     time.sleep(3)
                 else:
                     raise RuntimeError(f"[Imagen 4 이미지 생성 최종 실패] index={index}: {e}")
-        else:
-            # for-else: 내부 루프가 break 없이 정상 종료 → 여기 안 옴 (return 했을 것)
-            continue
         # break로 나왔으면 (429) → 다음 키로 계속
-        continue
 
     raise RuntimeError(f"[Imagen 4] 컷 {index+1}: {MAX_KEY_RETRIES}개 키 모두 쿼터 초과")
 

@@ -44,7 +44,7 @@ def check_quota(api_key: str = None) -> dict | None:
     return None
 
 
-def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None) -> str:
+def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None) -> str | None:
     """
     ElevenLabs API를 사용하여 매우 사실적인 다큐멘터리/쇼츠용 음성(.mp3)을 생성합니다.
     빈 텍스트 → 기본 문구로 대체, 타임아웃/네트워크 오류 → 최대 3회 재시도.
