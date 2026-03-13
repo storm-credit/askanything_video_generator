@@ -8,6 +8,7 @@ export const RemotionRoot: React.FC = () => {
     const totalFrames = (typeof inputProps.totalDurationInFrames === 'number' ? inputProps.totalDurationInFrames : 150);
     const introImagePath = typeof inputProps.introImagePath === 'string' ? inputProps.introImagePath : undefined;
     const outroImagePath = typeof inputProps.outroImagePath === 'string' ? inputProps.outroImagePath : undefined;
+    const title = typeof inputProps.title === 'string' ? inputProps.title : undefined;
 
     return (
         <>
@@ -18,7 +19,7 @@ export const RemotionRoot: React.FC = () => {
                 fps={24}
                 width={1080}
                 height={1920}
-                defaultProps={{ cuts, introImagePath, outroImagePath }}
+                defaultProps={{ cuts, introImagePath, outroImagePath, title }}
             />
         </>
     );

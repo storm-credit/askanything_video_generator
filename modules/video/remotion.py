@@ -9,8 +9,9 @@ from datetime import datetime
 BRAND_DIR = "brand"
 INTRO_IMAGE = "intro.png"
 OUTRO_IMAGE = "outro.jpg"
-INTRO_DURATION_FRAMES = 48         # 2초 @ 24fps
-OUTRO_DURATION_FRAMES = 48         # 2초 @ 24fps
+INTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
+TITLE_DURATION_FRAMES = 72         # 3초 @ 24fps
+OUTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
 
 
 def _to_relative(p: str) -> str:
@@ -31,7 +32,7 @@ def _validate_inputs(visual_paths: list[str], audio_paths: list[str], scripts: l
             raise FileNotFoundError(f"컷 {idx} audio 파일이 없습니다: {a}")
 
 
-def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str) -> str | None:
+def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str, title: str = "") -> str | None:
     """
     Python 백엔드 데이터를 모아 Remotion (React) 렌더링 CLI로 넘겨서 최종 비디오를 합성합니다.
     """
@@ -87,6 +88,11 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         total_duration_in_frames += INTRO_DURATION_FRAMES
         print(f"-> [인트로] 브랜드 인트로 {INTRO_DURATION_FRAMES}프레임 (2초) 추가")
 
+    # 제목 카드: 인트로 뒤, 본편 앞 (3초)
+    if title:
+        total_duration_in_frames += TITLE_DURATION_FRAMES
+        print(f"-> [제목] '{title}' — {TITLE_DURATION_FRAMES}프레임 (3초) 추가")
+
     if os.path.exists(os.path.join("assets", OUTRO_IMAGE)):
         outro_image_path = OUTRO_IMAGE
         total_duration_in_frames += OUTRO_DURATION_FRAMES
@@ -97,6 +103,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         "totalDurationInFrames": total_duration_in_frames,
         "introImagePath": intro_image_path,
         "outroImagePath": outro_image_path,
+        "title": title or None,
     }
 
     with open(props_json_path, "w", encoding="utf-8") as f:

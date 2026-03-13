@@ -28,8 +28,8 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-def _parse_cuts(content: str) -> list[dict[str, str]]:
-    """LLM 응답 텍스트에서 cuts 데이터를 파싱합니다."""
+def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str]:
+    """LLM 응답 텍스트에서 cuts 데이터와 제목을 파싱합니다."""
     if not content:
         raise ValueError("LLM 응답 content가 비어 있습니다.")
     try:
@@ -39,7 +39,8 @@ def _parse_cuts(content: str) -> list[dict[str, str]]:
     cuts = _sanitize_cuts(data.get("cuts", []))
     if not cuts:
         raise ValueError("LLM 응답에 유효한 cuts가 없습니다.")
-    return cuts
+    title = data.get("title", "").strip()
+    return cuts, title
 
 
 def _request_openai(api_key: str, system_prompt: str, user_content: str) -> str | None:
@@ -95,8 +96,8 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str) -> str:
     return (response.content[0].text or "").strip()
 
 
-def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str) -> list[dict[str, str]]:
-    """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다."""
+def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str) -> tuple[list[dict[str, str]], str]:
+    """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다. (cuts, title) 반환."""
     if provider == "gemini":
         content = _request_gemini(api_key, system_prompt, user_content)
     elif provider == "claude":
@@ -138,6 +139,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 반드시 통일된 흐름을 지닌 6~10컷 사이로 구성하며, 다음 JSON 스키마 구조로만 정확하게 응답하십시오.
 
 {
+  "title": "[영상 제목: 시청자의 클릭을 유도하는 짧고 임팩트 있는 한국어 제목 (15자 이내)]",
   "expert_validation": "[자가 검증 코멘트]",
   "cuts": [
     {
@@ -169,6 +171,7 @@ You must follow this **[5-Step Viral Storytelling Formula]** to plan a 6–10 cu
 Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in the following JSON schema:
 
 {
+  "title": "[Video title: A short, impactful, click-worthy English title (max 8 words)]",
   "expert_validation": "[Self-validation comment]",
   "cuts": [
     {
@@ -213,6 +216,7 @@ Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in t
     exhausted_keys: set[str] = set()
     current_key = final_api_key
     cuts: list[dict[str, str]] = []
+    title: str = ""
 
     if llm_provider == "gemini":
         from modules.utils.keys import get_google_key, mark_key_exhausted, mask_key
@@ -222,7 +226,7 @@ Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in t
 
     for attempt in range(max_key_attempts):
         try:
-            cuts = _request_cuts(llm_provider, current_key, system_prompt, user_content)
+            cuts, title = _request_cuts(llm_provider, current_key, system_prompt, user_content)
             break  # 성공
         except Exception as e:
             err_str = str(e)
@@ -254,10 +258,14 @@ Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in t
         else:
             retry_key = current_key
         retry_user = user_content + "\n\n중요: 이번 응답은 반드시 cuts 배열 길이를 6~10으로 맞추세요."
-        cuts = _request_cuts(llm_provider, retry_key, system_prompt, retry_user)
+        cuts, title = _request_cuts(llm_provider, retry_key, system_prompt, retry_user)
 
     if not (6 <= len(cuts) <= 10):
         raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 6~10).")
 
-    print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label})")
-    return cuts, topic_folder
+    # title이 비어있으면 topic을 폴백으로 사용
+    if not title:
+        title = topic
+
+    print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title}")
+    return cuts, topic_folder, title

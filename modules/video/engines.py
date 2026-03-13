@@ -252,6 +252,7 @@ def _generate_via_openai_sora(
         for output in response.output:
             if hasattr(output, "type") and output.type == "video_generation_call":
                 poll_interval = SORA_POLL_INTERVAL
+                poll_start = time.time()
                 for poll_count in range(SORA_MAX_POLLS):
                     time.sleep(poll_interval)
                     try:
@@ -272,7 +273,7 @@ def _generate_via_openai_sora(
                         continue
                     # 30초마다 진행 상태 로그
                     if (poll_count + 1) % 6 == 0:
-                        elapsed = (poll_count + 1) * poll_interval
+                        elapsed = int(time.time() - poll_start)
                         print(f"  [Sora 2] 컷 {index+1} 렌더링 대기 중... ({elapsed}초 경과)")
                     # 1분 이후 폴링 간격 확대
                     if poll_count == SORA_SLOWDOWN_AT:
