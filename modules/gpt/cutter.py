@@ -258,7 +258,15 @@ Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in t
         else:
             retry_key = current_key
         retry_user = user_content + "\n\n중요: 이번 응답은 반드시 cuts 배열 길이를 6~10으로 맞추세요."
-        cuts, title = _request_cuts(llm_provider, retry_key, system_prompt, retry_user)
+        try:
+            cuts, title = _request_cuts(llm_provider, retry_key, system_prompt, retry_user)
+        except Exception as retry_err:
+            err_str = str(retry_err)
+            if llm_provider == "gemini" and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str):
+                mark_key_exhausted(retry_key, service="gemini")
+                print(f"  [컷 수 재시도 429] {mask_key(retry_key)} 차단됨 — 기존 {len(cuts)}컷으로 진행")
+            else:
+                raise
 
     if not (6 <= len(cuts) <= 10):
         raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 6~10).")

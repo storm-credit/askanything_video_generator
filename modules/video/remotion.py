@@ -145,13 +145,20 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     print(f"-> [Remotion 렌더링 마스터] 총 길이 {total_duration_in_frames} 프레임, 렌더링 준비 완료.")
 
     try:
-        # Windows에서는 shell=True가 안정적, Unix에서는 False 권장
-        shell_mode = os.name == "nt"
-        result = subprocess.run(
-            cmd, cwd=remotion_dir, check=True, shell=shell_mode,
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=600,
-        )
+        # Windows: shell=True 필요하지만 list → 문자열로 변환 (공백 경로 안전 처리)
+        if os.name == "nt":
+            cmd_str = subprocess.list2cmdline(cmd)
+            result = subprocess.run(
+                cmd_str, cwd=remotion_dir, check=True, shell=True,
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=600,
+            )
+        else:
+            result = subprocess.run(
+                cmd, cwd=remotion_dir, check=True, shell=False,
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=600,
+            )
 
         if not os.path.exists(final_video_path):
             print(f"[Remotion 렌더링 실패] 렌더 명령은 끝났지만 결과 파일이 없습니다: {final_video_path}")

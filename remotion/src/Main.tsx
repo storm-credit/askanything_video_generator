@@ -269,9 +269,9 @@ export const Main: React.FC<{
         </Sequence>
       )}
 
-      {/* 제목 오버레이 — 첫 번째 컷 위에 표시 */}
+      {/* 제목 오버레이 — 첫 번째 컷 위에 표시 (컷 길이 초과 방지) */}
       {title && cuts.length > 0 && (
-        <Sequence from={introFrames} durationInFrames={TITLE_OVERLAY_FRAMES}>
+        <Sequence from={introFrames} durationInFrames={Math.min(TITLE_OVERLAY_FRAMES, cuts[0].duration_in_frames)}>
           <TitleOverlay title={title} />
         </Sequence>
       )}

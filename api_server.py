@@ -259,12 +259,10 @@ async def generate_video_endpoint(req: GenerateRequest):
 
     async def sse_generator():
         # 동시 요청 제한: 슬롯 부족 시 대기 안내
-        acquired = False
         if _generate_semaphore.locked():
             yield {"data": "WARN|[대기열] 다른 비디오가 생성 중입니다. 순서를 기다리는 중...\n"}
-        await _generate_semaphore.acquire()
-        acquired = True
-        try:
+        async with _generate_semaphore:
+          try:
             # 사전 검증: 필수 API 키 확인
             missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine, image_engine, llm_provider, llm_key_override)
             if missing:
@@ -530,7 +528,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 경로: {relative_video_path}\n"}
             yield {"data": f"DONE|{relative_video_path}\n"}
 
-        except Exception as e:
+          except Exception as e:
             traceback.print_exc()
             err_str = str(e)
             if "401" in err_str or "invalid_api_key" in err_str or "Incorrect API key" in err_str:
@@ -543,9 +541,6 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": "ERROR|[네트워크 오류] API 서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.\n"}
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
-        finally:
-            if acquired:
-                _generate_semaphore.release()
 
     return EventSourceResponse(sse_generator())
 

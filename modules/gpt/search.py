@@ -21,12 +21,13 @@ def get_fact_check_context(topic: str) -> str:
         print(f"-> [팩트체크 엔진] '{topic}'에 대한 실시간 논문/웹 검색 중 (Tavily Search API)...")
         client = TavilyClient(api_key=api_key)
 
-        # 검색 수행 (최신 정보 포함, 최대 3개의 핵심 정보만 가져옴)
+        # 검색 수행 (최신 정보 포함, 최대 3개의 핵심 정보만 가져옴, 30초 타임아웃)
         response = client.search(
             query=topic,
             search_depth="advanced",
             include_answer=True,
             max_results=3,
+            timeout=30,
         )
 
         # GPT에게 전달할 요약 컨텍스트 생성
