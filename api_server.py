@@ -21,7 +21,7 @@ from modules.video.engines import generate_video_from_image, get_available_engin
 from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs_quota
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
-from modules.utils.keys import get_google_key, count_google_keys, get_key_usage_stats
+from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats
 
 app = FastAPI()
 
@@ -254,6 +254,16 @@ async def generate_video_endpoint(req: GenerateRequest):
                     yield {"data": f"WARN|[ElevenLabs 잔여 크레딧 부족] {remaining:,}/{limit:,}자 남음 ({pct:.0f}%). 생성이 중단될 수 있습니다.\n"}
                 elif pct < 20:
                     yield {"data": f"WARN|[ElevenLabs 크레딧 경고] {remaining:,}/{limit:,}자 남음 ({pct:.0f}%).\n"}
+
+            # Google 키 가용성 경고
+            total_keys = count_google_keys()
+            avail_keys = count_available_keys()
+            if total_keys > 0 and avail_keys < total_keys:
+                blocked_count = total_keys - avail_keys
+                if avail_keys == 0:
+                    yield {"data": f"WARN|[Google 키 경고] 모든 {total_keys}개 키가 429 차단됨. 쿼터 초과 가능성 높음.\n"}
+                else:
+                    yield {"data": f"WARN|[Google 키 상태] {avail_keys}/{total_keys}개 사용 가능 ({blocked_count}개 24시간 차단 중)\n"}
 
             provider_labels = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
             provider_label = provider_labels.get(llm_provider, "ChatGPT")

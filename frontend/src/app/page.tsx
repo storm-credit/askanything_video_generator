@@ -124,7 +124,7 @@ export default function Home() {
   // 저장 경로 설정
   const [outputPath, setOutputPath] = useState("");
   // 키 사용량 통계
-  const [keyUsageStats, setKeyUsageStats] = useState<{total_keys: number; keys: {key: string; usage: Record<string, number>; total: number}[]} | null>(null);
+  const [keyUsageStats, setKeyUsageStats] = useState<{total_keys: number; keys: {key: string; usage: Record<string, number>; total: number; blocked: boolean; unblock_hours: number}[]} | null>(null);
 
   const fetchKeyStatus = useCallback(async () => {
     try {
@@ -441,17 +441,22 @@ export default function Home() {
                         총 {keyUsageStats.total_keys}개 키 등록 · 서버 재시작 시 초기화
                       </p>
                       {keyUsageStats.keys.map((k, idx) => (
-                        <div key={idx} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02]">
-                          <span className="text-xs text-gray-400 font-mono w-28 shrink-0">{k.key}</span>
+                        <div key={idx} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${k.blocked ? 'bg-red-500/5 border border-red-500/20' : 'bg-white/[0.02]'}`}>
+                          <span className={`text-xs font-mono w-28 shrink-0 ${k.blocked ? 'text-red-400' : 'text-gray-400'}`}>{k.key}</span>
                           <div className="flex-1 flex items-center gap-2 flex-wrap">
+                            {k.blocked && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">
+                                🚫 차단 ({k.unblock_hours}h 후 해제)
+                              </span>
+                            )}
                             {Object.entries(k.usage).map(([service, count]) => (
                               <span key={service} className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400">
                                 {service}: {count}
                               </span>
                             ))}
-                            {k.total === 0 && <span className="text-[10px] text-gray-600">미사용</span>}
+                            {!k.blocked && k.total === 0 && <span className="text-[10px] text-gray-600">미사용</span>}
                           </div>
-                          <span className="text-xs font-bold text-white shrink-0">{k.total}</span>
+                          <span className={`text-xs font-bold shrink-0 ${k.blocked ? 'text-red-400' : 'text-white'}`}>{k.total}</span>
                         </div>
                       ))}
                     </div>

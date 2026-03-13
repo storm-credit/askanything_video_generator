@@ -3,7 +3,7 @@ import time
 from PIL import Image, ImageOps
 import io
 
-from modules.utils.keys import record_key_usage
+from modules.utils.keys import record_key_usage, mark_key_exhausted
 
 
 def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=None):
@@ -50,6 +50,10 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
 
         except Exception as e:
             error_msg = str(e)
+            # 429 쿼터 초과 → 키 24시간 차단
+            if "429" in error_msg or "quota" in error_msg.lower() or "RESOURCE_EXHAUSTED" in error_msg:
+                mark_key_exhausted(final_api_key, "imagen")
+                raise RuntimeError(f"[Imagen 4 쿼터 초과] 컷 {index+1}: 이 키의 일일 한도 도달")
             if attempt < max_retries - 1:
                 if "safety" in error_msg.lower() or "blocked" in error_msg.lower() or "SAFETY" in error_msg:
                     enhanced_prompt = (

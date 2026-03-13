@@ -7,7 +7,7 @@ Higgsfield 없이 Google API 키 하나로 동작합니다.
 import os
 import time
 
-from modules.utils.keys import record_key_usage
+from modules.utils.keys import record_key_usage, mark_key_exhausted
 
 # Veo 모델 옵션 (환경변수로 오버라이드 가능)
 DEFAULT_MODEL = "veo-3.0-generate-001"
@@ -86,8 +86,9 @@ def generate_video_veo(
         )
     except Exception as e:
         err_str = str(e)
-        if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
-            print(f"[Veo 3 쿼터 초과] 컷 {index+1}: 일일 생성 한도 도달. 나중에 다시 시도하세요.")
+        if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower() or "RESOURCE_EXHAUSTED" in err_str:
+            mark_key_exhausted(final_key, "veo3")
+            print(f"[Veo 3 쿼터 초과] 컷 {index+1}: 일일 생성 한도 도달. 이 키는 24시간 후 자동 해제됩니다.")
         else:
             print(f"[Veo 3 오류] 컷 {index+1} 요청 실패: {e}")
         return None
