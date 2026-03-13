@@ -124,7 +124,7 @@ export default function Home() {
   // 저장 경로 설정
   const [outputPath, setOutputPath] = useState("");
   // 키 사용량 통계
-  const [keyUsageStats, setKeyUsageStats] = useState<{total_keys: number; keys: {key: string; usage: Record<string, number>; total: number; blocked: boolean; unblock_hours: number}[]} | null>(null);
+  const [keyUsageStats, setKeyUsageStats] = useState<{total_keys: number; keys: {key: string; usage: Record<string, number>; total: number; state: string; blocked: boolean; blocked_services: Record<string, number>; unblock_hours: number}[]} | null>(null);
 
   const fetchKeyStatus = useCallback(async () => {
     try {
@@ -440,25 +440,39 @@ export default function Home() {
                       <p className="text-[10px] text-gray-500 mb-2">
                         총 {keyUsageStats.total_keys}개 키 등록 · 서버 재시작 시 초기화
                       </p>
-                      {keyUsageStats.keys.map((k, idx) => (
-                        <div key={idx} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${k.blocked ? 'bg-red-500/5 border border-red-500/20' : 'bg-white/[0.02]'}`}>
-                          <span className={`text-xs font-mono w-28 shrink-0 ${k.blocked ? 'text-red-400' : 'text-gray-400'}`}>{k.key}</span>
-                          <div className="flex-1 flex items-center gap-2 flex-wrap">
-                            {k.blocked && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">
-                                🚫 차단 ({k.unblock_hours}h 후 해제)
-                              </span>
-                            )}
-                            {Object.entries(k.usage).map(([service, count]) => (
-                              <span key={service} className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400">
-                                {service}: {count}
-                              </span>
-                            ))}
-                            {!k.blocked && k.total === 0 && <span className="text-[10px] text-gray-600">미사용</span>}
+                      {keyUsageStats.keys.map((k, idx) => {
+                        const stateStyle = k.state === "blocked"
+                          ? "bg-red-500/5 border border-red-500/20"
+                          : k.state === "warning"
+                            ? "bg-amber-500/5 border border-amber-500/20"
+                            : "bg-white/[0.02]";
+                        const keyColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-gray-400";
+                        const totalColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-white";
+                        return (
+                          <div key={idx} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${stateStyle}`}>
+                            <div className="flex items-center gap-1.5 w-32 shrink-0">
+                              <div className={`w-2 h-2 rounded-full shrink-0 ${k.state === "blocked" ? "bg-red-500" : k.state === "warning" ? "bg-amber-500" : "bg-green-500"}`} />
+                              <span className={`text-xs font-mono ${keyColor}`}>{k.key}</span>
+                            </div>
+                            <div className="flex-1 flex items-center gap-1.5 flex-wrap">
+                              {Object.entries(k.blocked_services || {}).map(([svc, hours]) => (
+                                <span key={svc} className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">
+                                  {svc} 🚫 {hours}h
+                                </span>
+                              ))}
+                              {Object.entries(k.usage).map(([service, count]) => (
+                                <span key={service} className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                  (k.blocked_services || {})[service] ? "bg-red-500/10 text-red-400/60 line-through" : "bg-cyan-500/15 text-cyan-400"
+                                }`}>
+                                  {service}: {count}
+                                </span>
+                              ))}
+                              {k.total === 0 && k.state === "active" && <span className="text-[10px] text-gray-600">미사용</span>}
+                            </div>
+                            <span className={`text-xs font-bold shrink-0 ${totalColor}`}>{k.total}</span>
                           </div>
-                          <span className={`text-xs font-bold shrink-0 ${k.blocked ? 'text-red-400' : 'text-white'}`}>{k.total}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
