@@ -17,7 +17,7 @@ load_dotenv(override=True)
 from modules.gpt.cutter import generate_cuts
 from modules.image.dalle import generate_image as generate_image_dalle
 from modules.image.imagen import generate_image_imagen
-from modules.video.engines import generate_video_from_image, get_available_engines
+from modules.video.engines import generate_video_from_image, get_available_engines, check_engine_available
 from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs_quota
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
@@ -55,7 +55,7 @@ class GenerateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     apiKey: str | None = None
     elevenlabsKey: str | None = None
-    videoEngine: str = "kling"
+    videoEngine: str = "veo3"
     imageEngine: str = "imagen"
     llmProvider: str = "gemini"
     llmKey: str | None = None
@@ -236,6 +236,14 @@ async def generate_video_endpoint(req: GenerateRequest):
             provider_labels = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
             provider_label = provider_labels.get(llm_provider, "ChatGPT")
 
+            # 비디오 엔진 사전 검증
+            google_key_for_video = llm_key_override or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            if video_engine != "none":
+                engine_ok, engine_reason = check_engine_available(video_engine, google_key_for_video)
+                if not engine_ok:
+                    yield {"data": f"WARN|[비디오 엔진 경고] {video_engine}: {engine_reason}. 정지 이미지로 대체됩니다.\n"}
+                    video_engine = "none"
+
             yield {"data": "PROG|10\n"}
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
 
@@ -287,7 +295,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 if img_path and video_engine != "none":
                     video_future = cut_executor.submit(
-                        generate_video_from_image, img_path, cut["prompt"], i, topic_folder, video_engine
+                        generate_video_from_image, img_path, cut["prompt"], i, topic_folder, video_engine, google_key_for_video
                     )
                 tts_future = cut_executor.submit(
                     generate_tts, cut["script"], i, topic_folder, elevenlabs_key_override

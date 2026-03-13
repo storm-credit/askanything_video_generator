@@ -104,7 +104,7 @@ export default function Home() {
   const [topic, setTopic] = useState("");
   const [llmProvider, setLlmProvider] = useState("gemini");
   const [imageEngine, setImageEngine] = useState("imagen");
-  const [videoEngine, setVideoEngine] = useState("kling");
+  const [videoEngine, setVideoEngine] = useState("veo3");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -516,9 +516,9 @@ export default function Home() {
                 disabled={isGenerating}
                 className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
               >
+                <option value="veo3" className="bg-gray-900">Veo 3 (Google)</option>
                 <option value="kling" className="bg-gray-900">Kling 3.0</option>
                 <option value="sora2" className="bg-gray-900">Sora 2</option>
-                <option value="veo3" className="bg-gray-900">Veo 3.1</option>
                 <option value="hailuo" className="bg-gray-900">Hailuo 2.3</option>
                 <option value="wan" className="bg-gray-900">Wan 2.5</option>
                 <option value="none" className="bg-gray-900">없음</option>
