@@ -479,7 +479,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                         out_dir = os.path.dirname(abs_output)
                         if out_dir:
                             os.makedirs(out_dir, exist_ok=True)
-                        shutil.copy2(final_abs_path, abs_output)
+                        await asyncio.to_thread(shutil.copy2, final_abs_path, abs_output)
                         yield {"data": f"[저장] 지정 경로에 복사 완료: {abs_output}\n"}
                     except Exception as copy_err:
                         yield {"data": f"ERROR|[저장 오류] 지정 경로 복사 실패: {copy_err}\n"}
@@ -491,7 +491,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             if os.path.isdir(downloads_dir):
                 try:
                     downloads_path = os.path.join(downloads_dir, final_filename)
-                    shutil.copy2(final_abs_path, downloads_path)
+                    await asyncio.to_thread(shutil.copy2, final_abs_path, downloads_path)
                 except Exception as cp_err:
                     print(f"[Downloads 복사 실패] {cp_err}")
                     downloads_path = None
@@ -523,6 +523,11 @@ async def generate_video_endpoint(req: GenerateRequest):
                 _generate_semaphore.release()
 
     return EventSourceResponse(sse_generator())
+
+
+@app.on_event("shutdown")
+async def _shutdown():
+    _cut_executor.shutdown(wait=False)
 
 
 if __name__ == "__main__":

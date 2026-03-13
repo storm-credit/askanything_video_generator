@@ -65,7 +65,8 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None) -> lis
                             words.append({"word": str(w["word"]), "start": float(w["start"]), "end": float(w["end"])})
                         else:
                             words.append({"word": str(w.word), "start": float(w.start), "end": float(w.end)})
-                    except Exception:
+                    except Exception as parse_err:
+                        print(f"[Whisper 경고] 단어 파싱 실패 (건너뜀): {parse_err} | 원본: {w}")
                         continue
 
             if words:
