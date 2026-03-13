@@ -4,6 +4,9 @@ import json
 import subprocess
 from datetime import datetime
 
+INTRO_IMAGE = "intro.png"          # assets/ 기준 상대 경로
+INTRO_DURATION_FRAMES = 48         # 2초 @ 24fps
+
 
 def _to_relative(p: str) -> str:
     """assets/ 기준 상대 경로 변환 (staticFile()용 - publicDir=assets/)"""
@@ -64,7 +67,19 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             }
         )
 
-    props_data = {"cuts": cuts_data, "totalDurationInFrames": total_duration_in_frames}
+    # 인트로 이미지가 있으면 총 길이에 인트로 추가
+    intro_path = os.path.join("assets", INTRO_IMAGE)
+    intro_image_path = None
+    if os.path.exists(intro_path):
+        intro_image_path = INTRO_IMAGE
+        total_duration_in_frames += INTRO_DURATION_FRAMES
+        print(f"-> [인트로] 브랜드 인트로 {INTRO_DURATION_FRAMES}프레임 (2초) 추가")
+
+    props_data = {
+        "cuts": cuts_data,
+        "totalDurationInFrames": total_duration_in_frames,
+        "introImagePath": intro_image_path,
+    }
 
     with open(props_json_path, "w", encoding="utf-8") as f:
         json.dump(props_data, f, ensure_ascii=False, indent=2)
