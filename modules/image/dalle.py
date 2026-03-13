@@ -1,9 +1,10 @@
-from openai import OpenAI
-import requests
-from PIL import Image, ImageOps
 import io
 import os
 import time
+
+import requests
+from openai import OpenAI
+from PIL import Image, ImageOps
 
 from modules.utils.constants import MASTER_STYLE
 

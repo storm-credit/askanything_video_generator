@@ -282,12 +282,14 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
 
+            # 비디오 엔진 변수 초기화 (아래에서 키 선택·사전 검증에 사용)
+            active_video_engine = video_engine
+
             # Google 키 로테이션 (비디오 엔진용 — 서비스별 차단 고려)
             video_svc = active_video_engine if active_video_engine in ("veo3",) else None
             google_key_for_video = get_google_key(llm_key_override, service=video_svc)
 
             # 비디오 엔진 사전 검증
-            active_video_engine = video_engine
             if active_video_engine != "none":
                 engine_ok, engine_reason = check_engine_available(active_video_engine, google_key_for_video)
                 if not engine_ok:
