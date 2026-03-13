@@ -3,6 +3,8 @@ import sys
 import io
 import shutil
 import asyncio
+import threading
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
 from sse_starlette.sse import EventSourceResponse
@@ -21,6 +23,7 @@ from modules.video.engines import generate_video_from_image, get_available_engin
 from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs_quota
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
+from modules.utils.constants import PROVIDER_LABELS
 from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats
 
 app = FastAPI()
@@ -265,8 +268,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 else:
                     yield {"data": f"WARN|[Google 키 상태] {avail_keys}/{total_keys}개 사용 가능 ({blocked_count}개 24시간 차단 중)\n"}
 
-            provider_labels = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
-            provider_label = provider_labels.get(llm_provider, "ChatGPT")
+            provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
 
             # Google 키 로테이션 (Gemini, Imagen, Veo 공유)
             google_key_for_video = get_google_key(llm_key_override)
@@ -309,7 +311,6 @@ async def generate_video_endpoint(req: GenerateRequest):
             scripts = [cut["script"] for cut in cuts]
 
             # 이미지/TTS 동시성 제한 (API 레이트 리밋 방지)
-            import threading
             image_semaphore = threading.Semaphore(2)  # 이미지 최대 2개 동시
             cut_executor = ThreadPoolExecutor(max_workers=4)
 
@@ -440,8 +441,6 @@ async def generate_video_endpoint(req: GenerateRequest):
             yield {"data": f"DONE|{relative_video_path}\n"}
 
         except Exception as e:
-            import traceback
-
             traceback.print_exc()
             err_str = str(e)
             if "401" in err_str or "invalid_api_key" in err_str or "Incorrect API key" in err_str:
@@ -454,6 +453,12 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": "ERROR|[네트워크 오류] API 서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.\n"}
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
+        finally:
+            # ThreadPoolExecutor 리소스 정리
+            try:
+                cut_executor.shutdown(wait=False)
+            except Exception:
+                pass
 
     return EventSourceResponse(sse_generator())
 

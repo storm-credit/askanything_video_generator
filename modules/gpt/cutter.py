@@ -3,6 +3,7 @@ import json
 import re
 from typing import Any
 from modules.utils.slugify import slugify_topic
+from modules.utils.constants import PROVIDER_LABELS
 from modules.gpt.search import get_fact_check_context
 
 
@@ -146,8 +147,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 """
 
     # LLM 프로바이더별 API 키 결정
-    provider_labels = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
-    provider_label = provider_labels.get(llm_provider, "ChatGPT")
+    provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
 
     if llm_provider == "gemini":
         final_api_key = llm_key_override or os.getenv("GEMINI_API_KEY")

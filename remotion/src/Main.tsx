@@ -1,4 +1,4 @@
-import { AbsoluteFill, Sequence, Video, Audio, Img, useVideoConfig, staticFile } from 'remotion';
+import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile } from 'remotion';
 import React, { useMemo } from 'react';
 import { Captions } from './Captions';
 
@@ -15,8 +15,9 @@ type CutProps = {
   duration_in_frames: number;
 };
 
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov'];
+
 export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
-  const { fps } = useVideoConfig();
 
   // Precompute start frames to avoid side-effects during render
   const startFrames = useMemo(() => {
@@ -37,16 +38,17 @@ export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
         // staticFile()로 public dir (assets/) 기준 상대 경로 로드
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
         const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
-        const isVideo = visualSrc.toLowerCase().endsWith('.mp4');
+        const isVideo = VIDEO_EXTENSIONS.some(ext => visualSrc.toLowerCase().endsWith(ext));
 
         return (
           <Sequence key={index} from={startFrame} durationInFrames={cut.duration_in_frames}>
             <AbsoluteFill>
                 {isVideo ? (
-                    <Video 
-                      src={visualSrc} 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                      loop 
+                    <Video
+                      src={visualSrc}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      loop
+                      muted
                     />
                 ) : (
                     // 켄번 (줌인) 효과는 CSS 애니메이션 또는 Remotion의 interpolate로 구현 가능

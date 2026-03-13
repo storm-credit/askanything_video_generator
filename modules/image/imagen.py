@@ -3,15 +3,10 @@ import time
 from PIL import Image, ImageOps
 import io
 
-from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key
+from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
+from modules.utils.constants import MASTER_STYLE, is_quota_error
 
 MAX_KEY_RETRIES = 3  # 429 시 최대 키 전환 횟수
-
-
-def _is_quota_error(err_str: str) -> bool:
-    """429/쿼터 관련 에러인지 판별."""
-    return any(kw in err_str for kw in ("429", "RESOURCE_EXHAUSTED")) or \
-           "quota" in err_str.lower()
 
 
 def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=None):
@@ -22,14 +17,7 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
     if not prompt or not prompt.strip():
         raise ValueError(f"[Imagen 이미지 오류] 프롬프트가 비어 있습니다 (index={index})")
 
-    # National Geographic 스타일 마스터 프리셋
-    master_style = (
-        "Award-winning cinematic photograph, National Geographic high-end documentary style, "
-        "hyper-detailed, global illumination, bright vibrant uplifting lighting, "
-        "breathtaking aesthetic, 8K resolution, vertical composition, family-friendly. "
-        "Absolutely NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS. "
-    )
-    enhanced_prompt = master_style + prompt
+    enhanced_prompt = MASTER_STYLE + prompt
     tried_keys: set[str] = set()
     current_key = api_key
 
@@ -49,8 +37,7 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
         tried_keys.add(final_api_key)
 
         if key_attempt > 0:
-            from modules.utils.keys import _mask_key
-            print(f"  [Imagen 4] 컷 {index+1} 다른 키로 재시도 (시도 {key_attempt+1}/{MAX_KEY_RETRIES}, 키: {_mask_key(final_api_key)})")
+            print(f"  [Imagen 4] 컷 {index+1} 다른 키로 재시도 (시도 {key_attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_api_key)})")
 
         # 이미지 생성 재시도 (안전 정책 실패 등 일반 재시도)
         max_retries = 3
@@ -80,7 +67,7 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
             except Exception as e:
                 error_msg = str(e)
                 # 429 쿼터 초과 → 키 차단 후 다른 키로 전환
-                if _is_quota_error(error_msg):
+                if is_quota_error(error_msg):
                     mark_key_exhausted(final_api_key, "imagen")
                     print(f"  [Imagen 4 쿼터 초과] 컷 {index+1}: 키 차단됨 → 다른 키로 전환...")
                     break  # 내부 retry 루프 탈출 → 외부 key_attempt 루프로

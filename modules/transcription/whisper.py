@@ -39,6 +39,7 @@ def generate_word_timestamps(audio_path, api_key=None):
                 transcript = client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio_file,
+                    language="ko",
                     response_format="verbose_json",
                     timestamp_granularities=["word"]
                 )

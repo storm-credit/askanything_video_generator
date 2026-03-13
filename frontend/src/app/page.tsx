@@ -209,10 +209,13 @@ export default function Home() {
       llmKeyOverride = pickKey("claude_key");
     }
 
+    const abortController = new AbortController();
+
     try {
       const response = await fetch("http://localhost:8000/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           topic,
           apiKey: selectedOpenaiKey || undefined,
@@ -229,53 +232,65 @@ export default function Home() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
+      let buffer = "";  // chunk 경계에서 잘린 메시지 버퍼
+
+      const processLine = (line: string) => {
+        if (!line.startsWith("data:")) return;
+        const rawData = line.slice(5).trim();
+        if (!rawData) return;
+
+        if (rawData.startsWith("DONE|")) {
+          const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
+          const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
+          const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
+          const downloadUrl = `http://localhost:8000${normalizedPath}`;
+
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          const fileName = videoPath.split('/').pop() || "AskAnything_Shorts.mp4";
+          link.setAttribute("download", fileName);
+          document.body.appendChild(link);
+          link.click();
+          link.parentNode?.removeChild(link);
+
+          setVideoUrl("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
+          setIsGenerating(false);
+        } else if (rawData.startsWith("ERROR|")) {
+          const errMsg = rawData.slice(6);
+          setLogs(prev => [...prev.slice(-99), `ERROR:${errMsg}`]);
+          setErrorMessage(errMsg);
+          setIsGenerating(false);
+        } else if (rawData.startsWith("WARN|")) {
+          const warnMsg = rawData.slice(5);
+          setLogs(prev => [...prev.slice(-99), `WARN:${warnMsg}`]);
+        } else if (rawData.startsWith("PROG|")) {
+          const p = parseInt(rawData.slice(5), 10);
+          if (!isNaN(p)) setProgress(p);
+        } else {
+          setLogs(prev => [...prev.slice(-99), rawData]);
+        }
+      };
 
       while (true) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          // 스트림 종료 시 버퍼에 남은 데이터 처리
+          if (buffer.trim()) processLine(buffer);
+          break;
+        }
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
+        // stream: true → 멀티바이트 문자(한글) chunk 경계 깨짐 방지
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        // 마지막 줄은 불완전할 수 있으므로 버퍼에 보관
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (line.startsWith("data:")) {
-            const rawData = line.slice(5).trim();
-            if (!rawData) continue;
-
-            if (rawData.startsWith("DONE|")) {
-               const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
-               const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
-               const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
-               const downloadUrl = `http://localhost:8000${normalizedPath}`;
-
-               const link = document.createElement("a");
-               link.href = downloadUrl;
-               const fileName = videoPath.split('/').pop() || "AskAnything_Shorts.mp4";
-               link.setAttribute("download", fileName);
-               document.body.appendChild(link);
-               link.click();
-               link.parentNode?.removeChild(link);
-
-               setVideoUrl("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
-               setIsGenerating(false);
-            } else if (rawData.startsWith("ERROR|")) {
-               const errMsg = rawData.slice(6);
-               setLogs(prev => [...prev.slice(-99), `ERROR:${errMsg}`]);
-               setErrorMessage(errMsg);
-               setIsGenerating(false);
-            } else if (rawData.startsWith("WARN|")) {
-               const warnMsg = rawData.slice(5);
-               setLogs(prev => [...prev.slice(-99), `WARN:${warnMsg}`]);
-            } else if (rawData.startsWith("PROG|")) {
-               const p = parseInt(rawData.slice(5), 10);
-               if (!isNaN(p)) setProgress(p);
-            } else {
-               setLogs(prev => [...prev.slice(-99), rawData]);
-            }
-          }
+          processLine(line);
         }
       }
     } catch (error) {
+      if (abortController.signal.aborted) return;  // 사용자 취소 시 무시
       console.error(error);
       const message = error instanceof Error ? error.message : "Unknown error";
       const userMsg = message === "Failed to fetch"

@@ -80,24 +80,6 @@ def get_key_state(key: str, service: str = None) -> str:
     return "active"
 
 
-def _get_block_remaining(key: str, service: str = None) -> float:
-    """차단 잔여 시간(초). 서비스 지정 시 해당 서비스만, 미지정 시 최대값."""
-    if key not in _blocked_keys:
-        return 0
-    if service:
-        blocked_at = _blocked_keys[key].get(service)
-        if blocked_at is None:
-            return 0
-        remaining = _BLOCK_DURATION - (time.time() - blocked_at)
-        return max(0, remaining)
-    else:
-        # 모든 서비스 중 최대 잔여시간
-        max_remaining = 0
-        for svc, blocked_at in _blocked_keys[key].items():
-            remaining = _BLOCK_DURATION - (time.time() - blocked_at)
-            max_remaining = max(max_remaining, remaining)
-        return max(0, max_remaining)
-
 
 # ═══════════════════════ 차단/기록 ═══════════════════════
 
@@ -108,7 +90,7 @@ def mark_key_exhausted(api_key: str, service: str = ""):
     svc = service or "_global"
     with _usage_lock:
         _blocked_keys[api_key][svc] = time.time()
-        print(f"[키 로테이션] {_mask_key(api_key)} ({service}) → 429 쿼터 초과. 24시간 차단. (다른 서비스는 사용 가능)")
+        print(f"[키 로테이션] {mask_key(api_key)} ({service}) → 429 쿼터 초과. 24시간 차단. (다른 서비스는 사용 가능)")
 
 
 def record_key_usage(api_key: str, service: str, count: int = 1):
@@ -178,9 +160,9 @@ def get_google_key(override: str = None, service: str = None, exclude: set = Non
 
                 # 로그 (warning/blocked 사용 시)
                 if not active_keys and warning_keys:
-                    print(f"[키 로테이션] active 키 없음 → warning 키 사용: {_mask_key(chosen)} ({service})")
+                    print(f"[키 로테이션] active 키 없음 → warning 키 사용: {mask_key(chosen)} ({service})")
                 elif not active_keys and not warning_keys:
-                    print(f"[키 로테이션 경고] 모든 키 차단됨 → 최소 사용 키 강제 사용: {_mask_key(chosen)} ({service})")
+                    print(f"[키 로테이션 경고] 모든 키 차단됨 → 최소 사용 키 강제 사용: {mask_key(chosen)} ({service})")
 
                 return chosen
 
@@ -196,7 +178,7 @@ def get_key_usage_stats() -> list[dict]:
     stats = []
     with _usage_lock:
         for key in all_keys:
-            masked = _mask_key(key)
+            masked = mask_key(key)
             usage = dict(_key_usage[key]) if key in _key_usage else {}
             total = sum(usage.values())
 
@@ -230,7 +212,7 @@ def get_key_usage_stats() -> list[dict]:
 
 # ═══════════════════════ 유틸 ═══════════════════════
 
-def _mask_key(key: str) -> str:
+def mask_key(key: str) -> str:
     """API 키 마스킹: AIzaSyB-***7Y"""
     if len(key) <= 12:
         return key[:4] + "***"
