@@ -1,6 +1,9 @@
-import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile, useCurrentFrame, interpolate } from 'remotion';
+import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile, useCurrentFrame, interpolate, spring, useVideoConfig } from 'remotion';
 import React, { useMemo } from 'react';
 import { Captions } from './Captions';
+
+const INTRO_DURATION_FRAMES = 48;  // 2초 @ 24fps
+const OUTRO_DURATION_FRAMES = 48;  // 2초 @ 24fps
 
 type WordProps = {
   word: string;
@@ -60,21 +63,87 @@ const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: nu
   );
 };
 
-export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
+// 브랜드 인트로 화면 (페이드인 + 살짝 줌)
+const BrandIntro: React.FC<{ src: string }> = ({ src }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
 
-  // Precompute start frames to avoid side-effects during render
-  const startFrames = useMemo(() => {
+  // 0→0.5초: 페이드인, 0→2초: 살짝 줌인
+  const opacity = interpolate(frame, [0, fps * 0.5], [0, 1], { extrapolateRight: 'clamp' });
+  const scale = interpolate(frame, [0, INTRO_DURATION_FRAMES], [1.0, 1.05], { extrapolateRight: 'clamp' });
+  // 마지막 0.3초: 페이드아웃
+  const fadeOut = interpolate(
+    frame,
+    [INTRO_DURATION_FRAMES - fps * 0.3, INTRO_DURATION_FRAMES],
+    [1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: 'black' }}>
+      <Img
+        src={src}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          opacity: opacity * fadeOut,
+          transform: `scale(${scale})`,
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
+
+// 브랜드 아웃트로 화면 (페이드인 + 정지)
+const BrandOutro: React.FC<{ src: string }> = ({ src }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // 0→0.5초: 페이드인
+  const opacity = interpolate(frame, [0, fps * 0.5], [0, 1], { extrapolateRight: 'clamp' });
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: 'black' }}>
+      <Img
+        src={src}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          opacity,
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
+
+export const Main: React.FC<{ cuts: CutProps[]; introImagePath?: string; outroImagePath?: string }> = ({ cuts, introImagePath, outroImagePath }) => {
+
+  const introFrames = introImagePath ? INTRO_DURATION_FRAMES : 0;
+  const outroFrames = outroImagePath ? OUTRO_DURATION_FRAMES : 0;
+
+  // Precompute start frames (인트로 길이만큼 오프셋)
+  const { startFrames, contentEndFrame } = useMemo(() => {
     const frames: number[] = [];
-    let acc = 0;
+    let acc = introFrames;
     for (const cut of cuts) {
       frames.push(acc);
       acc += cut.duration_in_frames;
     }
-    return frames;
-  }, [cuts]);
+    return { startFrames: frames, contentEndFrame: acc };
+  }, [cuts, introFrames]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
+      {/* 브랜드 인트로 (있을 때만) */}
+      {introImagePath && (
+        <Sequence from={0} durationInFrames={INTRO_DURATION_FRAMES}>
+          <BrandIntro src={staticFile(introImagePath)} />
+        </Sequence>
+      )}
+
+      {/* 본편 컷 시퀀스 */}
       {cuts.map((cut, index) => {
         const startFrame = startFrames[index];
 
@@ -102,6 +171,13 @@ export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
           </Sequence>
         );
       })}
+
+      {/* 브랜드 아웃트로 (있을 때만) */}
+      {outroImagePath && (
+        <Sequence from={contentEndFrame} durationInFrames={OUTRO_DURATION_FRAMES}>
+          <BrandOutro src={staticFile(outroImagePath)} />
+        </Sequence>
+      )}
     </AbsoluteFill>
   );
 };
