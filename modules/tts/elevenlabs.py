@@ -94,11 +94,11 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
             lang_label = "EN" if language == "en" else "KO"
             print(f"-> [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 내레이션 렌더링 중... [{lang_label}] {label}")
 
-            response = requests.post(URL, json=data, headers=headers, timeout=30)
+            response = requests.post(URL, json=data, headers=headers, timeout=30, stream=True)
 
             if response.status_code == 200:
                 with open(audio_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=1024):
+                    for chunk in response.iter_content(chunk_size=4096):
                         if chunk:
                             f.write(chunk)
                 if os.path.getsize(audio_path) == 0:

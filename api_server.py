@@ -5,6 +5,7 @@ import shutil
 import asyncio
 import threading
 import traceback
+from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
 from sse_starlette.sse import EventSourceResponse
@@ -26,7 +27,12 @@ from modules.video.remotion import create_remotion_video
 from modules.utils.constants import PROVIDER_LABELS
 from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats
 
-app = FastAPI()
+@asynccontextmanager
+async def _lifespan(app):
+    yield
+    _cut_executor.shutdown(wait=False)
+
+app = FastAPI(lifespan=_lifespan)
 
 # 동시 생성 요청 제한 (GPU/API 과부하 방지)
 _generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "2")))
@@ -313,7 +319,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             # Gemini 프로바이더일 때 키 로테이션 적용
             llm_key_for_request = get_google_key(llm_key_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
-            cuts, topic_folder = await loop.run_in_executor(
+            cuts, topic_folder, video_title = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
                     topic,
@@ -395,6 +401,9 @@ async def generate_video_endpoint(req: GenerateRequest):
                 # 완료 대기 (비디오: 최대 5분, TTS: 최대 1분)
                 for t in threads:
                     t.join(timeout=300)
+                    if t.is_alive():
+                        errors.append(f"타임아웃: {t.name} 스레드가 5분 내 완료되지 않음")
+                        print(f"[컷 {i+1} 타임아웃] {t.name} 스레드가 응답 없음")
 
                 final_visual_path = video_result[0] if video_result[0] else img_path
 
@@ -458,12 +467,10 @@ async def generate_video_endpoint(req: GenerateRequest):
             # 단계 4: Remotion 비디오 렌더링
             video_path = await loop.run_in_executor(
                 None,
-                create_remotion_video,
-                visual_paths,
-                audio_paths,
-                scripts,
-                word_timestamps_list,
-                topic_folder,
+                lambda: create_remotion_video(
+                    visual_paths, audio_paths, scripts,
+                    word_timestamps_list, topic_folder, title=video_title,
+                ),
             )
 
             if not video_path:
@@ -479,9 +486,9 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 사용자 지정 저장 경로가 있으면 복사 (경로 검증 포함)
             if output_path:
-                abs_output = os.path.abspath(output_path)
-                safe_base = os.path.abspath("assets")
-                home_dir = os.path.expanduser("~")
+                abs_output = os.path.realpath(output_path)
+                safe_base = os.path.realpath("assets")
+                home_dir = os.path.realpath(os.path.expanduser("~"))
                 # 허용: assets/ 내부 또는 사용자 홈 디렉토리 하위
                 if not (abs_output.startswith(safe_base + os.sep) or abs_output.startswith(home_dir + os.sep)):
                     yield {"data": "ERROR|[보안 오류] 지정 경로가 허용 범위(assets/ 또는 홈 디렉토리)를 벗어납니다.\n"}
@@ -535,10 +542,6 @@ async def generate_video_endpoint(req: GenerateRequest):
 
     return EventSourceResponse(sse_generator())
 
-
-@app.on_event("shutdown")
-async def _shutdown():
-    _cut_executor.shutdown(wait=False)
 
 
 if __name__ == "__main__":
