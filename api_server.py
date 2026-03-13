@@ -21,6 +21,19 @@ from modules.video.remotion import create_remotion_video
 
 app = FastAPI()
 
+
+@app.get("/")
+async def root():
+    return {
+        "status": "running",
+        "name": "AskAnything Video Generator API",
+        "endpoints": {
+            "POST /api/generate": "비디오 생성 (SSE 스트리밍)",
+            "GET /api/engines": "사용 가능한 비디오 엔진 목록",
+        },
+    }
+
+
 # 정적 파일 서빙 (비디오 다운로드용)
 os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
