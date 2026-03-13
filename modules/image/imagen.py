@@ -5,7 +5,7 @@ import io
 
 
 def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=None):
-    """Google Imagen 3 (Nano Banana Pro) API로 이미지를 생성합니다."""
+    """Google Imagen 4 API로 이미지를 생성합니다."""
     final_api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not final_api_key:
         raise EnvironmentError("Google API 키가 제공되지 않았습니다. GEMINI_API_KEY를 설정하세요.")
@@ -26,7 +26,7 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
     for attempt in range(max_retries):
         try:
             if attempt == 0:
-                print(f"-> [아트 디렉터] 컷 {index+1} Imagen 3 렌더링 중...")
+                print(f"-> [아트 디렉터] 컷 {index+1} Imagen 4 렌더링 중...")
 
             image_bytes = _generate_imagen(final_api_key, enhanced_prompt)
 
@@ -42,7 +42,7 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
             filename = os.path.join(image_dir, f"cut_{index:02}.png")
             fitted_image.save(filename)
 
-            print(f"OK [아트 디렉터] 컷 {index+1} Imagen 3 렌더링 완료!")
+            print(f"OK [아트 디렉터] 컷 {index+1} Imagen 4 렌더링 완료!")
             return filename
 
         except Exception as e:
@@ -54,27 +54,28 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
                         "National Geographic documentary style, atmospheric lighting, "
                         "bright and uplifting, vertical composition, NO TEXT, NO LETTERS."
                     )
-                    print(f"  [Imagen 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도 ({attempt+1}/{max_retries})")
+                    print(f"  [Imagen 4 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도 ({attempt+1}/{max_retries})")
                 else:
-                    print(f"  [Imagen 경고] 컷 {index+1} 실패. 3초 후 재시도 ({attempt+1}/{max_retries}) | {e}")
+                    print(f"  [Imagen 4 경고] 컷 {index+1} 실패. 3초 후 재시도 ({attempt+1}/{max_retries}) | {e}")
                 time.sleep(3)
             else:
-                raise RuntimeError(f"[Imagen 이미지 생성 최종 실패] index={index}: {e}")
+                raise RuntimeError(f"[Imagen 4 이미지 생성 최종 실패] index={index}: {e}")
 
 
 def _generate_imagen(api_key, prompt):
-    """google-genai SDK로 Imagen 3 이미지를 생성합니다."""
+    """google-genai SDK로 Imagen 4 이미지를 생성합니다."""
     from google import genai
     from google.genai import types
 
+    model_name = os.getenv("IMAGEN_MODEL", "imagen-4.0-generate-001")
     client = genai.Client(api_key=api_key)
     response = client.models.generate_images(
-        model="imagen-3.0-generate-002",
+        model=model_name,
         prompt=prompt,
         config=types.GenerateImagesConfig(
             number_of_images=1,
             aspect_ratio="9:16",
-            safety_filter_level="BLOCK_ONLY_HIGH",
+            safety_filter_level="BLOCK_LOW_AND_ABOVE",
         ),
     )
 

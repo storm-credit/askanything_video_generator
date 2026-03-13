@@ -162,7 +162,7 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
     if image_engine == "imagen":
         gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
         if not gemini_key:
-            errors.append("GEMINI_API_KEY (Imagen 3 이미지 생성에 필수)")
+            errors.append("GEMINI_API_KEY (Imagen 4 이미지 생성에 필수)")
 
     # LLM 프로바이더별 키 검증
     if llm_provider == "gemini":
@@ -255,7 +255,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             yield {"data": f"[기획 완료] 총 {len(cuts)}컷 기획 완료!\n"}
 
             # 단계 2 & 3: 이미지와 TTS 병렬 처리 (Threading)
-            image_label = "Imagen 3" if image_engine == "imagen" else "DALL-E"
+            image_label = "Imagen 4" if image_engine == "imagen" else "DALL-E"
             yield {"data": f"[생성 엔진] 아트 디렉터({image_label})와 성우(TTS) 동시 작업 중...\n"}
 
             visual_paths = [None] * len(cuts)

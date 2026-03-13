@@ -502,7 +502,7 @@ export default function Home() {
                 disabled={isGenerating}
                 className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
               >
-                <option value="imagen" className="bg-gray-900">Imagen 3 (Google)</option>
+                <option value="imagen" className="bg-gray-900">Imagen 4 (Google)</option>
                 <option value="dalle" className="bg-gray-900">DALL-E 3 (OpenAI)</option>
               </select>
             </div>
