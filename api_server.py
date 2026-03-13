@@ -479,16 +479,30 @@ async def generate_video_endpoint(req: GenerateRequest):
                         out_dir = os.path.dirname(abs_output)
                         if out_dir:
                             os.makedirs(out_dir, exist_ok=True)
-                        shutil.copy2(final_abs_path, abs_output)
+                        await asyncio.to_thread(shutil.copy2, final_abs_path, abs_output)
                         yield {"data": f"[저장] 지정 경로에 복사 완료: {abs_output}\n"}
                     except Exception as copy_err:
                         yield {"data": f"ERROR|[저장 오류] 지정 경로 복사 실패: {copy_err}\n"}
 
-            # 프론트엔드 라우팅용 경로 (StaticFiles mount 기준)
+            # Downloads 폴더로 자동 복사
             final_filename = os.path.basename(video_path)
+            downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            downloads_path = None
+            if os.path.isdir(downloads_dir):
+                try:
+                    downloads_path = os.path.join(downloads_dir, final_filename)
+                    await asyncio.to_thread(shutil.copy2, final_abs_path, downloads_path)
+                except Exception as cp_err:
+                    print(f"[Downloads 복사 실패] {cp_err}")
+                    downloads_path = None
+
+            # 프론트엔드 라우팅용 경로 (StaticFiles mount 기준)
             relative_video_path = f"/assets/{topic_folder}/video/{final_filename}"
 
-            yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 경로: {relative_video_path}\n"}
+            if downloads_path and os.path.exists(downloads_path):
+                yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 📂 Downloads 폴더에 저장됨: {final_filename}\n"}
+            else:
+                yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 경로: {relative_video_path}\n"}
             yield {"data": f"DONE|{relative_video_path}\n"}
 
         except Exception as e:
@@ -509,6 +523,11 @@ async def generate_video_endpoint(req: GenerateRequest):
                 _generate_semaphore.release()
 
     return EventSourceResponse(sse_generator())
+
+
+@app.on_event("shutdown")
+async def _shutdown():
+    _cut_executor.shutdown(wait=False)
 
 
 if __name__ == "__main__":
