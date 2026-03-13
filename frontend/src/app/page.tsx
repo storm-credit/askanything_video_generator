@@ -44,6 +44,7 @@ export default function Home() {
   const [keyUsageStats, setKeyUsageStats] = useState<KeyUsageStats | null>(null);
   // AbortController (생성 취소용)
   const abortControllerRef = useRef<AbortController | null>(null);
+  const cancelledRef = useRef(false);
 
   const fetchKeyStatus = useCallback(async () => {
     try {
@@ -138,6 +139,7 @@ export default function Home() {
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    cancelledRef.current = false;
 
     try {
       const response = await fetch(`${API_BASE}/api/generate`, {
@@ -201,12 +203,16 @@ export default function Home() {
       };
 
       while (true) {
+        if (cancelledRef.current) break;
+
         const { value, done } = await reader.read();
         if (done) {
           // 스트림 종료 시 버퍼에 남은 데이터 처리
           if (buffer.trim()) processLine(buffer);
           break;
         }
+
+        if (cancelledRef.current) break;
 
         // stream: true → 멀티바이트 문자(한글) chunk 경계 깨짐 방지
         buffer += decoder.decode(value, { stream: true });
@@ -215,6 +221,7 @@ export default function Home() {
         buffer = lines.pop() || "";
 
         for (const line of lines) {
+          if (cancelledRef.current) break;
           processLine(line);
         }
       }
@@ -237,8 +244,11 @@ export default function Home() {
   };
 
   const handleCancel = () => {
+    cancelledRef.current = true;
     abortControllerRef.current?.abort();
     setIsGenerating(false);
+    // 백엔드에도 취소 요청 (fire-and-forget)
+    fetch(`${API_BASE}/api/cancel`, { method: "POST" }).catch(() => {});
   };
 
   const handleClearError = () => {
