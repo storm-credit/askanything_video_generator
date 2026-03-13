@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, CheckCircle2, Film, AlertCircle, Settings, Brain, ImageIcon, XCircle } from "lucide-react";
+import { Sparkles, CheckCircle2, Film, AlertCircle, Settings, Brain, ImageIcon, XCircle } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -14,7 +14,7 @@ export default function Home() {
   const [videoEngine, setVideoEngine] = useState("veo3");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [successMessage, setVideoUrl] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -263,6 +263,7 @@ export default function Home() {
         onClick={() => setIsSettingsOpen(true)}
         className={`absolute top-6 right-6 z-50 w-11 h-11 rounded-full border backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:scale-110 ${iconStyle}`}
         title="API 키 설정"
+        aria-label="API 키 설정"
       >
         <Settings className="w-5 h-5" />
       </button>
@@ -330,6 +331,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleCancel}
+                aria-label="생성 취소"
                 className="absolute right-2 bg-red-600 text-white hover:bg-red-500 font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
               >
                 <XCircle className="w-5 h-5" />
@@ -355,6 +357,7 @@ export default function Home() {
                 value={llmProvider}
                 onChange={(e) => setLlmProvider(e.target.value)}
                 disabled={isGenerating}
+                aria-label="LLM 기획 엔진 선택"
                 className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
               >
                 <option value="gemini" className="bg-gray-900">Gemini 2.5 Pro</option>
@@ -370,6 +373,7 @@ export default function Home() {
                 value={imageEngine}
                 onChange={(e) => setImageEngine(e.target.value)}
                 disabled={isGenerating}
+                aria-label="이미지 엔진 선택"
                 className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
               >
                 <option value="imagen" className="bg-gray-900">Imagen 4 (Google)</option>
@@ -384,6 +388,7 @@ export default function Home() {
                 value={videoEngine}
                 onChange={(e) => setVideoEngine(e.target.value)}
                 disabled={isGenerating}
+                aria-label="비디오 엔진 선택"
                 className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
               >
                 <option value="veo3" className="bg-gray-900">Veo 3 (Google)</option>
@@ -407,7 +412,7 @@ export default function Home() {
 
       {/* 성공 패널 */}
       <AnimatePresence>
-        {videoUrl && !isGenerating && !errorMessage && (
+        {successMessage && !isGenerating && !errorMessage && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

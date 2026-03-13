@@ -1,5 +1,16 @@
 import re
 
+# Okt() 인스턴스 캐시 (JVM 초기화 비용 ~2-3초 → 최초 1회만)
+_okt_instance = None
+
+
+def _get_okt():
+    global _okt_instance
+    if _okt_instance is None:
+        from konlpy.tag import Okt
+        _okt_instance = Okt()
+    return _okt_instance
+
 
 def _safe_slug(text: str, *, max_len: int) -> str:
     cleaned = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip()
@@ -13,9 +24,7 @@ def slugify_topic(topic: str, lang: str = "ko") -> str:
 
     if lang == "ko":
         try:
-            from konlpy.tag import Okt
-
-            okt = Okt()
+            okt = _get_okt()
             nouns = okt.nouns(topic)
             keywords = "_".join(nouns[:2]) if nouns else topic
         except Exception:

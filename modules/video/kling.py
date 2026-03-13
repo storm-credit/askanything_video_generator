@@ -16,7 +16,7 @@ def _generate_jwt(ak: str, sk: str) -> str:
     }
     return jwt.encode(payload, sk, headers=headers)
 
-def generate_video_from_image(image_path: str, prompt: str, index: int, topic_folder: str, ak_override: str = None, sk_override: str = None) -> str:
+def generate_video_from_image(image_path: str, prompt: str, index: int, topic_folder: str, ak_override: str = None, sk_override: str = None) -> str | None:
     """
     Kling AI를 사용하여 정지 이미지를 5초짜리 시네마틱 숏폼 비디오로 변환합니다.
     """
@@ -37,7 +37,11 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
         print(f"[Kling AI 오류] JWT 발급 실패: {e}")
         return None
         
-    # 이미지 Base64 인코딩
+    # 이미지 Base64 인코딩 (20MB 제한)
+    file_size = os.path.getsize(image_path)
+    if file_size > 20 * 1024 * 1024:
+        print(f"[Kling AI 오류] 이미지가 너무 큽니다 ({file_size // 1024 // 1024}MB, 최대 20MB)")
+        return None
     with open(image_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode("utf-8")
         
@@ -93,6 +97,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
                 last_token_time = time.time()
             
             poll_resp = requests.get(poll_url, headers=headers, timeout=10)
+            poll_resp.raise_for_status()
             poll_data = poll_resp.json()
             
             status = poll_data.get("data", {}).get("task_status")

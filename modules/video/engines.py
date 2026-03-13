@@ -108,9 +108,7 @@ def generate_video_from_image(
         hf_result = _generate_via_higgsfield(image_path, prompt, index, topic_folder, engine)
         if hf_result:
             return hf_result
-        # 직접 API도 시도 (키 없으면 자동 실패)
-        if not ak or not sk:
-            print(f"[Kling 오류] KLING_ACCESS_KEY/SECRET_KEY 미설정, Higgsfield 크레딧 부족")
+        print(f"[Kling 오류] 모든 경로 실패 (직접 API: {'설정됨' if ak and sk else '미설정'}, Higgsfield: 실패)")
         return None
 
     # Hailuo, Wan: Higgsfield 전용
@@ -151,10 +149,10 @@ def _generate_via_higgsfield(
         if hasattr(higgsfield_client, "configure"):
             higgsfield_client.configure(api_key=hf_key, account_id=hf_account or "")
         else:
-            # 폴백: 환경변수 설정 (레거시 SDK)
-            os.environ["HF_API_KEY"] = hf_key
-            if hf_account:
-                os.environ["HF_API_SECRET"] = hf_account
+            # 레거시 SDK: configure() 미지원 시 경고 후 중단
+            # (os.environ 직접 변경은 스레드 안전하지 않으므로 제거)
+            print("[Higgsfield 오류] SDK가 configure() 미지원. higgsfield-client를 최신 버전으로 업데이트하세요.")
+            return None
     except ImportError:
         print("[Higgsfield 오류] higgsfield-client 패키지가 없습니다. (pip install higgsfield-client)")
         return None
@@ -218,6 +216,12 @@ def _generate_via_openai_sora(
         return None
 
     print(f"-> [Sora 2] 컷 {index+1} 이미지-투-비디오 렌더링 요청 중...")
+
+    # 이미지 크기 제한 (20MB)
+    file_size = os.path.getsize(image_path)
+    if file_size > 20 * 1024 * 1024:
+        print(f"[Sora 2 오류] 이미지가 너무 큽니다 ({file_size // 1024 // 1024}MB, 최대 20MB)")
+        return None
 
     with open(image_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode("utf-8")
@@ -292,8 +296,8 @@ def _download_video(
     os.makedirs(output_dir, exist_ok=True)
     final_path = os.path.join(output_dir, f"{engine}_cut_{index:02d}.mp4")
 
+    engine_name = SUPPORTED_ENGINES.get(engine, {}).get("name", engine)
     try:
-        engine_name = SUPPORTED_ENGINES.get(engine, {}).get("name", engine)
         print(f"-> [{engine_name}] 컷 {index+1} 렌더링 완료! 비디오 다운로드 중...")
         vid_resp = requests.get(video_url, stream=True, timeout=60)
         vid_resp.raise_for_status()
@@ -302,6 +306,5 @@ def _download_video(
                 f.write(chunk)
         return final_path
     except Exception as e:
-        engine_name = SUPPORTED_ENGINES.get(engine, {}).get("name", engine)
         print(f"[{engine_name} 다운로드 오류] 컷 {index+1} 저장 실패: {e}")
         return None

@@ -1,3 +1,4 @@
+import React from 'react';
 import { Composition, getInputProps } from 'remotion';
 import { Main } from './Main';
 

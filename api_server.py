@@ -30,6 +30,8 @@ app = FastAPI()
 
 # 동시 생성 요청 제한 (GPU/API 과부하 방지)
 _generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "2")))
+# 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
+_cut_executor = ThreadPoolExecutor(max_workers=4)
 
 
 @app.get("/")
@@ -241,9 +243,11 @@ async def generate_video_endpoint(req: GenerateRequest):
 
     async def sse_generator():
         # 동시 요청 제한: 슬롯 부족 시 대기 안내
+        acquired = False
         if _generate_semaphore.locked():
             yield {"data": "WARN|[대기열] 다른 비디오가 생성 중입니다. 순서를 기다리는 중...\n"}
         await _generate_semaphore.acquire()
+        acquired = True
         try:
             # 사전 검증: 필수 API 키 확인
             missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine, image_engine, llm_provider, llm_key_override)
@@ -278,8 +282,9 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
 
-            # Google 키 로테이션 (Gemini, Imagen, Veo 공유)
-            google_key_for_video = get_google_key(llm_key_override)
+            # Google 키 로테이션 (비디오 엔진용 — 서비스별 차단 고려)
+            video_svc = active_video_engine if active_video_engine in ("veo3",) else None
+            google_key_for_video = get_google_key(llm_key_override, service=video_svc)
 
             # 비디오 엔진 사전 검증
             active_video_engine = video_engine
@@ -320,7 +325,6 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 이미지/TTS 동시성 제한 (API 레이트 리밋 방지)
             image_semaphore = threading.Semaphore(2)  # 이미지 최대 2개 동시
-            cut_executor = ThreadPoolExecutor(max_workers=4)
 
             # 이미지 엔진에 따라 생성 함수 선택
             gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
@@ -385,7 +389,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                         print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
                 return i, final_visual_path, aud_path, words
 
-            tasks = [loop.run_in_executor(cut_executor, process_cut, i, cut) for i, cut in enumerate(cuts)]
+            tasks = [loop.run_in_executor(_cut_executor, process_cut, i, cut) for i, cut in enumerate(cuts)]
             completed_count = 0
 
             for future in asyncio.as_completed(tasks):
@@ -475,12 +479,8 @@ async def generate_video_endpoint(req: GenerateRequest):
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
         finally:
-            # ThreadPoolExecutor 리소스 정리 (대기 + 미완료 작업 취소)
-            try:
-                cut_executor.shutdown(wait=True, cancel_futures=True)
-            except Exception:
-                pass
-            _generate_semaphore.release()
+            if acquired:
+                _generate_semaphore.release()
 
     return EventSourceResponse(sse_generator())
 

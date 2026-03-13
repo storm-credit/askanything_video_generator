@@ -59,6 +59,9 @@ export function SettingsModal({
       />
       {/* 모달 */}
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="API 키 설정"
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -73,6 +76,7 @@ export function SettingsModal({
           </div>
           <button
             onClick={onClose}
+            aria-label="설정 닫기"
             className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
@@ -178,7 +182,7 @@ export function SettingsModal({
                   const keyColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-gray-400";
                   const totalColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-white";
                   return (
-                    <div key={idx} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${stateStyle}`}>
+                    <div key={k.key} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${stateStyle}`}>
                       <div className="flex items-center gap-1.5 w-32 shrink-0">
                         <div className={`w-2 h-2 rounded-full shrink-0 ${k.state === "blocked" ? "bg-red-500" : k.state === "warning" ? "bg-amber-500" : "bg-green-500"}`} />
                         <span className={`text-xs font-mono ${keyColor}`}>{k.key}</span>
@@ -280,7 +284,7 @@ function KeySection({
       {savedKeys.length > 0 && (
         <div className="space-y-1.5 mb-2">
           {savedKeys.map((key, idx) => (
-            <div key={idx} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
+            <div key={key} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
               <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
               <span className="text-xs text-blue-300 font-mono flex-1">
                 {isVisible ? key : maskKey(key)}
