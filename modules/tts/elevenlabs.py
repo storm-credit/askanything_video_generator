@@ -39,8 +39,8 @@ def check_quota(api_key: str = None) -> dict | None:
             limit = data.get("character_limit", 0)
             remaining = max(0, limit - used)
             return {"used": used, "limit": limit, "remaining": remaining}
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[ElevenLabs 경고] 쿼터 조회 실패: {e}")
     return None
 
 
