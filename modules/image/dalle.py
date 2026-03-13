@@ -33,12 +33,12 @@ def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
             response = client.images.generate(
                 model="dall-e-3",
                 prompt=enhanced_prompt,
-                size="1024x1024",
+                size="1024x1792",
                 n=1,
                 quality="standard"
             )
             image_url = response.data[0].url
-            image_data = requests.get(image_url).content
+            image_data = requests.get(image_url, timeout=30).content
 
             image = Image.open(io.BytesIO(image_data)).convert("RGB")
             target_size = (1080, 1920)

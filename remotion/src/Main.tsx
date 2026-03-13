@@ -1,5 +1,5 @@
 import { AbsoluteFill, Sequence, Video, Audio, Img, useVideoConfig } from 'remotion';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Captions } from './Captions';
 
 type WordProps = {
@@ -17,14 +17,22 @@ type CutProps = {
 
 export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
   const { fps } = useVideoConfig();
-  
-  let currentStartFrame = 0;
+
+  // Precompute start frames to avoid side-effects during render
+  const startFrames = useMemo(() => {
+    const frames: number[] = [];
+    let acc = 0;
+    for (const cut of cuts) {
+      frames.push(acc);
+      acc += cut.duration_in_frames;
+    }
+    return frames;
+  }, [cuts]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
       {cuts.map((cut, index) => {
-        const startFrame = currentStartFrame;
-        currentStartFrame += cut.duration_in_frames;
+        const startFrame = startFrames[index];
         
         // file:/// URI 처리 (Windows 절대 경로 지원)
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : `file://${cut.visual_path}`;
