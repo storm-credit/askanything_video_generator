@@ -39,6 +39,11 @@ _generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE",
 # 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
 _cut_executor = ThreadPoolExecutor(max_workers=4)
 
+# 취소 토큰: 현재 진행 중인 생성 작업을 중단할 수 있는 이벤트
+_cancel_event = threading.Event()
+_active_generation_id: str | None = None
+_generation_lock = threading.Lock()
+
 
 @app.get("/")
 async def root():
@@ -232,6 +237,27 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
     return errors
 
 
+@app.post("/api/cancel")
+async def cancel_generation():
+    """현재 진행 중인 생성 작업을 취소합니다."""
+    with _generation_lock:
+        if _active_generation_id:
+            _cancel_event.set()
+            print(f"[취소] 생성 작업 취소 요청: {_active_generation_id}")
+            return {"status": "cancelled", "generation_id": _active_generation_id}
+        return {"status": "idle", "message": "진행 중인 생성 작업이 없습니다."}
+
+
+@app.get("/api/status")
+async def generation_status():
+    """현재 생성 상태 확인."""
+    with _generation_lock:
+        return {
+            "active": _active_generation_id is not None,
+            "generation_id": _active_generation_id,
+        }
+
+
 @app.post("/api/generate")
 async def generate_video_endpoint(req: GenerateRequest):
     topic = req.topic
@@ -244,7 +270,23 @@ async def generate_video_endpoint(req: GenerateRequest):
     output_path = req.outputPath
     language = req.language
 
+    import uuid as _uuid
+    generation_id = _uuid.uuid4().hex[:8]
+
     async def sse_generator():
+        global _active_generation_id
+
+        # 이전 작업 취소 + 새 작업 등록
+        with _generation_lock:
+            if _active_generation_id:
+                _cancel_event.set()
+                print(f"[취소] 새 요청으로 이전 작업({_active_generation_id}) 자동 취소")
+            _cancel_event.clear()
+            _active_generation_id = generation_id
+
+        def _is_cancelled() -> bool:
+            return _cancel_event.is_set()
+
         # 동시 요청 제한: 슬롯 부족 시 대기 안내
         if _generate_semaphore.locked():
             yield {"data": "WARN|[대기열] 다른 비디오가 생성 중입니다. 순서를 기다리는 중...\n"}
@@ -318,6 +360,11 @@ async def generate_video_endpoint(req: GenerateRequest):
             yield {"data": "PROG|30\n"}
             yield {"data": f"[기획 완료] 총 {len(cuts)}컷 기획 완료!\n"}
 
+            # 취소 체크포인트 1: LLM 기획 후
+            if _is_cancelled():
+                yield {"data": "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"}
+                return
+
             # 단계 2 & 3: 이미지와 TTS 병렬 처리 (Threading)
             image_label = "Imagen 4" if image_engine == "imagen" else "DALL-E"
             yield {"data": f"[생성 엔진] 아트 디렉터({image_label})와 성우(TTS) 동시 작업 중...\n"}
@@ -340,6 +387,10 @@ async def generate_video_endpoint(req: GenerateRequest):
                 return api_key_override
 
             def process_cut(i, cut):
+                # 취소 체크: 작업 시작 전
+                if _is_cancelled():
+                    return i, None, None, [], ["취소됨"]
+
                 # 에러 수집 (SSE로 전달할 상세 정보) — 멀티스레드 안전
                 errors = []
                 errors_lock = threading.Lock()
@@ -439,6 +490,11 @@ async def generate_video_endpoint(req: GenerateRequest):
                     err_detail = f" ({errors[0]})" if errors else ""
                     yield {"data": f"WARN|  -> 컷 {i+1} {'+'.join(fail_parts)} 생성 실패{err_detail}\n"}
 
+            # 취소 체크포인트 2: 컷 생성 후
+            if _is_cancelled():
+                yield {"data": "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"}
+                return
+
             failed_visual = [i+1 for i, p in enumerate(visual_paths) if p is None]
             failed_audio = [i+1 for i, p in enumerate(audio_paths) if p is None]
             if failed_visual or failed_audio:
@@ -451,6 +507,11 @@ async def generate_video_endpoint(req: GenerateRequest):
                 first_err = next(iter(all_cut_errors.values()), [])
                 err_hint = f" 원인: {first_err[0]}" if first_err else ""
                 yield {"data": f"ERROR|[소스 생성 오류] {', '.join(details)}.{err_hint}\n"}
+                return
+
+            # 취소 체크포인트 3: 렌더링 시작 전
+            if _is_cancelled():
+                yield {"data": "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"}
                 return
 
             yield {"data": "PROG|85\n"}
@@ -528,6 +589,11 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": "ERROR|[네트워크 오류] API 서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.\n"}
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
+          finally:
+            # 작업 완료/취소 후 정리
+            with _generation_lock:
+                if _active_generation_id == generation_id:
+                    _active_generation_id = None
 
     return EventSourceResponse(sse_generator())
 
