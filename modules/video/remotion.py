@@ -37,6 +37,13 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
     total_duration_in_frames = 0
     fps = 24
 
+    # assets/ 기준 상대 경로 변환 (staticFile()용 - publicDir=assets/)
+    # 예: "assets/test/images/cut_00.png" → "test/images/cut_00.png"
+    def _to_relative(p: str) -> str:
+        normed = p.replace("\\", "/")
+        idx = normed.find("assets/")
+        return normed[idx + len("assets/"):] if idx >= 0 else normed
+
     for visual_path, audio_path, _script, word_timestamps in zip(
         visual_paths, audio_paths, scripts, word_timestamps_list
     ):
@@ -47,13 +54,6 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
 
         frames = int(duration_sec * fps)
         total_duration_in_frames += frames
-
-        # assets/ 기준 상대 경로 (staticFile()용 - publicDir=assets/)
-        # visual_path 예: "assets/test/images/cut_00.png" → "test/images/cut_00.png"
-        def _to_relative(p):
-            normed = p.replace("\\", "/")
-            idx = normed.find("assets/")
-            return normed[idx + len("assets/"):] if idx >= 0 else normed
 
         cuts_data.append(
             {

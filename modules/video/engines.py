@@ -237,8 +237,10 @@ def _generate_via_openai_sora(
         video_url = None
         for output in response.output:
             if hasattr(output, "type") and output.type == "video_generation_call":
-                for _ in range(120):
-                    time.sleep(5)
+                poll_interval = 5
+                max_polls = 60  # 최대 5분 (5초 간격 → 점진적 증가)
+                for poll_count in range(max_polls):
+                    time.sleep(poll_interval)
                     try:
                         status = client.responses.retrieve(response.id)
                         for out in status.output:
@@ -255,6 +257,13 @@ def _generate_via_openai_sora(
                             print(f"[Sora 2 인증 오류] 폴링 중 인증 실패 — 중단합니다: {poll_err}")
                             return None
                         continue
+                    # 30초마다 진행 상태 로그
+                    if (poll_count + 1) % 6 == 0:
+                        elapsed = (poll_count + 1) * poll_interval
+                        print(f"  [Sora 2] 컷 {index+1} 렌더링 대기 중... ({elapsed}초 경과)")
+                    # 1분 이후 폴링 간격 확대 (5초 → 10초)
+                    if poll_count == 12:
+                        poll_interval = 10
 
         if not video_url:
             print(f"[Sora 2 오류] 컷 {index+1} 비디오 생성 실패 또는 타임아웃.")
@@ -287,6 +296,7 @@ def _download_video(
         engine_name = SUPPORTED_ENGINES.get(engine, {}).get("name", engine)
         print(f"-> [{engine_name}] 컷 {index+1} 렌더링 완료! 비디오 다운로드 중...")
         vid_resp = requests.get(video_url, stream=True, timeout=60)
+        vid_resp.raise_for_status()
         with open(final_path, "wb") as f:
             for chunk in vid_resp.iter_content(chunk_size=8192):
                 f.write(chunk)

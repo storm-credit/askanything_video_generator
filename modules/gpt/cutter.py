@@ -42,7 +42,7 @@ def _parse_cuts(content: str) -> list[dict[str, str]]:
     return cuts
 
 
-def _request_openai(api_key: str, system_prompt: str, user_content: str) -> str:
+def _request_openai(api_key: str, system_prompt: str, user_content: str) -> str | None:
     """OpenAI GPT API로 기획안을 생성합니다."""
     from openai import OpenAI
     model = os.getenv("OPENAI_MODEL", "gpt-4o")
@@ -90,6 +90,8 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str) -> str:
         system=system_prompt + json_instruction,
         messages=[{"role": "user", "content": user_content}],
     )
+    if not response.content:
+        raise ValueError("Claude 응답에 content가 비어 있습니다.")
     return (response.content[0].text or "").strip()
 
 
@@ -178,7 +180,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
         print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 1회 재요청합니다.")
         if llm_provider == "gemini":
             from modules.utils.keys import get_google_key
-            retry_key = get_google_key(llm_key_override, service="gemini") or final_api_key
+            retry_key = get_google_key(None, service="gemini", exclude={final_api_key}) or final_api_key
         else:
             retry_key = final_api_key
         retry_user = user_content + "\n\n중요: 이번 응답은 반드시 cuts 배열 길이를 6~10으로 맞추세요."

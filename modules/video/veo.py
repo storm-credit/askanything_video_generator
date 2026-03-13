@@ -140,9 +140,11 @@ def generate_video_veo(
                 elif hasattr(vid, "uri") and vid.uri:
                     import requests
                     print(f"-> [Veo 3] 컷 {index+1} 비디오 다운로드 중...")
-                    resp = requests.get(vid.uri, timeout=60)
+                    resp = requests.get(vid.uri, stream=True, timeout=60)
+                    resp.raise_for_status()
                     with open(final_path, "wb") as f:
-                        f.write(resp.content)
+                        for chunk in resp.iter_content(chunk_size=8192):
+                            f.write(chunk)
                     record_key_usage(final_key, "veo3")
                     elapsed = time.time() - start
                     print(f"OK [Veo 3] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
