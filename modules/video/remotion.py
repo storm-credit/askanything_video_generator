@@ -12,7 +12,7 @@ def _to_relative(p: str) -> str:
     return normed[idx + len("assets/"):] if idx >= 0 else normed
 
 
-def _validate_inputs(visual_paths, audio_paths, scripts, word_timestamps_list):
+def _validate_inputs(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]]) -> None:
     if not (len(visual_paths) == len(audio_paths) == len(scripts) == len(word_timestamps_list)):
         raise ValueError("Remotion 입력 배열 길이가 서로 다릅니다.")
 
@@ -23,7 +23,7 @@ def _validate_inputs(visual_paths, audio_paths, scripts, word_timestamps_list):
             raise FileNotFoundError(f"컷 {idx} audio 파일이 없습니다: {a}")
 
 
-def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_list, topic_folder):
+def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str) -> str | None:
     """
     Python 백엔드 데이터를 모아 Remotion (React) 렌더링 CLI로 넘겨서 최종 비디오를 합성합니다.
     """

@@ -8,7 +8,7 @@ from PIL import Image, ImageOps
 
 from modules.utils.constants import MASTER_STYLE
 
-def generate_image(prompt, index, topic_folder="default_topic", api_key=None):
+def generate_image(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None) -> str:
     final_api_key = api_key or os.getenv("OPENAI_API_KEY")
     if not final_api_key:
         raise EnvironmentError("OpenAI API 키가 제공되지 않았습니다.")
