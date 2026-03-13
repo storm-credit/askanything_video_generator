@@ -3,7 +3,6 @@
 - Veo 3: Google genai SDK 직접 연동 (Gemini 키 사용)
 - Sora 2: OpenAI API 직접 연동
 - Kling: Kling AI 직접 연동 (KLING_ACCESS_KEY/SECRET_KEY)
-- Higgsfield: 크레딧 필요 (Kling, Hailuo, Wan 폴백용)
 """
 
 import os
@@ -17,8 +16,6 @@ SUPPORTED_ENGINES = {
     "kling": {"name": "Kling 3.0", "desc": "시네마틱 모션", "provider": "kling_direct"},
     "sora2": {"name": "Sora 2", "desc": "최고 품질 (OpenAI)", "provider": "openai"},
     "veo3": {"name": "Veo 3", "desc": "Google API 직접 연동", "provider": "google"},
-    "hailuo": {"name": "Hailuo 2.3", "desc": "가성비 최고 (Higgsfield)", "provider": "higgsfield"},
-    "wan": {"name": "Wan 2.5", "desc": "빠른 생성 (Higgsfield)", "provider": "higgsfield"},
     "none": {"name": "비디오 없음", "desc": "정지 이미지만 사용", "provider": "none"},
 }
 
@@ -63,17 +60,7 @@ def check_engine_available(engine: str, google_key: str = None) -> tuple[bool, s
         sk = os.getenv("KLING_SECRET_KEY")
         if ak and sk:
             return True, "Kling AI 직접 연동"
-        # Higgsfield 폴백 체크
-        hf_key = os.getenv("HIGGSFIELD_API_KEY")
-        if hf_key:
-            return True, "Higgsfield 경유 (크레딧 필요)"
-        return False, "KLING_ACCESS_KEY + KLING_SECRET_KEY 또는 HIGGSFIELD_API_KEY 필요"
-
-    if engine in ("hailuo", "wan"):
-        hf_key = os.getenv("HIGGSFIELD_API_KEY")
-        if not hf_key:
-            return False, f"HIGGSFIELD_API_KEY 필요 ({SUPPORTED_ENGINES[engine]['name']})"
-        return True, "Higgsfield 경유 (크레딧 필요)"
+        return False, "KLING_ACCESS_KEY + KLING_SECRET_KEY 필요"
 
     return False, f"알 수 없는 엔진: {engine}"
 
@@ -106,107 +93,12 @@ def generate_video_from_image(
     if engine == "sora2":
         return _generate_via_openai_sora(image_path, prompt, index, topic_folder)
 
-    # Kling: 직접 API 우선, Higgsfield 폴백
+    # Kling: 직접 API
     if engine == "kling":
-        ak = os.getenv("KLING_ACCESS_KEY")
-        sk = os.getenv("KLING_SECRET_KEY")
-        if ak and sk:
-            result = _generate_via_kling_direct(image_path, prompt, index, topic_folder)
-            if result:
-                return result
-        # Higgsfield 폴백
-        hf_result = _generate_via_higgsfield(image_path, prompt, index, topic_folder, engine)
-        if hf_result:
-            return hf_result
-        print(f"[Kling 오류] 모든 경로 실패 (직접 API: {'설정됨' if ak and sk else '미설정'}, Higgsfield: 실패)")
-        return None
-
-    # Hailuo, Wan: Higgsfield 전용
-    if engine in ("hailuo", "wan"):
-        return _generate_via_higgsfield(image_path, prompt, index, topic_folder, engine)
+        return _generate_via_kling_direct(image_path, prompt, index, topic_folder)
 
     print(f"[비디오 엔진 오류] 알 수 없는 엔진: {engine}")
     return None
-
-
-def _generate_via_higgsfield(
-    image_path: str, prompt: str, index: int, topic_folder: str, engine: str
-) -> str | None:
-    """Higgsfield 통합 API를 통한 비디오 생성"""
-    hf_key = os.getenv("HIGGSFIELD_API_KEY")
-    hf_account = os.getenv("HIGGSFIELD_ACCOUNT_ID")
-
-    if not hf_key:
-        print("[Higgsfield 오류] HIGGSFIELD_API_KEY가 없습니다.")
-        return None
-
-    engine_name = SUPPORTED_ENGINES.get(engine, {}).get("name", engine)
-
-    # Higgsfield 모델 매핑
-    model_map = {
-        "kling": "kling-v2-master",
-        "hailuo": "hailuo-02",
-        "wan": "wan-2.1",
-    }
-    model_id = model_map.get(engine)
-    if not model_id:
-        print(f"[Higgsfield 오류] {engine}에 대한 모델 매핑이 없습니다.")
-        return None
-
-    try:
-        import higgsfield_client
-        # Higgsfield 인증: 스레드 안전을 위해 클라이언트 설정 사용
-        if hasattr(higgsfield_client, "configure"):
-            higgsfield_client.configure(api_key=hf_key, account_id=hf_account or "")
-        else:
-            # 레거시 SDK: configure() 미지원 시 경고 후 중단
-            # (os.environ 직접 변경은 스레드 안전하지 않으므로 제거)
-            print("[Higgsfield 오류] SDK가 configure() 미지원. higgsfield-client를 최신 버전으로 업데이트하세요.")
-            return None
-    except ImportError:
-        print("[Higgsfield 오류] higgsfield-client 패키지가 없습니다. (pip install higgsfield-client)")
-        return None
-
-    print(f"-> [{engine_name}] 컷 {index+1} 이미지-투-비디오 렌더링 요청 중 (Higgsfield)...")
-
-    try:
-        # 이미지 업로드
-        from PIL import Image
-        img = Image.open(image_path)
-        img_url = higgsfield_client.upload_image(img)
-
-        # 비디오 생성 요청
-        result = higgsfield_client.subscribe(
-            f"{model_id}/image-to-video",
-            arguments={
-                "image": img_url,
-                "prompt": f"Cinematic movement, 4k, realistic physics. {prompt}",
-                "duration": 5,
-            },
-        )
-
-        # 결과에서 비디오 URL 추출
-        video_url = None
-        if isinstance(result, dict):
-            video_url = result.get("url") or result.get("video_url")
-            if not video_url and "videos" in result:
-                videos = result["videos"]
-                if videos:
-                    video_url = videos[0].get("url")
-
-        if not video_url:
-            print(f"[{engine_name} 오류] 비디오 URL을 받지 못했습니다. 응답: {str(result)[:200]}")
-            return None
-
-        return _download_video(video_url, index, topic_folder, engine)
-
-    except Exception as e:
-        err_str = str(e)
-        if "Internal Server Error" in err_str:
-            print(f"[{engine_name} 오류] Higgsfield 서버 오류 - 크레딧 부족 또는 서비스 일시 중단일 수 있습니다.")
-        else:
-            print(f"[{engine_name} 오류] Higgsfield API 호출 실패: {e}")
-        return None
 
 
 def _generate_via_openai_sora(

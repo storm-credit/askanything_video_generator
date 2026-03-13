@@ -96,7 +96,7 @@ class GenerateRequest(BaseModel):
     @field_validator("videoEngine")
     @classmethod
     def valid_engine(cls, v: str) -> str:
-        allowed = {"kling", "sora2", "veo3", "hailuo", "wan", "none"}
+        allowed = {"kling", "sora2", "veo3", "none"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
         return v
@@ -150,8 +150,6 @@ async def health_check():
     elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     claude_key = os.getenv("ANTHROPIC_API_KEY", "")
-    hf_key = os.getenv("HIGGSFIELD_API_KEY", "")
-    hf_id = os.getenv("HIGGSFIELD_ACCOUNT_ID", "")
     kling_ak = os.getenv("KLING_ACCESS_KEY", "")
     kling_sk = os.getenv("KLING_SECRET_KEY", "")
 
@@ -160,8 +158,6 @@ async def health_check():
         "elevenlabs": _is_set(elevenlabs_key, ["YOUR_ELEVENLABS_API_KEY_HERE"]),
         "gemini": _is_set(gemini_key),
         "claude_key": _is_set(claude_key),
-        "higgsfield_key": _is_set(hf_key, ["YOUR"]),
-        "higgsfield_account": _is_set(hf_id, ["YOUR"]),
         "kling_access": _is_set(kling_ak, ["YOUR"]),
         "kling_secret": _is_set(kling_sk, ["YOUR"]),
     }
@@ -222,20 +218,11 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
         if not google_key:
             errors.append("GEMINI_API_KEY 또는 GEMINI_API_KEYS (Veo 3 비디오 엔진에 필수)")
 
-    # Kling: 직접 API 또는 Higgsfield
+    # Kling: 직접 API
     if video_engine == "kling":
         kling_ak = os.getenv("KLING_ACCESS_KEY", "")
         if not kling_ak or kling_ak.startswith("YOUR"):
             errors.append("KLING_ACCESS_KEY (Kling 비디오 엔진에 필수)")
-
-    # Higgsfield 전용 엔진 (hailuo, wan 등)
-    if video_engine in ("hailuo", "wan"):
-        hf_key = os.getenv("HIGGSFIELD_API_KEY", "")
-        hf_id = os.getenv("HIGGSFIELD_ACCOUNT_ID", "")
-        if not hf_key or hf_key.startswith("YOUR"):
-            errors.append(f"HIGGSFIELD_API_KEY ({video_engine} 비디오 엔진에 필수)")
-        elif not hf_id or hf_id.startswith("YOUR"):
-            errors.append("HIGGSFIELD_ACCOUNT_ID (Higgsfield 엔진에 필수)")
 
     if video_engine == "sora2":
         openai_check = api_key_override or os.getenv("OPENAI_API_KEY", "")

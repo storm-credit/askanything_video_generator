@@ -5,8 +5,6 @@ export interface KeyStatus {
   elevenlabs: boolean;
   gemini: boolean;
   claude_key: boolean;
-  higgsfield_key: boolean;
-  higgsfield_account: boolean;
   kling_access: boolean;
   kling_secret: boolean;
 }
@@ -74,27 +72,9 @@ export const KEY_CONFIGS: KeyConfig[] = [
     multiKey: false,
   },
   {
-    id: "higgsfield_key",
-    label: "Higgsfield API Key",
-    description: "Kling, Hailuo, Wan 비디오 엔진에 사용",
-    envName: "HIGGSFIELD_API_KEY",
-    statusKey: "higgsfield_key",
-    required: false,
-    multiKey: false,
-  },
-  {
-    id: "higgsfield_account",
-    label: "Higgsfield Account ID",
-    description: "Higgsfield 엔진 계정 식별자",
-    envName: "HIGGSFIELD_ACCOUNT_ID",
-    statusKey: "higgsfield_account",
-    required: false,
-    multiKey: false,
-  },
-  {
     id: "kling_access",
     label: "Kling Access Key",
-    description: "Kling AI 직접 연동 (Higgsfield 실패 시 폴백)",
+    description: "Kling AI 직접 연동",
     envName: "KLING_ACCESS_KEY",
     statusKey: "kling_access",
     required: false,
