@@ -22,7 +22,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         print("[ElevenLabs 오류] ELEVENLABS_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
         return None
 
-    VOICE_ID = "cjVigY5qzO86Huf0OWal"  # Eric (다큐멘터리 톤)
+    VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "cjVigY5qzO86Huf0OWal")  # 기본: Eric
     URL = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
 
     headers = {

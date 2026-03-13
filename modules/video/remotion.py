@@ -82,7 +82,8 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
         shell_mode = os.name == "nt"
         result = subprocess.run(
             cmd, cwd=remotion_dir, check=True, shell=shell_mode,
-            capture_output=True, text=True, timeout=600,
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=600,
         )
 
         if not os.path.exists(final_video_path):

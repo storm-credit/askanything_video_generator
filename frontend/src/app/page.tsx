@@ -99,6 +99,8 @@ export default function Home() {
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   // 비밀번호 표시 토글
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
+  // 저장 경로 설정
+  const [outputPath, setOutputPath] = useState("");
 
   const fetchKeyStatus = useCallback(async () => {
     try {
@@ -169,6 +171,7 @@ export default function Home() {
           apiKey: selectedOpenaiKey || undefined,
           elevenlabsKey: selectedElevenlabsKey || undefined,
           videoEngine,
+          outputPath: outputPath.trim() || undefined,
         }),
       });
 
@@ -195,40 +198,25 @@ export default function Home() {
                const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
                const downloadUrl = `http://localhost:8000${normalizedPath}`;
 
-               try {
-                 const vidRes = await fetch(downloadUrl);
-                 if (!vidRes.ok) throw new Error("Video not found");
-                 const blob = await vidRes.blob();
-                 const url = window.URL.createObjectURL(blob);
-                 const link = document.createElement("a");
-                 link.href = url;
-                 link.setAttribute("download", "AskAnything_Shorts.mp4");
-                 document.body.appendChild(link);
-                 link.click();
-                 link.parentNode?.removeChild(link);
-                 window.URL.revokeObjectURL(url);
-               } catch (e) {
-                 console.error("Download failed, using fallback:", e);
-                 const link = document.createElement("a");
-                 link.href = downloadUrl;
-                 link.setAttribute("download", "AskAnything_Shorts.mp4");
-                 document.body.appendChild(link);
-                 link.click();
-                 link.parentNode?.removeChild(link);
-               }
+               const link = document.createElement("a");
+               link.href = downloadUrl;
+               link.setAttribute("download", "AskAnything_Shorts.mp4");
+               document.body.appendChild(link);
+               link.click();
+               link.parentNode?.removeChild(link);
 
                setVideoUrl("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
                setIsGenerating(false);
             } else if (rawData.startsWith("ERROR|")) {
                const errMsg = rawData.slice(6);
-               setLogs(prev => [...prev, `ERROR:${errMsg}`]);
+               setLogs(prev => [...prev.slice(-99), `ERROR:${errMsg}`]);
                setErrorMessage(errMsg);
                setIsGenerating(false);
             } else if (rawData.startsWith("PROG|")) {
                const p = parseInt(rawData.slice(5), 10);
                if (!isNaN(p)) setProgress(p);
             } else {
-               setLogs(prev => [...prev, rawData]);
+               setLogs(prev => [...prev.slice(-99), rawData]);
             }
           }
         }
@@ -239,7 +227,7 @@ export default function Home() {
       const userMsg = message === "Failed to fetch"
         ? "[연결 실패] 백엔드 서버(localhost:8000)에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
         : `[네트워크 오류] ${message}`;
-      setLogs(prev => [...prev, `ERROR:${userMsg}`]);
+      setLogs(prev => [...prev.slice(-99), `ERROR:${userMsg}`]);
       setErrorMessage(userMsg);
     } finally {
       setIsGenerating(false);
@@ -338,6 +326,26 @@ export default function Home() {
                       onToggleVisible={() => setVisibleKeys((prev) => ({ ...prev, [config.id]: !prev[config.id] }))}
                     />
                   ))}
+                </div>
+
+                {/* 저장 경로 설정 */}
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">출력 설정</h3>
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <span className="text-sm font-medium text-white">저장 경로</span>
+                        <p className="text-xs text-gray-500 mt-0.5">비어있으면 브라우저 다운로드 폴더에 저장됩니다</p>
+                      </div>
+                    </div>
+                    <input
+                      type="text"
+                      value={outputPath}
+                      onChange={(e) => setOutputPath(e.target.value)}
+                      placeholder={"예: C:\\Users\\사용자\\Desktop\\output.mp4"}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 

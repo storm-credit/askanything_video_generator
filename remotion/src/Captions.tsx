@@ -1,5 +1,5 @@
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, spring } from 'remotion';
-import React from 'react';
+import React, { useMemo } from 'react';
 
 type WordProps = {
   word: string;
@@ -12,6 +12,15 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
 
+  // 성능 최적화: currentTime ± 1초 범위의 단어만 필터링
+  const visibleWords = useMemo(() => {
+    const windowStart = currentTime - 1;
+    const windowEnd = currentTime + 1;
+    return wordTimestamps
+      .map((w, index) => ({ ...w, index }))
+      .filter((w) => w.end >= windowStart && w.start <= windowEnd);
+  }, [wordTimestamps, currentTime]);
+
   return (
     <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', top: '25%' }}>
       <div style={{
@@ -23,14 +32,13 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
         gap: '20px',
         textAlign: 'center'
       }}>
-        {wordTimestamps.map((w, index) => {
+        {visibleWords.map((w) => {
           const isActive = currentTime >= w.start && currentTime <= w.end;
           const hasPassed = currentTime > w.end;
-          const isVisible = currentTime >= w.start - 0.5; // 미리 조금 보여줌 (옵션)
+          const isVisible = currentTime >= w.start - 0.5;
 
           if (!isVisible && !hasPassed && !isActive) return null;
 
-          // 팝업 애니메이션: 단어가 시작될 때 spring 효과
           const wordStartFrame = Math.round(w.start * fps);
           const scale = spring({
             fps,
@@ -43,16 +51,15 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
             durationInFrames: 10,
           });
 
-          // 현재 읽고 있는 단어는 노란색 + 커짐, 지나간 단어는 흰색
           const color = isActive ? '#FFD700' : 'white';
           const transformScale = isActive ? 1 + (scale * 0.15) : 1;
-          const textShadow = isActive 
-                ? '0px 0px 20px rgba(255, 215, 0, 0.8), 4px 4px 0px rgba(0,0,0,1)' 
+          const textShadow = isActive
+                ? '0px 0px 20px rgba(255, 215, 0, 0.8), 4px 4px 0px rgba(0,0,0,1)'
                 : '4px 4px 0px rgba(0,0,0,1)';
 
           return (
             <span
-              key={index}
+              key={w.index}
               style={{
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 900,
@@ -61,7 +68,6 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
                 textTransform: 'uppercase',
                 transform: `scale(${transformScale})`,
                 textShadow: textShadow,
-                // Note: CSS transitions don't work in Remotion (frame-based rendering)
                 WebkitTextStroke: '3px black',
                 lineHeight: '1.2',
                 display: 'inline-block'

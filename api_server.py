@@ -1,7 +1,9 @@
 import os
 import sys
 import io
+import shutil
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,6 +55,7 @@ class GenerateRequest(BaseModel):
     apiKey: str | None = None
     elevenlabsKey: str | None = None
     videoEngine: str = "kling"
+    outputPath: str | None = None
 
     @field_validator("topic")
     @classmethod
@@ -149,6 +152,7 @@ async def generate_video_endpoint(req: GenerateRequest):
     api_key_override = req.apiKey
     elevenlabs_key_override = req.elevenlabsKey
     video_engine = req.videoEngine
+    output_path = req.outputPath
 
     async def sse_generator():
         try:
@@ -179,6 +183,8 @@ async def generate_video_endpoint(req: GenerateRequest):
             word_timestamps_list = [None] * len(cuts)
             scripts = [cut["script"] for cut in cuts]
 
+            cut_executor = ThreadPoolExecutor(max_workers=2)
+
             def process_cut(i, cut):
                 try:
                     img_path = generate_image(cut["prompt"], i, topic_folder, api_key_override)
@@ -186,22 +192,35 @@ async def generate_video_endpoint(req: GenerateRequest):
                     print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
                     img_path = None
 
-                video_path = None
+                # 이미지 완료 후 비디오 변환과 TTS를 병렬 실행
+                video_future = None
+                tts_future = None
+
                 if img_path and video_engine != "none":
+                    video_future = cut_executor.submit(
+                        generate_video_from_image, img_path, cut["prompt"], i, topic_folder, video_engine
+                    )
+                tts_future = cut_executor.submit(
+                    generate_tts, cut["script"], i, topic_folder, elevenlabs_key_override
+                )
+
+                # 비디오 결과 수집
+                video_path = None
+                if video_future:
                     try:
-                        video_path = generate_video_from_image(img_path, cut["prompt"], i, topic_folder, engine=video_engine)
+                        video_path = video_future.result(timeout=300)
                     except Exception as exc:
                         print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
-
-                # 비디오 변환 실패 시 기존 이미지로 폴백
                 final_visual_path = video_path if video_path else img_path
 
+                # TTS 결과 수집
+                aud_path = None
                 try:
-                    aud_path = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override)
+                    aud_path = tts_future.result(timeout=60)
                 except Exception as exc:
                     print(f"[컷 {i+1} TTS 생성 실패] {exc}")
-                    aud_path = None
 
+                # Whisper 타임스탬프 (TTS 완료 후 순차)
                 words = []
                 if aud_path:
                     try:
@@ -260,6 +279,17 @@ async def generate_video_endpoint(req: GenerateRequest):
                 return
 
             yield {"data": "PROG|100\n"}
+
+            # 사용자 지정 저장 경로가 있으면 복사
+            if output_path:
+                try:
+                    out_dir = os.path.dirname(output_path)
+                    if out_dir:
+                        os.makedirs(out_dir, exist_ok=True)
+                    shutil.copy2(final_abs_path, output_path)
+                    yield {"data": f"[저장] 지정 경로에 복사 완료: {output_path}\n"}
+                except Exception as copy_err:
+                    yield {"data": f"ERROR|[저장 오류] 지정 경로 복사 실패: {copy_err}\n"}
 
             # 프론트엔드 라우팅용 경로 (StaticFiles mount 기준)
             final_filename = os.path.basename(video_path)
