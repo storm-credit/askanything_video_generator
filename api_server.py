@@ -51,7 +51,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작...\n"}
 
             # 단계 1: GPT 기획
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             cuts, topic_folder = await loop.run_in_executor(None, generate_cuts, topic, api_key_override)
 
             yield {"data": "PROG|30\n"}

@@ -34,7 +34,7 @@ def generate_word_timestamps(audio_path, api_key=None):
             try:
                 data = transcript.model_dump()
                 return data.get("words", [])
-            except:
+            except Exception:
                 return []
     except Exception as e:
         print(f"[Whisper 오류] {e}")

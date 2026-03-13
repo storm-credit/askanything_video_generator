@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$TOOL_INPUT\" | grep -q '\\.py'; then python -m py_compile \"$(echo \"$TOOL_INPUT\" | grep -oP '(?<=\"file_path\":\"|file_path\": \")([^\"]+\\.py)')\" 2>&1 || echo 'Python syntax error detected'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

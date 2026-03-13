@@ -61,7 +61,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
                 textTransform: 'uppercase',
                 transform: `scale(${transformScale})`,
                 textShadow: textShadow,
-                transition: 'all 0.1s ease-out',
+                // Note: CSS transitions don't work in Remotion (frame-based rendering)
                 WebkitTextStroke: '3px black',
                 lineHeight: '1.2',
                 display: 'inline-block'
