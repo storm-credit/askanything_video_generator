@@ -1,4 +1,4 @@
-import { AbsoluteFill, Sequence, Video, Audio, Img, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Sequence, Video, Audio, Img, useVideoConfig, staticFile } from 'remotion';
 import React, { useMemo } from 'react';
 import { Captions } from './Captions';
 
@@ -34,9 +34,9 @@ export const Main: React.FC<{ cuts: CutProps[] }> = ({ cuts }) => {
       {cuts.map((cut, index) => {
         const startFrame = startFrames[index];
         
-        // file:/// URI 처리 (Windows 절대 경로 지원)
-        const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : `file://${cut.visual_path}`;
-        const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : `file://${cut.audio_path}`;
+        // staticFile()로 public dir (assets/) 기준 상대 경로 로드
+        const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
+        const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
         const isVideo = visualSrc.toLowerCase().endsWith('.mp4');
 
         return (

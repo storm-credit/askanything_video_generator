@@ -47,10 +47,17 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
         frames = int(duration_sec * fps)
         total_duration_in_frames += frames
 
+        # assets/ 기준 상대 경로 (staticFile()용 - publicDir=assets/)
+        # visual_path 예: "assets/test/images/cut_00.png" → "test/images/cut_00.png"
+        def _to_relative(p):
+            normed = p.replace("\\", "/")
+            idx = normed.find("assets/")
+            return normed[idx + len("assets/"):] if idx >= 0 else normed
+
         cuts_data.append(
             {
-                "visual_path": os.path.abspath(visual_path).replace("\\", "/"),
-                "audio_path": os.path.abspath(audio_path).replace("\\", "/"),
+                "visual_path": _to_relative(visual_path),
+                "audio_path": _to_relative(audio_path),
                 "word_timestamps": word_timestamps or [],
                 "duration_in_frames": frames,
             }
@@ -66,6 +73,7 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
         print("[Remotion 렌더링 실패] remotion/node_modules가 없습니다. `npm --prefix remotion install` 실행 필요")
         return None
 
+    assets_dir = os.path.abspath("assets")
     cmd = [
         "npx",
         "remotion",
@@ -75,6 +83,8 @@ def create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_li
         os.path.abspath(final_video_path),
         "--props",
         os.path.abspath(props_json_path),
+        "--public-dir",
+        assets_dir,
     ]
 
     print(f"-> [Remotion 렌더링 마스터] 총 길이 {total_duration_in_frames} 프레임, 렌더링 준비 완료.")
