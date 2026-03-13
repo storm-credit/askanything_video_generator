@@ -7,7 +7,7 @@ MAX_RETRIES = 2
 RETRY_DELAY = 3
 
 
-def generate_word_timestamps(audio_path: str, api_key: str | None = None) -> list[dict]:
+def generate_word_timestamps(audio_path: str, api_key: str | None = None, language: str = "ko") -> list[dict]:
     """
     주어진 오디오 파일에서 Whisper API를 이용해 단어 단위 타임스탬프를 추출합니다.
     타임아웃/네트워크 오류 시 최대 2회 재시도.
@@ -39,7 +39,7 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None) -> lis
                 transcript = client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio_file,
-                    language="ko",
+                    language=language,
                     response_format="verbose_json",
                     timestamp_granularities=["word"]
                 )

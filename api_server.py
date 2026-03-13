@@ -70,6 +70,15 @@ class GenerateRequest(BaseModel):
     llmProvider: str = "gemini"
     llmKey: str | None = None
     outputPath: str | None = None
+    language: str = "ko"
+
+    @field_validator("language")
+    @classmethod
+    def valid_language(cls, v: str) -> str:
+        allowed = {"ko", "en"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 언어: {v}. 허용: {allowed}")
+        return v
 
     @field_validator("topic")
     @classmethod
@@ -240,6 +249,7 @@ async def generate_video_endpoint(req: GenerateRequest):
     llm_provider = req.llmProvider
     llm_key_override = req.llmKey
     output_path = req.outputPath
+    language = req.language
 
     async def sse_generator():
         # 동시 요청 제한: 슬롯 부족 시 대기 안내
@@ -308,6 +318,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 lambda: generate_cuts(
                     topic,
                     api_key_override=api_key_override,
+                    lang=language,
                     llm_provider=llm_provider,
                     llm_key_override=llm_key_for_request,
                 ),
@@ -367,7 +378,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 def _run_tts():
                     try:
-                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override)
+                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language)
                     except Exception as exc:
                         errors.append(f"TTS: {exc}")
                         print(f"[컷 {i+1} TTS 생성 실패] {exc}")
@@ -392,7 +403,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 words = []
                 if aud_path:
                     try:
-                        words = generate_word_timestamps(aud_path, api_key_override)
+                        words = generate_word_timestamps(aud_path, api_key_override, language=language)
                     except Exception as exc:
                         errors.append(f"타임스탬프: {exc}")
                         print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")

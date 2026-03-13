@@ -117,8 +117,8 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     os.makedirs(os.path.join(base_path, "audio"), exist_ok=True)
     os.makedirs(os.path.join(base_path, "video"), exist_ok=True)
 
-    # System Prompt (역할 부여 및 엄격한 규칙 강제)
-    system_prompt = """
+    # System Prompt — 언어별 분기
+    _SYSTEM_PROMPT_KO = """
 당신은 구독자 100만 명 이상을 보유한 유튜브 쇼츠(Shorts) 및 틱톡(TikTok) 수석 콘텐츠 디렉터이자, 최상급 DALL-E 3 프롬프트 엔지니어입니다.
 당신의 임무는 1분 미만의 세로형 숏폼 영상을 위한 완벽한 기획안을 JSON 포맷으로 작성하는 것입니다.
 
@@ -149,6 +149,39 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 }
 """
 
+    _SYSTEM_PROMPT_EN = """
+You are a senior content director for YouTube Shorts and TikTok with over 1 million subscribers, and a top-tier DALL-E 3 prompt engineer.
+Your mission is to create a perfect production plan in JSON format for a vertical short-form video under 1 minute.
+
+[Writing Rules: Short-form Storytelling Anatomy (VERY IMPORTANT)]
+You must follow this **[5-Step Viral Storytelling Formula]** to plan a 6–10 cut script:
+
+1. [Cut 1–2] Hook: Stop the viewer's scroll within 3 seconds. Open with the most shocking or curiosity-provoking statement about the topic.
+2. [Cut 3] Context: Briefly add background or principles to deepen immersion.
+3. [Cut 4–5] Build-up: Maximize curiosity right before revealing the answer.
+4. [Cut 6–8] Climax: Deliver the key answer or twist. Use fact-based, intuitive analogies.
+5. [Cut 9–10 (last 1–2 cuts)] Conclusion & CTA: Summarize the result or end with a witty closing remark.
+
+* Length constraint: Speed is the soul of short-form. Each cut script should be 5–10 words, readable by a voice actor in 3–5 seconds.
+* [CRITICAL WARNING] NEVER end with only 3–4 cuts. You MUST write 6–10 cuts.
+
+[Output Format Constraint]
+Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in the following JSON schema:
+
+{
+  "expert_validation": "[Self-validation comment]",
+  "cuts": [
+    {
+      "description": "[Cut description sentence (English)]",
+      "image_prompt": "[Detailed DALL-E 3 English prompt]",
+      "script": "[English voice-over script for AI narrator]"
+    }
+  ]
+}
+"""
+
+    system_prompt = _SYSTEM_PROMPT_EN if lang == "en" else _SYSTEM_PROMPT_KO
+
     # LLM 프로바이더별 API 키 결정
     provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
 
@@ -169,7 +202,10 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
     # RAG 기법: 실시간 검색 팩트체크 주입
     fact_context = get_fact_check_context(topic)
-    user_content = f"주제: '{topic}'에 대한 숏폼 기획안을 작성해주세요."
+    if lang == "en":
+        user_content = f"Topic: Create a short-form video plan about '{topic}'."
+    else:
+        user_content = f"주제: '{topic}'에 대한 숏폼 기획안을 작성해주세요."
     if fact_context:
         user_content += f"\n\n{fact_context}"
 
