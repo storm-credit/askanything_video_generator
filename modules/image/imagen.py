@@ -3,6 +3,8 @@ import time
 from PIL import Image, ImageOps
 import io
 
+from modules.utils.keys import record_key_usage
+
 
 def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=None):
     """Google Imagen 4 API로 이미지를 생성합니다."""
@@ -42,6 +44,7 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
             filename = os.path.join(image_dir, f"cut_{index:02}.png")
             fitted_image.save(filename)
 
+            record_key_usage(final_api_key, "imagen")
             print(f"OK [아트 디렉터] 컷 {index+1} Imagen 4 렌더링 완료!")
             return filename
 

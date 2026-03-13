@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, CheckCircle2, Film, AlertCircle, XCircle, Settings, X, Plus, Trash2, Eye, EyeOff, Brain, ImageIcon } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, Film, AlertCircle, XCircle, Settings, X, Plus, Trash2, Eye, EyeOff, Brain, ImageIcon, BarChart3 } from "lucide-react";
 
 interface KeyStatus {
   openai: boolean;
@@ -123,6 +123,8 @@ export default function Home() {
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
   // 저장 경로 설정
   const [outputPath, setOutputPath] = useState("");
+  // 키 사용량 통계
+  const [keyUsageStats, setKeyUsageStats] = useState<{total_keys: number; keys: {key: string; usage: Record<string, number>; total: number}[]} | null>(null);
 
   const fetchKeyStatus = useCallback(async () => {
     try {
@@ -140,10 +142,25 @@ export default function Home() {
     fetchKeyStatus();
   }, [fetchKeyStatus]);
 
+  const fetchKeyUsage = useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:8000/api/key-usage");
+      if (res.ok) {
+        const data = await res.json();
+        setKeyUsageStats(data);
+      }
+    } catch {
+      // 서버 미실행 시 무시
+    }
+  }, []);
+
   // 모달 열릴 때마다 최신 서버 상태 조회
   useEffect(() => {
-    if (isSettingsOpen) fetchKeyStatus();
-  }, [isSettingsOpen, fetchKeyStatus]);
+    if (isSettingsOpen) {
+      fetchKeyStatus();
+      fetchKeyUsage();
+    }
+  }, [isSettingsOpen, fetchKeyStatus, fetchKeyUsage]);
 
   const addKey = (configId: string) => {
     const value = (inputValues[configId] || "").trim();
@@ -411,6 +428,35 @@ export default function Home() {
                     />
                   </div>
                 </div>
+
+                {/* Google API 키 사용량 */}
+                {keyUsageStats && keyUsageStats.total_keys > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <BarChart3 className="w-3.5 h-3.5" />
+                      Google API 키 사용량 (세션)
+                    </h3>
+                    <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-2">
+                      <p className="text-[10px] text-gray-500 mb-2">
+                        총 {keyUsageStats.total_keys}개 키 등록 · 서버 재시작 시 초기화
+                      </p>
+                      {keyUsageStats.keys.map((k, idx) => (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02]">
+                          <span className="text-xs text-gray-400 font-mono w-28 shrink-0">{k.key}</span>
+                          <div className="flex-1 flex items-center gap-2 flex-wrap">
+                            {Object.entries(k.usage).map(([service, count]) => (
+                              <span key={service} className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400">
+                                {service}: {count}
+                              </span>
+                            ))}
+                            {k.total === 0 && <span className="text-[10px] text-gray-600">미사용</span>}
+                          </div>
+                          <span className="text-xs font-bold text-white shrink-0">{k.total}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 모달 푸터 */}

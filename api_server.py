@@ -21,6 +21,7 @@ from modules.video.engines import generate_video_from_image, get_available_engin
 from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs_quota
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
+from modules.utils.keys import get_google_key, count_google_keys, get_key_usage_stats
 
 app = FastAPI()
 
@@ -98,6 +99,17 @@ async def list_engines():
     return get_available_engines()
 
 
+@app.get("/api/key-usage")
+async def key_usage():
+    """Google API 키별 사용량 통계 (세션 내 추적)."""
+    stats = get_key_usage_stats()
+    return {
+        "total_keys": count_google_keys(),
+        "keys": stats,
+        "note": "서버 재시작 시 카운터가 초기화됩니다. Veo 3는 유료 계정 기준 일일 한도가 있습니다.",
+    }
+
+
 @app.get("/api/health")
 async def health_check():
     """각 API 키의 설정 상태를 개별적으로 반환합니다."""
@@ -131,10 +143,12 @@ async def health_check():
     }
 
     missing = [k for k, v in keys.items() if not v]
+    google_key_count = count_google_keys()
     return {
         "status": "ok" if not missing else "missing_keys",
         "keys": keys,
         "missing": missing,
+        "google_key_count": google_key_count,
     }
 
 
@@ -178,16 +192,24 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
     if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
         errors.append("ELEVENLABS_API_KEY (TTS 음성 생성에 필수)")
 
-    if video_engine in ("kling", "veo3", "hailuo", "wan"):
+    # Veo 3: Google API 직접 연동 (GEMINI_API_KEYS 로테이션)
+    if video_engine == "veo3":
+        google_key = llm_key_override or get_google_key() or ""
+        if not google_key:
+            errors.append("GEMINI_API_KEY 또는 GEMINI_API_KEYS (Veo 3 비디오 엔진에 필수)")
+
+    # Kling: 직접 API 또는 Higgsfield
+    if video_engine == "kling":
+        kling_ak = os.getenv("KLING_ACCESS_KEY", "")
+        if not kling_ak or kling_ak.startswith("YOUR"):
+            errors.append("KLING_ACCESS_KEY (Kling 비디오 엔진에 필수)")
+
+    # Higgsfield 전용 엔진 (hailuo, wan 등)
+    if video_engine in ("hailuo", "wan"):
         hf_key = os.getenv("HIGGSFIELD_API_KEY", "")
         hf_id = os.getenv("HIGGSFIELD_ACCOUNT_ID", "")
         if not hf_key or hf_key.startswith("YOUR"):
-            if video_engine == "kling":
-                kling_ak = os.getenv("KLING_ACCESS_KEY", "")
-                if not kling_ak or kling_ak.startswith("YOUR"):
-                    errors.append(f"HIGGSFIELD_API_KEY 또는 KLING_ACCESS_KEY ({video_engine} 비디오 엔진에 필수)")
-            else:
-                errors.append(f"HIGGSFIELD_API_KEY ({video_engine} 비디오 엔진에 필수)")
+            errors.append(f"HIGGSFIELD_API_KEY ({video_engine} 비디오 엔진에 필수)")
         elif not hf_id or hf_id.startswith("YOUR"):
             errors.append("HIGGSFIELD_ACCOUNT_ID (Higgsfield 엔진에 필수)")
 
@@ -236,18 +258,23 @@ async def generate_video_endpoint(req: GenerateRequest):
             provider_labels = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
             provider_label = provider_labels.get(llm_provider, "ChatGPT")
 
+            # Google 키 로테이션 (Gemini, Imagen, Veo 공유)
+            google_key_for_video = get_google_key(llm_key_override)
+
             # 비디오 엔진 사전 검증
-            google_key_for_video = llm_key_override or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-            if video_engine != "none":
-                engine_ok, engine_reason = check_engine_available(video_engine, google_key_for_video)
+            active_video_engine = video_engine
+            if active_video_engine != "none":
+                engine_ok, engine_reason = check_engine_available(active_video_engine, google_key_for_video)
                 if not engine_ok:
-                    yield {"data": f"WARN|[비디오 엔진 경고] {video_engine}: {engine_reason}. 정지 이미지로 대체됩니다.\n"}
-                    video_engine = "none"
+                    yield {"data": f"WARN|[비디오 엔진 경고] {active_video_engine}: {engine_reason}. 정지 이미지로 대체됩니다.\n"}
+                    active_video_engine = "none"
 
             yield {"data": "PROG|10\n"}
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
 
             # 단계 1: LLM 기획 (Gemini / ChatGPT / Claude 선택)
+            # Gemini 프로바이더일 때 키 로테이션 적용
+            llm_key_for_request = get_google_key(llm_key_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
             cuts, topic_folder = await loop.run_in_executor(
                 None,
@@ -255,7 +282,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     topic,
                     api_key_override=api_key_override,
                     llm_provider=llm_provider,
-                    llm_key_override=llm_key_override,
+                    llm_key_override=llm_key_for_request,
                 ),
             )
 
@@ -278,14 +305,20 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 이미지 엔진에 따라 생성 함수 선택
             gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
-            image_api_key = (llm_key_override or os.getenv("GEMINI_API_KEY")) if image_engine == "imagen" else api_key_override
+
+            def _get_image_key():
+                """이미지 생성 시마다 다른 키 사용 (로테이션)"""
+                if image_engine == "imagen":
+                    return get_google_key(llm_key_override)
+                return api_key_override
 
             def process_cut(i, cut):
                 # 이미지 생성 (세마포어로 동시성 제한)
                 img_path = None
                 with image_semaphore:
                     try:
-                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, image_api_key)
+                        cut_image_key = _get_image_key()
+                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
                     except Exception as exc:
                         print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
 
@@ -293,9 +326,10 @@ async def generate_video_endpoint(req: GenerateRequest):
                 video_future = None
                 tts_future = None
 
-                if img_path and video_engine != "none":
+                if img_path and active_video_engine != "none":
+                    cut_video_key = get_google_key(llm_key_override)
                     video_future = cut_executor.submit(
-                        generate_video_from_image, img_path, cut["prompt"], i, topic_folder, video_engine, google_key_for_video
+                        generate_video_from_image, img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key
                     )
                 tts_future = cut_executor.submit(
                     generate_tts, cut["script"], i, topic_folder, elevenlabs_key_override
@@ -338,7 +372,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 completed_count += 1
                 prog = 30 + int(50 * (completed_count / len(cuts)))
                 yield {"data": f"PROG|{prog}\n"}
-                engine_label = video_engine if video_engine != "none" else "이미지"
+                engine_label = active_video_engine if active_video_engine != "none" else "이미지"
                 yield {"data": f"  -> 컷 {i+1} 시각 소스({engine_label}/{image_label}) 및 음성 생성 완료\n"}
 
             failed_visual = [i+1 for i, p in enumerate(visual_paths) if p is None]

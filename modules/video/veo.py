@@ -7,6 +7,7 @@ Higgsfield 없이 Google API 키 하나로 동작합니다.
 import os
 import time
 
+from modules.utils.keys import record_key_usage
 
 # Veo 모델 옵션 (환경변수로 오버라이드 가능)
 DEFAULT_MODEL = "veo-3.0-generate-001"
@@ -126,6 +127,7 @@ def generate_video_veo(
             if hasattr(vid, "video_bytes") and vid.video_bytes:
                 with open(final_path, "wb") as f:
                     f.write(vid.video_bytes)
+                record_key_usage(final_key, "veo3")
                 elapsed = time.time() - start
                 print(f"OK [Veo 3] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
                 return final_path
@@ -136,6 +138,7 @@ def generate_video_veo(
                 resp = requests.get(vid.uri, timeout=60)
                 with open(final_path, "wb") as f:
                     f.write(resp.content)
+                record_key_usage(final_key, "veo3")
                 elapsed = time.time() - start
                 print(f"OK [Veo 3] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
                 return final_path
