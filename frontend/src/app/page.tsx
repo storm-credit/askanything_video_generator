@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, CheckCircle2, KeyRound } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, KeyRound, Film } from "lucide-react";
 
 export default function Home() {
   const [topic, setTopic] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [isKeySaved, setIsKeySaved] = useState(false);
+  const [videoEngine, setVideoEngine] = useState("kling");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -32,7 +33,7 @@ export default function Home() {
       const response = await fetch("http://localhost:8000/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, apiKey: apiKey.trim() }),
+        body: JSON.stringify({ topic, apiKey: apiKey.trim(), videoEngine }),
       });
 
       if (!response.body) throw new Error("No response body");
@@ -171,7 +172,7 @@ export default function Home() {
           </p>
         </div>
 
-        <form onSubmit={handleGenerate} className="relative max-w-xl mx-auto mt-12">
+        <form onSubmit={handleGenerate} className="relative max-w-xl mx-auto mt-12 space-y-4">
           <div className="relative flex items-center">
             <input
               type="text"
@@ -188,6 +189,24 @@ export default function Home() {
             >
               {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : "생성하기"}
             </button>
+          </div>
+
+          {/* 비디오 엔진 선택 */}
+          <div className="flex items-center justify-center gap-2">
+            <Film className="w-4 h-4 text-gray-500" />
+            <select
+              value={videoEngine}
+              onChange={(e) => setVideoEngine(e.target.value)}
+              disabled={isGenerating}
+              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+            >
+              <option value="kling" className="bg-gray-900">Kling 3.0 - 시네마틱 모션 (기본)</option>
+              <option value="sora2" className="bg-gray-900">Sora 2 - 최고 품질 (OpenAI)</option>
+              <option value="veo3" className="bg-gray-900">Veo 3.1 - 4K 시네마틱 (Google)</option>
+              <option value="hailuo" className="bg-gray-900">Hailuo 2.3 - 가성비 (Minimax)</option>
+              <option value="wan" className="bg-gray-900">Wan 2.5 - 빠른 생성 (Alibaba)</option>
+              <option value="none" className="bg-gray-900">비디오 없음 - 정지 이미지만</option>
+            </select>
           </div>
         </form>
       </motion.div>

@@ -9,8 +9,9 @@
     },
     {
       "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "--port", "3000"],
+      "cwd": "frontend",
       "port": 3000
     }
   ]
