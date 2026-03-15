@@ -26,6 +26,7 @@ from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
 from modules.utils.constants import PROVIDER_LABELS
 from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats
+from modules.utils.audio import normalize_audio_lufs
 
 @asynccontextmanager
 async def _lifespan(app):
@@ -435,8 +436,12 @@ async def generate_video_endpoint(req: GenerateRequest):
                             errors.append(f"TTS: {exc}")
                         print(f"[컷 {i+1} TTS 생성 실패] {exc}")
                         return
-                    # TTS 성공 시 바로 Whisper 실행 (비디오 생성과 병렬)
+                    # TTS 성공 시 LUFS 정규화 → Whisper 실행 (비디오 생성과 병렬)
                     if tts_result[0]:
+                        try:
+                            tts_result[0] = normalize_audio_lufs(tts_result[0])
+                        except Exception as exc:
+                            print(f"[컷 {i+1} LUFS 정규화 경고] {exc}")
                         try:
                             whisper_result[0] = generate_word_timestamps(tts_result[0], api_key_override, language=language)
                         except Exception as exc:
@@ -544,6 +549,18 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": f"ERROR|[파일 오류] 렌더링 성공 응답을 받았지만 파일이 없습니다: {final_abs_path}\n"}
                 return
 
+            # 스마트 썸네일 자동 생성 (업로드용)
+            thumbnail_path = None
+            try:
+                from modules.utils.thumbnail import select_best_thumbnail, create_thumbnail
+                best_img = select_best_thumbnail(visual_paths)
+                if best_img:
+                    thumb_dir = os.path.join("assets", topic_folder, "video")
+                    thumb_output = os.path.join(thumb_dir, "thumbnail.jpg")
+                    thumbnail_path = create_thumbnail(best_img, thumb_output)
+            except Exception as thumb_err:
+                print(f"[썸네일 경고] 자동 생성 실패: {thumb_err}")
+
             yield {"data": "PROG|100\n"}
 
             # 사용자 지정 저장 경로가 있으면 복사 (경로 검증 포함)
@@ -593,7 +610,11 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 📂 Downloads 폴더에 저장됨: {final_filename}\n"}
             else:
                 yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 경로: {relative_video_path}\n"}
-            yield {"data": f"DONE|{relative_video_path}\n"}
+            # 썸네일 경로도 함께 전달 (업로드 시 사용)
+            thumb_relative = ""
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                thumb_relative = f"/assets/{topic_folder}/video/thumbnail.jpg"
+            yield {"data": f"DONE|{relative_video_path}|{thumb_relative}\n"}
 
           except Exception as e:
             traceback.print_exc()

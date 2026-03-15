@@ -90,12 +90,18 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     for visual_path, audio_path, _script, word_timestamps in zip(
         visual_paths, audio_paths, scripts, word_timestamps_list
     ):
-        # Whisper 타임스탬프 중 마지막 단어 기준으로 컷 길이 계산 (단어가 없을 시 기본값 5초)
-        duration_sec = 5.0
+        # 적응형 컷 타이밍: Whisper 오디오 끝 기준 + 시각적 여유 패딩
+        # 참고: 숏폼 편집 이론 — 컷당 0.3~0.5초 tail padding이 자연스러운 호흡감 제공
+        DEFAULT_CUT_SEC = 5.0
+        MIN_CUT_SEC = 2.0  # 최소 2초 (너무 짧으면 시각적으로 불안정)
+        TAIL_PADDING = 0.4  # 대사 끝 후 시각적 여유
         if word_timestamps:
-            duration_sec = max(1.5, word_timestamps[-1].get("end", 0) + 0.3)
+            audio_end = word_timestamps[-1].get("end", 0)
+            duration_sec = max(MIN_CUT_SEC, audio_end + TAIL_PADDING)
+        else:
+            duration_sec = DEFAULT_CUT_SEC
 
-        frames = int(duration_sec * fps)
+        frames = max(int(duration_sec * fps), fps)  # 최소 1초(24프레임) 보장
         total_duration_in_frames += frames
 
         cuts_data.append(
