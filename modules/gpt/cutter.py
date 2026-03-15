@@ -128,15 +128,15 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 1. [Cut 1~2] Hook (호기심 유발): 3초 만에 시청자의 스크롤을 멈춰야 합니다. 질문에 대한 가장 충격적이거나 궁금증을 유발하는 파격적인 한마디로 시작하세요.
 2. [Cut 3~4] Context (배경 설명 및 스케일 업): Hook에서 던진 질문에 원리나 배경을 짧게 덧붙여 몰입감을 극대화합니다.
-3. [Cut 5~7] Build-up (빌드업 및 긴장감 고조): 본격적인 해답을 제시하기 직전, 시청자의 궁금증을 최고조로 끌어올립니다.
-4. [Cut 8~12] Climax (결정적 해답 및 반전): 시청자가 가장 기다려온 '정답'이나 '반전'을 터뜨립니다. 팩트 기반의 직관적인 비유로 결과를 명확히 제시하세요.
-5. [Cut 13~15 (마지막 1~3컷)] Conclusion & CTA (결론 및 마무리): 결과를 짧게 요약하거나 재치 있는 멘트로 깔끔하게 떨어지게 마무리합니다.
+3. [Cut 5~6] Build-up (빌드업 및 긴장감 고조): 본격적인 해답을 제시하기 직전, 시청자의 궁금증을 최고조로 끌어올립니다.
+4. [Cut 7~8] Climax (결정적 해답 및 반전): 시청자가 가장 기다려온 '정답'이나 '반전'을 터뜨립니다. 팩트 기반의 직관적인 비유로 결과를 명확히 제시하세요.
+5. [Cut 9~10 (마지막 1~2컷)] Conclusion & CTA (결론 및 마무리): 결과를 짧게 요약하거나 재치 있는 멘트로 깔끔하게 떨어지게 마무리합니다.
 
 * 길이 제약: 숏폼은 속도감이 생명입니다. 각 컷 대본은 성우가 3~5초 내에 읽도록 20~30자 내외로 자르세요.
-* [CRITICAL WARNING] 절대 7컷 이하로 끝내지 말고, 무조건 8~15컷으로 작성하십시오. 최소 30초 이상의 영상이 되어야 합니다.
+* [CRITICAL WARNING] 절대 5컷 이하로 끝내지 말고, 무조건 8~10컷으로 작성하십시오. 최소 30초, 최대 50초 이내의 영상이 되어야 합니다.
 
 [Output Format Constraint]
-반드시 통일된 흐름을 지닌 8~15컷 사이로 구성하며, 다음 JSON 스키마 구조로만 정확하게 응답하십시오.
+반드시 통일된 흐름을 지닌 8~10컷 사이로 구성하며, 다음 JSON 스키마 구조로만 정확하게 응답하십시오.
 
 {
   "title": "[영상 제목: 시청자의 클릭을 유도하는 짧고 임팩트 있는 한국어 제목 (15자 이내)]",
@@ -160,15 +160,15 @@ You must follow this **[5-Step Viral Storytelling Formula]** to plan an 8–15 c
 
 1. [Cut 1–2] Hook: Stop the viewer's scroll within 3 seconds. Open with the most shocking or curiosity-provoking statement about the topic.
 2. [Cut 3–4] Context: Briefly add background or principles to deepen immersion.
-3. [Cut 5–7] Build-up: Maximize curiosity right before revealing the answer.
-4. [Cut 8–12] Climax: Deliver the key answer or twist. Use fact-based, intuitive analogies.
-5. [Cut 13–15 (last 1–3 cuts)] Conclusion & CTA: Summarize the result or end with a witty closing remark.
+3. [Cut 5–6] Build-up: Maximize curiosity right before revealing the answer.
+4. [Cut 7–8] Climax: Deliver the key answer or twist. Use fact-based, intuitive analogies.
+5. [Cut 9–10 (last 1–2 cuts)] Conclusion & CTA: Summarize the result or end with a witty closing remark.
 
 * Length constraint: Speed is the soul of short-form. Each cut script should be 5–10 words, readable by a voice actor in 3–5 seconds.
-* [CRITICAL WARNING] NEVER end with only 7 or fewer cuts. You MUST write 8–15 cuts. The video must be at least 30 seconds long.
+* [CRITICAL WARNING] NEVER end with only 5 or fewer cuts. You MUST write 8–10 cuts. The video must be 30–50 seconds long.
 
 [Output Format Constraint]
-Compose exactly 8–15 cuts with a unified narrative flow, and respond ONLY in the following JSON schema:
+Compose exactly 8–10 cuts with a unified narrative flow, and respond ONLY in the following JSON schema:
 
 {
   "title": "[Video title: A short, impactful, click-worthy English title (max 8 words)]",
@@ -272,11 +272,11 @@ The narrator will speak in {lang_name}, so the script must be natural {lang_name
                 raise  # 429가 아닌 에러는 그대로 전파
 
     # 컷 수 검증 — 초과 시 트림, 부족 시 기존 컷 기반 확장 요청 (전체 재생성 방지)
-    if len(cuts) > 15:
-        print(f"-> [검증] 컷 수 {len(cuts)}개 → 15개로 트림")
-        cuts = cuts[:15]
-    elif len(cuts) < 8:
-        print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 기존 컷 기반 확장 요청합니다.")
+    if len(cuts) > 10:
+        print(f"-> [검증] 컷 수 {len(cuts)}개 → 10개로 트림")
+        cuts = cuts[:10]
+    elif len(cuts) < 6:
+        print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 기존 컷 기반 확장 요청합니다 (목표: 8~10컷).")
         if llm_provider == "gemini":
             retry_key = get_google_key(None, service="gemini", exclude=exhausted_keys) or current_key
         else:
@@ -285,7 +285,7 @@ The narrator will speak in {lang_name}, so the script must be natural {lang_name
         existing_cuts_json = json.dumps([{"script": c["script"], "description": c.get("text", "")} for c in cuts], ensure_ascii=False)
         retry_user = (
             user_content
-            + f"\n\n기존에 {len(cuts)}컷이 생성되었습니다. 아래 기존 컷 사이에 중간 컷을 추가하여 총 10~12컷으로 확장하세요. "
+            + f"\n\n기존에 {len(cuts)}컷이 생성되었습니다. 아래 기존 컷 사이에 중간 컷을 추가하여 총 8~10컷으로 확장하세요. "
             + f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
         )
         try:
@@ -298,10 +298,10 @@ The narrator will speak in {lang_name}, so the script must be natural {lang_name
             else:
                 raise
 
-    if len(cuts) > 15:
-        cuts = cuts[:15]
-    if len(cuts) < 8:
-        raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 8~15).")
+    if len(cuts) > 10:
+        cuts = cuts[:10]
+    if len(cuts) < 6:
+        raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 6~10).")
 
     # title이 비어있으면 topic을 폴백으로 사용
     if not title:
