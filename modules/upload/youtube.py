@@ -1,4 +1,6 @@
 import os
+import time
+import secrets
 from pathlib import Path
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -10,6 +12,9 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googlea
 TOKENS_DIR = Path("youtube_tokens")
 CLIENT_SECRET_PATH = Path(os.getenv("YOUTUBE_CLIENT_SECRET", "client_secret.json"))
 REDIRECT_URI = os.getenv("YOUTUBE_REDIRECT_URI", "http://localhost:8003/api/youtube/callback")
+
+# CSRF state 저장 (state → 만료 시간)
+_pending_states: dict[str, float] = {}
 
 
 def _ensure_tokens_dir():
@@ -76,7 +81,8 @@ def get_channels() -> list[dict]:
                 channels.append({"id": info["id"], "title": info["title"], "connected": True})
             else:
                 channels.append({"id": channel_id, "title": channel_id, "connected": False})
-        except Exception:
+        except Exception as e:
+            print(f"[YouTube] 채널 정보 로드 실패 ({channel_id}): {e}")
             channels.append({"id": channel_id, "title": channel_id, "connected": False})
     return channels
 
@@ -91,9 +97,18 @@ def get_auth_status() -> dict:
 
 
 def create_auth_url() -> str:
-    """OAuth 인증 URL을 생성합니다."""
+    """OAuth 인증 URL을 생성합니다 (CSRF 보호용 state 포함)."""
     if not CLIENT_SECRET_PATH.exists():
         raise FileNotFoundError("client_secret.json 파일이 필요합니다. Google Cloud Console에서 다운로드하세요.")
+
+    state = secrets.token_urlsafe(16)
+    _pending_states[state] = time.time() + 300  # 5분 유효
+
+    # 만료된 state 정리
+    now = time.time()
+    expired = [s for s, exp in _pending_states.items() if exp < now]
+    for s in expired:
+        _pending_states.pop(s, None)
 
     flow = Flow.from_client_secrets_file(
         str(CLIENT_SECRET_PATH),
@@ -104,12 +119,17 @@ def create_auth_url() -> str:
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
+        state=state,
     )
     return auth_url
 
 
-def handle_auth_callback(auth_code: str) -> dict:
+def handle_auth_callback(auth_code: str, state: str | None = None) -> dict:
     """OAuth 콜백에서 토큰을 교환하고 채널별로 저장합니다."""
+    if state:
+        expires_at = _pending_states.pop(state, None)
+        if expires_at is None or time.time() > expires_at:
+            raise ValueError("인증 state가 유효하지 않습니다. 다시 시도해주세요.")
     flow = Flow.from_client_secrets_file(
         str(CLIENT_SECRET_PATH),
         scopes=SCOPES,

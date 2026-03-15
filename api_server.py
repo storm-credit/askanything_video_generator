@@ -681,11 +681,11 @@ async def youtube_auth():
 
 
 @app.get("/api/youtube/callback")
-async def youtube_callback(code: str):
+async def youtube_callback(code: str, state: str | None = None):
     from modules.upload.youtube import handle_auth_callback
     from fastapi.responses import HTMLResponse
     try:
-        result = handle_auth_callback(code)
+        result = handle_auth_callback(code, state)
         return HTMLResponse(
             "<html><body><h2>YouTube 연동 완료!</h2>"
             "<p>이 창을 닫고 돌아가세요.</p>"
@@ -1036,4 +1036,6 @@ async def upload_platforms():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("api_server:app", host="0.0.0.0", port=8003, reload=True)
+    port = int(os.getenv("API_PORT", "8003"))
+    reload = os.getenv("UVICORN_RELOAD", "true").lower() == "true"
+    uvicorn.run("api_server:app", host="0.0.0.0", port=port, reload=reload)
