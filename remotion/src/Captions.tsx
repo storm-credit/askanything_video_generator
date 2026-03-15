@@ -54,10 +54,10 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
             durationInFrames: 10,
           });
 
-          const color = isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)';
+          const color = isActive ? '#FFD700' : 'rgba(255, 255, 255, 0.6)';
           const transformScale = isActive ? 1 + (scale * 0.08) : 1;
           const textShadow = isActive
-            ? '0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 4px rgba(0, 0, 0, 0.7)'
+            ? '0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 6px rgba(255, 215, 0, 0.3)'
             : '0px 2px 8px rgba(0, 0, 0, 0.8)';
 
           return (
