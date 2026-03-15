@@ -950,11 +950,26 @@ async def batch_start():
                 update_job(job_id, status="running", started_at=datetime.now().isoformat())
 
                 try:
-                    # 기획
-                    llm_key = get_google_key(None, service="gemini") if job["llm_provider"] == "gemini" else None
-                    cuts, topic_folder, title = await loop.run_in_executor(
-                        None, lambda: generate_cuts(job["topic"], lang=job["language"], llm_provider=job["llm_provider"], llm_key_override=llm_key)
-                    )
+                    # 기획 (Gemini 키 로테이션 재시도 — 메인 생성과 동일 패턴)
+                    cuts, topic_folder, title = None, None, None
+                    _excluded = set()
+                    for _attempt in range(max(count_google_keys(), 1)):
+                        llm_key = get_google_key(None, service="gemini", exclude=_excluded) if job["llm_provider"] == "gemini" else None
+                        try:
+                            cuts, topic_folder, title = await loop.run_in_executor(
+                                None, lambda k=llm_key: generate_cuts(job["topic"], lang=job["language"], llm_provider=job["llm_provider"], llm_key_override=k)
+                            )
+                            break
+                        except Exception as _e:
+                            if "429" in str(_e) and llm_key:
+                                from modules.utils.keys import mark_key_exhausted
+                                mark_key_exhausted(llm_key, "gemini")
+                                _excluded.add(llm_key)
+                                print(f"[배치] 작업 #{job_id} Gemini 키 재시도 ({_attempt+1})")
+                                continue
+                            raise
+                    if cuts is None:
+                        raise RuntimeError("기획 생성 실패 — 모든 키 소진")
 
                     # 이미지 + TTS + Whisper (순차)
                     visual_paths, audio_paths, scripts, word_ts_list = [], [], [], []
