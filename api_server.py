@@ -548,11 +548,21 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 사용자 지정 저장 경로가 있으면 복사 (경로 검증 포함)
             if output_path:
+                from pathlib import Path as _P
                 abs_output = os.path.realpath(output_path)
                 safe_base = os.path.realpath("assets")
                 home_dir = os.path.realpath(os.path.expanduser("~"))
-                # 허용: assets/ 내부 또는 사용자 홈 디렉토리 하위
-                if not (abs_output.startswith(safe_base + os.sep) or abs_output.startswith(home_dir + os.sep)):
+                # 허용: assets/ 내부 또는 사용자 홈 디렉토리 하위 (Path.relative_to로 검증)
+                try:
+                    _P(abs_output).relative_to(safe_base)
+                    path_ok = True
+                except ValueError:
+                    try:
+                        _P(abs_output).relative_to(home_dir)
+                        path_ok = True
+                    except ValueError:
+                        path_ok = False
+                if not path_ok:
                     yield {"data": "ERROR|[보안 오류] 지정 경로가 허용 범위(assets/ 또는 홈 디렉토리)를 벗어납니다.\n"}
                 else:
                     try:

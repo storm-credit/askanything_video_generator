@@ -1,11 +1,17 @@
 import os
 import time
 import struct
+import random
 import requests
 
 
 MAX_RETRIES = 3
-RETRY_DELAYS = [2, 5, 10]  # 초 단위 백오프
+
+
+def _backoff_delay(attempt: int) -> float:
+    """지수 백오프 + 지터 (AWS Architecture Blog: Exponential Backoff And Jitter)"""
+    base = min(2 ** (attempt + 1), 16)  # 2, 4, 8, 16 cap
+    return base + random.uniform(0, base * 0.5)
 
 
 def _write_silent_wav(path: str, duration_sec: float = 1.0, sample_rate: int = 22050):
@@ -105,7 +111,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                     print(f"[ElevenLabs 오류] 컷 {index+1} 음성 파일이 비어 있습니다.")
                     # 빈 파일은 재시도
                     if attempt < MAX_RETRIES - 1:
-                        time.sleep(RETRY_DELAYS[attempt])
+                        time.sleep(_backoff_delay(attempt))
                         continue
                     return None
                 print(f"OK [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 음성 생성 완료!")
@@ -118,7 +124,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
 
             elif response.status_code == 429:
                 # 할당량 초과: 대기 후 재시도
-                wait = RETRY_DELAYS[attempt] if attempt < len(RETRY_DELAYS) else 10
+                wait = _backoff_delay(attempt) if attempt < len(RETRY_DELAYS) else 10
                 print(f"[ElevenLabs 할당량 초과] {wait}초 후 재시도... ({attempt+1}/{MAX_RETRIES})")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(wait)
@@ -129,27 +135,27 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
             else:
                 print(f"[ElevenLabs 오류] 요청 실패 ({response.status_code}): {response.text[:200]}")
                 if attempt < MAX_RETRIES - 1:
-                    time.sleep(RETRY_DELAYS[attempt])
+                    time.sleep(_backoff_delay(attempt))
                     continue
                 return None
 
         except requests.exceptions.Timeout:
             print(f"[ElevenLabs 타임아웃] 컷 {index+1} 응답 시간 초과 ({attempt+1}/{MAX_RETRIES})")
             if attempt < MAX_RETRIES - 1:
-                time.sleep(RETRY_DELAYS[attempt])
+                time.sleep(_backoff_delay(attempt))
                 continue
             return None
 
         except requests.exceptions.ConnectionError:
             print(f"[ElevenLabs 연결 오류] 컷 {index+1} 서버 연결 실패 ({attempt+1}/{MAX_RETRIES})")
             if attempt < MAX_RETRIES - 1:
-                time.sleep(RETRY_DELAYS[attempt])
+                time.sleep(_backoff_delay(attempt))
                 continue
             return None
 
         except Exception as e:
             print(f"[ElevenLabs 통신 오류] 컷 {index+1}: {e} ({attempt+1}/{MAX_RETRIES})")
             if attempt < MAX_RETRIES - 1:
-                time.sleep(RETRY_DELAYS[attempt])
+                time.sleep(_backoff_delay(attempt))
                 continue
             return None
