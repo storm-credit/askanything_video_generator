@@ -32,7 +32,41 @@ def _validate_inputs(visual_paths: list[str], audio_paths: list[str], scripts: l
             raise FileNotFoundError(f"컷 {idx} audio 파일이 없습니다: {a}")
 
 
-def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str, title: str = "") -> str | None:
+def _select_bgm(bgm_theme: str = "random") -> str | None:
+    """brand/bgm/ 폴더에서 테마별 BGM 선택. 단일 brand/bgm.mp3도 호환."""
+    import random
+    bgm_dir = os.path.join(BRAND_DIR, "bgm")
+    single_bgm = os.path.join(BRAND_DIR, BGM_FILE)
+
+    if bgm_theme == "none":
+        return None
+
+    if os.path.isdir(bgm_dir):
+        # 테마별 파일: brand/bgm/epic.mp3, brand/bgm/calm.mp3 등
+        available = {}
+        for f in os.listdir(bgm_dir):
+            if f.lower().endswith(('.mp3', '.wav', '.m4a')):
+                theme_name = os.path.splitext(f)[0].lower()
+                available[theme_name] = os.path.join(bgm_dir, f)
+
+        if not available:
+            return single_bgm if os.path.exists(single_bgm) else None
+
+        if bgm_theme == "random":
+            chosen = random.choice(list(available.values()))
+        elif bgm_theme in available:
+            chosen = available[bgm_theme]
+        else:
+            chosen = random.choice(list(available.values()))
+            print(f"  [BGM] 테마 '{bgm_theme}' 없음 → 랜덤 선택")
+
+        return chosen
+
+    # brand/bgm/ 폴더 없으면 단일 파일 폴백
+    return single_bgm if os.path.exists(single_bgm) else None
+
+
+def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str, title: str = "", camera_style: str = "dynamic", bgm_theme: str = "random") -> str | None:
     """
     Python 백엔드 데이터를 모아 Remotion (React) 렌더링 CLI로 넘겨서 최종 비디오를 합성합니다.
     """
@@ -77,18 +111,20 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     intro_image_path = None
     outro_image_path = None
 
-    for asset_name in [INTRO_IMAGE, OUTRO_IMAGE, BGM_FILE]:
+    # 브랜드 에셋 복사 (변경된 경우만)
+    for asset_name in [INTRO_IMAGE, OUTRO_IMAGE]:
         brand_src = os.path.join(BRAND_DIR, asset_name)
         assets_dst = os.path.join("assets", asset_name)
         if os.path.exists(brand_src):
-            shutil.copy2(brand_src, assets_dst)
+            # 이미 동일한 파일이면 복사 건너뜀
+            if not os.path.exists(assets_dst) or os.path.getmtime(brand_src) > os.path.getmtime(assets_dst):
+                shutil.copy2(brand_src, assets_dst)
 
     if os.path.exists(os.path.join("assets", INTRO_IMAGE)):
         intro_image_path = INTRO_IMAGE
         total_duration_in_frames += INTRO_DURATION_FRAMES
         print(f"-> [인트로] 브랜드 인트로 {INTRO_DURATION_FRAMES}프레임 (1초) 추가")
 
-    # 제목: 첫 번째 컷 위 오버레이로 표시 (별도 시간 추가 없음)
     if title:
         print(f"-> [제목] '{title}' — 첫 컷 위 오버레이로 표시")
 
@@ -97,11 +133,16 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         total_duration_in_frames += OUTRO_DURATION_FRAMES
         print(f"-> [아웃트로] 브랜드 아웃트로 {OUTRO_DURATION_FRAMES}프레임 (1초) 추가")
 
-    # BGM: brand/bgm.mp3 → 전체 영상 배경음악 (있을 때만)
+    # BGM: 테마별 선택 (중복 복사 방지)
     bgm_path = None
-    if os.path.exists(os.path.join("assets", BGM_FILE)):
+    bgm_source = _select_bgm(bgm_theme)
+    if bgm_source and os.path.exists(bgm_source):
+        bgm_dest = os.path.join("assets", BGM_FILE)
+        if not os.path.exists(bgm_dest) or os.path.getmtime(bgm_source) > os.path.getmtime(bgm_dest):
+            shutil.copy2(bgm_source, bgm_dest)
         bgm_path = BGM_FILE
-        print(f"-> [BGM] 배경음악 '{BGM_FILE}' 전체 영상에 적용")
+        bgm_name = os.path.basename(bgm_source)
+        print(f"-> [BGM] 배경음악 '{bgm_name}' 전체 영상에 적용")
 
     props_data = {
         "cuts": cuts_data,
@@ -110,6 +151,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         "outroImagePath": outro_image_path,
         "bgmPath": bgm_path,
         "title": title or None,
+        "cameraStyle": camera_style if camera_style in ("dynamic", "gentle", "static") else "dynamic",
     }
 
     with open(props_json_path, "w", encoding="utf-8") as f:

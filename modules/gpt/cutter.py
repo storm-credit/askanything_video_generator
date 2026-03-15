@@ -124,19 +124,19 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 당신의 임무는 1분 미만의 세로형 숏폼 영상을 위한 완벽한 기획안을 JSON 포맷으로 작성하는 것입니다.
 
 [Writing Rules: 숏폼 스토리텔링 해부학 (매우 중요)]
-당신은 단순히 지식만 나열하는 것이 아니라, 반드시 다음 **[5단계 바이럴 스토리텔링 공식]**에 맞춰 6~10컷 분량의 대본을 기획해야 합니다.
+당신은 단순히 지식만 나열하는 것이 아니라, 반드시 다음 **[5단계 바이럴 스토리텔링 공식]**에 맞춰 8~15컷 분량의 대본을 기획해야 합니다.
 
 1. [Cut 1~2] Hook (호기심 유발): 3초 만에 시청자의 스크롤을 멈춰야 합니다. 질문에 대한 가장 충격적이거나 궁금증을 유발하는 파격적인 한마디로 시작하세요.
-2. [Cut 3] Context (배경 설명 및 스케일 업): Hook에서 던진 질문에 원리나 배경을 짧게 덧붙여 몰입감을 극대화합니다.
-3. [Cut 4~5] Build-up (빌드업 및 긴장감 고조): 본격적인 해답을 제시하기 직전, 시청자의 궁금증을 최고조로 끌어올립니다.
-4. [Cut 6~8] Climax (결정적 해답 및 반전): 시청자가 가장 기다려온 '정답'이나 '반전'을 터뜨립니다. 팩트 기반의 직관적인 비유로 결과를 명확히 제시하세요.
-5. [Cut 9~10 (마지막 1~2컷)] Conclusion & CTA (결론 및 마무리): 결과를 짧게 요약하거나 재치 있는 멘트로 깔끔하게 떨어지게 마무리합니다.
+2. [Cut 3~4] Context (배경 설명 및 스케일 업): Hook에서 던진 질문에 원리나 배경을 짧게 덧붙여 몰입감을 극대화합니다.
+3. [Cut 5~7] Build-up (빌드업 및 긴장감 고조): 본격적인 해답을 제시하기 직전, 시청자의 궁금증을 최고조로 끌어올립니다.
+4. [Cut 8~12] Climax (결정적 해답 및 반전): 시청자가 가장 기다려온 '정답'이나 '반전'을 터뜨립니다. 팩트 기반의 직관적인 비유로 결과를 명확히 제시하세요.
+5. [Cut 13~15 (마지막 1~3컷)] Conclusion & CTA (결론 및 마무리): 결과를 짧게 요약하거나 재치 있는 멘트로 깔끔하게 떨어지게 마무리합니다.
 
 * 길이 제약: 숏폼은 속도감이 생명입니다. 각 컷 대본은 성우가 3~5초 내에 읽도록 20~30자 내외로 자르세요.
-* [CRITICAL WARNING] 절대 3~4컷으로 끝내지 말고, 무조건 6~10컷으로 작성하십시오.
+* [CRITICAL WARNING] 절대 7컷 이하로 끝내지 말고, 무조건 8~15컷으로 작성하십시오. 최소 30초 이상의 영상이 되어야 합니다.
 
 [Output Format Constraint]
-반드시 통일된 흐름을 지닌 6~10컷 사이로 구성하며, 다음 JSON 스키마 구조로만 정확하게 응답하십시오.
+반드시 통일된 흐름을 지닌 8~15컷 사이로 구성하며, 다음 JSON 스키마 구조로만 정확하게 응답하십시오.
 
 {
   "title": "[영상 제목: 시청자의 클릭을 유도하는 짧고 임팩트 있는 한국어 제목 (15자 이내)]",
@@ -156,19 +156,19 @@ You are a senior content director for YouTube Shorts and TikTok with over 1 mill
 Your mission is to create a perfect production plan in JSON format for a vertical short-form video under 1 minute.
 
 [Writing Rules: Short-form Storytelling Anatomy (VERY IMPORTANT)]
-You must follow this **[5-Step Viral Storytelling Formula]** to plan a 6–10 cut script:
+You must follow this **[5-Step Viral Storytelling Formula]** to plan an 8–15 cut script:
 
 1. [Cut 1–2] Hook: Stop the viewer's scroll within 3 seconds. Open with the most shocking or curiosity-provoking statement about the topic.
-2. [Cut 3] Context: Briefly add background or principles to deepen immersion.
-3. [Cut 4–5] Build-up: Maximize curiosity right before revealing the answer.
-4. [Cut 6–8] Climax: Deliver the key answer or twist. Use fact-based, intuitive analogies.
-5. [Cut 9–10 (last 1–2 cuts)] Conclusion & CTA: Summarize the result or end with a witty closing remark.
+2. [Cut 3–4] Context: Briefly add background or principles to deepen immersion.
+3. [Cut 5–7] Build-up: Maximize curiosity right before revealing the answer.
+4. [Cut 8–12] Climax: Deliver the key answer or twist. Use fact-based, intuitive analogies.
+5. [Cut 13–15 (last 1–3 cuts)] Conclusion & CTA: Summarize the result or end with a witty closing remark.
 
 * Length constraint: Speed is the soul of short-form. Each cut script should be 5–10 words, readable by a voice actor in 3–5 seconds.
-* [CRITICAL WARNING] NEVER end with only 3–4 cuts. You MUST write 6–10 cuts.
+* [CRITICAL WARNING] NEVER end with only 7 or fewer cuts. You MUST write 8–15 cuts. The video must be at least 30 seconds long.
 
 [Output Format Constraint]
-Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in the following JSON schema:
+Compose exactly 8–15 cuts with a unified narrative flow, and respond ONLY in the following JSON schema:
 
 {
   "title": "[Video title: A short, impactful, click-worthy English title (max 8 words)]",
@@ -183,7 +183,28 @@ Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in t
 }
 """
 
-    system_prompt = _SYSTEM_PROMPT_EN if lang == "en" else _SYSTEM_PROMPT_KO
+    # 언어별 프롬프트 매핑
+    _LANG_NAMES = {
+        "ko": "Korean", "en": "English", "de": "German", "da": "Danish",
+        "no": "Norwegian", "es": "Spanish", "fr": "French", "pt": "Portuguese",
+        "it": "Italian", "nl": "Dutch", "sv": "Swedish", "pl": "Polish",
+        "ru": "Russian", "ja": "Japanese", "zh": "Chinese", "ar": "Arabic",
+        "tr": "Turkish", "hi": "Hindi",
+    }
+    if lang == "ko":
+        system_prompt = _SYSTEM_PROMPT_KO
+    elif lang == "en":
+        system_prompt = _SYSTEM_PROMPT_EN
+    else:
+        # 기타 언어: 영어 프롬프트 기반 + 해당 언어로 대본/제목 작성 지시
+        lang_name = _LANG_NAMES.get(lang, lang)
+        system_prompt = _SYSTEM_PROMPT_EN + f"""
+
+[LANGUAGE OVERRIDE]
+You MUST write ALL "script" fields and the "title" field in {lang_name}.
+The "image_prompt" and "description" fields must remain in English.
+The narrator will speak in {lang_name}, so the script must be natural {lang_name}.
+"""
 
     # LLM 프로바이더별 API 키 결정
     provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
@@ -250,14 +271,23 @@ Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in t
             else:
                 raise  # 429가 아닌 에러는 그대로 전파
 
-    # 컷 수 검증 (1차 실패 시 재시도 프롬프트 보강)
-    if not (6 <= len(cuts) <= 10):
-        print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 1회 재요청합니다.")
+    # 컷 수 검증 — 초과 시 트림, 부족 시 기존 컷 기반 확장 요청 (전체 재생성 방지)
+    if len(cuts) > 15:
+        print(f"-> [검증] 컷 수 {len(cuts)}개 → 15개로 트림")
+        cuts = cuts[:15]
+    elif len(cuts) < 8:
+        print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 기존 컷 기반 확장 요청합니다.")
         if llm_provider == "gemini":
             retry_key = get_google_key(None, service="gemini", exclude=exhausted_keys) or current_key
         else:
             retry_key = current_key
-        retry_user = user_content + "\n\n중요: 이번 응답은 반드시 cuts 배열 길이를 6~10으로 맞추세요."
+        # 기존 컷 데이터를 포함하여 확장만 요청 (전체 재생성 대신)
+        existing_cuts_json = json.dumps([{"script": c["script"], "description": c.get("text", "")} for c in cuts], ensure_ascii=False)
+        retry_user = (
+            user_content
+            + f"\n\n기존에 {len(cuts)}컷이 생성되었습니다. 아래 기존 컷 사이에 중간 컷을 추가하여 총 10~12컷으로 확장하세요. "
+            + f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
+        )
         try:
             cuts, title = _request_cuts(llm_provider, retry_key, system_prompt, retry_user)
         except Exception as retry_err:
@@ -268,8 +298,10 @@ Compose exactly 6–10 cuts with a unified narrative flow, and respond ONLY in t
             else:
                 raise
 
-    if not (6 <= len(cuts) <= 10):
-        raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 6~10).")
+    if len(cuts) > 15:
+        cuts = cuts[:15]
+    if len(cuts) < 8:
+        raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 8~15).")
 
     # title이 비어있으면 topic을 폴백으로 사용
     if not title:

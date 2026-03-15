@@ -31,19 +31,34 @@ function isVideoPath(path: string): boolean {
   }
 }
 
-// Ken Burns 효과 프리셋: 컷마다 다른 줌/패닝 적용
-const KEN_BURNS_PRESETS = [
-  { startScale: 1.0, endScale: 1.15, startX: 0, endX: -3, startY: 0, endY: -2 },   // 줌인 + 좌상향
-  { startScale: 1.12, endScale: 1.0, startX: -2, endX: 2, startY: -1, endY: 1 },    // 줌아웃 + 우하향
-  { startScale: 1.0, endScale: 1.1, startX: 2, endX: -2, startY: 0, endY: 0 },      // 줌인 + 좌패닝
-  { startScale: 1.08, endScale: 1.0, startX: 0, endX: 0, startY: 2, endY: -2 },     // 줌아웃 + 상향패닝
-  { startScale: 1.0, endScale: 1.18, startX: -1, endX: 1, startY: -1, endY: 1 },    // 대각선 줌인
-  { startScale: 1.15, endScale: 1.02, startX: 3, endX: -1, startY: 0, endY: -1 },   // 줌아웃 + 좌패닝
-];
+// Ken Burns 효과 프리셋: 스타일별 그룹
+type KenBurnsPreset = { startScale: number; endScale: number; startX: number; endX: number; startY: number; endY: number };
+type CameraStyle = 'dynamic' | 'gentle' | 'static';
 
-const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: number }> = ({ src, durationInFrames, index }) => {
+const CAMERA_PRESETS: Record<CameraStyle, KenBurnsPreset[]> = {
+  dynamic: [
+    { startScale: 1.0, endScale: 1.15, startX: 0, endX: -3, startY: 0, endY: -2 },
+    { startScale: 1.12, endScale: 1.0, startX: -2, endX: 2, startY: -1, endY: 1 },
+    { startScale: 1.0, endScale: 1.1, startX: 2, endX: -2, startY: 0, endY: 0 },
+    { startScale: 1.08, endScale: 1.0, startX: 0, endX: 0, startY: 2, endY: -2 },
+    { startScale: 1.0, endScale: 1.18, startX: -1, endX: 1, startY: -1, endY: 1 },
+    { startScale: 1.15, endScale: 1.02, startX: 3, endX: -1, startY: 0, endY: -1 },
+  ],
+  gentle: [
+    { startScale: 1.0, endScale: 1.05, startX: 0, endX: -1, startY: 0, endY: -0.5 },
+    { startScale: 1.04, endScale: 1.0, startX: -0.5, endX: 0.5, startY: 0, endY: 0 },
+    { startScale: 1.0, endScale: 1.04, startX: 0.5, endX: -0.5, startY: 0, endY: 0 },
+    { startScale: 1.03, endScale: 1.0, startX: 0, endX: 0, startY: 0.5, endY: -0.5 },
+  ],
+  static: [
+    { startScale: 1.0, endScale: 1.0, startX: 0, endX: 0, startY: 0, endY: 0 },
+  ],
+};
+
+const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: number; cameraStyle?: CameraStyle }> = ({ src, durationInFrames, index, cameraStyle = 'dynamic' }) => {
   const frame = useCurrentFrame();
-  const preset = KEN_BURNS_PRESETS[index % KEN_BURNS_PRESETS.length];
+  const presets = CAMERA_PRESETS[cameraStyle] || CAMERA_PRESETS.dynamic;
+  const preset = presets[index % presets.length];
 
   const progress = interpolate(frame, [0, durationInFrames], [0, 1], { extrapolateRight: 'clamp' });
 
@@ -208,7 +223,8 @@ export const Main: React.FC<{
   outroImagePath?: string;
   bgmPath?: string;
   title?: string;
-}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title }) => {
+  cameraStyle?: CameraStyle;
+}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle = 'dynamic' }) => {
 
   const introFrames = introImagePath ? INTRO_DURATION_FRAMES : 0;
   const outroFrames = outroImagePath ? OUTRO_DURATION_FRAMES : 0;
@@ -253,7 +269,7 @@ export const Main: React.FC<{
                       muted
                     />
                 ) : (
-                    <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} />
+                    <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} />
                 )}
                 <Audio src={audioSrc} />
                 <Captions wordTimestamps={cut.word_timestamps} />

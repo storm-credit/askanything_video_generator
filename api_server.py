@@ -62,11 +62,14 @@ os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # CORS 설정 (프론트엔드 연동)
-_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:*").split(",")
+# 개발 환경: 와일드카드 포함 시 모든 origin 허용
+if any("*" in o for o in _cors_origins):
+    _cors_origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in _cors_origins],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -82,11 +85,13 @@ class GenerateRequest(BaseModel):
     llmKey: str | None = None
     outputPath: str | None = None
     language: str = "ko"
+    cameraStyle: str = "dynamic"
+    bgmTheme: str = "random"
 
     @field_validator("language")
     @classmethod
     def valid_language(cls, v: str) -> str:
-        allowed = {"ko", "en"}
+        allowed = {"ko", "en", "de", "da", "no", "es", "fr", "pt", "it", "nl", "sv", "pl", "ru", "ja", "zh", "ar", "tr", "hi"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 언어: {v}. 허용: {allowed}")
         return v
@@ -421,26 +426,38 @@ async def generate_video_endpoint(req: GenerateRequest):
                             errors.append(f"비디오: {exc}")
                         print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
 
-                def _run_tts():
+                def _run_tts_and_whisper():
+                    """TTS 생성 후 바로 Whisper 타임스탬프 추출 (순차 but 동일 스레드)"""
                     try:
                         tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"TTS: {exc}")
                         print(f"[컷 {i+1} TTS 생성 실패] {exc}")
+                        return
+                    # TTS 성공 시 바로 Whisper 실행 (비디오 생성과 병렬)
+                    if tts_result[0]:
+                        try:
+                            whisper_result[0] = generate_word_timestamps(tts_result[0], api_key_override, language=language)
+                        except Exception as exc:
+                            with errors_lock:
+                                errors.append(f"타임스탬프: {exc}")
+                            print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
+
+                whisper_result = [None]
 
                 threads = []
                 if img_path and active_video_engine != "none":
                     t = threading.Thread(target=_run_video, name=f"video-cut{i}", daemon=True)
                     t.start()
                     threads.append(t)
-                t_tts = threading.Thread(target=_run_tts, name=f"tts-cut{i}", daemon=True)
+                t_tts = threading.Thread(target=_run_tts_and_whisper, name=f"tts-cut{i}", daemon=True)
                 t_tts.start()
                 threads.append(t_tts)
 
-                # 완료 대기 (비디오: 최대 5분, TTS: 최대 1분)
+                # 완료 대기 (비디오: 최대 5분, TTS+Whisper: 최대 2분)
                 for t in threads:
-                    timeout = 300 if "video" in t.name.lower() else 60
+                    timeout = 300 if "video" in t.name.lower() else 120
                     t.join(timeout=timeout)
                     if t.is_alive():
                         with errors_lock:
@@ -448,18 +465,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                         print(f"[컷 {i+1} 타임아웃] {t.name} 스레드가 응답 없음")
 
                 final_visual_path = video_result[0] if video_result[0] else img_path
-
-                # Whisper 타임스탬프 (TTS 완료 후 순차)
-                aud_path = tts_result[0]
-                words = []
-                if aud_path:
-                    try:
-                        words = generate_word_timestamps(aud_path, api_key_override, language=language)
-                    except Exception as exc:
-                        with errors_lock:
-                            errors.append(f"타임스탬프: {exc}")
-                        print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
-                return i, final_visual_path, aud_path, words, errors
+                words = whisper_result[0] or []
+                return i, final_visual_path, tts_result[0], words, errors
 
             tasks = [loop.run_in_executor(_cut_executor, process_cut, i, cut) for i, cut in enumerate(cuts)]
             completed_count = 0
@@ -523,6 +530,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                 lambda: create_remotion_video(
                     visual_paths, audio_paths, scripts,
                     word_timestamps_list, topic_folder, title=video_title,
+                    camera_style=req.cameraStyle,
+                    bgm_theme=req.bgmTheme,
                 ),
             )
 
@@ -598,8 +607,266 @@ async def generate_video_endpoint(req: GenerateRequest):
     return EventSourceResponse(sse_generator())
 
 
+# ── BGM 테마 목록 API ──────────────────────────────────────────────
+
+@app.get("/api/bgm-themes")
+async def bgm_themes():
+    themes = ["random", "none"]
+    bgm_dir = os.path.join("brand", "bgm")
+    if os.path.isdir(bgm_dir):
+        for f in sorted(os.listdir(bgm_dir)):
+            if f.lower().endswith(('.mp3', '.wav', '.m4a')):
+                themes.append(os.path.splitext(f)[0].lower())
+    elif os.path.exists(os.path.join("brand", "bgm.mp3")):
+        themes = ["random", "none"]  # 단일 파일만 있으면 random = 그 파일
+    return {"themes": themes}
+
+
+# ── YouTube 업로드 API ─────────────────────────────────────────────
+
+class YouTubeUploadRequest(BaseModel):
+    video_path: str = Field(..., description="업로드할 동영상 경로")
+    title: str = Field(..., max_length=100)
+    description: str = Field("", max_length=5000)
+    tags: list[str] = Field(default_factory=list)
+    privacy: str = Field("private", pattern="^(private|unlisted|public)$")
+    channel_id: str | None = None
+
+
+@app.get("/api/youtube/status")
+async def youtube_status():
+    from modules.upload.youtube import get_auth_status
+    return get_auth_status()
+
+
+@app.post("/api/youtube/auth")
+async def youtube_auth():
+    from modules.upload.youtube import create_auth_url
+    try:
+        url = create_auth_url()
+        return {"auth_url": url}
+    except FileNotFoundError as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/youtube/callback")
+async def youtube_callback(code: str):
+    from modules.upload.youtube import handle_auth_callback
+    from fastapi.responses import HTMLResponse
+    try:
+        result = handle_auth_callback(code)
+        return HTMLResponse(
+            "<html><body><h2>YouTube 연동 완료!</h2>"
+            "<p>이 창을 닫고 돌아가세요.</p>"
+            "<script>window.close()</script></body></html>"
+        )
+    except Exception as e:
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{e}</p></body></html>", status_code=400)
+
+
+@app.post("/api/youtube/upload")
+async def youtube_upload(req: YouTubeUploadRequest):
+    from modules.upload.youtube import upload_video
+    try:
+        # 경로 보안 검증
+        abs_path = os.path.abspath(req.video_path)
+        assets_dir = os.path.abspath("assets")
+        if not abs_path.startswith(assets_dir):
+            return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            _cut_executor,
+            lambda: upload_video(
+                video_path=abs_path,
+                title=req.title,
+                description=req.description,
+                tags=req.tags,
+                privacy=req.privacy,
+                channel_id=req.channel_id,
+            )
+        )
+        return result
+    except PermissionError as e:
+        return {"error": str(e), "need_auth": True}
+    except FileNotFoundError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": f"업로드 실패: {e}"}
+
+
+@app.post("/api/youtube/disconnect")
+async def youtube_disconnect():
+    from modules.upload.youtube import disconnect
+    return disconnect()
+
+
+# ── TikTok 업로드 API ─────────────────────────────────────────────
+
+class TikTokUploadRequest(BaseModel):
+    video_path: str = Field(..., description="업로드할 동영상 경로")
+    title: str = Field(..., max_length=150)
+    privacy_level: str = Field("SELF_ONLY", pattern="^(SELF_ONLY|MUTUAL_FOLLOW_FRIENDS|FOLLOWER_OF_CREATOR|PUBLIC_TO_EVERYONE)$")
+    user_id: str | None = None
+
+
+@app.get("/api/tiktok/status")
+async def tiktok_status():
+    from modules.upload.tiktok import get_auth_status
+    return get_auth_status()
+
+
+@app.post("/api/tiktok/auth")
+async def tiktok_auth():
+    from modules.upload.tiktok import create_auth_url
+    try:
+        url = create_auth_url()
+        return {"auth_url": url}
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/tiktok/callback")
+async def tiktok_callback(code: str, state: str | None = None):
+    from modules.upload.tiktok import handle_auth_callback
+    from fastapi.responses import HTMLResponse
+    try:
+        handle_auth_callback(code, state=state)
+        return HTMLResponse(
+            "<html><body><h2>TikTok 연동 완료!</h2>"
+            "<p>이 창을 닫고 돌아가세요.</p>"
+            "<script>window.close()</script></body></html>"
+        )
+    except Exception as e:
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{e}</p></body></html>", status_code=400)
+
+
+@app.post("/api/tiktok/upload")
+async def tiktok_upload(req: TikTokUploadRequest):
+    from modules.upload.tiktok import upload_video
+    try:
+        abs_path = os.path.abspath(req.video_path)
+        assets_dir = os.path.abspath("assets")
+        if not abs_path.startswith(assets_dir):
+            return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            _cut_executor,
+            lambda: upload_video(
+                video_path=abs_path,
+                title=req.title,
+                privacy_level=req.privacy_level,
+                user_id=req.user_id,
+            )
+        )
+        return result
+    except PermissionError as e:
+        return {"error": str(e), "need_auth": True}
+    except FileNotFoundError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": f"업로드 실패: {e}"}
+
+
+@app.post("/api/tiktok/disconnect")
+async def tiktok_disconnect():
+    from modules.upload.tiktok import disconnect
+    return disconnect()
+
+
+# ── Instagram Reels 업로드 API ────────────────────────────────────
+
+class InstagramUploadRequest(BaseModel):
+    video_path: str = Field(..., description="업로드할 동영상 경로")
+    caption: str = Field("", max_length=2200)
+    account_id: str | None = None
+    video_url: str | None = Field(None, description="공개 접근 가능한 영상 URL (로컬 파일 대신)")
+
+
+@app.get("/api/instagram/status")
+async def instagram_status():
+    from modules.upload.instagram import get_auth_status
+    return get_auth_status()
+
+
+@app.post("/api/instagram/auth")
+async def instagram_auth():
+    from modules.upload.instagram import create_auth_url
+    try:
+        url = create_auth_url()
+        return {"auth_url": url}
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/instagram/callback")
+async def instagram_callback(code: str, state: str | None = None):
+    from modules.upload.instagram import handle_auth_callback
+    from fastapi.responses import HTMLResponse
+    try:
+        handle_auth_callback(code, state=state)
+        return HTMLResponse(
+            "<html><body><h2>Instagram 연동 완료!</h2>"
+            "<p>이 창을 닫고 돌아가세요.</p>"
+            "<script>window.close()</script></body></html>"
+        )
+    except Exception as e:
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{e}</p></body></html>", status_code=400)
+
+
+@app.post("/api/instagram/upload")
+async def instagram_upload(req: InstagramUploadRequest):
+    from modules.upload.instagram import upload_reels
+    try:
+        abs_path = os.path.abspath(req.video_path)
+        assets_dir = os.path.abspath("assets")
+        if not abs_path.startswith(assets_dir):
+            return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            _cut_executor,
+            lambda: upload_reels(
+                video_path=abs_path,
+                caption=req.caption,
+                account_id=req.account_id,
+                video_url=req.video_url,
+            )
+        )
+        return result
+    except PermissionError as e:
+        return {"error": str(e), "need_auth": True}
+    except FileNotFoundError as e:
+        return {"error": str(e)}
+    except ValueError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": f"업로드 실패: {e}"}
+
+
+@app.post("/api/instagram/disconnect")
+async def instagram_disconnect():
+    from modules.upload.instagram import disconnect
+    return disconnect()
+
+
+# ── 플랫폼 통합 상태 API ─────────────────────────────────────────
+
+@app.get("/api/upload/platforms")
+async def upload_platforms():
+    """모든 업로드 플랫폼의 연동 상태를 한번에 반환합니다."""
+    from modules.upload.youtube import get_auth_status as yt_status
+    from modules.upload.tiktok import get_auth_status as tt_status
+    from modules.upload.instagram import get_auth_status as ig_status
+    return {
+        "youtube": yt_status(),
+        "tiktok": tt_status(),
+        "instagram": ig_status(),
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("api_server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("api_server:app", host="0.0.0.0", port=8003, reload=True)

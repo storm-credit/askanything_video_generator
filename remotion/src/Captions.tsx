@@ -12,7 +12,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
 
-  // 성능 최적화: 100ms 단위로 양자화하여 useMemo 재계산 빈도 감소 (24fps → ~2.4 updates/sec)
+  // 성능 최적화: 100ms 단위로 양자화하여 useMemo 재계산 빈도 감소
   const quantizedTime = Math.floor(currentTime * 10) / 10;
 
   const visibleWords = useMemo(() => {
@@ -24,14 +24,14 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
   }, [wordTimestamps, quantizedTime]);
 
   return (
-    <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', top: '25%' }}>
+    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '15%' }}>
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
         justifyContent: 'center',
         alignItems: 'center',
-        width: '80%',
-        gap: '20px',
+        width: '88%',
+        gap: '8px',
         textAlign: 'center'
       }}>
         {visibleWords.map((w) => {
@@ -43,38 +43,36 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
 
           const wordStartFrame = Math.round(w.start * fps);
           const elapsed = frame - wordStartFrame;
-          // spring 최적화: 10프레임 이후 settled → 계산 스킵
           const scale = elapsed > 10 ? 1 : spring({
             fps,
             frame: elapsed,
             config: {
-              damping: 12,
-              stiffness: 200,
-              mass: 0.5,
+              damping: 14,
+              stiffness: 180,
+              mass: 0.4,
             },
             durationInFrames: 10,
           });
 
-          const color = isActive ? '#FFD700' : 'white';
-          const transformScale = isActive ? 1 + (scale * 0.15) : 1;
+          const color = isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)';
+          const transformScale = isActive ? 1 + (scale * 0.08) : 1;
           const textShadow = isActive
-                ? '0px 0px 20px rgba(255, 215, 0, 0.8), 4px 4px 0px rgba(0,0,0,1)'
-                : '4px 4px 0px rgba(0,0,0,1)';
+            ? '0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 4px rgba(0, 0, 0, 0.7)'
+            : '0px 2px 8px rgba(0, 0, 0, 0.8)';
 
           return (
             <span
               key={w.index}
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontWeight: 900,
-                fontSize: isActive ? '120px' : '90px',
+                fontWeight: 800,
+                fontSize: isActive ? '56px' : '48px',
                 color: color,
-                textTransform: 'uppercase',
                 transform: `scale(${transformScale})`,
                 textShadow: textShadow,
-                WebkitTextStroke: '3px black',
-                lineHeight: '1.2',
-                display: 'inline-block'
+                WebkitTextStroke: '1.5px rgba(0, 0, 0, 0.5)',
+                lineHeight: '1.3',
+                display: 'inline-block',
               }}
             >
               {w.word}

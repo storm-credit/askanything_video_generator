@@ -10,6 +10,7 @@ export const RemotionRoot: React.FC = () => {
     const outroImagePath = typeof inputProps.outroImagePath === 'string' ? inputProps.outroImagePath : undefined;
     const title = typeof inputProps.title === 'string' ? inputProps.title : undefined;
     const bgmPath = typeof inputProps.bgmPath === 'string' ? inputProps.bgmPath : undefined;
+    const cameraStyle = (typeof inputProps.cameraStyle === 'string' ? inputProps.cameraStyle : 'dynamic') as 'dynamic' | 'gentle' | 'static';
 
     return (
         <>
@@ -20,7 +21,7 @@ export const RemotionRoot: React.FC = () => {
                 fps={24}
                 width={1080}
                 height={1920}
-                defaultProps={{ cuts, introImagePath, outroImagePath, bgmPath, title }}
+                defaultProps={{ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle }}
             />
         </>
     );
