@@ -882,6 +882,142 @@ async def instagram_disconnect():
     return disconnect()
 
 
+# ── 배치 생성 큐 API ──────────────────────────────────────────────
+
+class BatchJobRequest(BaseModel):
+    topic: str = Field(..., min_length=1, max_length=500)
+    language: str = "ko"
+    cameraStyle: str = "dynamic"
+    bgmTheme: str = "random"
+    llmProvider: str = "gemini"
+    videoEngine: str = "veo3"
+    imageEngine: str = "imagen"
+
+class BatchBulkRequest(BaseModel):
+    jobs: list[BatchJobRequest]
+
+_batch_running = False
+_batch_stop = threading.Event()
+
+@app.post("/api/batch/add")
+async def batch_add(req: BatchJobRequest):
+    from modules.utils.batch import add_job
+    job_id = add_job(req.topic, req.language, req.cameraStyle, req.bgmTheme, req.llmProvider, req.videoEngine, req.imageEngine)
+    return {"id": job_id, "message": f"작업 #{job_id} 큐에 추가됨"}
+
+@app.post("/api/batch/add-bulk")
+async def batch_add_bulk(req: BatchBulkRequest):
+    from modules.utils.batch import add_jobs_bulk
+    topics = [j.model_dump() for j in req.jobs]
+    ids = add_jobs_bulk(topics)
+    return {"ids": ids, "message": f"{len(ids)}개 작업 큐에 추가됨"}
+
+@app.get("/api/batch/queue")
+async def batch_queue():
+    from modules.utils.batch import get_queue, get_stats
+    return {"jobs": get_queue(), "stats": get_stats()}
+
+@app.get("/api/batch/stats")
+async def batch_stats():
+    from modules.utils.batch import get_stats
+    return get_stats()
+
+@app.post("/api/batch/start")
+async def batch_start():
+    """배치 큐의 대기 작업을 순차 실행합니다."""
+    global _batch_running
+    if _batch_running:
+        return {"message": "배치가 이미 실행 중입니다", "running": True}
+    _batch_stop.clear()
+    _batch_running = True
+
+    async def _run_batch():
+        global _batch_running
+        from modules.utils.batch import get_next_pending, update_job
+        from datetime import datetime
+        loop = asyncio.get_running_loop()
+        try:
+            while not _batch_stop.is_set():
+                job = get_next_pending()
+                if not job:
+                    print("[배치] 대기 작업 없음 — 배치 완료")
+                    break
+                job_id = job["id"]
+                print(f"[배치] 작업 #{job_id} 시작: {job['topic']}")
+                update_job(job_id, status="running", started_at=datetime.now().isoformat())
+
+                try:
+                    # 기획
+                    llm_key = get_google_key(None, service="gemini") if job["llm_provider"] == "gemini" else None
+                    cuts, topic_folder, title = await loop.run_in_executor(
+                        None, lambda: generate_cuts(job["topic"], lang=job["language"], llm_provider=job["llm_provider"], llm_key_override=llm_key)
+                    )
+
+                    # 이미지 + TTS + Whisper (순차)
+                    visual_paths, audio_paths, scripts, word_ts_list = [], [], [], []
+                    for i, cut in enumerate(cuts):
+                        if job["image_engine"] == "imagen":
+                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_imagen(c["prompt"], idx, topic_folder))
+                        else:
+                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_dalle(c["prompt"], idx, topic_folder))
+                        visual_paths.append(img)
+
+                        aud = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_tts(c["script"], idx, topic_folder, language=job["language"]))
+                        if aud:
+                            aud = normalize_audio_lufs(aud)
+                        audio_paths.append(aud)
+
+                        words = []
+                        if aud:
+                            words = await loop.run_in_executor(None, lambda a=aud: generate_word_timestamps(a, language=job["language"]))
+                        word_ts_list.append(words)
+                        scripts.append(cut["script"])
+
+                    # 렌더링
+                    video_path = await loop.run_in_executor(
+                        None, lambda: create_remotion_video(
+                            visual_paths, audio_paths, scripts, word_ts_list, topic_folder,
+                            title=title, camera_style=job["camera_style"], bgm_theme=job["bgm_theme"]
+                        )
+                    )
+
+                    if video_path:
+                        update_job(job_id, status="completed", video_path=video_path, completed_at=datetime.now().isoformat())
+                        print(f"OK [배치] 작업 #{job_id} 완료: {video_path}")
+                    else:
+                        update_job(job_id, status="failed", error="Remotion 렌더링 실패", completed_at=datetime.now().isoformat())
+
+                except Exception as e:
+                    from datetime import datetime as _dt
+                    update_job(job_id, status="failed", error=str(e)[:500], completed_at=_dt.now().isoformat())
+                    print(f"[배치 오류] 작업 #{job_id}: {e}")
+
+        finally:
+            _batch_running = False
+            print("[배치] 배치 프로세스 종료")
+
+    asyncio.create_task(_run_batch())
+    return {"message": "배치 실행 시작", "running": True}
+
+@app.post("/api/batch/stop")
+async def batch_stop():
+    global _batch_running
+    _batch_stop.set()
+    return {"message": "배치 중지 요청됨 (현재 작업 완료 후 중지)", "running": _batch_running}
+
+@app.delete("/api/batch/job/{job_id}")
+async def batch_delete(job_id: int):
+    from modules.utils.batch import delete_job
+    ok = delete_job(job_id)
+    return {"success": ok, "message": f"작업 #{job_id} {'삭제됨' if ok else '삭제 불가 (실행 중이거나 존재하지 않음)'}"}
+
+@app.post("/api/batch/clear")
+async def batch_clear():
+    from modules.utils.batch import clear_completed
+    count = clear_completed()
+    return {"cleared": count, "message": f"완료/실패 작업 {count}건 정리됨"}
+
+
 # ── 플랫폼 통합 상태 API ─────────────────────────────────────────
 
 @app.get("/api/upload/platforms")
