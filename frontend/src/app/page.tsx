@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -13,6 +13,8 @@ export default function Home() {
   const [imageEngine, setImageEngine] = useState("imagen");
   const [videoEngine, setVideoEngine] = useState("none");
   const [language, setLanguage] = useState("ko");
+  const [cameraStyle, setCameraStyle] = useState("dynamic");
+  const [bgmTheme, setBgmTheme] = useState("random");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -42,6 +44,26 @@ export default function Home() {
   });
   // 키 사용량 통계
   const [keyUsageStats, setKeyUsageStats] = useState<KeyUsageStats | null>(null);
+  // 업로드 (멀티 플랫폼)
+  const [generatedVideoPath, setGeneratedVideoPath] = useState<string | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadPlatform, setUploadPlatform] = useState<"youtube" | "tiktok" | "instagram">("youtube");
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadTags, setUploadTags] = useState("");
+  const [uploadPrivacy, setUploadPrivacy] = useState("private");
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{ success: boolean; url?: string; error?: string } | null>(null);
+  // YouTube
+  const [ytConnected, setYtConnected] = useState(false);
+  const [ytChannels, setYtChannels] = useState<{ id: string; title: string; connected: boolean }[]>([]);
+  const [ytSelectedChannel, setYtSelectedChannel] = useState<string>("");
+  // TikTok
+  const [ttConnected, setTtConnected] = useState(false);
+  const [ttPrivacy, setTtPrivacy] = useState("SELF_ONLY");
+  // Instagram
+  const [igConnected, setIgConnected] = useState(false);
+
   // AbortController (생성 취소용)
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
@@ -156,6 +178,8 @@ export default function Home() {
           language,
           llmKey: llmKeyOverride || undefined,
           outputPath: outputPath.trim() || undefined,
+          cameraStyle,
+          bgmTheme,
         }),
       });
 
@@ -176,6 +200,9 @@ export default function Home() {
           const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
           const downloadUrl = `${API_BASE}${normalizedPath}`;
 
+          // YouTube 업로드용 경로 저장
+          setGeneratedVideoPath(videoPath);
+
           const link = document.createElement("a");
           link.href = downloadUrl;
           const fileName = videoPath.split('/').pop() || "AskAnything_Shorts.mp4";
@@ -186,6 +213,8 @@ export default function Home() {
 
           setSuccessMessage("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
           setIsGenerating(false);
+          // YouTube 상태 확인
+          checkPlatformStatus();
         } else if (rawData.startsWith("ERROR|")) {
           const errMsg = rawData.slice(6);
           setLogs(prev => [...prev.slice(-99), `ERROR:${errMsg}`]);
@@ -233,7 +262,7 @@ export default function Home() {
       console.error(error);
       const message = error instanceof Error ? error.message : "Unknown error";
       const userMsg = message === "Failed to fetch"
-        ? "[연결 실패] 백엔드 서버(localhost:8000)에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
+        ? "[연결 실패] 백엔드 서버(localhost:8003)에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
         : `[네트워크 오류] ${message}`;
       setLogs(prev => [...prev.slice(-99), `ERROR:${userMsg}`]);
       setErrorMessage(userMsg);
@@ -254,6 +283,117 @@ export default function Home() {
   const handleClearError = () => {
     setErrorMessage(null);
     setLogs([]);
+  };
+
+  // 전체 플랫폼 연동 상태 확인
+  const checkPlatformStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/upload/platforms`);
+      if (res.ok) {
+        const data = await res.json();
+        // YouTube
+        if (data.youtube) {
+          setYtConnected(data.youtube.connected === true);
+          if (data.youtube.channels) {
+            setYtChannels(data.youtube.channels);
+            if (!ytSelectedChannel && data.youtube.channels.length > 0) {
+              setYtSelectedChannel(data.youtube.channels[0].id);
+            }
+          }
+        }
+        // TikTok
+        if (data.tiktok) {
+          setTtConnected(data.tiktok.connected === true);
+        }
+        // Instagram
+        if (data.instagram) {
+          setIgConnected(data.instagram.connected === true);
+        }
+      }
+    } catch {}
+  }, [ytSelectedChannel]);
+
+  // 플랫폼별 OAuth 인증 시작
+  const handlePlatformAuth = async (platform: "youtube" | "tiktok" | "instagram") => {
+    try {
+      const res = await fetch(`${API_BASE}/api/${platform}/auth`, { method: "POST" });
+      const data = await res.json();
+      if (data.auth_url) {
+        window.open(data.auth_url, `${platform}_auth`, "width=600,height=700");
+        const poll = setInterval(async () => {
+          const check = await fetch(`${API_BASE}/api/${platform}/status`);
+          const status = await check.json();
+          if (status.connected) {
+            if (platform === "youtube") setYtConnected(true);
+            else if (platform === "tiktok") setTtConnected(true);
+            else if (platform === "instagram") setIgConnected(true);
+            clearInterval(poll);
+          }
+        }, 2000);
+        setTimeout(() => clearInterval(poll), 120000);
+      } else if (data.error) {
+        setUploadResult({ success: false, error: data.error });
+      }
+    } catch {
+      setUploadResult({ success: false, error: `${platform} 인증 서버에 연결할 수 없습니다.` });
+    }
+  };
+
+  // 통합 업로드 실행
+  const handleUpload = async () => {
+    if (!generatedVideoPath) return;
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      let body: Record<string, unknown>;
+      let endpoint: string;
+
+      if (uploadPlatform === "youtube") {
+        endpoint = "/api/youtube/upload";
+        body = {
+          video_path: generatedVideoPath,
+          title: uploadTitle || topic,
+          description: uploadDescription,
+          tags: uploadTags.split(",").map(t => t.trim()).filter(Boolean),
+          privacy: uploadPrivacy,
+          channel_id: ytSelectedChannel || undefined,
+        };
+      } else if (uploadPlatform === "tiktok") {
+        endpoint = "/api/tiktok/upload";
+        body = {
+          video_path: generatedVideoPath,
+          title: uploadTitle || topic,
+          privacy_level: ttPrivacy,
+        };
+      } else {
+        endpoint = "/api/instagram/upload";
+        body = {
+          video_path: generatedVideoPath,
+          caption: `${uploadTitle || topic}\n\n${uploadDescription}`.trim(),
+        };
+      }
+
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUploadResult({ success: true, url: data.url });
+      } else {
+        if (data.need_auth) {
+          if (uploadPlatform === "youtube") setYtConnected(false);
+          else if (uploadPlatform === "tiktok") setTtConnected(false);
+          else setIgConnected(false);
+        }
+        setUploadResult({ success: false, error: data.error });
+      }
+    } catch {
+      setUploadResult({ success: false, error: "업로드 요청 실패" });
+    } finally {
+      setUploading(false);
+    }
   };
 
   // 설정된 키 개수 계산
@@ -379,6 +519,21 @@ export default function Home() {
               >
                 <option value="ko" className="bg-gray-900">한국어</option>
                 <option value="en" className="bg-gray-900">English</option>
+                <option value="de" className="bg-gray-900">Deutsch</option>
+                <option value="da" className="bg-gray-900">Dansk</option>
+                <option value="no" className="bg-gray-900">Norsk</option>
+                <option value="es" className="bg-gray-900">Español</option>
+                <option value="fr" className="bg-gray-900">Français</option>
+                <option value="pt" className="bg-gray-900">Português</option>
+                <option value="it" className="bg-gray-900">Italiano</option>
+                <option value="nl" className="bg-gray-900">Nederlands</option>
+                <option value="sv" className="bg-gray-900">Svenska</option>
+                <option value="ja" className="bg-gray-900">日本語</option>
+                <option value="zh" className="bg-gray-900">中文</option>
+                <option value="ar" className="bg-gray-900">العربية</option>
+                <option value="ru" className="bg-gray-900">Русский</option>
+                <option value="tr" className="bg-gray-900">Türkçe</option>
+                <option value="hi" className="bg-gray-900">हिन्दी</option>
               </select>
             </div>
 
@@ -412,6 +567,37 @@ export default function Home() {
                 <option value="dalle" className="bg-gray-900">DALL-E 3 (OpenAI)</option>
               </select>
             </div>
+
+            {/* 카메라 무빙 */}
+            <div className="flex items-center gap-1">
+              <Video className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={cameraStyle}
+                onChange={(e) => setCameraStyle(e.target.value)}
+                disabled={isGenerating}
+                aria-label="카메라 스타일 선택"
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="dynamic" className="bg-gray-900">역동적</option>
+                <option value="gentle" className="bg-gray-900">부드러움</option>
+                <option value="static" className="bg-gray-900">고정</option>
+              </select>
+            </div>
+
+            {/* BGM */}
+            <div className="flex items-center gap-1">
+              <Music className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={bgmTheme}
+                onChange={(e) => setBgmTheme(e.target.value)}
+                disabled={isGenerating}
+                aria-label="BGM 선택"
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="random" className="bg-gray-900">BGM 랜덤</option>
+                <option value="none" className="bg-gray-900">BGM 없음</option>
+              </select>
+            </div>
           </div>
         </form>
       </motion.div>
@@ -435,6 +621,274 @@ export default function Home() {
             <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
             <h3 className="text-xl text-white font-bold">생성 성공!</h3>
             <p className="text-gray-400 text-sm">최고 수준의 숏폼 비디오가 성공적으로 기기 다운로드 폴더에 저장되었습니다.</p>
+            {generatedVideoPath && (
+              <div className="flex flex-col gap-2 w-full">
+                <button
+                  onClick={() => {
+                    setUploadTitle(topic);
+                    setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
+                    setUploadTags(topic);
+                    setUploadResult(null);
+                    setUploadPlatform("youtube");
+                    setShowUploadModal(true);
+                    checkPlatformStatus();
+                  }}
+                  className="flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-colors w-full"
+                >
+                  <Youtube className="w-5 h-5" />
+                  YouTube Shorts
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setUploadTitle(topic);
+                      setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
+                      setUploadResult(null);
+                      setUploadPlatform("tiktok");
+                      setShowUploadModal(true);
+                      checkPlatformStatus();
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-xl transition-colors text-sm"
+                  >
+                    <Send className="w-4 h-4" />
+                    TikTok
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUploadTitle(topic);
+                      setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
+                      setUploadResult(null);
+                      setUploadPlatform("instagram");
+                      setShowUploadModal(true);
+                      checkPlatformStatus();
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-semibold rounded-xl transition-colors text-sm"
+                  >
+                    <Instagram className="w-4 h-4" />
+                    Reels
+                  </button>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 멀티 플랫폼 업로드 모달 */}
+      <AnimatePresence>
+        {showUploadModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => !uploading && setShowUploadModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md glass-panel rounded-2xl border border-white/10 p-6 space-y-5 max-h-[85vh] overflow-y-auto"
+            >
+              {/* 헤더 + 플랫폼 탭 */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg text-white font-bold">업로드</h3>
+                <button
+                  onClick={() => !uploading && setShowUploadModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 플랫폼 선택 탭 */}
+              <div className="flex gap-1 bg-white/5 rounded-xl p-1">
+                <button
+                  onClick={() => { setUploadPlatform("youtube"); setUploadResult(null); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${uploadPlatform === "youtube" ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"}`}
+                >
+                  <Youtube className="w-4 h-4" /> YouTube
+                </button>
+                <button
+                  onClick={() => { setUploadPlatform("tiktok"); setUploadResult(null); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${uploadPlatform === "tiktok" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
+                >
+                  <Send className="w-4 h-4" /> TikTok
+                </button>
+                <button
+                  onClick={() => { setUploadPlatform("instagram"); setUploadResult(null); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${uploadPlatform === "instagram" ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white" : "text-gray-400 hover:text-white"}`}
+                >
+                  <Instagram className="w-4 h-4" /> Reels
+                </button>
+              </div>
+
+              {/* 연동 안 된 경우 */}
+              {((uploadPlatform === "youtube" && !ytConnected) ||
+                (uploadPlatform === "tiktok" && !ttConnected) ||
+                (uploadPlatform === "instagram" && !igConnected)) ? (
+                <div className="space-y-4 text-center py-4">
+                  <p className="text-gray-400 text-sm">
+                    {uploadPlatform === "youtube" && "YouTube 계정을 먼저 연동해주세요."}
+                    {uploadPlatform === "tiktok" && "TikTok 계정을 먼저 연동해주세요."}
+                    {uploadPlatform === "instagram" && "Instagram Business 계정을 먼저 연동해주세요."}
+                  </p>
+                  <button
+                    onClick={() => handlePlatformAuth(uploadPlatform)}
+                    className={`px-6 py-3 text-white font-semibold rounded-xl transition-colors flex items-center gap-2 mx-auto ${
+                      uploadPlatform === "youtube" ? "bg-red-600 hover:bg-red-500" :
+                      uploadPlatform === "tiktok" ? "bg-gray-700 hover:bg-gray-600" :
+                      "bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400"
+                    }`}
+                  >
+                    {uploadPlatform === "youtube" && <Youtube className="w-5 h-5" />}
+                    {uploadPlatform === "tiktok" && <Send className="w-5 h-5" />}
+                    {uploadPlatform === "instagram" && <Instagram className="w-5 h-5" />}
+                    계정 연동
+                  </button>
+                  {uploadResult && !uploadResult.success && (
+                    <p className="text-red-400 text-sm">{uploadResult.error}</p>
+                  )}
+                </div>
+              ) : uploadResult?.success ? (
+                <div className="space-y-4 text-center py-4">
+                  <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
+                  <h4 className="text-white font-bold">업로드 완료!</h4>
+                  {uploadResult.url && (
+                    <a
+                      href={uploadResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      영상 보기
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* 제목 (모든 플랫폼 공통) */}
+                  <div>
+                    <label className="text-gray-400 text-xs mb-1 block">제목</label>
+                    <input
+                      type="text"
+                      value={uploadTitle}
+                      onChange={(e) => setUploadTitle(e.target.value)}
+                      maxLength={uploadPlatform === "tiktok" ? 150 : 100}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+
+                  {/* 설명 (YouTube + Instagram) */}
+                  {uploadPlatform !== "tiktok" && (
+                    <div>
+                      <label className="text-gray-400 text-xs mb-1 block">
+                        {uploadPlatform === "instagram" ? "캡션" : "설명"}
+                      </label>
+                      <textarea
+                        value={uploadDescription}
+                        onChange={(e) => setUploadDescription(e.target.value)}
+                        rows={3}
+                        maxLength={uploadPlatform === "instagram" ? 2200 : 5000}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
+                      />
+                    </div>
+                  )}
+
+                  {/* 태그 (YouTube만) */}
+                  {uploadPlatform === "youtube" && (
+                    <div>
+                      <label className="text-gray-400 text-xs mb-1 block">태그 (쉼표로 구분)</label>
+                      <input
+                        type="text"
+                        value={uploadTags}
+                        onChange={(e) => setUploadTags(e.target.value)}
+                        placeholder="AI, 숏폼, 과학"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                      />
+                    </div>
+                  )}
+
+                  {/* YouTube 채널 선택 */}
+                  {uploadPlatform === "youtube" && ytChannels.length > 1 && (
+                    <div>
+                      <label className="text-gray-400 text-xs mb-1 block">채널 선택</label>
+                      <select
+                        value={ytSelectedChannel}
+                        onChange={(e) => setYtSelectedChannel(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none cursor-pointer"
+                      >
+                        {ytChannels.filter(ch => ch.connected).map(ch => (
+                          <option key={ch.id} value={ch.id} className="bg-gray-900">{ch.title}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* 공개 설정 */}
+                  <div>
+                    <label className="text-gray-400 text-xs mb-1 block">공개 설정</label>
+                    {uploadPlatform === "youtube" ? (
+                      <select
+                        value={uploadPrivacy}
+                        onChange={(e) => setUploadPrivacy(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none cursor-pointer"
+                      >
+                        <option value="private" className="bg-gray-900">비공개</option>
+                        <option value="unlisted" className="bg-gray-900">미등록 (링크 공유)</option>
+                        <option value="public" className="bg-gray-900">공개</option>
+                      </select>
+                    ) : uploadPlatform === "tiktok" ? (
+                      <select
+                        value={ttPrivacy}
+                        onChange={(e) => setTtPrivacy(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none cursor-pointer"
+                      >
+                        <option value="SELF_ONLY" className="bg-gray-900">본인만</option>
+                        <option value="MUTUAL_FOLLOW_FRIENDS" className="bg-gray-900">친구만</option>
+                        <option value="FOLLOWER_OF_CREATOR" className="bg-gray-900">팔로워만</option>
+                        <option value="PUBLIC_TO_EVERYONE" className="bg-gray-900">전체 공개</option>
+                      </select>
+                    ) : (
+                      <p className="text-gray-500 text-xs">Instagram Reels는 항상 공개로 게시됩니다.</p>
+                    )}
+                  </div>
+
+                  {/* Instagram 경고 */}
+                  {uploadPlatform === "instagram" && (
+                    <p className="text-amber-400/80 text-xs">Instagram은 공개 URL이 필요합니다. PUBLIC_SERVER_URL 또는 ngrok 설정이 필요할 수 있습니다.</p>
+                  )}
+
+                  {uploadResult && !uploadResult.success && (
+                    <p className="text-red-400 text-sm">{uploadResult.error}</p>
+                  )}
+
+                  <button
+                    onClick={handleUpload}
+                    disabled={uploading || !uploadTitle.trim()}
+                    className={`w-full py-3 disabled:bg-gray-700 disabled:text-gray-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+                      uploadPlatform === "youtube" ? "bg-red-600 hover:bg-red-500" :
+                      uploadPlatform === "tiktok" ? "bg-gray-700 hover:bg-gray-600" :
+                      "bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400"
+                    }`}
+                  >
+                    {uploading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        업로드 중...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        {uploadPlatform === "youtube" ? "YouTube 업로드" : uploadPlatform === "tiktok" ? "TikTok 업로드" : "Reels 업로드"}
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

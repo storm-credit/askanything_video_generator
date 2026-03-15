@@ -5,14 +5,15 @@
       "name": "backend",
       "runtimeExecutable": "python",
       "runtimeArgs": ["api_server.py"],
-      "port": 8000
+      "port": 8003
     },
     {
       "name": "frontend",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "--port", "3000"],
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
       "cwd": "frontend",
-      "port": 3000
+      "port": 3000,
+      "autoPort": true
     }
   ]
 }
