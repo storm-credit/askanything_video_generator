@@ -88,6 +88,7 @@ class GenerateRequest(BaseModel):
     language: str = "ko"
     cameraStyle: str = "dynamic"
     bgmTheme: str = "random"
+    channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
 
     @field_validator("language")
     @classmethod
@@ -537,6 +538,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     word_timestamps_list, topic_folder, title=video_title,
                     camera_style=req.cameraStyle,
                     bgm_theme=req.bgmTheme,
+                    channel=req.channel,
                 ),
             )
 
@@ -892,6 +894,7 @@ class BatchJobRequest(BaseModel):
     llmProvider: str = "gemini"
     videoEngine: str = "veo3"
     imageEngine: str = "imagen"
+    channel: str | None = None
 
 class BatchBulkRequest(BaseModel):
     jobs: list[BatchJobRequest]
@@ -902,7 +905,7 @@ _batch_stop = threading.Event()
 @app.post("/api/batch/add")
 async def batch_add(req: BatchJobRequest):
     from modules.utils.batch import add_job
-    job_id = add_job(req.topic, req.language, req.cameraStyle, req.bgmTheme, req.llmProvider, req.videoEngine, req.imageEngine)
+    job_id = add_job(req.topic, req.language, req.cameraStyle, req.bgmTheme, req.llmProvider, req.videoEngine, req.imageEngine, req.channel)
     return {"id": job_id, "message": f"작업 #{job_id} 큐에 추가됨"}
 
 @app.post("/api/batch/add-bulk")
@@ -977,7 +980,8 @@ async def batch_start():
                     video_path = await loop.run_in_executor(
                         None, lambda: create_remotion_video(
                             visual_paths, audio_paths, scripts, word_ts_list, topic_folder,
-                            title=title, camera_style=job["camera_style"], bgm_theme=job["bgm_theme"]
+                            title=title, camera_style=job["camera_style"], bgm_theme=job["bgm_theme"],
+                            channel=job.get("channel")
                         )
                     )
 

@@ -30,6 +30,7 @@ def _get_conn() -> sqlite3.Connection:
             llm_provider TEXT DEFAULT 'gemini',
             video_engine TEXT DEFAULT 'veo3',
             image_engine TEXT DEFAULT 'imagen',
+            channel TEXT,
             status TEXT DEFAULT 'pending',
             video_path TEXT,
             error TEXT,
@@ -44,14 +45,15 @@ def _get_conn() -> sqlite3.Connection:
 
 def add_job(topic: str, language: str = "ko", camera_style: str = "dynamic",
             bgm_theme: str = "random", llm_provider: str = "gemini",
-            video_engine: str = "veo3", image_engine: str = "imagen") -> int:
+            video_engine: str = "veo3", image_engine: str = "imagen",
+            channel: str | None = None) -> int:
     """큐에 생성 작업을 추가합니다. 작업 ID를 반환합니다."""
     with _lock:
         conn = _get_conn()
         try:
             cur = conn.execute(
-                "INSERT INTO batch_jobs (topic, language, camera_style, bgm_theme, llm_provider, video_engine, image_engine, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (topic, language, camera_style, bgm_theme, llm_provider, video_engine, image_engine, datetime.now().isoformat()),
+                "INSERT INTO batch_jobs (topic, language, camera_style, bgm_theme, llm_provider, video_engine, image_engine, channel, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (topic, language, camera_style, bgm_theme, llm_provider, video_engine, image_engine, channel, datetime.now().isoformat()),
             )
             conn.commit()
             return cur.lastrowid
@@ -71,6 +73,7 @@ def add_jobs_bulk(topics: list[dict[str, Any]]) -> list[int]:
             llm_provider=t.get("llmProvider", "gemini"),
             video_engine=t.get("videoEngine", "veo3"),
             image_engine=t.get("imageEngine", "imagen"),
+            channel=t.get("channel"),
         )
         ids.append(job_id)
     return ids
