@@ -3,7 +3,7 @@ import sys
 import traceback
 
 def test_generate(topic):
-    url = "http://localhost:8000/api/generate"
+    url = "http://localhost:8003/api/generate"
     payload = {"topic": topic}
     try:
         with open("debug_api.txt", "w", encoding="utf-8") as f:

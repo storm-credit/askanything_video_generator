@@ -88,6 +88,7 @@ class GenerateRequest(BaseModel):
     language: str = "ko"
     cameraStyle: str = "dynamic"
     bgmTheme: str = "random"
+    channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
 
     @field_validator("language")
     @classmethod
@@ -537,6 +538,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     word_timestamps_list, topic_folder, title=video_title,
                     camera_style=req.cameraStyle,
                     bgm_theme=req.bgmTheme,
+                    channel=req.channel,
                 ),
             )
 
@@ -681,11 +683,11 @@ async def youtube_auth():
 
 
 @app.get("/api/youtube/callback")
-async def youtube_callback(code: str):
+async def youtube_callback(code: str, state: str | None = None):
     from modules.upload.youtube import handle_auth_callback
     from fastapi.responses import HTMLResponse
     try:
-        result = handle_auth_callback(code)
+        result = handle_auth_callback(code, state)
         return HTMLResponse(
             "<html><body><h2>YouTube 연동 완료!</h2>"
             "<p>이 창을 닫고 돌아가세요.</p>"
@@ -882,6 +884,159 @@ async def instagram_disconnect():
     return disconnect()
 
 
+# ── 배치 생성 큐 API ──────────────────────────────────────────────
+
+class BatchJobRequest(BaseModel):
+    topic: str = Field(..., min_length=1, max_length=500)
+    language: str = "ko"
+    cameraStyle: str = "dynamic"
+    bgmTheme: str = "random"
+    llmProvider: str = "gemini"
+    videoEngine: str = "veo3"
+    imageEngine: str = "imagen"
+    channel: str | None = None
+
+class BatchBulkRequest(BaseModel):
+    jobs: list[BatchJobRequest]
+
+_batch_running = False
+_batch_stop = threading.Event()
+
+@app.post("/api/batch/add")
+async def batch_add(req: BatchJobRequest):
+    from modules.utils.batch import add_job
+    job_id = add_job(req.topic, req.language, req.cameraStyle, req.bgmTheme, req.llmProvider, req.videoEngine, req.imageEngine, req.channel)
+    return {"id": job_id, "message": f"작업 #{job_id} 큐에 추가됨"}
+
+@app.post("/api/batch/add-bulk")
+async def batch_add_bulk(req: BatchBulkRequest):
+    from modules.utils.batch import add_jobs_bulk
+    topics = [j.model_dump() for j in req.jobs]
+    ids = add_jobs_bulk(topics)
+    return {"ids": ids, "message": f"{len(ids)}개 작업 큐에 추가됨"}
+
+@app.get("/api/batch/queue")
+async def batch_queue():
+    from modules.utils.batch import get_queue, get_stats
+    return {"jobs": get_queue(), "stats": get_stats()}
+
+@app.get("/api/batch/stats")
+async def batch_stats():
+    from modules.utils.batch import get_stats
+    return get_stats()
+
+@app.post("/api/batch/start")
+async def batch_start():
+    """배치 큐의 대기 작업을 순차 실행합니다."""
+    global _batch_running
+    if _batch_running:
+        return {"message": "배치가 이미 실행 중입니다", "running": True}
+    _batch_stop.clear()
+    _batch_running = True
+
+    async def _run_batch():
+        global _batch_running
+        from modules.utils.batch import get_next_pending, update_job
+        from datetime import datetime
+        loop = asyncio.get_running_loop()
+        try:
+            while not _batch_stop.is_set():
+                job = get_next_pending()
+                if not job:
+                    print("[배치] 대기 작업 없음 — 배치 완료")
+                    break
+                job_id = job["id"]
+                print(f"[배치] 작업 #{job_id} 시작: {job['topic']}")
+                update_job(job_id, status="running", started_at=datetime.now().isoformat())
+
+                try:
+                    # 기획 (Gemini 키 로테이션 재시도 — 메인 생성과 동일 패턴)
+                    cuts, topic_folder, title = None, None, None
+                    _excluded = set()
+                    for _attempt in range(max(count_google_keys(), 1)):
+                        llm_key = get_google_key(None, service="gemini", exclude=_excluded) if job["llm_provider"] == "gemini" else None
+                        try:
+                            cuts, topic_folder, title = await loop.run_in_executor(
+                                None, lambda k=llm_key: generate_cuts(job["topic"], lang=job["language"], llm_provider=job["llm_provider"], llm_key_override=k)
+                            )
+                            break
+                        except Exception as _e:
+                            if "429" in str(_e) and llm_key:
+                                from modules.utils.keys import mark_key_exhausted
+                                mark_key_exhausted(llm_key, "gemini")
+                                _excluded.add(llm_key)
+                                print(f"[배치] 작업 #{job_id} Gemini 키 재시도 ({_attempt+1})")
+                                continue
+                            raise
+                    if cuts is None:
+                        raise RuntimeError("기획 생성 실패 — 모든 키 소진")
+
+                    # 이미지 + TTS + Whisper (순차)
+                    visual_paths, audio_paths, scripts, word_ts_list = [], [], [], []
+                    for i, cut in enumerate(cuts):
+                        if job["image_engine"] == "imagen":
+                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_imagen(c["prompt"], idx, topic_folder))
+                        else:
+                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_dalle(c["prompt"], idx, topic_folder))
+                        visual_paths.append(img)
+
+                        aud = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_tts(c["script"], idx, topic_folder, language=job["language"]))
+                        if aud:
+                            aud = normalize_audio_lufs(aud)
+                        audio_paths.append(aud)
+
+                        words = []
+                        if aud:
+                            words = await loop.run_in_executor(None, lambda a=aud: generate_word_timestamps(a, language=job["language"]))
+                        word_ts_list.append(words)
+                        scripts.append(cut["script"])
+
+                    # 렌더링
+                    video_path = await loop.run_in_executor(
+                        None, lambda: create_remotion_video(
+                            visual_paths, audio_paths, scripts, word_ts_list, topic_folder,
+                            title=title, camera_style=job["camera_style"], bgm_theme=job["bgm_theme"],
+                            channel=job.get("channel")
+                        )
+                    )
+
+                    if video_path:
+                        update_job(job_id, status="completed", video_path=video_path, completed_at=datetime.now().isoformat())
+                        print(f"OK [배치] 작업 #{job_id} 완료: {video_path}")
+                    else:
+                        update_job(job_id, status="failed", error="Remotion 렌더링 실패", completed_at=datetime.now().isoformat())
+
+                except Exception as e:
+                    from datetime import datetime as _dt
+                    update_job(job_id, status="failed", error=str(e)[:500], completed_at=_dt.now().isoformat())
+                    print(f"[배치 오류] 작업 #{job_id}: {e}")
+
+        finally:
+            _batch_running = False
+            print("[배치] 배치 프로세스 종료")
+
+    asyncio.create_task(_run_batch())
+    return {"message": "배치 실행 시작", "running": True}
+
+@app.post("/api/batch/stop")
+async def batch_stop():
+    global _batch_running
+    _batch_stop.set()
+    return {"message": "배치 중지 요청됨 (현재 작업 완료 후 중지)", "running": _batch_running}
+
+@app.delete("/api/batch/job/{job_id}")
+async def batch_delete(job_id: int):
+    from modules.utils.batch import delete_job
+    ok = delete_job(job_id)
+    return {"success": ok, "message": f"작업 #{job_id} {'삭제됨' if ok else '삭제 불가 (실행 중이거나 존재하지 않음)'}"}
+
+@app.post("/api/batch/clear")
+async def batch_clear():
+    from modules.utils.batch import clear_completed
+    count = clear_completed()
+    return {"cleared": count, "message": f"완료/실패 작업 {count}건 정리됨"}
+
+
 # ── 플랫폼 통합 상태 API ─────────────────────────────────────────
 
 @app.get("/api/upload/platforms")
@@ -900,4 +1055,6 @@ async def upload_platforms():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("api_server:app", host="0.0.0.0", port=8003, reload=True)
+    port = int(os.getenv("API_PORT", "8003"))
+    reload = os.getenv("UVICORN_RELOAD", "true").lower() == "true"
+    uvicorn.run("api_server:app", host="0.0.0.0", port=port, reload=reload)

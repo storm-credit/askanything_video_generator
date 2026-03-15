@@ -191,8 +191,8 @@ def handle_auth_callback(code: str, state: str | None = None) -> dict:
         )
         if user_resp.status_code == 200:
             username = user_resp.json().get("username", ig_user_id)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Instagram] 사용자명 조회 실패: {e}")
 
     token_data = {
         "access_token": access_token,

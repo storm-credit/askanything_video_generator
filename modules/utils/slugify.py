@@ -27,7 +27,8 @@ def slugify_topic(topic: str, lang: str = "ko") -> str:
             okt = _get_okt()
             nouns = okt.nouns(topic)
             keywords = "_".join(nouns[:2]) if nouns else topic
-        except Exception:
+        except Exception as e:
+            print(f"[Slugify] 형태소 분석 실패, 원문 사용: {e}")
             keywords = topic
 
         return _safe_slug(keywords, max_len=60)

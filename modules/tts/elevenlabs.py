@@ -109,7 +109,10 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                             f.write(chunk)
                 if os.path.getsize(audio_path) == 0:
                     print(f"[ElevenLabs 오류] 컷 {index+1} 음성 파일이 비어 있습니다.")
-                    # 빈 파일은 재시도
+                    try:
+                        os.remove(audio_path)
+                    except OSError:
+                        pass
                     if attempt < MAX_RETRIES - 1:
                         time.sleep(_backoff_delay(attempt))
                         continue

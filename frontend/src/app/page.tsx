@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -15,6 +15,7 @@ export default function Home() {
   const [language, setLanguage] = useState("ko");
   const [cameraStyle, setCameraStyle] = useState("dynamic");
   const [bgmTheme, setBgmTheme] = useState("random");
+  const [channel, setChannel] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -180,6 +181,7 @@ export default function Home() {
           outputPath: outputPath.trim() || undefined,
           cameraStyle,
           bgmTheme,
+          channel: channel || undefined,
         }),
       });
 
@@ -596,6 +598,22 @@ export default function Home() {
               >
                 <option value="random" className="bg-gray-900">BGM 랜덤</option>
                 <option value="none" className="bg-gray-900">BGM 없음</option>
+              </select>
+            </div>
+
+            {/* 채널 (인트로/아웃트로) */}
+            <div className="flex items-center gap-1">
+              <Tv className="w-3.5 h-3.5 text-gray-500" />
+              <select
+                value={channel}
+                onChange={(e) => setChannel(e.target.value)}
+                disabled={isGenerating}
+                aria-label="채널 선택"
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="" className="bg-gray-900">채널 없음</option>
+                <option value="askanything" className="bg-gray-900">Ask Anything</option>
+                <option value="wonderdrop" className="bg-gray-900">Wonder Drop</option>
               </select>
             </div>
           </div>

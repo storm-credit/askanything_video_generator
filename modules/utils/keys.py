@@ -76,7 +76,11 @@ def _is_key_warned(key: str, service: str = None) -> bool:
 
 
 def get_key_state(key: str, service: str = None) -> str:
-    """키 상태 반환: 'blocked', 'warning', 'active'. 반드시 _usage_lock 내부에서 호출할 것."""
+    """키 상태 반환: 'blocked', 'warning', 'active'.
+
+    _is_key_blocked / _is_key_warned 모두 _key_usage / _blocked_keys를 읽으므로
+    반드시 _usage_lock 안에서 호출하거나, 이미 lock 내부에서 호출되어야 합니다.
+    """
     if _is_key_blocked(key, service):
         return "blocked"
     if _is_key_warned(key, service):
@@ -202,7 +206,7 @@ def get_key_usage_stats() -> list[dict]:
                     del _blocked_keys[key]
 
             any_blocked = len(blocked_services) > 0
-            state = "blocked" if any_blocked else ("warning" if _is_key_warned(key) else "active")
+            state = "blocked" if any_blocked else get_key_state(key)
             remaining_hr = max(blocked_services.values()) if blocked_services else 0
 
             stats.append({

@@ -13,12 +13,34 @@ BGM_FILE = "bgm.mp3"
 INTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
 OUTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
 
+# 채널별 브랜드 에셋 지원
+# brand/channels/askanything/intro.png, outro.jpg
+# brand/channels/wonderdrop/intro.png, outro.jpg
+CHANNELS_DIR = os.path.join(BRAND_DIR, "channels")
+
 
 def _to_relative(p: str) -> str:
     """assets/ 기준 상대 경로 변환 (staticFile()용 - publicDir=assets/)"""
     normed = p.replace("\\", "/")
     idx = normed.find("assets/")
     return normed[idx + len("assets/"):] if idx >= 0 else normed
+
+
+def _resolve_brand_asset(asset_name: str, channel: str | None = None) -> str | None:
+    """채널별 브랜드 에셋 경로를 반환합니다.
+
+    우선순위: brand/channels/{channel}/{asset} → brand/{asset} → None
+    """
+    if channel:
+        channel_path = os.path.join(CHANNELS_DIR, channel, asset_name)
+        if os.path.exists(channel_path):
+            return channel_path
+
+    default_path = os.path.join(BRAND_DIR, asset_name)
+    if os.path.exists(default_path):
+        return default_path
+
+    return None
 
 
 def _validate_inputs(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]]) -> None:
@@ -66,7 +88,7 @@ def _select_bgm(bgm_theme: str = "random") -> str | None:
     return single_bgm if os.path.exists(single_bgm) else None
 
 
-def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str, title: str = "", camera_style: str = "dynamic", bgm_theme: str = "random") -> str | None:
+def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str, title: str = "", camera_style: str = "dynamic", bgm_theme: str = "random", channel: str | None = None) -> str | None:
     """
     Python 백엔드 데이터를 모아 Remotion (React) 렌더링 CLI로 넘겨서 최종 비디오를 합성합니다.
     """
@@ -113,23 +135,24 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             }
         )
 
-    # 브랜드 이미지: brand/ → assets/로 복사 (Remotion publicDir = assets/)
+    # 브랜드 이미지: 채널별 우선 선택 → brand/ → assets/로 복사 (Remotion publicDir = assets/)
     intro_image_path = None
     outro_image_path = None
 
-    # 브랜드 에셋 복사 (변경된 경우만)
+    channel_label = f" ({channel})" if channel else ""
+
+    # 채널별 브랜드 에셋 복사 (변경된 경우만)
     for asset_name in [INTRO_IMAGE, OUTRO_IMAGE]:
-        brand_src = os.path.join(BRAND_DIR, asset_name)
+        brand_src = _resolve_brand_asset(asset_name, channel)
         assets_dst = os.path.join("assets", asset_name)
-        if os.path.exists(brand_src):
-            # 이미 동일한 파일이면 복사 건너뜀
+        if brand_src:
             if not os.path.exists(assets_dst) or os.path.getmtime(brand_src) > os.path.getmtime(assets_dst):
                 shutil.copy2(brand_src, assets_dst)
 
     if os.path.exists(os.path.join("assets", INTRO_IMAGE)):
         intro_image_path = INTRO_IMAGE
         total_duration_in_frames += INTRO_DURATION_FRAMES
-        print(f"-> [인트로] 브랜드 인트로 {INTRO_DURATION_FRAMES}프레임 (1초) 추가")
+        print(f"-> [인트로] 브랜드 인트로{channel_label} {INTRO_DURATION_FRAMES}프레임 (1초) 추가")
 
     if title:
         print(f"-> [제목] '{title}' — 첫 컷 위 오버레이로 표시")
@@ -137,7 +160,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     if os.path.exists(os.path.join("assets", OUTRO_IMAGE)):
         outro_image_path = OUTRO_IMAGE
         total_duration_in_frames += OUTRO_DURATION_FRAMES
-        print(f"-> [아웃트로] 브랜드 아웃트로 {OUTRO_DURATION_FRAMES}프레임 (1초) 추가")
+        print(f"-> [아웃트로] 브랜드 아웃트로{channel_label} {OUTRO_DURATION_FRAMES}프레임 (1초) 추가")
 
     # BGM: 테마별 선택 (중복 복사 방지)
     bgm_path = None
