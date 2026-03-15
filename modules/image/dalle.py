@@ -1,6 +1,7 @@
 import io
 import os
 import time
+import random
 
 import requests
 from openai import OpenAI
@@ -59,6 +60,6 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
                     enhanced_prompt = "A very safe, beautiful, abstract and highly detailed cinematic visualization illustrating the related concept, National Geographic high-end documentary style, atmospheric lighting, strictly NO TEXT, NO LETTERS, NO WORDS."
                 else:
                     print(f"  [DALL·E 경고] 컷 {index+1} 렌더링 실패. 서버 지연으로 3초 후 재시도합니다... ({attempt+1}/{max_retries}) | 사유: {e}")
-                time.sleep(3)
+                time.sleep(min(2 ** (attempt + 1), 10) + random.uniform(0, 1))
             else:
                 raise RuntimeError(f"[DALL·E 이미지 생성 최종 실패] index={index}, 3회 재시도 실패. 오류: {error_msg}")

@@ -230,7 +230,7 @@ def upload_video(
     )
 
     if publish_resp.status_code != 200:
-        print(f"[TikTok] 발행 경고: {publish_resp.status_code} {publish_resp.text[:200]}")
+        raise Exception(f"TikTok 발행 실패 ({publish_resp.status_code}): {publish_resp.text[:300]}")
 
     print(f"OK [TikTok] 업로드 완료!")
     return {

@@ -1,10 +1,10 @@
 import os
 import time
+import random
 from openai import OpenAI
 
 
 MAX_RETRIES = 2
-RETRY_DELAY = 3
 
 
 def generate_word_timestamps(audio_path: str, api_key: str | None = None, language: str = "ko") -> list[dict]:
@@ -58,6 +58,8 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None, langua
                     print(f"[Whisper 경고] model_dump() 실패: {dump_err}")
 
             words = []
+            if not raw_words:
+                print(f"[Whisper 경고] API 응답에 word timestamp가 없습니다 ({os.path.basename(audio_path)}). 응답 타입: {type(transcript).__name__}")
             if raw_words:
                 for w in raw_words:
                     try:
@@ -78,6 +80,6 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None, langua
         except Exception as e:
             print(f"[Whisper 오류] {e} ({attempt+1}/{MAX_RETRIES})")
             if attempt < MAX_RETRIES - 1:
-                time.sleep(RETRY_DELAY)
+                time.sleep(min(2 ** (attempt + 1), 8) + random.uniform(0, 1))
                 continue
             return []
