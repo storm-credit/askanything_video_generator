@@ -124,7 +124,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
 
             elif response.status_code == 429:
                 # 할당량 초과: 대기 후 재시도
-                wait = _backoff_delay(attempt) if attempt < len(RETRY_DELAYS) else 10
+                wait = _backoff_delay(attempt)
                 print(f"[ElevenLabs 할당량 초과] {wait}초 후 재시도... ({attempt+1}/{MAX_RETRIES})")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(wait)
