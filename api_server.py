@@ -85,6 +85,9 @@ class GenerateRequest(BaseModel):
     videoEngine: str = "veo3"
     imageEngine: str = "imagen"
     llmProvider: str = "gemini"
+    llmModel: str | None = None    # 세부 모델 버전 (예: "gemini-2.0-flash", "gpt-4o-mini")
+    imageModel: str | None = None  # 이미지 모델 버전 (예: "imagen-4.0-fast-generate-001")
+    videoModel: str | None = None  # 비디오 모델 버전 (예: "veo-3.0-fast-generate-001")
     llmKey: str | None = None
     outputPath: str | None = None
     language: str = "ko"
@@ -170,6 +173,7 @@ async def health_check():
     claude_key = os.getenv("ANTHROPIC_API_KEY", "")
     kling_ak = os.getenv("KLING_ACCESS_KEY", "")
     kling_sk = os.getenv("KLING_SECRET_KEY", "")
+    tavily_key = os.getenv("TAVILY_API_KEY", "")
 
     keys = {
         "openai": _is_set(openai_key, ["sk-proj-YOUR"]),
@@ -178,6 +182,7 @@ async def health_check():
         "claude_key": _is_set(claude_key),
         "kling_access": _is_set(kling_ak, ["YOUR"]),
         "kling_secret": _is_set(kling_sk, ["YOUR"]),
+        "tavily": _is_set(tavily_key),
     }
 
     missing = [k for k, v in keys.items() if not v]
@@ -195,20 +200,23 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
     """파이프라인 시작 전 필수 키 검증. 누락된 키 이름 목록을 반환."""
     errors = []
 
-    # OpenAI 키: DALL-E 사용 시 또는 Whisper 자막에 필요
+    # OpenAI 키: DALL-E/GPT/Sora2 선택 시 필수, Whisper 자막은 경고만
     openai_key = api_key_override or os.getenv("OPENAI_API_KEY", "")
+    openai_missing = not openai_key or openai_key.startswith("sk-proj-YOUR")
     openai_needed_for = []
+    if llm_provider == "openai":
+        openai_needed_for.append("GPT 기획")
     if image_engine == "dalle":
         openai_needed_for.append("DALL-E 이미지")
-    openai_needed_for.append("Whisper 자막")
-    if llm_provider == "openai":
-        openai_needed_for.insert(0, "GPT 기획")
+    if video_engine == "sora2":
+        openai_needed_for.append("Sora2 비디오")
 
-    if (image_engine == "dalle" or llm_provider == "openai") and (not openai_key or openai_key.startswith("sk-proj-YOUR")):
+    if openai_missing and openai_needed_for:
+        openai_needed_for.append("Whisper 자막")
         errors.append(f"OPENAI_API_KEY ({' + '.join(openai_needed_for)}에 필수)")
-    elif not openai_key or openai_key.startswith("sk-proj-YOUR"):
-        # Whisper만 필요 - 경고 수준 (나중에 WARN으로 처리 가능)
-        errors.append("OPENAI_API_KEY (Whisper 자막 타임스탬프에 필수)")
+    elif openai_missing:
+        # Whisper만 필요 — Gemini 기반 구성에서는 경고만 (자막 없이 진행 가능)
+        print("  [경고] OPENAI_API_KEY 미설정 — Whisper 자막 타임스탬프 사용 불가")
 
     # Imagen 사용 시 Google 키 필요
     if image_engine == "imagen":
@@ -286,8 +294,25 @@ async def generate_video_endpoint(req: GenerateRequest):
     import uuid as _uuid
     generation_id = _uuid.uuid4().hex[:8]
 
+    # 모델 버전 오버라이드: 요청에 명시된 모델 → 환경변수로 임시 설정
+    _model_overrides: dict[str, str] = {}
+    if req.llmModel:
+        env_key = {"gemini": "GEMINI_MODEL", "openai": "OPENAI_MODEL", "claude": "CLAUDE_MODEL"}.get(llm_provider)
+        if env_key:
+            _model_overrides[env_key] = req.llmModel
+    if req.imageModel:
+        _model_overrides["IMAGEN_MODEL"] = req.imageModel
+    if req.videoModel:
+        _model_overrides["VEO_MODEL"] = req.videoModel
+
     async def sse_generator():
         global _active_generation_id
+
+        # 모델 오버라이드 적용 (요청 스코프)
+        _prev_env: dict[str, str | None] = {}
+        for k, v in _model_overrides.items():
+            _prev_env[k] = os.environ.get(k)
+            os.environ[k] = v
 
         # 이전 작업 취소 + 새 작업 등록
         with _generation_lock:
@@ -668,6 +693,12 @@ async def generate_video_endpoint(req: GenerateRequest):
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
           finally:
+            # 모델 오버라이드 복원
+            for k, prev in _prev_env.items():
+                if prev is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = prev
             # 작업 완료/취소 후 정리
             with _generation_lock:
                 if _active_generation_id == generation_id:

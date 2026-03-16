@@ -2,16 +2,20 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
 
 export default function Home() {
   const [topic, setTopic] = useState("");
+  const [qualityPreset, setQualityPreset] = useState("best");
   const [llmProvider, setLlmProvider] = useState("gemini");
+  const [llmModel, setLlmModel] = useState("");
   const [imageEngine, setImageEngine] = useState("imagen");
+  const [imageModel, setImageModel] = useState("");
   const [videoEngine, setVideoEngine] = useState("none");
+  const [videoModel, setVideoModel] = useState("");
   const [language, setLanguage] = useState("ko");
   const [cameraStyle, setCameraStyle] = useState("dynamic");
   const [bgmTheme, setBgmTheme] = useState("random");
@@ -146,6 +150,67 @@ export default function Home() {
   };
 
   // 키 랜덤 선택 (멀티키 로테이션)
+  // LLM 프로바이더별 모델 옵션
+  const LLM_MODELS: Record<string, { value: string; label: string }[]> = {
+    gemini: [
+      { value: "", label: "Gemini 2.5 Pro (기본)" },
+      { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+    ],
+    openai: [
+      { value: "", label: "GPT-4o (기본)" },
+      { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+      { value: "gpt-4.1", label: "GPT-4.1" },
+      { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+    ],
+    claude: [
+      { value: "", label: "Claude Sonnet 4 (기본)" },
+      { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
+      { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 3.5" },
+    ],
+  };
+
+  const IMAGE_MODELS: Record<string, { value: string; label: string }[]> = {
+    imagen: [
+      { value: "", label: "Imagen 4 Standard (기본)" },
+      { value: "imagen-4.0-fast-generate-001", label: "Imagen 4 Fast" },
+    ],
+    dalle: [
+      { value: "", label: "DALL-E 3 (기본)" },
+    ],
+  };
+
+  const VIDEO_MODELS: Record<string, { value: string; label: string }[]> = {
+    veo3: [
+      { value: "", label: "Veo 3 Standard (기본)" },
+      { value: "veo-3.0-fast-generate-001", label: "Veo 3 Fast" },
+    ],
+    sora2: [{ value: "", label: "Sora 2 (기본)" }],
+    kling: [{ value: "", label: "Kling v1 (기본)" }],
+    none: [],
+  };
+
+  const applyPreset = (preset: string) => {
+    setQualityPreset(preset);
+    switch (preset) {
+      case "best":
+        setLlmProvider("gemini"); setLlmModel("");
+        setImageEngine("imagen"); setImageModel("");
+        setVideoEngine("none"); setVideoModel("");
+        break;
+      case "balanced":
+        setLlmProvider("gemini"); setLlmModel("");
+        setImageEngine("imagen"); setImageModel("imagen-4.0-fast-generate-001");
+        setVideoEngine("none"); setVideoModel("");
+        break;
+      case "fast":
+        setLlmProvider("gemini"); setLlmModel("gemini-2.5-flash");
+        setImageEngine("imagen"); setImageModel("imagen-4.0-fast-generate-001");
+        setVideoEngine("none"); setVideoModel("");
+        break;
+    }
+  };
+
   const pickKey = (configId: string): string | undefined => {
     const keys = savedKeys[configId];
     if (!keys || keys.length === 0) return undefined;
@@ -189,6 +254,9 @@ export default function Home() {
           videoEngine,
           imageEngine,
           llmProvider,
+          llmModel: llmModel || undefined,
+          imageModel: imageModel || undefined,
+          videoModel: videoModel || undefined,
           language,
           llmKey: llmKeyOverride || undefined,
           outputPath: outputPath.trim() || undefined,
@@ -709,32 +777,102 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-1.5">
+              <Crown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+              <select
+                value={qualityPreset}
+                onChange={(e) => applyPreset(e.target.value)}
+                disabled={isGenerating}
+                aria-label="품질 모드 선택"
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="best" className="bg-gray-900">최고 품질</option>
+                <option value="balanced" className="bg-gray-900">합리적</option>
+                <option value="fast" className="bg-gray-900">빠른 생성</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5">
               <Brain className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={llmProvider}
-                onChange={(e) => setLlmProvider(e.target.value)}
+                onChange={(e) => { setLlmProvider(e.target.value); setLlmModel(""); setQualityPreset("custom"); }}
                 disabled={isGenerating}
                 aria-label="LLM 기획 엔진 선택"
                 className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
               >
-                <option value="gemini" className="bg-gray-900">Gemini 2.5 Pro</option>
-                <option value="openai" className="bg-gray-900">GPT-4o</option>
-                <option value="claude" className="bg-gray-900">Claude Sonnet 4</option>
+                <option value="gemini" className="bg-gray-900">Gemini</option>
+                <option value="openai" className="bg-gray-900">GPT</option>
+                <option value="claude" className="bg-gray-900">Claude</option>
               </select>
+              {LLM_MODELS[llmProvider]?.length > 1 && (
+                <select
+                  value={llmModel}
+                  onChange={(e) => { setLlmModel(e.target.value); setQualityPreset("custom"); }}
+                  disabled={isGenerating}
+                  aria-label="LLM 모델 버전 선택"
+                  className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+                >
+                  {LLM_MODELS[llmProvider].map((m) => (
+                    <option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5">
               <ImageIcon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={imageEngine}
-                onChange={(e) => setImageEngine(e.target.value)}
+                onChange={(e) => { setImageEngine(e.target.value); setImageModel(""); setQualityPreset("custom"); }}
                 disabled={isGenerating}
                 aria-label="이미지 엔진 선택"
                 className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
               >
-                <option value="imagen" className="bg-gray-900">Imagen 4 (Google)</option>
-                <option value="dalle" className="bg-gray-900">DALL-E 3 (OpenAI)</option>
+                <option value="imagen" className="bg-gray-900">Imagen</option>
+                <option value="dalle" className="bg-gray-900">DALL-E</option>
               </select>
+              {IMAGE_MODELS[imageEngine]?.length > 1 && (
+                <select
+                  value={imageModel}
+                  onChange={(e) => { setImageModel(e.target.value); setQualityPreset("custom"); }}
+                  disabled={isGenerating}
+                  aria-label="이미지 모델 버전 선택"
+                  className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+                >
+                  {IMAGE_MODELS[imageEngine].map((m) => (
+                    <option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Film className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+              <select
+                value={videoEngine}
+                onChange={(e) => { setVideoEngine(e.target.value); setVideoModel(""); setQualityPreset("custom"); }}
+                disabled={isGenerating}
+                aria-label="비디오 엔진 선택"
+                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+              >
+                <option value="veo3" className="bg-gray-900">Veo 3</option>
+                <option value="sora2" className="bg-gray-900">Sora 2</option>
+                <option value="kling" className="bg-gray-900">Kling</option>
+                <option value="none" className="bg-gray-900">없음</option>
+              </select>
+              {VIDEO_MODELS[videoEngine]?.length > 1 && (
+                <select
+                  value={videoModel}
+                  onChange={(e) => { setVideoModel(e.target.value); setQualityPreset("custom"); }}
+                  disabled={isGenerating}
+                  aria-label="비디오 모델 버전 선택"
+                  className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
+                >
+                  {VIDEO_MODELS[videoEngine].map((m) => (
+                    <option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5">

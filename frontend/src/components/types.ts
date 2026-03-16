@@ -7,6 +7,7 @@ export interface KeyStatus {
   claude_key: boolean;
   kling_access: boolean;
   kling_secret: boolean;
+  tavily: boolean;
 }
 
 export interface KeyConfig {
@@ -17,6 +18,7 @@ export interface KeyConfig {
   statusKey: keyof KeyStatus;
   required: boolean;
   multiKey: boolean;
+  group: "core" | "extra";
 }
 
 export interface KeyUsageEntry {
@@ -35,58 +37,76 @@ export interface KeyUsageStats {
 }
 
 export const KEY_CONFIGS: KeyConfig[] = [
+  // ── 핵심 키 (Google 또는 OpenAI 중 하나 + ElevenLabs = 최소 구성) ──
+  {
+    id: "gemini",
+    label: "Google API Key",
+    description: "Gemini 기획 + Imagen 이미지 + Veo3 비디오 (Google AI Studio 발급)",
+    envName: "GEMINI_API_KEY",
+    statusKey: "gemini",
+    required: false,
+    multiKey: true,
+    group: "core",
+  },
   {
     id: "openai",
     label: "OpenAI API Key",
-    description: "GPT 기획, DALL-E 이미지, Whisper 자막, Sora 2 비디오에 사용",
+    description: "GPT 기획 + DALL-E 이미지 + Whisper 자막 + Sora2 비디오",
     envName: "OPENAI_API_KEY",
     statusKey: "openai",
-    required: true,
+    required: false,
     multiKey: true,
+    group: "core",
   },
   {
     id: "elevenlabs",
     label: "ElevenLabs API Key",
-    description: "TTS 음성 내레이션 생성에 사용",
+    description: "TTS 음성 내레이션 (대체 없음, 필수)",
     envName: "ELEVENLABS_API_KEY",
     statusKey: "elevenlabs",
     required: true,
     multiKey: true,
+    group: "core",
   },
-  {
-    id: "gemini",
-    label: "Gemini API Key",
-    description: "Gemini 기획 엔진에 사용 (Google AI Studio에서 발급)",
-    envName: "GEMINI_API_KEY",
-    statusKey: "gemini",
-    required: false,
-    multiKey: false,
-  },
+  // ── 추가 엔진 ──
   {
     id: "claude_key",
     label: "Claude API Key",
-    description: "Claude 기획 엔진에 사용 (Anthropic Console에서 발급)",
+    description: "기획 엔진 대안 (Anthropic Console 발급)",
     envName: "ANTHROPIC_API_KEY",
     statusKey: "claude_key",
     required: false,
     multiKey: false,
+    group: "extra",
   },
   {
     id: "kling_access",
     label: "Kling Access Key",
-    description: "Kling AI 직접 연동",
+    description: "Kling AI 비디오 엔진 (Access Key)",
     envName: "KLING_ACCESS_KEY",
     statusKey: "kling_access",
     required: false,
     multiKey: false,
+    group: "extra",
   },
   {
     id: "kling_secret",
     label: "Kling Secret Key",
-    description: "Kling AI 시크릿 키",
+    description: "Kling AI 비디오 엔진 (Secret Key)",
     envName: "KLING_SECRET_KEY",
     statusKey: "kling_secret",
     required: false,
     multiKey: false,
+    group: "extra",
+  },
+  {
+    id: "tavily",
+    label: "Tavily API Key",
+    description: "팩트체크 웹 검색 (선택사항)",
+    envName: "TAVILY_API_KEY",
+    statusKey: "tavily",
+    required: false,
+    multiKey: false,
+    group: "extra",
   },
 ];

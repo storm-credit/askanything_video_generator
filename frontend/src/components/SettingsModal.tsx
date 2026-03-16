@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Trash2, Eye, EyeOff, BarChart3 } from "lucide-react";
+import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle } from "lucide-react";
 import { KeyConfig, KeyStatus, KeyUsageStats, KEY_CONFIGS } from "./types";
 
 interface SettingsModalProps {
@@ -38,6 +38,8 @@ export function SettingsModal({
   onToggleVisible,
   onOutputPathChange,
 }: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<"core" | "extra">("core");
+
   // Escape 키로 모달 닫기
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -46,6 +48,9 @@ export function SettingsModal({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
+
+  const coreConfigs = KEY_CONFIGS.filter((c) => c.group === "core");
+  const extraConfigs = KEY_CONFIGS.filter((c) => c.group === "extra");
 
   return (
     <>
@@ -68,146 +73,156 @@ export function SettingsModal({
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
         className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[560px] sm:max-h-[85vh] z-[70] bg-gray-900/95 border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
       >
-        {/* 모달 헤더 */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
-          <div>
-            <h2 className="text-lg font-bold text-white">API 키 설정</h2>
-            <p className="text-xs text-gray-500 mt-1">.env에 설정된 키는 자동 사용됩니다. 브라우저에서 추가 키를 등록하면 로테이션됩니다.</p>
+        {/* 모달 헤더 + 탭 */}
+        <div className="px-6 pt-5 pb-0 border-b border-white/10">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-white">API 키 설정</h2>
+              <p className="text-xs text-gray-500 mt-1">.env에 설정된 키는 자동 사용됩니다. 브라우저에서 추가 키를 등록하면 로테이션됩니다.</p>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="설정 닫기"
+              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="설정 닫기"
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {/* 탭 버튼 */}
+          <div className="flex gap-1">
+            <button
+              onClick={() => setActiveTab("core")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-xl transition-colors ${
+                activeTab === "core"
+                  ? "bg-white/[0.06] text-indigo-400 border-b-2 border-indigo-400"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <Key className="w-3.5 h-3.5" />
+              핵심 키
+            </button>
+            <button
+              onClick={() => setActiveTab("extra")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-xl transition-colors ${
+                activeTab === "extra"
+                  ? "bg-white/[0.06] text-purple-400 border-b-2 border-purple-400"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <Puzzle className="w-3.5 h-3.5" />
+              추가 엔진
+            </button>
+          </div>
         </div>
 
-        {/* 모달 바디 */}
+        {/* 모달 바디 — 탭 콘텐츠 */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
-          {/* 필수 키 */}
-          <div>
-            <h3 className="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-3">필수 키</h3>
-            {KEY_CONFIGS.filter((c) => c.required).map((config) => (
-              <KeySection
-                key={config.id}
-                config={config}
-                serverStatus={serverKeyStatus?.[config.statusKey] ?? null}
-                savedKeys={savedKeys[config.id] || []}
-                inputValue={inputValues[config.id] || ""}
-                isVisible={visibleKeys[config.id] || false}
-                onInputChange={(v) => onInputChange(config.id, v)}
-                onAdd={() => onAddKey(config.id)}
-                onRemove={(idx) => onRemoveKey(config.id, idx)}
-                onToggleVisible={() => onToggleVisible(config.id)}
-              />
-            ))}
-          </div>
+          {activeTab === "core" && (
+            <>
+              <p className="text-[10px] text-gray-500">Google 또는 OpenAI 중 하나 + ElevenLabs = 최소 구성</p>
+              {coreConfigs.map((config) => (
+                <KeySection
+                  key={config.id}
+                  config={config}
+                  serverStatus={serverKeyStatus?.[config.statusKey] ?? null}
+                  savedKeys={savedKeys[config.id] || []}
+                  inputValue={inputValues[config.id] || ""}
+                  isVisible={visibleKeys[config.id] || false}
+                  onInputChange={(v) => onInputChange(config.id, v)}
+                  onAdd={() => onAddKey(config.id)}
+                  onRemove={(idx) => onRemoveKey(config.id, idx)}
+                  onToggleVisible={() => onToggleVisible(config.id)}
+                />
+              ))}
 
-          {/* 기획 엔진 키 (Gemini / Claude) */}
-          <div>
-            <h3 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-3">기획 엔진 키 (LLM)</h3>
-            {KEY_CONFIGS.filter((c) => ["gemini", "claude_key"].includes(c.id)).map((config) => (
-              <KeySection
-                key={config.id}
-                config={config}
-                serverStatus={serverKeyStatus?.[config.statusKey] ?? null}
-                savedKeys={savedKeys[config.id] || []}
-                inputValue={inputValues[config.id] || ""}
-                isVisible={visibleKeys[config.id] || false}
-                onInputChange={(v) => onInputChange(config.id, v)}
-                onAdd={() => onAddKey(config.id)}
-                onRemove={(idx) => onRemoveKey(config.id, idx)}
-                onToggleVisible={() => onToggleVisible(config.id)}
-              />
-            ))}
-          </div>
-
-          {/* 선택 키 (비디오 엔진) */}
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">비디오 엔진 키 (선택)</h3>
-            {KEY_CONFIGS.filter((c) => !c.required && !["gemini", "claude_key"].includes(c.id)).map((config) => (
-              <KeySection
-                key={config.id}
-                config={config}
-                serverStatus={serverKeyStatus?.[config.statusKey] ?? null}
-                savedKeys={savedKeys[config.id] || []}
-                inputValue={inputValues[config.id] || ""}
-                isVisible={visibleKeys[config.id] || false}
-                onInputChange={(v) => onInputChange(config.id, v)}
-                onAdd={() => onAddKey(config.id)}
-                onRemove={(idx) => onRemoveKey(config.id, idx)}
-                onToggleVisible={() => onToggleVisible(config.id)}
-              />
-            ))}
-          </div>
-
-          {/* 저장 경로 설정 */}
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">출력 설정</h3>
-            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <span className="text-sm font-medium text-white">저장 경로</span>
-                  <p className="text-xs text-gray-500 mt-0.5">비어있으면 브라우저 다운로드 폴더에 저장됩니다</p>
+              {/* 저장 경로 설정 */}
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">출력 설정</h3>
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <span className="text-sm font-medium text-white">저장 경로</span>
+                      <p className="text-xs text-gray-500 mt-0.5">비어있으면 브라우저 다운로드 폴더에 저장됩니다</p>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={outputPath}
+                    onChange={(e) => onOutputPathChange(e.target.value)}
+                    placeholder={"예: C:\\Users\\사용자\\Desktop\\output.mp4"}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-mono"
+                  />
                 </div>
               </div>
-              <input
-                type="text"
-                value={outputPath}
-                onChange={(e) => onOutputPathChange(e.target.value)}
-                placeholder={"예: C:\\Users\\사용자\\Desktop\\output.mp4"}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 font-mono"
-              />
-            </div>
-          </div>
 
-          {/* Google API 키 사용량 */}
-          {keyUsageStats && keyUsageStats.total_keys > 0 && (
-            <div>
-              <h3 className="text-xs font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <BarChart3 className="w-3.5 h-3.5" />
-                Google API 키 사용량 (세션)
-              </h3>
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-2">
-                <p className="text-[10px] text-gray-500 mb-2">
-                  총 {keyUsageStats.total_keys}개 키 등록 · 서버 재시작 시 초기화
-                </p>
-                {keyUsageStats.keys.map((k, idx) => {
-                  const stateStyle = k.state === "blocked"
-                    ? "bg-red-500/5 border border-red-500/20"
-                    : k.state === "warning"
-                      ? "bg-amber-500/5 border border-amber-500/20"
-                      : "bg-white/[0.02]";
-                  const keyColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-gray-400";
-                  const totalColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-white";
-                  return (
-                    <div key={k.key} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${stateStyle}`}>
-                      <div className="flex items-center gap-1.5 w-32 shrink-0">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${k.state === "blocked" ? "bg-red-500" : k.state === "warning" ? "bg-amber-500" : "bg-green-500"}`} />
-                        <span className={`text-xs font-mono ${keyColor}`}>{k.key}</span>
-                      </div>
-                      <div className="flex-1 flex items-center gap-1.5 flex-wrap">
-                        {Object.entries(k.blocked_services || {}).map(([svc, hours]) => (
-                          <span key={svc} className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">
-                            {svc} {hours}h
-                          </span>
-                        ))}
-                        {Object.entries(k.usage).map(([service, count]) => (
-                          <span key={service} className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            (k.blocked_services || {})[service] ? "bg-red-500/10 text-red-400/60 line-through" : "bg-cyan-500/15 text-cyan-400"
-                          }`}>
-                            {service}: {count}
-                          </span>
-                        ))}
-                        {k.total === 0 && k.state === "active" && <span className="text-[10px] text-gray-600">미사용</span>}
-                      </div>
-                      <span className={`text-xs font-bold shrink-0 ${totalColor}`}>{k.total}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+              {/* Google API 키 사용량 */}
+              {keyUsageStats && keyUsageStats.total_keys > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    Google API 키 사용량 (세션)
+                  </h3>
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-2">
+                    <p className="text-[10px] text-gray-500 mb-2">
+                      총 {keyUsageStats.total_keys}개 키 등록 · 서버 재시작 시 초기화
+                    </p>
+                    {keyUsageStats.keys.map((k) => {
+                      const stateStyle = k.state === "blocked"
+                        ? "bg-red-500/5 border border-red-500/20"
+                        : k.state === "warning"
+                          ? "bg-amber-500/5 border border-amber-500/20"
+                          : "bg-white/[0.02]";
+                      const keyColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-gray-400";
+                      const totalColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-white";
+                      return (
+                        <div key={k.key} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${stateStyle}`}>
+                          <div className="flex items-center gap-1.5 w-32 shrink-0">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${k.state === "blocked" ? "bg-red-500" : k.state === "warning" ? "bg-amber-500" : "bg-green-500"}`} />
+                            <span className={`text-xs font-mono ${keyColor}`}>{k.key}</span>
+                          </div>
+                          <div className="flex-1 flex items-center gap-1.5 flex-wrap">
+                            {Object.entries(k.blocked_services || {}).map(([svc, hours]) => (
+                              <span key={svc} className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">
+                                {svc} {hours}h
+                              </span>
+                            ))}
+                            {Object.entries(k.usage).map(([service, count]) => (
+                              <span key={service} className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                (k.blocked_services || {})[service] ? "bg-red-500/10 text-red-400/60 line-through" : "bg-cyan-500/15 text-cyan-400"
+                              }`}>
+                                {service}: {count}
+                              </span>
+                            ))}
+                            {k.total === 0 && k.state === "active" && <span className="text-[10px] text-gray-600">미사용</span>}
+                          </div>
+                          <span className={`text-xs font-bold shrink-0 ${totalColor}`}>{k.total}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === "extra" && (
+            <>
+              <p className="text-[10px] text-gray-500">기획 대안 · 비디오 대안 · 팩트체크</p>
+              {extraConfigs.map((config) => (
+                <KeySection
+                  key={config.id}
+                  config={config}
+                  serverStatus={serverKeyStatus?.[config.statusKey] ?? null}
+                  savedKeys={savedKeys[config.id] || []}
+                  inputValue={inputValues[config.id] || ""}
+                  isVisible={visibleKeys[config.id] || false}
+                  onInputChange={(v) => onInputChange(config.id, v)}
+                  onAdd={() => onAddKey(config.id)}
+                  onRemove={(idx) => onRemoveKey(config.id, idx)}
+                  onToggleVisible={() => onToggleVisible(config.id)}
+                />
+              ))}
+            </>
           )}
         </div>
 
