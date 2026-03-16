@@ -555,6 +555,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     platforms=req.platforms,
                     caption_size=req.captionSize,
                     caption_y=req.captionY,
+                    descriptions=[cut.get("description", "") for cut in cuts],
                 ),
             )
 
@@ -913,6 +914,7 @@ async def render_endpoint(req: RenderRequest):
                     channel=req.channel, platforms=req.platforms,
                     caption_size=req.captionSize,
                     caption_y=req.captionY,
+                    descriptions=[cut.get("description", "") for cut in cuts],
                 ),
             )
 
@@ -1330,7 +1332,8 @@ async def batch_start():
                         None, lambda: create_remotion_video(
                             visual_paths, audio_paths, scripts, word_ts_list, topic_folder,
                             title=title, camera_style=job["camera_style"], bgm_theme=job["bgm_theme"],
-                            channel=job.get("channel")
+                            channel=job.get("channel"),
+                            descriptions=[c.get("description", "") for c in cuts],
                         )
                     )
 

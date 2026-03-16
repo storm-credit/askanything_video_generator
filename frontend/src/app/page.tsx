@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -677,11 +677,10 @@ export default function Home() {
             )}
           </div>
 
-          {/* 엔진 선택 (언어 + LLM + 이미지) */}
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            {/* 언어 선택 */}
-            <div className="flex items-center gap-1">
-              <Globe className="w-3.5 h-3.5 text-gray-500" />
+          {/* Row 1: 엔진 선택 (언어 + LLM + 이미지 + 카메라) */}
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
@@ -709,9 +708,8 @@ export default function Home() {
               </select>
             </div>
 
-            {/* LLM 기획 엔진 */}
-            <div className="flex items-center gap-1">
-              <Brain className="w-3.5 h-3.5 text-gray-500" />
+            <div className="flex items-center gap-1.5">
+              <Brain className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={llmProvider}
                 onChange={(e) => setLlmProvider(e.target.value)}
@@ -725,9 +723,8 @@ export default function Home() {
               </select>
             </div>
 
-            {/* 이미지 엔진 */}
-            <div className="flex items-center gap-1">
-              <ImageIcon className="w-3.5 h-3.5 text-gray-500" />
+            <div className="flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={imageEngine}
                 onChange={(e) => setImageEngine(e.target.value)}
@@ -740,9 +737,8 @@ export default function Home() {
               </select>
             </div>
 
-            {/* 카메라 무빙 */}
-            <div className="flex items-center gap-1">
-              <Video className="w-3.5 h-3.5 text-gray-500" />
+            <div className="flex items-center gap-1.5">
+              <Video className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={cameraStyle}
                 onChange={(e) => setCameraStyle(e.target.value)}
@@ -755,10 +751,12 @@ export default function Home() {
                 <option value="static" className="bg-gray-900">고정</option>
               </select>
             </div>
+          </div>
 
-            {/* BGM */}
-            <div className="flex items-center gap-1">
-              <Music className="w-3.5 h-3.5 text-gray-500" />
+          {/* Row 2: 설정 (BGM + 채널 | 슬라이더) */}
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Music className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={bgmTheme}
                 onChange={(e) => setBgmTheme(e.target.value)}
@@ -771,15 +769,13 @@ export default function Home() {
               </select>
             </div>
 
-            {/* 채널 (프리셋 자동 적용) */}
-            <div className="flex items-center gap-1">
-              <Tv className="w-3.5 h-3.5 text-gray-500" />
+            <div className="flex items-center gap-1.5">
+              <Tv className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={channel}
                 onChange={(e) => {
                   const ch = e.target.value;
                   setChannel(ch);
-                  // 채널별 프리셋 자동 적용
                   const presets: Record<string, { language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = {
                     askanything: { language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 },
                     wonderdrop: { language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
@@ -803,9 +799,10 @@ export default function Home() {
               </select>
             </div>
 
-            {/* TTS 속도 */}
-            <div className="flex items-center gap-1">
-              <Mic className="w-3.5 h-3.5 text-gray-500" />
+            <div className="w-px h-4 bg-white/10" />
+
+            <div className="flex items-center gap-1.5">
+              <Mic className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <input
                 type="range"
                 min="0.7"
@@ -817,12 +814,11 @@ export default function Home() {
                 className="w-16 h-1 accent-indigo-500 cursor-pointer"
                 aria-label="음성 속도"
               />
-              <span className="text-[10px] text-gray-500 w-8">{ttsSpeed}x</span>
+              <span className="text-[10px] text-gray-500 tabular-nums w-7 text-right">{ttsSpeed}x</span>
             </div>
 
-            {/* 자막 크기 */}
-            <div className="flex items-center gap-1">
-              <Type className="w-3.5 h-3.5 text-gray-500" />
+            <div className="flex items-center gap-1.5">
+              <Type className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <input
                 type="range"
                 min="32"
@@ -834,12 +830,11 @@ export default function Home() {
                 className="w-16 h-1 accent-indigo-500 cursor-pointer"
                 aria-label="자막 크기"
               />
-              <span className="text-[10px] text-gray-500 w-8">{captionSize}px</span>
+              <span className="text-[10px] text-gray-500 tabular-nums w-7 text-right">{captionSize}px</span>
             </div>
 
-            {/* 자막 높이 */}
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-gray-500">Y</span>
+            <div className="flex items-center gap-1.5">
+              <MoveVertical className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <input
                 type="range"
                 min="10"
@@ -851,19 +846,19 @@ export default function Home() {
                 className="w-16 h-1 accent-indigo-500 cursor-pointer"
                 aria-label="자막 높이"
               />
-              <span className="text-[10px] text-gray-500 w-8">{captionY}%</span>
+              <span className="text-[10px] text-gray-500 tabular-nums w-7 text-right">{captionY}%</span>
             </div>
           </div>
 
-          {/* 플랫폼 선택 */}
-          <div className="flex items-center gap-3 mt-2">
+          {/* Row 3: 플랫폼 선택 */}
+          <div className="flex items-center justify-center gap-4">
             <span className="text-[10px] text-gray-500 uppercase tracking-wider">플랫폼</span>
             {[
               { id: "youtube", label: "YouTube", icon: Youtube, color: "text-red-400" },
               { id: "tiktok", label: "TikTok", icon: Send, color: "text-cyan-400" },
               { id: "reels", label: "Reels", icon: Instagram, color: "text-pink-400" },
             ].map(({ id, label, icon: Icon, color }) => (
-              <label key={id} className="flex items-center gap-1 cursor-pointer select-none">
+              <label key={id} className="flex items-center gap-1.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={platforms.includes(id)}
@@ -877,7 +872,7 @@ export default function Home() {
                   disabled={isGenerating}
                   className="accent-indigo-500 w-3 h-3"
                 />
-                <Icon className={`w-3 h-3 ${color}`} />
+                <Icon className={`w-3.5 h-3.5 ${color}`} />
                 <span className="text-xs text-gray-400">{label}</span>
               </label>
             ))}

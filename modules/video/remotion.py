@@ -154,7 +154,13 @@ PLATFORM_CONFIGS = {
 }
 
 
-def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str, title: str = "", camera_style: str = "dynamic", bgm_theme: str = "random", channel: str | None = None, platforms: list[str] | None = None, caption_size: int = 48, caption_y: int = 28) -> str | dict[str, str] | None:
+def _extract_emotion(description: str) -> str | None:
+    """description에서 [SHOCK], [WONDER] 등 감정 태그를 추출합니다."""
+    match = re.search(r'\[(SHOCK|WONDER|TENSION|REVEAL|CALM)\]', description or "", re.IGNORECASE)
+    return match.group(1).upper() if match else None
+
+
+def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str, title: str = "", camera_style: str = "dynamic", bgm_theme: str = "random", channel: str | None = None, platforms: list[str] | None = None, caption_size: int = 48, caption_y: int = 28, descriptions: list[str] | None = None) -> str | dict[str, str] | None:
     """
     Remotion 렌더링. platforms가 2개 이상이면 플랫폼별 영상을 각각 생성합니다.
     API 토큰 추가 비용 없이 로컬 렌더만 반복합니다.
@@ -180,9 +186,11 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     cuts_duration = 0
     fps = 24
 
-    for visual_path, audio_path, _script, word_timestamps in zip(
+    desc_list = descriptions or [""] * len(visual_paths)
+
+    for idx, (visual_path, audio_path, _script, word_timestamps) in enumerate(zip(
         visual_paths, audio_paths, scripts, word_timestamps_list
-    ):
+    )):
         DEFAULT_CUT_SEC = 5.0
         MIN_CUT_SEC = 2.0
         TAIL_PADDING = 0.4
@@ -195,12 +203,18 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         frames = max(int(duration_sec * fps), fps)
         cuts_duration += frames
 
-        cuts_data.append({
+        cut_entry: dict = {
             "visual_path": _to_relative(visual_path),
             "audio_path": _to_relative(audio_path),
             "word_timestamps": word_timestamps or [],
             "duration_in_frames": frames,
-        })
+        }
+
+        emotion = _extract_emotion(desc_list[idx] if idx < len(desc_list) else "")
+        if emotion:
+            cut_entry["emotion"] = emotion
+
+        cuts_data.append(cut_entry)
 
     # 브랜드 에셋 준비 (한 번만)
     channel_label = f" ({channel})" if channel else ""
