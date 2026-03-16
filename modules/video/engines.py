@@ -81,6 +81,36 @@ def check_engine_available(engine: str, google_key: str = None) -> tuple[bool, s
     return False, f"알 수 없는 엔진: {engine}"
 
 
+def _get_available_engines(preferred_engine: str) -> list[str]:
+    """Return engine list ordered by availability. Preferred engine first if available."""
+    from modules.utils.keys import get_google_key, get_key_state
+
+    available = []
+
+    # Check each engine's key availability
+    engine_checks = {
+        "veo3": lambda: get_google_key(service="veo3") is not None,
+        "kling": lambda: bool(os.getenv("KLING_ACCESS_KEY")),
+        "sora2": lambda: bool(os.getenv("OPENAI_API_KEY")),
+    }
+
+    # Preferred engine first
+    if preferred_engine in engine_checks:
+        if engine_checks[preferred_engine]():
+            available.append(preferred_engine)
+
+    # Then other engines
+    for eng, check in engine_checks.items():
+        if eng != preferred_engine:
+            try:
+                if check():
+                    available.append(eng)
+            except Exception:
+                pass
+
+    return available
+
+
 def generate_video_from_image(
     image_path: str,
     prompt: str,
@@ -91,7 +121,8 @@ def generate_video_from_image(
 ) -> str | None:
     """
     선택된 엔진으로 이미지를 비디오로 변환합니다.
-    실패 시 None을 반환합니다 (호출자가 정지 이미지로 폴백).
+    키 가용성에 따라 동적 폴백을 시도합니다.
+    모든 엔진 실패 시 None을 반환합니다 (호출자가 정지 이미지로 폴백).
     """
     if engine == "none":
         return None
@@ -100,18 +131,46 @@ def generate_video_from_image(
         print(f"[비디오 엔진 오류] 이미지를 찾을 수 없습니다: {image_path}")
         return None
 
-    # Veo 3: Google genai SDK 직접 사용
-    if engine == "veo3":
-        from modules.video.veo import generate_video_veo
-        return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key)
+    # Build dynamic engine order based on key availability
+    engines_to_try = _get_available_engines(engine)
+    print(f"[비디오 엔진] 사용 가능: {engines_to_try}")
 
-    # Sora 2: OpenAI API
-    if engine == "sora2":
-        return _generate_via_openai_sora(image_path, prompt, index, topic_folder)
+    if not engines_to_try:
+        print(f"[비디오 엔진 오류] 사용 가능한 엔진이 없습니다. 정지 이미지로 폴백합니다.")
+        return None
 
-    # Kling: 직접 API
-    if engine == "kling":
-        return _generate_via_kling_direct(image_path, prompt, index, topic_folder)
+    for eng in engines_to_try:
+        result = _try_engine(eng, image_path, prompt, index, topic_folder, google_api_key)
+        if result is not None:
+            return result
+        print(f"[비디오 엔진] {eng} 실패 → 다음 엔진 시도")
+
+    print(f"[비디오 엔진] 모든 엔진 실패. 정지 이미지로 폴백합니다.")
+    return None
+
+
+def _try_engine(
+    engine: str,
+    image_path: str,
+    prompt: str,
+    index: int,
+    topic_folder: str,
+    google_api_key: str = None,
+) -> str | None:
+    """단일 엔진으로 비디오 생성을 시도합니다."""
+    try:
+        if engine == "veo3":
+            from modules.video.veo import generate_video_veo
+            return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key)
+
+        if engine == "sora2":
+            return _generate_via_openai_sora(image_path, prompt, index, topic_folder)
+
+        if engine == "kling":
+            return _generate_via_kling_direct(image_path, prompt, index, topic_folder)
+    except Exception as e:
+        print(f"[비디오 엔진 오류] {engine} 예외: {e}")
+        return None
 
     print(f"[비디오 엔진 오류] 알 수 없는 엔진: {engine}")
     return None

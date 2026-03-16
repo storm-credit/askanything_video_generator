@@ -1,10 +1,12 @@
 import os
+import shutil
 import time
 from PIL import Image, ImageOps
 import io
 
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
 from modules.utils.constants import MASTER_STYLE, is_key_rotation_error
+from modules.utils.cache import get_cached_image, save_to_cache
 from modules.utils.models import get_model_chain, get_service_tag
 from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 
@@ -18,6 +20,17 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
     """
     if not prompt or not prompt.strip():
         raise ValueError(f"[Imagen 이미지 오류] 프롬프트가 비어 있습니다 (index={index})")
+
+    # ── 캐시 확인 ──
+    cache_key_prompt = MASTER_STYLE + prompt
+    cached = get_cached_image(cache_key_prompt)
+    if cached:
+        image_dir = f"assets/{topic_folder}/images"
+        os.makedirs(image_dir, exist_ok=True)
+        filename = os.path.join(image_dir, f"cut_{index:02}.png")
+        shutil.copy2(cached, filename)
+        print(f"[이미지 캐시] 히트 — 재생성 스킵 (컷 {index+1})")
+        return filename
 
     # 모델 체인: 환경변수 오버라이드 시 단일 모델, 아니면 Standard → Fast
     override_model = os.getenv("IMAGEN_MODEL")
@@ -76,6 +89,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 fitted_image.save(filename)
 
                 record_key_usage(final_api_key, service_tag)
+                save_to_cache(cache_key_prompt, filename)
                 print(f"OK [아트 디렉터] 컷 {index+1} {model_label} 렌더링 완료!")
                 return filename
 

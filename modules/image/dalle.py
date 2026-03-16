@@ -1,5 +1,6 @@
 import io
 import os
+import shutil
 import time
 import random
 
@@ -8,6 +9,7 @@ from openai import OpenAI
 from PIL import Image, ImageOps
 
 from modules.utils.constants import MASTER_STYLE
+from modules.utils.cache import get_cached_image, save_to_cache
 from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 
 def generate_image(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None) -> str:
@@ -21,6 +23,17 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
         raise ValueError(f"[DALL·E 이미지 오류] 프롬프트가 비어 있습니다 (index={index})")
 
     enhanced_prompt = MASTER_STYLE + prompt
+
+    # ── 캐시 확인 ──
+    cached = get_cached_image(enhanced_prompt)
+    if cached:
+        image_dir = f"assets/{topic_folder}/images"
+        os.makedirs(image_dir, exist_ok=True)
+        filename = os.path.join(image_dir, f"cut_{index:02}.png")
+        shutil.copy2(cached, filename)
+        print(f"[이미지 캐시] 히트 — 재생성 스킵 (컷 {index+1})")
+        return filename
+
     safety_retry_count = 0  # safety fallback stage tracker
 
     max_retries = 3
@@ -50,6 +63,7 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
             filename = os.path.join(image_dir, f"cut_{index:02}.png")
             fitted_image.save(filename)
 
+            save_to_cache(enhanced_prompt, filename)
             return filename
 
         except Exception as e:
