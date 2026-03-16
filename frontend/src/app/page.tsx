@@ -583,16 +583,21 @@ export default function Home() {
       if (data.auth_url) {
         window.open(data.auth_url, `${platform}_auth`, "width=600,height=700");
         const poll = setInterval(async () => {
-          const check = await fetch(`${API_BASE}/api/${platform}/status`);
-          const status = await check.json();
-          if (status.connected) {
-            if (platform === "youtube") setYtConnected(true);
-            else if (platform === "tiktok") setTtConnected(true);
-            else if (platform === "instagram") setIgConnected(true);
+          try {
+            const check = await fetch(`${API_BASE}/api/${platform}/status`);
+            const status = await check.json();
+            if (status.connected) {
+              if (platform === "youtube") setYtConnected(true);
+              else if (platform === "tiktok") setTtConnected(true);
+              else if (platform === "instagram") setIgConnected(true);
+              clearInterval(poll);
+            }
+          } catch {
+            // 연결 실패 시 폴링 중단
             clearInterval(poll);
           }
         }, 2000);
-        setTimeout(() => clearInterval(poll), 120000);
+        const timeout = setTimeout(() => clearInterval(poll), 120000);
       } else if (data.error) {
         setUploadResult({ success: false, error: data.error });
       }

@@ -71,8 +71,12 @@ def _is_key_warned(key: str, service: str = None) -> bool:
         threshold = _WARN_THRESHOLD.get(service, _DEFAULT_WARN_THRESHOLD)
         return used >= threshold
     else:
-        total = sum(_key_usage[key].values())
-        return total >= sum(_WARN_THRESHOLD.values())
+        # 서비스별 경고 여부 개별 확인: 하나라도 경고면 True
+        for svc, cnt in _key_usage[key].items():
+            threshold = _WARN_THRESHOLD.get(svc, _DEFAULT_WARN_THRESHOLD)
+            if cnt >= threshold:
+                return True
+        return False
 
 
 def get_key_state(key: str, service: str = None) -> str:
