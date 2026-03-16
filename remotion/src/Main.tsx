@@ -17,7 +17,18 @@ type CutProps = {
   audio_path: string;
   word_timestamps: WordProps[];
   duration_in_frames: number;
+  description?: string;
   emotion?: 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
+};
+
+// Extract [EMOTION] tag from cut description field
+const EMOTION_TAGS = new Set(['SHOCK', 'WONDER', 'TENSION', 'REVEAL', 'CALM']);
+const extractEmotion = (cut: CutProps): string | undefined => {
+  if (cut.emotion) return cut.emotion;
+  if (!cut.description) return undefined;
+  const match = cut.description.match(/\[(\w+)\]/);
+  if (match && EMOTION_TAGS.has(match[1])) return match[1];
+  return undefined;
 };
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov'];
@@ -233,6 +244,18 @@ const BrandOutro: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
+const FADE_IN_FRAMES = 6; // 250ms @ 24fps
+
+const FadeIn: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const frame = useCurrentFrame();
+  const opacity = interpolate(frame, [0, FADE_IN_FRAMES], [0, 1], { extrapolateRight: 'clamp' });
+  return (
+    <AbsoluteFill style={{ opacity }}>
+      {children}
+    </AbsoluteFill>
+  );
+};
+
 const BGM_VOLUME = 0.15;  // TTS 대비 15% 볼륨
 
 export const Main: React.FC<{
@@ -280,20 +303,22 @@ export const Main: React.FC<{
 
         return (
           <Sequence key={index} from={startFrame} durationInFrames={cut.duration_in_frames}>
-            <AbsoluteFill>
-                {isVideo ? (
-                    <Video
-                      src={visualSrc}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      loop
-                      muted
-                    />
-                ) : (
-                    <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={cut.emotion} />
-                )}
-                <Audio src={audioSrc} />
-                <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} />
-            </AbsoluteFill>
+            <FadeIn>
+              <AbsoluteFill>
+                  {isVideo ? (
+                      <Video
+                        src={visualSrc}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        loop
+                        muted
+                      />
+                  ) : (
+                      <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={cut.emotion} />
+                  )}
+                  <Audio src={audioSrc} />
+                  <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={extractEmotion(cut)} />
+              </AbsoluteFill>
+            </FadeIn>
           </Sequence>
         );
       })}

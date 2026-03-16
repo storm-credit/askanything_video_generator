@@ -25,6 +25,23 @@ const EN_STOPWORDS = new Set([
   'getting', 'looking', 'turning', 'making', 'having', 'being', 'going',
 ]);
 
+type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
+
+const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
+  SHOCK: '#FF4444',
+  WONDER: '#FFD700',
+  TENSION: '#FF8C00',
+  REVEAL: '#00FF88',
+  CALM: '#87CEEB',
+};
+
+const getEmotionColor = (emotion?: string): string => {
+  if (emotion && emotion in EMOTION_HIGHLIGHT_COLOR) {
+    return EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag];
+  }
+  return '#FFD700'; // default gold
+};
+
 const isEmphasisWord = (word: string): boolean => {
   const clean = word.replace(/[.,!?;:'"]/g, '').toLowerCase();
   // 1) Explicit power words — always emphasize
@@ -35,10 +52,16 @@ const isEmphasisWord = (word: string): boolean => {
   if (clean.length >= 7 && /^[a-z]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
   // 4) Korean: 4+ Hangul syllables (most 4+ syllable Korean words carry high info density)
   if (clean.length >= 4 && /^[\uAC00-\uD7A3]+$/.test(clean)) return true;
+  // 5) Japanese: katakana words (foreign/technical loanwords are attention-grabbing)
+  if (/^[\u30A0-\u30FF]{3,}$/.test(clean)) return true;
+  // 6) Chinese: 4+ character words (longer compounds carry high info density)
+  if (clean.length >= 4 && /^[\u4E00-\u9FFF]+$/.test(clean)) return true;
+  // 7) European languages (Spanish, French, German, Portuguese, etc.): 8+ chars
+  if (clean.length >= 8 && /^[a-zA-Z\u00C0-\u024F]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
   return false;
 };
 
-export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: number; captionY?: number }> = ({ wordTimestamps, captionSize = 48, captionY = 28 }) => {
+export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: number; captionY?: number; emotion?: string }> = ({ wordTimestamps, captionSize = 48, captionY = 28, emotion }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
@@ -72,17 +95,20 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
           if (!isVisible && !hasPassed && !isActive) return null;
 
           const isEmphasized = isActive && w.emphasis;
+          const highlightColor = getEmotionColor(emotion);
 
           const color = isEmphasized
             ? '#FF4444'
             : isActive
-              ? '#FFD700'
+              ? highlightColor
               : 'rgba(255, 255, 255, 0.6)';
+
+          const highlightGlow = `0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 6px ${highlightColor}4D`;
 
           const textShadow = isEmphasized
             ? '0px 2px 16px rgba(255, 68, 68, 0.6), 0px 0px 8px rgba(255, 68, 68, 0.4), 0px 2px 12px rgba(0, 0, 0, 0.9)'
             : isActive
-              ? '0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 6px rgba(255, 215, 0, 0.3)'
+              ? highlightGlow
               : '0px 2px 8px rgba(0, 0, 0, 0.8)';
 
           const scale = isEmphasized ? 1.15 : 1;
