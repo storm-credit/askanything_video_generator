@@ -101,7 +101,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                     print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → 다른 키로 전환...")
                     continue  # 다음 키로
                 if is_safety_error(error_msg):
-                    enhanced_prompt = get_safety_fallback_prompt(prompt, safety_retry_count)
+                    enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count)
                     safety_retry_count += 1
                     print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도...")
                     continue  # 같은 키로 대체 프롬프트 재시도

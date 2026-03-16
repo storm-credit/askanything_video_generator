@@ -39,7 +39,7 @@ async def _lifespan(app):
 app = FastAPI(lifespan=_lifespan)
 
 # 동시 생성 요청 제한 (GPU/API 과부하 방지)
-_generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "2")))
+_generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "1")))
 # 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
 _cut_executor = ThreadPoolExecutor(max_workers=4)
 

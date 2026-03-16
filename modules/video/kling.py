@@ -5,21 +5,7 @@ import jwt
 import requests
 import base64
 
-
-def _get_motion_style(prompt: str) -> str:
-    """감정 태그 기반 모션 스타일 결정"""
-    if "[SHOCK]" in prompt or "shock" in prompt.lower():
-        return "fast dynamic camera movement, sudden dramatic angles"
-    elif "[WONDER]" in prompt or "wonder" in prompt.lower():
-        return "slow graceful panning, gentle reveal shots"
-    elif "[TENSION]" in prompt or "tension" in prompt.lower():
-        return "slow creeping approach, tightening frame"
-    elif "[CALM]" in prompt or "calm" in prompt.lower():
-        return "very slow or static camera, peaceful ambient motion"
-    elif "[REVEAL]" in prompt or "reveal" in prompt.lower():
-        return "sudden camera shift, dramatic angle change"
-    else:
-        return "smooth cinematic camera movement"
+from modules.utils.constants import get_motion_style
 
 
 def _generate_jwt(ak: str, sk: str) -> str:
@@ -73,7 +59,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     payload = {
         "model": "kling-v1",
         "image": img_b64,
-        "prompt": f"{_get_motion_style(prompt)}, 4k, realistic physics. {prompt}",
+        "prompt": f"{get_motion_style(prompt)}, 4k, realistic physics. {prompt}",
         "duration": "5"
     }
     

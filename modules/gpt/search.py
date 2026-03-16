@@ -46,13 +46,11 @@ def get_fact_check_context(topic: str) -> str:
         )
 
         # GPT에게 전달할 요약 컨텍스트 생성
-        context = "### [실시간 웹 검색 팩트체크 자료 (Tavily Search API)] ###\n"
-        context += "아래의 검색 결과를 참고 자료로 활용하되, 사실 여부를 교차 검증하여 대본의 'Climax'나 'Context'를 작성하는 데 참고하십시오.\n\n"
+        context = "\n\n[Fact-Check Reference]\n"
+        if response.get("answer"):
+            context += f"Summary: {response['answer']}\n\n"
 
-        if "answer" in response and response["answer"]:
-            context += f"💡 [AI 요약 답변]: {response['answer']}\n\n"
-
-        context += "🔍 [상세 검색 결과 (교차 검증 자료)]:\n"
+        context += "Sources:\n"
         for i, result in enumerate(response.get("results", [])):
             context += f"{i+1}. 제목: {result.get('title')}\n"
             context += f"   출처: {result.get('url')}\n"

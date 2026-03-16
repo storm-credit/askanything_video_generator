@@ -282,44 +282,37 @@ function buildGlobalWordTimeline(
   return timeline;
 }
 
+// Type alias for global word timeline segments
+type GlobalWordSegment = { startFrame: number; endFrame: number };
+
 // For a given frame, find the nearest speech boundary and compute interpolated BGM volume
+// Uses binary search (O(log n)) instead of linear scan
 function getDynamicBgmVolume(
   frame: number,
-  timeline: { startFrame: number; endFrame: number }[],
+  timeline: GlobalWordSegment[],
 ): number {
   if (timeline.length === 0) return BGM_VOLUME;
 
-  // Find distance to nearest speech region
-  // Positive = inside speech, negative = distance to nearest speech edge
-  let minDistToSpeech = Infinity;
-  let isSpeechActive = false;
-
-  for (const seg of timeline) {
-    if (frame >= seg.startFrame && frame <= seg.endFrame) {
-      isSpeechActive = true;
-      break;
-    }
-    // Distance to start of this segment
-    const distToStart = seg.startFrame - frame;
-    // Distance to end of this segment
-    const distFromEnd = frame - seg.endFrame;
-
-    if (distToStart > 0) {
-      minDistToSpeech = Math.min(minDistToSpeech, distToStart);
-    }
-    if (distFromEnd > 0) {
-      minDistToSpeech = Math.min(minDistToSpeech, distFromEnd);
-    }
+  // Binary search for speech segment containing frame
+  let lo = 0, hi = timeline.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (frame < timeline[mid].startFrame) hi = mid - 1;
+    else if (frame > timeline[mid].endFrame) lo = mid + 1;
+    else return BGM_VOLUME_SPEECH; // inside speech
   }
 
-  if (isSpeechActive) {
-    return BGM_VOLUME_SPEECH;
-  }
+  // After binary search: hi < lo
+  // hi = index of last segment ending before frame (or -1)
+  // lo = index of first segment starting after frame (or timeline.length)
+  let minDist = Infinity;
+  if (hi >= 0) minDist = Math.min(minDist, frame - timeline[hi].endFrame);
+  if (lo < timeline.length) minDist = Math.min(minDist, timeline[lo].startFrame - frame);
 
   // Ramp: smoothly transition from speech volume to silence volume over BGM_RAMP_FRAMES
-  if (minDistToSpeech <= BGM_RAMP_FRAMES) {
+  if (minDist <= BGM_RAMP_FRAMES) {
     return interpolate(
-      minDistToSpeech,
+      minDist,
       [0, BGM_RAMP_FRAMES],
       [BGM_VOLUME_SPEECH, BGM_VOLUME_SILENCE],
       { extrapolateRight: 'clamp' },

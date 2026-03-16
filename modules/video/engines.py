@@ -6,6 +6,7 @@
 """
 
 import os
+import tempfile
 import time
 import mimetypes
 import requests
@@ -29,21 +30,7 @@ SORA_SLOWDOWN_AT = 12        # 이 횟수 이후 폴링 간격 확대
 VIDEO_DOWNLOAD_TIMEOUT = 60  # 초
 MAX_IMAGE_SIZE_MB = 20       # Base64 인코딩 전 최대 이미지 크기
 
-
-def _get_motion_style(prompt: str) -> str:
-    """감정 태그 기반 모션 스타일 결정"""
-    if "[SHOCK]" in prompt or "shock" in prompt.lower():
-        return "fast dynamic camera movement, sudden dramatic angles"
-    elif "[WONDER]" in prompt or "wonder" in prompt.lower():
-        return "slow graceful panning, gentle reveal shots"
-    elif "[TENSION]" in prompt or "tension" in prompt.lower():
-        return "slow creeping approach, tightening frame"
-    elif "[CALM]" in prompt or "calm" in prompt.lower():
-        return "very slow or static camera, peaceful ambient motion"
-    elif "[REVEAL]" in prompt or "reveal" in prompt.lower():
-        return "sudden camera shift, dramatic angle change"
-    else:
-        return "smooth cinematic camera movement"
+from modules.utils.constants import get_motion_style
 
 
 def get_available_engines() -> list[dict]:
@@ -210,7 +197,7 @@ def _generate_via_openai_sora(
             model="sora",
             input=[
                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
-                {"type": "text", "text": f"Generate an 8-second cinematic video. {_get_motion_style(prompt)}, 4K quality. {prompt}"},
+                {"type": "text", "text": f"Generate an 8-second cinematic video. {get_motion_style(prompt)}, 4K quality. {prompt}"},
             ],
             tools=[{"type": "video_generation", "resolution": "1080p", "duration": 8}],
         )
@@ -275,14 +262,24 @@ def _download_video(
     final_path = os.path.join(output_dir, f"{engine}_cut_{index:02d}.mp4")
 
     engine_name = SUPPORTED_ENGINES.get(engine, {}).get("name", engine)
+    tmp_path = None
     try:
         print(f"-> [{engine_name}] 컷 {index+1} 렌더링 완료! 비디오 다운로드 중...")
         vid_resp = requests.get(video_url, stream=True, timeout=VIDEO_DOWNLOAD_TIMEOUT)
         vid_resp.raise_for_status()
-        with open(final_path, "wb") as f:
+        # Write to temp file first to prevent partial downloads
+        fd, tmp_path = tempfile.mkstemp(dir=output_dir, suffix=".tmp")
+        os.close(fd)
+        with open(tmp_path, "wb") as f:
             for chunk in vid_resp.iter_content(chunk_size=8192):
                 f.write(chunk)
+        os.replace(tmp_path, final_path)  # atomic rename
         return final_path
     except Exception as e:
         print(f"[{engine_name} 다운로드 오류] 컷 {index+1} 저장 실패: {e}")
+        if tmp_path:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
         return None

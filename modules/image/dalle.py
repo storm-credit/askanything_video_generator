@@ -70,9 +70,10 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
             error_msg = str(e)
             if attempt < max_retries - 1:
                 if is_safety_error(error_msg):
-                    enhanced_prompt = get_safety_fallback_prompt(prompt, safety_retry_count)
+                    enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count)
                     safety_retry_count += 1
                     print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 대체 프롬프트로 재시도합니다... ({attempt+1}/{max_retries})")
+                    continue
                 elif '429' in error_msg or 'rate_limit' in error_msg.lower():
                     wait = min(2 ** (attempt + 1), 30) + random.uniform(0, 2)
                     print(f"  [DALL·E 429] 컷 {index+1} 속도 제한. {wait:.1f}초 후 재시도... ({attempt+1}/{max_retries})")
