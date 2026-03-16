@@ -7,28 +7,33 @@ type WordProps = {
   end: number;
 };
 
-// Emphasis detection: numbers, exclamations, long words (high-info density)
+// Emphasis detection: numbers, power words, impact vocabulary
 // Based on Dual Coding Theory (Paivio 1986) — highlight ≤20% of words for optimal recall
-const EMPHASIS_PATTERNS = /^(\d[\d,.]*[%배만억조x]?|미쳤|소름|진짜|ㄹㅇ|대박|역대|최초|insane|crazy|impossible|dead|never|every|all|million|billion|trillion|forever|nothing|destroy|vanish|disappear|survive|freeze|explode)/i;
+// Strategy: explicit allow-list (EMPHASIS) > explicit deny-list (STOPWORDS) > length heuristic
+const EMPHASIS_PATTERNS = /^(\d[\d,.]*[%배만억조x]?|미쳤|소름|진짜|ㄹㅇ|대박|역대|최초|insane|crazy|impossible|dead|never|every|million|billion|trillion|forever|nothing|destroy|vanish|disappear|survive|freeze|explode|entire|massive|infinite|absolute)/i;
 
-// English stopwords — common function words that should NOT be emphasized even if long
+// Common function words — should NOT be emphasized even if 7+ chars
 const EN_STOPWORDS = new Set([
   'because', 'through', 'should', 'before', 'after', 'about', 'between',
   'during', 'without', 'within', 'around', 'already', 'always', 'another',
-  'become', 'behind', 'believe', 'beside', 'beyond', 'cannot', 'could',
-  'enough', 'itself', 'itself', 'might', 'nothing', 'people', 'really',
-  'should', 'something', 'sometimes', 'still', 'their', 'there', 'these',
-  'thing', 'think', 'those', 'though', 'under', 'until', 'where', 'which',
-  'while', 'would', 'actually', 'however', 'together',
+  'become', 'behind', 'believe', 'beside', 'beyond', 'cannot', 'enough',
+  'itself', 'might', 'people', 'really', 'something', 'sometimes', 'still',
+  'their', 'there', 'these', 'thing', 'think', 'those', 'though', 'under',
+  'until', 'where', 'which', 'while', 'would', 'could', 'actually',
+  'however', 'together', 'against', 'minutes', 'seconds', 'degrees',
+  'basically', 'literally', 'everything', 'anything', 'someone', 'another',
+  'getting', 'looking', 'turning', 'making', 'having', 'being', 'going',
 ]);
 
 const isEmphasisWord = (word: string): boolean => {
   const clean = word.replace(/[.,!?;:'"]/g, '').toLowerCase();
+  // 1) Explicit power words — always emphasize
   if (EMPHASIS_PATTERNS.test(clean)) return true;
+  // 2) Numbers — always emphasize (data = impact)
   if (/^\d/.test(clean)) return true;
-  // English: 6+ chars, not a stopword (content words only)
-  if (clean.length >= 6 && /^[a-z]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
-  // Korean: 4+ chars (Korean words are inherently shorter, most 4+ char words are content-rich)
+  // 3) English content words: 7+ chars, not a stopword (stricter threshold)
+  if (clean.length >= 7 && /^[a-z]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
+  // 4) Korean: 4+ Hangul chars (most 4+ syllable Korean words carry high info density)
   if (clean.length >= 4 && /^[\u3131-\uD79D]+$/.test(clean)) return true;
   return false;
 };
