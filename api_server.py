@@ -148,7 +148,7 @@ class GenerateRequest(BaseModel):
     geminiKeys: str | None = None  # 프론트엔드 멀티키 (쉼표 구분)
     outputPath: str | None = None
     language: str = "ko"
-    cameraStyle: str = "dynamic"
+    cameraStyle: str = "auto"
     bgmTheme: str = "random"
     channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
@@ -962,7 +962,7 @@ class RenderRequest(BaseModel):
     elevenlabsKey: str | None = None
     ttsSpeed: float = 0.9
     videoEngine: str = "none"
-    cameraStyle: str = "dynamic"
+    cameraStyle: str = "auto"
     bgmTheme: str = "random"
     channel: str | None = None
     platforms: list[str] = ["youtube"]
@@ -1385,7 +1385,7 @@ async def instagram_disconnect():
 class BatchJobRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     language: str = "ko"
-    cameraStyle: str = "dynamic"
+    cameraStyle: str = "auto"
     bgmTheme: str = "random"
     llmProvider: str = "gemini"
     videoEngine: str = "veo3"

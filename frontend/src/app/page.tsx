@@ -17,7 +17,7 @@ export default function Home() {
   const [videoEngine, setVideoEngine] = useState("none");
   const [videoModel, setVideoModel] = useState("");
   const [language, setLanguage] = useState("ko");
-  const [cameraStyle, setCameraStyle] = useState("dynamic");
+  const [cameraStyle, setCameraStyle] = useState("auto");
   const [bgmTheme, setBgmTheme] = useState("random");
   const [channel, setChannel] = useState("");
   const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
@@ -887,6 +887,7 @@ export default function Home() {
                     <span className="text-[10px] font-medium text-gray-400">카메라</span>
                   </div>
                   <select value={cameraStyle} onChange={(e) => setCameraStyle(e.target.value)} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-sky-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <option value="auto" className="bg-gray-900">자동 (감정 기반)</option>
                     <option value="dynamic" className="bg-gray-900">역동적</option>
                     <option value="gentle" className="bg-gray-900">부드러운</option>
                     <option value="static" className="bg-gray-900">고정</option>

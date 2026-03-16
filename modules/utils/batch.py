@@ -28,7 +28,7 @@ def _init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             topic TEXT NOT NULL,
             language TEXT DEFAULT 'ko',
-            camera_style TEXT DEFAULT 'dynamic',
+            camera_style TEXT DEFAULT 'auto',
             bgm_theme TEXT DEFAULT 'random',
             llm_provider TEXT DEFAULT 'gemini',
             video_engine TEXT DEFAULT 'veo3',

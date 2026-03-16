@@ -249,7 +249,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         return None
 
     assets_dir = os.path.abspath("assets")
-    camera = camera_style if camera_style in ("dynamic", "gentle", "static") else "dynamic"
+    camera = camera_style if camera_style in ("auto", "dynamic", "gentle", "static") else "dynamic"
 
     # 플랫폼 결정: 기본 youtube만
     if not platforms:

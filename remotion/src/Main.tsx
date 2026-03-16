@@ -45,9 +45,9 @@ function isVideoPath(path: string): boolean {
 
 // Ken Burns 효과 프리셋: 스타일별 그룹
 type KenBurnsPreset = { startScale: number; endScale: number; startX: number; endX: number; startY: number; endY: number };
-type CameraStyle = 'dynamic' | 'gentle' | 'static';
+type CameraStyle = 'auto' | 'dynamic' | 'gentle' | 'static';
 
-const CAMERA_PRESETS: Record<CameraStyle, KenBurnsPreset[]> = {
+const CAMERA_PRESETS: Record<Exclude<CameraStyle, 'auto'>, KenBurnsPreset[]> = {
   dynamic: [
     { startScale: 1.0, endScale: 1.15, startX: 0, endX: -3, startY: 0, endY: -2 },
     { startScale: 1.12, endScale: 1.0, startX: -2, endX: 2, startY: -1, endY: 1 },
@@ -82,10 +82,12 @@ const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: nu
 
   // Emotion-based camera takes priority over round-robin
   let preset: KenBurnsPreset;
-  if (emotion && cameraStyle !== 'static' && EMOTION_CAMERA[emotion]) {
+  // "auto" mode: always use emotion-based camera if available
+  const effectiveStyle = cameraStyle === 'auto' ? 'dynamic' : cameraStyle;
+  if (emotion && effectiveStyle !== 'static' && EMOTION_CAMERA[emotion]) {
     preset = EMOTION_CAMERA[emotion];
   } else {
-    const presets = CAMERA_PRESETS[cameraStyle] || CAMERA_PRESETS.dynamic;
+    const presets = CAMERA_PRESETS[effectiveStyle] || CAMERA_PRESETS.dynamic;
     preset = presets[index % presets.length];
   }
 
