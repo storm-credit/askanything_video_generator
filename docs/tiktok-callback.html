@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TikTok OAuth Callback</title>
+</head>
+<body>
+<h2>TikTok 연동 처리 중...</h2>
+<p id="status">로컬 서버로 전달 중입니다...</p>
+<script>
+const params = new URLSearchParams(window.location.search);
+const code = params.get('code');
+const state = params.get('state');
+if (code) {
+  const localUrl = 'http://localhost:8003/api/tiktok/callback?code=' + encodeURIComponent(code) + (state ? '&state=' + encodeURIComponent(state) : '');
+  document.getElementById('status').textContent = '로컬 서버로 리다이렉트 중...';
+  window.location.href = localUrl;
+} else {
+  document.getElementById('status').textContent = '오류: 인증 코드를 받지 못했습니다. ' + window.location.search;
+}
+</script>
+</body>
+</html>
