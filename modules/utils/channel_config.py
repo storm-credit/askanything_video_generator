@@ -72,20 +72,3 @@ def get_channel_names() -> list[str]:
     return list(CHANNEL_PRESETS.keys())
 
 
-def apply_channel_defaults(channel: str | None, current: dict) -> dict:
-    """채널 프리셋을 기본값으로 적용. 사용자가 명시적으로 설정한 값은 유지.
-
-    current: 현재 설정값 (API 요청에서 받은 값)
-    반환: 채널 기본값이 적용된 설정 dict
-    """
-    preset = get_channel_preset(channel)
-    if not preset:
-        return current
-
-    result = dict(current)
-    # 채널 프리셋의 각 키를 기본값으로 적용 (현재 값이 기본값이면 프리셋으로 대체)
-    for key, default_val in preset.items():
-        if key in result:
-            result[key] = default_val
-
-    return result

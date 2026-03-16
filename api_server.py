@@ -570,6 +570,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 # 비디오 변환과 TTS를 threading으로 병렬 실행 (데드락 방지: 직접 스레드 사용)
                 video_result = [None]  # mutable container for thread result
                 tts_result = [None]
+                whisper_result = [None]
 
                 def _run_video():
                     try:
@@ -603,8 +604,6 @@ async def generate_video_endpoint(req: GenerateRequest):
                             with errors_lock:
                                 errors.append(f"타임스탬프: {exc}")
                             print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
-
-                whisper_result = [None]  # must be before _run_tts_and_whisper definition
 
                 threads = []
                 if img_path and active_video_engine != "none":
