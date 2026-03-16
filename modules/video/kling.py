@@ -89,7 +89,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
         time.sleep(5)
 
         try:
-            poll_resp = requests.get(poll_url, headers=headers, timeout=10)
+            poll_resp = requests.get(poll_url, headers=headers, timeout=30)
             poll_resp.raise_for_status()
             poll_data = poll_resp.json()
 

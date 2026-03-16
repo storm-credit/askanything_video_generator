@@ -90,8 +90,10 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
                     or "이미지가 없습니다" in error_msg
                 )
                 if is_safety:
+                    # 원본 프롬프트에서 핵심 키워드 추출하여 맥락 유지
+                    topic_hint = " ".join(prompt.split()[:6])  # 첫 6단어로 맥락 보존
                     enhanced_prompt = (
-                        "A safe, beautiful abstract cinematic visualization, "
+                        f"A safe, beautiful cinematic visualization related to: {topic_hint}. "
                         "National Geographic documentary style, atmospheric lighting, "
                         "bright and uplifting, vertical composition, NO TEXT, NO LETTERS."
                     )

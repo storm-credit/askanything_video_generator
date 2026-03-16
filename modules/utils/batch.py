@@ -43,11 +43,27 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
+def has_duplicate_topic(topic: str) -> bool:
+    """pending/running 상태에서 동일 주제가 이미 존재하는지 확인합니다."""
+    with _lock:
+        conn = _get_conn()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM batch_jobs WHERE topic = ? AND status IN ('pending', 'running')",
+                (topic,),
+            ).fetchone()
+            return row["cnt"] > 0
+        finally:
+            conn.close()
+
+
 def add_job(topic: str, language: str = "ko", camera_style: str = "dynamic",
             bgm_theme: str = "random", llm_provider: str = "gemini",
             video_engine: str = "veo3", image_engine: str = "imagen",
             channel: str | None = None) -> int:
-    """큐에 생성 작업을 추가합니다. 작업 ID를 반환합니다."""
+    """큐에 생성 작업을 추가합니다. 중복 주제 경고 후 작업 ID를 반환합니다."""
+    if has_duplicate_topic(topic):
+        print(f"[배치 경고] 동일 주제가 이미 큐에 있습니다: {topic[:30]}...")
     with _lock:
         conn = _get_conn()
         try:

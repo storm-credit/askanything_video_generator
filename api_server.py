@@ -27,6 +27,7 @@ from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
 from modules.utils.constants import PROVIDER_LABELS
 from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats
+from modules.utils.models import MODEL_RATE_LIMITS
 from modules.utils.audio import normalize_audio_lufs
 from modules.utils.channel_config import get_channel_preset, get_channel_names
 
@@ -193,6 +194,12 @@ async def health_check():
         "missing": missing,
         "google_key_count": google_key_count,
     }
+
+
+@app.get("/api/model-limits")
+async def model_limits():
+    """모델별 Rate Limit 정보를 반환합니다."""
+    return MODEL_RATE_LIMITS
 
 
 def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | None, video_engine: str,

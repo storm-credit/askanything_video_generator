@@ -10,7 +10,7 @@ type WordProps = {
 // Emphasis detection: numbers, power words, impact vocabulary
 // Based on Dual Coding Theory (Paivio 1986) — highlight ≤20% of words for optimal recall
 // Strategy: explicit allow-list (EMPHASIS) > explicit deny-list (STOPWORDS) > length heuristic
-const EMPHASIS_PATTERNS = /^(\d[\d,.]*[%배만억조x]?|미쳤|소름|진짜|ㄹㅇ|대박|역대|최초|insane|crazy|impossible|dead|never|every|million|billion|trillion|forever|nothing|destroy|vanish|disappear|survive|freeze|explode|entire|massive|infinite|absolute)/i;
+const EMPHASIS_PATTERNS = /^(\d[\d,.]*[%배만억조x]?|미쳤|미침|소름|진짜|ㄹㅇ|대박|역대|최초|헐|insane|crazy|impossible|dead|never|every|million|billion|trillion|forever|nothing|destroy|vanish|disappear|survive|freeze|explode|entire|massive|infinite|absolute|unbelievable|incredible|shocking|terrifying)$/i;
 
 // Common function words — should NOT be emphasized even if 7+ chars
 const EN_STOPWORDS = new Set([

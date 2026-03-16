@@ -135,9 +135,9 @@ def _generate_via_openai_sora(
             model="sora",
             input=[
                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
-                {"type": "text", "text": f"Generate a 5-second cinematic video with smooth camera movement. {prompt}"},
+                {"type": "text", "text": f"Generate an 8-second cinematic video with smooth camera movement. {prompt}"},
             ],
-            tools=[{"type": "video_generation", "resolution": "1080p", "duration": 5}],
+            tools=[{"type": "video_generation", "resolution": "1080p", "duration": 8}],
         )
 
         video_url = None

@@ -141,7 +141,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 * "~입니다", "~합니다" 금지. "~거든", "~잖아", "~인 거야", "~라는 거지" 같은 구어체 어미 사용.
 * 감탄사/추임새 적극 활용: "미쳤지?", "소름이지?", "진짜야.", "ㄹㅇ."
 * 같은 문장 구조를 연속 사용하지 마라. Q&A, 명령문, 서술문을 섞어라.
-* [CRITICAL WARNING] 8~10컷으로 작성. 30~50초 영상. 절대 5컷 이하 금지.
+* [CRITICAL WARNING] 8~10컷으로 작성. 각 컷 약 3.5~5초 (총 30~50초 영상). 절대 5컷 이하 금지.
 
 [이미지 프롬프트 규칙]
 * 반드시 영어로 작성. 한국어 금지.
@@ -213,7 +213,7 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 * Each cut: 5–10 words MAX. Short. Punchy. One sentence only.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
 * Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
-* [CRITICAL WARNING] Write 8–10 cuts. 30–50 second video. NEVER less than 5 cuts.
+* [CRITICAL WARNING] Write 8–10 cuts (~3.5–5 sec each). 30–50 second video. NEVER less than 5 cuts.
 
 [Image Prompt Rules]
 * ALL image prompts must be in English.

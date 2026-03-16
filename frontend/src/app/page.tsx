@@ -153,37 +153,37 @@ export default function Home() {
   // LLM 프로바이더별 모델 옵션
   const LLM_MODELS: Record<string, { value: string; label: string }[]> = {
     gemini: [
-      { value: "", label: "Gemini 2.5 Pro (기본)" },
-      { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-      { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+      { value: "", label: "Gemini 2.5 Pro (기본) — 5 RPM" },
+      { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash — 10 RPM" },
+      { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash — 15 RPM" },
     ],
     openai: [
-      { value: "", label: "GPT-4o (기본)" },
-      { value: "gpt-4o-mini", label: "GPT-4o Mini" },
-      { value: "gpt-4.1", label: "GPT-4.1" },
-      { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+      { value: "", label: "GPT-4o (기본) — 500 RPM" },
+      { value: "gpt-4o-mini", label: "GPT-4o Mini — 500 RPM" },
+      { value: "gpt-4.1", label: "GPT-4.1 — 500 RPM" },
+      { value: "gpt-4.1-mini", label: "GPT-4.1 Mini — 500 RPM" },
     ],
     claude: [
-      { value: "", label: "Claude Sonnet 4 (기본)" },
-      { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
-      { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 3.5" },
+      { value: "", label: "Claude Sonnet 4 (기본) — 50 RPM" },
+      { value: "claude-opus-4-20250514", label: "Claude Opus 4 — 20 RPM" },
+      { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 3.5 — 50 RPM" },
     ],
   };
 
   const IMAGE_MODELS: Record<string, { value: string; label: string }[]> = {
     imagen: [
-      { value: "", label: "Imagen 4 Standard (기본)" },
-      { value: "imagen-4.0-fast-generate-001", label: "Imagen 4 Fast" },
+      { value: "", label: "Imagen 4 Standard (기본) — 10 RPM" },
+      { value: "imagen-4.0-fast-generate-001", label: "Imagen 4 Fast — 10 RPM" },
     ],
     dalle: [
-      { value: "", label: "DALL-E 3 (기본)" },
+      { value: "", label: "DALL-E 3 (기본) — 7 RPM" },
     ],
   };
 
   const VIDEO_MODELS: Record<string, { value: string; label: string }[]> = {
     veo3: [
-      { value: "", label: "Veo 3 Standard (기본)" },
-      { value: "veo-3.0-fast-generate-001", label: "Veo 3 Fast" },
+      { value: "", label: "Veo 3 Standard (기본) — 2 RPM" },
+      { value: "veo-3.0-fast-generate-001", label: "Veo 3 Fast — 2 RPM" },
     ],
     sora2: [{ value: "", label: "Sora 2 (기본)" }],
     kling: [{ value: "", label: "Kling v1 (기본)" }],

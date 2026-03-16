@@ -55,7 +55,8 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
             if attempt < max_retries - 1:
                 if 'content_policy_violation' in error_msg:
                     print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 대체 프롬프트로 재시도합니다... ({attempt+1}/{max_retries})")
-                    enhanced_prompt = "A very safe, beautiful, abstract and highly detailed cinematic visualization illustrating the related concept, National Geographic high-end documentary style, atmospheric lighting, strictly NO TEXT, NO LETTERS, NO WORDS."
+                    topic_hint = " ".join(prompt.split()[:6])  # 첫 6단어로 맥락 보존
+                    enhanced_prompt = f"A very safe, beautiful cinematic visualization related to: {topic_hint}. National Geographic high-end documentary style, atmospheric lighting, strictly NO TEXT, NO LETTERS, NO WORDS."
                 elif '429' in error_msg or 'rate_limit' in error_msg.lower():
                     wait = min(2 ** (attempt + 1), 30) + random.uniform(0, 2)
                     print(f"  [DALL·E 429] 컷 {index+1} 속도 제한. {wait:.1f}초 후 재시도... ({attempt+1}/{max_retries})")
