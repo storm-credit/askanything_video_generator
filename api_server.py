@@ -418,12 +418,6 @@ async def generate_video_endpoint(req: GenerateRequest):
     async def sse_generator():
         global _active_generation_id
 
-        # 모델 오버라이드 적용 (요청 스코프)
-        _prev_env: dict[str, str | None] = {}
-        for k, v in _model_overrides.items():
-            _prev_env[k] = os.environ.get(k)
-            os.environ[k] = v
-
         # 이전 작업 취소 + 새 작업 등록
         with _generation_lock:
             if _active_generation_id:
@@ -439,6 +433,11 @@ async def generate_video_endpoint(req: GenerateRequest):
         if _generate_semaphore.locked():
             yield {"data": "WARN|[대기열] 다른 비디오가 생성 중입니다. 순서를 기다리는 중...\n"}
         async with _generate_semaphore:
+          # 모델 오버라이드 적용 (세마포어 내부 — 동시 요청 간 env 충돌 방지)
+          _prev_env: dict[str, str | None] = {}
+          for k, v in _model_overrides.items():
+              _prev_env[k] = os.environ.get(k)
+              os.environ[k] = v
           try:
             # 사전 검증: 필수 API 키 확인
             missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine, image_engine, llm_provider, llm_key_override)

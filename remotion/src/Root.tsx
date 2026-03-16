@@ -10,7 +10,7 @@ export const RemotionRoot: React.FC = () => {
     const outroImagePath = typeof inputProps.outroImagePath === 'string' ? inputProps.outroImagePath : undefined;
     const title = typeof inputProps.title === 'string' ? inputProps.title : undefined;
     const bgmPath = typeof inputProps.bgmPath === 'string' ? inputProps.bgmPath : undefined;
-    const cameraStyle = (typeof inputProps.cameraStyle === 'string' ? inputProps.cameraStyle : 'dynamic') as 'dynamic' | 'gentle' | 'static';
+    const cameraStyle = (typeof inputProps.cameraStyle === 'string' ? inputProps.cameraStyle : 'auto') as 'auto' | 'dynamic' | 'gentle' | 'static';
     const captionSize = typeof inputProps.captionSize === 'number' ? inputProps.captionSize : 48;
     const captionY = typeof inputProps.captionY === 'number' ? inputProps.captionY : 28;
 
