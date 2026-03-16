@@ -1,5 +1,5 @@
 import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile, useCurrentFrame, interpolate, useVideoConfig } from 'remotion';
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Captions } from './Captions';
 
 const INTRO_DURATION_FRAMES = 24;  // 1초 @ 24fps
@@ -17,7 +17,18 @@ type CutProps = {
   audio_path: string;
   word_timestamps: WordProps[];
   duration_in_frames: number;
+  description?: string;
   emotion?: 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
+};
+
+// Extract [EMOTION] tag from cut description field
+const EMOTION_TAGS = new Set(['SHOCK', 'WONDER', 'TENSION', 'REVEAL', 'CALM']);
+const extractEmotion = (cut: CutProps): string | undefined => {
+  if (cut.emotion) return cut.emotion;
+  if (!cut.description) return undefined;
+  const match = cut.description.match(/\[(\w+)\]/);
+  if (match && EMOTION_TAGS.has(match[1])) return match[1];
+  return undefined;
 };
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov'];
@@ -233,7 +244,119 @@ const BrandOutro: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
-const BGM_VOLUME = 0.15;  // TTS 대비 15% 볼륨
+const FADE_IN_FRAMES = 6; // 250ms @ 24fps
+
+const FadeIn: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const frame = useCurrentFrame();
+  const opacity = interpolate(frame, [0, FADE_IN_FRAMES], [0, 1], { extrapolateRight: 'clamp' });
+  return (
+    <AbsoluteFill style={{ opacity }}>
+      {children}
+    </AbsoluteFill>
+  );
+};
+
+const BGM_VOLUME = 0.15;  // TTS 대비 15% 볼륨 (fallback when no timestamps)
+const BGM_VOLUME_SPEECH = 0.08;  // Speech active: duck to 8%
+const BGM_VOLUME_SILENCE = 0.20; // No speech: raise to 20%
+const BGM_RAMP_FRAMES = 5;       // Smooth transition over 5 frames
+
+// Build global word timeline from all cuts with their absolute frame offsets
+function buildGlobalWordTimeline(
+  cuts: CutProps[],
+  startFrames: number[],
+  fps: number,
+): { startFrame: number; endFrame: number }[] {
+  const timeline: { startFrame: number; endFrame: number }[] = [];
+  for (let i = 0; i < cuts.length; i++) {
+    const cutOffset = startFrames[i];
+    for (const w of cuts[i].word_timestamps) {
+      timeline.push({
+        startFrame: cutOffset + Math.round(w.start * fps),
+        endFrame: cutOffset + Math.round(w.end * fps),
+      });
+    }
+  }
+  // Sort by startFrame for binary search
+  timeline.sort((a, b) => a.startFrame - b.startFrame);
+  return timeline;
+}
+
+// For a given frame, find the nearest speech boundary and compute interpolated BGM volume
+function getDynamicBgmVolume(
+  frame: number,
+  timeline: { startFrame: number; endFrame: number }[],
+): number {
+  if (timeline.length === 0) return BGM_VOLUME;
+
+  // Find distance to nearest speech region
+  // Positive = inside speech, negative = distance to nearest speech edge
+  let minDistToSpeech = Infinity;
+  let isSpeechActive = false;
+
+  for (const seg of timeline) {
+    if (frame >= seg.startFrame && frame <= seg.endFrame) {
+      isSpeechActive = true;
+      break;
+    }
+    // Distance to start of this segment
+    const distToStart = seg.startFrame - frame;
+    // Distance to end of this segment
+    const distFromEnd = frame - seg.endFrame;
+
+    if (distToStart > 0) {
+      minDistToSpeech = Math.min(minDistToSpeech, distToStart);
+    }
+    if (distFromEnd > 0) {
+      minDistToSpeech = Math.min(minDistToSpeech, distFromEnd);
+    }
+  }
+
+  if (isSpeechActive) {
+    return BGM_VOLUME_SPEECH;
+  }
+
+  // Ramp: smoothly transition from speech volume to silence volume over BGM_RAMP_FRAMES
+  if (minDistToSpeech <= BGM_RAMP_FRAMES) {
+    return interpolate(
+      minDistToSpeech,
+      [0, BGM_RAMP_FRAMES],
+      [BGM_VOLUME_SPEECH, BGM_VOLUME_SILENCE],
+      { extrapolateRight: 'clamp' },
+    );
+  }
+
+  return BGM_VOLUME_SILENCE;
+}
+
+// BGM audio with dynamic volume that ducks during speech
+const DynamicBgmAudio: React.FC<{
+  src: string;
+  cuts: CutProps[];
+  startFrames: number[];
+}> = ({ src, cuts, startFrames }) => {
+  const { fps } = useVideoConfig();
+
+  const globalTimeline = useMemo(
+    () => buildGlobalWordTimeline(cuts, startFrames, fps),
+    [cuts, startFrames, fps],
+  );
+
+  const hasTimestamps = globalTimeline.length > 0;
+
+  const volumeCallback = useCallback(
+    (f: number) => getDynamicBgmVolume(f, globalTimeline),
+    [globalTimeline],
+  );
+
+  return (
+    <Audio
+      src={src}
+      volume={hasTimestamps ? volumeCallback : BGM_VOLUME}
+      loop
+    />
+  );
+};
 
 export const Main: React.FC<{
   cuts: CutProps[];
@@ -280,20 +403,22 @@ export const Main: React.FC<{
 
         return (
           <Sequence key={index} from={startFrame} durationInFrames={cut.duration_in_frames}>
-            <AbsoluteFill>
-                {isVideo ? (
-                    <Video
-                      src={visualSrc}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      loop
-                      muted
-                    />
-                ) : (
-                    <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={cut.emotion} />
-                )}
-                <Audio src={audioSrc} />
-                <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} />
-            </AbsoluteFill>
+            <FadeIn>
+              <AbsoluteFill>
+                  {isVideo ? (
+                      <Video
+                        src={visualSrc}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        loop
+                        muted
+                      />
+                  ) : (
+                      <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={cut.emotion} />
+                  )}
+                  <Audio src={audioSrc} />
+                  <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={extractEmotion(cut)} />
+              </AbsoluteFill>
+            </FadeIn>
           </Sequence>
         );
       })}
@@ -312,10 +437,10 @@ export const Main: React.FC<{
         </Sequence>
       )}
 
-      {/* BGM 배경음악 — 전체 영상에 낮은 볼륨으로 루프 */}
+      {/* BGM 배경음악 — 전체 영상에 동적 볼륨으로 루프 (speech ducking) */}
       {bgmPath && (
         <Sequence from={0} durationInFrames={totalFrames}>
-          <Audio src={staticFile(bgmPath)} volume={BGM_VOLUME} loop />
+          <DynamicBgmAudio src={staticFile(bgmPath)} cuts={cuts} startFrames={startFrames} />
         </Sequence>
       )}
     </AbsoluteFill>

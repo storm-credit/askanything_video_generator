@@ -1,5 +1,9 @@
 """파이프라인 전역 공유 상수 및 유틸리티."""
 
+import os
+
+# ── 캐시 디렉터리 ──
+IMAGE_CACHE_DIR = os.path.join("assets", ".cache", "images")
 
 # ── LLM 프로바이더 레이블 ──
 PROVIDER_LABELS = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
@@ -7,10 +11,9 @@ PROVIDER_LABELS = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
 
 # ── National Geographic 마스터 스타일 프롬프트 (DALL-E / Imagen 공용) ──
 MASTER_STYLE = (
-    "Award-winning cinematic photograph, National Geographic high-end documentary style, "
-    "hyper-detailed, global illumination, bright vibrant uplifting lighting, "
-    "breathtaking aesthetic, 8K resolution, vertical composition, family-friendly. "
-    "Absolutely NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS. "
+    "Cinematic photograph, National Geographic documentary style, "
+    "detailed, bright uplifting lighting, vertical 9:16 composition, "
+    "family-friendly. NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS. "
 )
 
 

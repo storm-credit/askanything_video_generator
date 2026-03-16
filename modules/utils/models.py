@@ -21,6 +21,30 @@ VEO_MODELS = [
     {"id": "veo-3.0-fast-generate-001", "tag": "fast", "label": "Veo 3 Fast"},
 ]
 
+# 모델별 Rate Limit 참고 (Google AI Studio 무료 기준, 2026-03 기준)
+MODEL_RATE_LIMITS = {
+    # Gemini LLM
+    "gemini-2.5-pro": {"rpm": 5, "rpd": 25, "note": "무료"},
+    "gemini-2.5-flash": {"rpm": 10, "rpd": 500, "note": "무료"},
+    "gemini-2.0-flash": {"rpm": 15, "rpd": 1500, "note": "무료"},
+    # Imagen
+    "imagen-4.0-generate-001": {"rpm": 10, "rpd": 100, "note": "무료"},
+    "imagen-4.0-fast-generate-001": {"rpm": 10, "rpd": 100, "note": "무료"},
+    # Veo
+    "veo-3.0-generate-001": {"rpm": 2, "rpd": 6, "note": "무료"},
+    "veo-3.0-fast-generate-001": {"rpm": 2, "rpd": 6, "note": "무료"},
+    # OpenAI
+    "gpt-4o": {"rpm": 500, "rpd": 10000, "note": "유료"},
+    "gpt-4o-mini": {"rpm": 500, "rpd": 10000, "note": "유료"},
+    "gpt-4.1": {"rpm": 500, "rpd": 10000, "note": "유료"},
+    "gpt-4.1-mini": {"rpm": 500, "rpd": 10000, "note": "유료"},
+    "dall-e-3": {"rpm": 7, "rpd": 700, "note": "유료 Tier1"},
+    # Claude
+    "claude-sonnet-4-20250514": {"rpm": 50, "rpd": 1000, "note": "유료"},
+    "claude-opus-4-20250514": {"rpm": 20, "rpd": 200, "note": "유료"},
+    "claude-haiku-4-5-20251001": {"rpm": 50, "rpd": 1000, "note": "유료"},
+}
+
 _CHAINS = {
     "imagen": IMAGEN_MODELS,
     "veo3": VEO_MODELS,

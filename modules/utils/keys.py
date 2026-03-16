@@ -78,9 +78,14 @@ def _is_key_warned(key: str, service: str = None) -> bool:
 def get_key_state(key: str, service: str = None) -> str:
     """키 상태 반환: 'blocked', 'warning', 'active'.
 
-    _is_key_blocked / _is_key_warned 모두 _key_usage / _blocked_keys를 읽으므로
-    반드시 _usage_lock 안에서 호출하거나, 이미 lock 내부에서 호출되어야 합니다.
+    내부에서 _usage_lock을 획득합니다. 이미 lock 내부에서 호출 시 _get_key_state_unlocked()를 사용하세요.
     """
+    with _usage_lock:
+        return _get_key_state_unlocked(key, service)
+
+
+def _get_key_state_unlocked(key: str, service: str = None) -> str:
+    """락 없이 키 상태 반환 — 반드시 _usage_lock 내부에서만 호출."""
     if _is_key_blocked(key, service):
         return "blocked"
     if _is_key_warned(key, service):
@@ -147,7 +152,7 @@ def get_google_key(override: str = None, service: str = None, exclude: set = Non
                 blocked_keys_list = []
 
                 for k in candidates:
-                    state = get_key_state(k, service)
+                    state = _get_key_state_unlocked(k, service)
                     svc_usage = _key_usage[k].get(service, 0) if service else sum(_key_usage[k].values())
                     if state == "active":
                         active_keys.append((svc_usage, k))
@@ -206,7 +211,7 @@ def get_key_usage_stats() -> list[dict]:
                     del _blocked_keys[key]
 
             any_blocked = len(blocked_services) > 0
-            state = "blocked" if any_blocked else get_key_state(key)
+            state = "blocked" if any_blocked else _get_key_state_unlocked(key)
             remaining_hr = max(blocked_services.values()) if blocked_services else 0
 
             stats.append({
@@ -219,6 +224,17 @@ def get_key_usage_stats() -> list[dict]:
                 "unblock_hours": remaining_hr,
             })
     return stats
+
+
+def get_service_usage_totals() -> dict[str, int]:
+    """서비스별 총 사용량 합산 (모든 키 합계). 예: {"imagen": 15, "veo3": 3, "gemini": 8}"""
+    with _usage_lock:
+        totals: dict[str, int] = {}
+        for key_usage in _key_usage.values():
+            for svc, cnt in key_usage.items():
+                base_svc = svc.split(":")[0] if ":" in svc else svc
+                totals[base_svc] = totals.get(base_svc, 0) + cnt
+        return totals
 
 
 # ═══════════════════════ 유틸 ═══════════════════════

@@ -1,8 +1,26 @@
 import os
 import time
+import random
 import jwt
 import requests
 import base64
+
+
+def _get_motion_style(prompt: str) -> str:
+    """감정 태그 기반 모션 스타일 결정"""
+    if "[SHOCK]" in prompt or "shock" in prompt.lower():
+        return "fast dynamic camera movement, sudden dramatic angles"
+    elif "[WONDER]" in prompt or "wonder" in prompt.lower():
+        return "slow graceful panning, gentle reveal shots"
+    elif "[TENSION]" in prompt or "tension" in prompt.lower():
+        return "slow creeping approach, tightening frame"
+    elif "[CALM]" in prompt or "calm" in prompt.lower():
+        return "very slow or static camera, peaceful ambient motion"
+    elif "[REVEAL]" in prompt or "reveal" in prompt.lower():
+        return "sudden camera shift, dramatic angle change"
+    else:
+        return "smooth cinematic camera movement"
+
 
 def _generate_jwt(ak: str, sk: str) -> str:
     headers = {
@@ -55,27 +73,36 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     payload = {
         "model": "kling-v1",
         "image": img_b64,
-        "prompt": f"Cinematic movement, 4k, realistic physics. {prompt}",
+        "prompt": f"{_get_motion_style(prompt)}, 4k, realistic physics. {prompt}",
         "duration": "5"
     }
     
     print(f"-> [Kling AI] 컷 {index+1} 이미지-투-비디오 렌더링 요청 중...")
-    try:
-        resp = requests.post(submit_url, headers=headers, json=payload, timeout=30)
-        resp.raise_for_status()
-        resp_data = resp.json()
-        
-        if resp_data.get("code") != 0:
-            print(f"[Kling AI 오류] 생성 요청 거절됨: {resp_data}")
-            return None
-            
-        task_id = resp_data.get("data", {}).get("task_id")
-        if not task_id:
-            print(f"[Kling AI 오류] task_id를 받지 못했습니다.")
-            return None
-    except Exception as e:
-        print(f"[Kling AI 오류] 네트워크 요청 실패: {e}")
-        return None
+    task_id = None
+    MAX_RETRIES = 3
+    for attempt in range(MAX_RETRIES):
+        try:
+            resp = requests.post(submit_url, headers=headers, json=payload, timeout=30)
+            resp.raise_for_status()
+            resp_data = resp.json()
+
+            if resp_data.get("code") != 0:
+                print(f"[Kling AI 오류] 생성 요청 거절됨: {resp_data}")
+                return None
+
+            task_id = resp_data.get("data", {}).get("task_id")
+            if not task_id:
+                print(f"[Kling AI 오류] task_id를 받지 못했습니다.")
+                return None
+            break
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                wait = min(2 ** (attempt + 1), 15) + random.uniform(0, 2)
+                print(f"[Kling 재시도] {attempt+1}/{MAX_RETRIES} — {wait:.1f}초 대기")
+                time.sleep(wait)
+            else:
+                print(f"[Kling 오류] 최대 재시도 초과: {e}")
+                return None
         
     # 2. 결과 폴링 대기
     poll_url = f"https://api.klingai.com/v1/videos/image2video/{task_id}"
@@ -83,13 +110,14 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     
     print(f"-> [Kling AI] 컷 {index+1} 렌더링 클라우드 진행 상태 대기 중 (약 2~3분 소요 예상)...")
     
-    max_retries = 90  # 90 * 5초 = 450초 (7.5분)
+    max_polls = 90  # 90 * 5초 = 450초 (7.5분)
     timed_out = True
-    for poll_iter in range(max_retries):
-        time.sleep(5)
+    for poll_iter in range(max_polls):
+        if poll_iter > 0:
+            time.sleep(5)
 
         try:
-            poll_resp = requests.get(poll_url, headers=headers, timeout=10)
+            poll_resp = requests.get(poll_url, headers=headers, timeout=30)
             poll_resp.raise_for_status()
             poll_data = poll_resp.json()
 
@@ -105,6 +133,11 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
                 reason = poll_data.get("data", {}).get("task_status_msg", "알 수 없는 오류")
                 print(f"[Kling AI 오류] 컷 {index+1} 클라우드 렌더링 실패: {reason}")
                 return None
+            # processing/pending/submitted → 계속 대기
+
+            if poll_iter > 0 and poll_iter % 12 == 0:
+                elapsed = (poll_iter + 1) * 5
+                print(f"  [Kling AI] 컷 {index+1} 렌더링 진행 중... ({elapsed}초 경과, 상태: {status})")
 
         except Exception as e:
             print(f"[Kling AI 대기 중 오류] {e}")
@@ -112,7 +145,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
 
     if not video_url:
         if timed_out:
-            print(f"[Kling AI 오류] 컷 {index+1} 렌더링 타임아웃 (최대 {max_retries * 5}초 초과).")
+            print(f"[Kling AI 오류] 컷 {index+1} 렌더링 타임아웃 (최대 {max_polls * 5}초 초과).")
         else:
             print(f"[Kling AI 오류] 컷 {index+1} 렌더링 성공했으나 비디오 URL이 비어 있습니다.")
         return None

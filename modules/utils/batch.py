@@ -13,12 +13,15 @@ from typing import Any
 
 DB_PATH = os.path.join("assets", "batch_queue.db")
 _lock = threading.Lock()
+_db_initialized = False
 
 
-def _get_conn() -> sqlite3.Connection:
+def _init_db():
+    global _db_initialized
+    if _db_initialized:
+        return
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS batch_jobs (
@@ -40,14 +43,38 @@ def _get_conn() -> sqlite3.Connection:
         )
     """)
     conn.commit()
+    conn.close()
+    _db_initialized = True
+
+
+def _get_conn() -> sqlite3.Connection:
+    _init_db()
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
     return conn
+
+
+def has_duplicate_topic(topic: str) -> bool:
+    """pending/running 상태에서 동일 주제가 이미 존재하는지 확인합니다."""
+    with _lock:
+        conn = _get_conn()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM batch_jobs WHERE topic = ? AND status IN ('pending', 'running')",
+                (topic,),
+            ).fetchone()
+            return row["cnt"] > 0
+        finally:
+            conn.close()
 
 
 def add_job(topic: str, language: str = "ko", camera_style: str = "dynamic",
             bgm_theme: str = "random", llm_provider: str = "gemini",
             video_engine: str = "veo3", image_engine: str = "imagen",
             channel: str | None = None) -> int:
-    """큐에 생성 작업을 추가합니다. 작업 ID를 반환합니다."""
+    """큐에 생성 작업을 추가합니다. 중복 주제 경고 후 작업 ID를 반환합니다."""
+    if has_duplicate_topic(topic):
+        print(f"[배치 경고] 동일 주제가 이미 큐에 있습니다: {topic[:30]}...")
     with _lock:
         conn = _get_conn()
         try:
@@ -101,6 +128,10 @@ def get_job(job_id: int) -> dict | None:
 
 
 def update_job(job_id: int, **kwargs) -> None:
+    ALLOWED_COLS = {"status", "video_path", "error", "started_at", "completed_at"}
+    invalid = set(kwargs.keys()) - ALLOWED_COLS
+    if invalid:
+        raise ValueError(f"Invalid columns: {invalid}")
     with _lock:
         conn = _get_conn()
         try:

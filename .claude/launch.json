@@ -5,7 +5,8 @@
       "name": "backend",
       "runtimeExecutable": "python",
       "runtimeArgs": ["api_server.py"],
-      "port": 8003
+      "port": 8003,
+      "env": { "UVICORN_RELOAD": "false" }
     },
     {
       "name": "frontend",

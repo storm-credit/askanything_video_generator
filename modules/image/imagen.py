@@ -1,22 +1,36 @@
 import os
+import shutil
 import time
 from PIL import Image, ImageOps
 import io
 
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
 from modules.utils.constants import MASTER_STYLE, is_key_rotation_error
+from modules.utils.cache import get_cached_image, save_to_cache
 from modules.utils.models import get_model_chain, get_service_tag
+from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
 
-def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=None):
+def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None) -> str:
     """
     Google Imagen 4 API로 이미지를 생성합니다.
     429 에러 시 다른 키로 자동 전환, 전 키 소진 시 Fast 모델로 자동 폴백.
     """
     if not prompt or not prompt.strip():
         raise ValueError(f"[Imagen 이미지 오류] 프롬프트가 비어 있습니다 (index={index})")
+
+    # ── 캐시 확인 ──
+    cache_key_prompt = MASTER_STYLE + prompt
+    cached = get_cached_image(cache_key_prompt)
+    if cached:
+        image_dir = f"assets/{topic_folder}/images"
+        os.makedirs(image_dir, exist_ok=True)
+        filename = os.path.join(image_dir, f"cut_{index:02}.png")
+        shutil.copy2(cached, filename)
+        print(f"[이미지 캐시] 히트 — 재생성 스킵 (컷 {index+1})")
+        return filename
 
     # 모델 체인: 환경변수 오버라이드 시 단일 모델, 아니면 Standard → Fast
     override_model = os.getenv("IMAGEN_MODEL")
@@ -34,6 +48,7 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
 
         # 모델 체인 반복마다 프롬프트 초기화 (safety 폴백으로 변경된 프롬프트 리셋)
         enhanced_prompt = MASTER_STYLE + prompt
+        safety_retry_count = 0  # safety fallback stage tracker
 
         tried_keys: set[str] = set()
         current_key = api_key
@@ -48,68 +63,49 @@ def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=N
             if not final_api_key:
                 break  # 이 모델에 사용 가능한 키 없음 → 다음 모델로
 
-            if final_api_key in tried_keys:
-                break  # 새 키 없음 → 다음 모델로
-
             tried_keys.add(final_api_key)
 
             if key_attempt > 0:
                 print(f"  [{model_label}] 컷 {index+1} 다른 키로 재시도 (시도 {key_attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_api_key)})")
 
-            # 이미지 생성 재시도 (안전 정책 실패 등 일반 재시도)
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    if attempt == 0 and key_attempt == 0:
-                        if model_idx == 0:
-                            print(f"-> [아트 디렉터] 컷 {index+1} {model_label} 렌더링 중...")
-                        else:
-                            print(f"-> [아트 디렉터] 컷 {index+1} {model_label}로 폴백 렌더링 중...")
+            if key_attempt == 0 and model_idx == 0:
+                print(f"-> [아트 디렉터] 컷 {index+1} {model_label} 렌더링 중...")
+            elif key_attempt == 0:
+                print(f"-> [아트 디렉터] 컷 {index+1} {model_label}로 폴백 렌더링 중...")
 
-                    image_bytes = _generate_imagen(final_api_key, enhanced_prompt, model_id)
+            try:
+                image_bytes = _generate_imagen(final_api_key, enhanced_prompt, model_id)
 
-                    if not image_bytes:
-                        raise ValueError("이미지 생성 결과가 비어 있습니다.")
+                if not image_bytes:
+                    raise ValueError("이미지 생성 결과가 비어 있습니다.")
 
-                    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-                    target_size = (1080, 1920)
-                    fitted_image = ImageOps.fit(image, target_size, method=Image.LANCZOS, centering=(0.5, 0.5))
+                image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+                target_size = (1080, 1920)
+                fitted_image = ImageOps.fit(image, target_size, method=Image.LANCZOS, centering=(0.5, 0.5))
 
-                    image_dir = f"assets/{topic_folder}/images"
-                    os.makedirs(image_dir, exist_ok=True)
-                    filename = os.path.join(image_dir, f"cut_{index:02}.png")
-                    fitted_image.save(filename)
+                image_dir = f"assets/{topic_folder}/images"
+                os.makedirs(image_dir, exist_ok=True)
+                filename = os.path.join(image_dir, f"cut_{index:02}.png")
+                fitted_image.save(filename)
 
-                    record_key_usage(final_api_key, service_tag)
-                    print(f"OK [아트 디렉터] 컷 {index+1} {model_label} 렌더링 완료!")
-                    return filename
+                record_key_usage(final_api_key, service_tag)
+                save_to_cache(cache_key_prompt, filename)
+                print(f"OK [아트 디렉터] 컷 {index+1} {model_label} 렌더링 완료!")
+                return filename
 
-                except Exception as e:
-                    error_msg = str(e)
-                    # 429/503/유료전용 → 키 차단 후 다른 키로 전환
-                    if is_key_rotation_error(error_msg):
-                        mark_key_exhausted(final_api_key, service_tag)
-                        print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → 다른 키로 전환...")
-                        break  # 내부 retry 루프 탈출 → 외부 key_attempt 루프로
-                    if attempt < max_retries - 1:
-                        is_safety = (
-                            "safety" in error_msg.lower() or "blocked" in error_msg.lower()
-                            or "SAFETY" in error_msg
-                            or "이미지가 없습니다" in error_msg
-                        )
-                        if is_safety:
-                            enhanced_prompt = (
-                                "A safe, beautiful abstract cinematic visualization, "
-                                "National Geographic documentary style, atmospheric lighting, "
-                                "bright and uplifting, vertical composition, NO TEXT, NO LETTERS."
-                            )
-                            print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도 ({attempt+1}/{max_retries})")
-                        else:
-                            print(f"  [{model_label} 경고] 컷 {index+1} 실패. 3초 후 재시도 ({attempt+1}/{max_retries}) | {e}")
-                        time.sleep(3)
-                    else:
-                        raise RuntimeError(f"[{model_label} 이미지 생성 최종 실패] index={index}: {e}")
-            # break로 나왔으면 (429) → 다음 키로 계속
+            except Exception as e:
+                error_msg = str(e)
+                # 429/503/유료전용 → 키 차단 후 다른 키로 전환
+                if is_key_rotation_error(error_msg):
+                    mark_key_exhausted(final_api_key, service_tag)
+                    print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → 다른 키로 전환...")
+                    continue  # 다음 키로
+                if is_safety_error(error_msg):
+                    enhanced_prompt = get_safety_fallback_prompt(prompt, safety_retry_count)
+                    safety_retry_count += 1
+                    print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도...")
+                    continue  # 같은 키로 대체 프롬프트 재시도
+                raise RuntimeError(f"[{model_label} 이미지 생성 실패] index={index}: {e}")
 
         # 이 모델의 키 전부 소진 → 다음 모델로 폴백
         if model_idx < len(model_chain) - 1:
@@ -132,6 +128,7 @@ def _generate_imagen(api_key, prompt, model_name):
             number_of_images=1,
             aspect_ratio="9:16",
             safety_filter_level=safety_level,
+            http_options=types.HttpOptions(timeout=120_000),
         ),
     )
 

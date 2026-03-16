@@ -8,6 +8,7 @@ import traceback
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -25,7 +26,8 @@ from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
 from modules.utils.constants import PROVIDER_LABELS
-from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats
+from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats, get_service_usage_totals
+from modules.utils.models import MODEL_RATE_LIMITS
 from modules.utils.audio import normalize_audio_lufs
 from modules.utils.channel_config import get_channel_preset, get_channel_names
 
@@ -77,6 +79,61 @@ app.add_middleware(
 )
 
 
+# ═══════════════════════ 자동 음성 선택 ═══════════════════════
+
+# ElevenLabs premade voice IDs
+_VOICE_MAP = {
+    "eric":    "cjVigY5qzO86Huf0OWal",  # 차분/다큐
+    "adam":    "pNInz6obpgDQGcFmaJgB",  # 깊은/권위
+    "brian":   "nPczCjzI2devNBz1zQrb",  # 내레이션
+    "bill":    "pqHfZKP75CvOlQylNhV4",  # 다큐/진지
+    "daniel":  "onwK4e9ZLuTAKqWW03F9",  # 뉴스/정보
+    "rachel":  "21m00Tcm4TlvDq8ikWAM",  # 차분/여성
+    "sarah":   "EXAVITQu4vr4xnSDxMaL",  # 부드러운
+    "matilda": "XrExE9yKIg1WjnnlVkGX",  # 따뜻한
+    "charlie": "IKne3meq5aSn9XLyUdCD",  # 유머/캐주얼
+    "antoni":  "ErXwobaYiN019PkySvjV",  # 만능
+    "george":  "JBFqnCBsd6RMkjVDRZzb",  # 거친/공포
+}
+
+_VOICE_ID_TO_NAME = {v: k.capitalize() for k, v in _VOICE_MAP.items()}
+
+# 주제 키워드 → 최적 음성 매핑 (우선순위 순)
+_TONE_RULES: list[tuple[list[str], str]] = [
+    # 공포/미스터리/범죄
+    (["공포", "호러", "귀신", "유령", "살인", "미스터리", "괴담", "소름", "horror", "ghost", "murder", "creepy", "dark", "죽음", "저주", "심령", "폐허"], "george"),
+    # 유머/재미/밈
+    (["웃긴", "유머", "밈", "meme", "funny", "코미디", "개그", "ㅋㅋ", "레전드", "웃음", "드립", "짤"], "charlie"),
+    # 과학/기술/교육
+    (["과학", "기술", "AI", "인공지능", "우주", "NASA", "양자", "물리", "화학", "생물", "science", "tech", "quantum", "로봇", "컴퓨터", "프로그래밍"], "daniel"),
+    # 역사/다큐
+    (["역사", "전쟁", "고대", "조선", "제국", "세계대전", "history", "ancient", "war", "왕조", "문명", "유적"], "bill"),
+    # 감성/힐링/동기부여
+    (["감동", "힐링", "동기부여", "motivation", "inspiring", "감성", "위로", "희망", "사랑", "인생", "명언"], "matilda"),
+    # 뉴스/시사/경제
+    (["뉴스", "시사", "경제", "정치", "주식", "투자", "부동산", "금리", "인플레이션", "news", "economy", "stock", "비트코인", "코인"], "adam"),
+    # 자연/동물/여행
+    (["자연", "동물", "여행", "바다", "산", "nature", "animal", "travel", "풍경", "safari", "ocean"], "sarah"),
+]
+
+
+def _auto_select_voice(topic: str, language: str = "ko") -> str:
+    """주제 키워드를 분석하여 최적의 ElevenLabs 음성을 자동 선택합니다."""
+    topic_lower = topic.lower()
+    for keywords, voice_name in _TONE_RULES:
+        for kw in keywords:
+            if kw.lower() in topic_lower:
+                print(f"[음성 자동 선택] '{kw}' 매칭 → {voice_name} ({_VOICE_MAP[voice_name][:12]}...)")
+                return _VOICE_MAP[voice_name]
+    # 기본값: Eric (차분한 다큐 톤, 만능)
+    return _VOICE_MAP["eric"]
+
+
+def _voice_name(voice_id: str) -> str:
+    """음성 ID를 이름으로 변환합니다."""
+    return _VOICE_ID_TO_NAME.get(voice_id, voice_id[:12] + "...")
+
+
 class GenerateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     apiKey: str | None = None
@@ -84,7 +141,11 @@ class GenerateRequest(BaseModel):
     videoEngine: str = "veo3"
     imageEngine: str = "imagen"
     llmProvider: str = "gemini"
+    llmModel: str | None = None    # 세부 모델 버전 (예: "gemini-2.0-flash", "gpt-4o-mini")
+    imageModel: str | None = None  # 이미지 모델 버전 (예: "imagen-4.0-fast-generate-001")
+    videoModel: str | None = None  # 비디오 모델 버전 (예: "veo-3.0-fast-generate-001")
     llmKey: str | None = None
+    geminiKeys: str | None = None  # 프론트엔드 멀티키 (쉼표 구분)
     outputPath: str | None = None
     language: str = "ko"
     cameraStyle: str = "dynamic"
@@ -92,6 +153,7 @@ class GenerateRequest(BaseModel):
     channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
     ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
+    voiceId: str | None = None  # ElevenLabs 음성 ID
     captionSize: int = 48  # 자막 폰트 크기 (px): 32~72
     captionY: int = 28  # 자막 높이 (%): 10~50, 하단 기준
 
@@ -166,17 +228,38 @@ async def health_check():
     openai_key = os.getenv("OPENAI_API_KEY", "")
     elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
     gemini_key = os.getenv("GEMINI_API_KEY", "")
+    gemini_keys = os.getenv("GEMINI_API_KEYS", "")
     claude_key = os.getenv("ANTHROPIC_API_KEY", "")
     kling_ak = os.getenv("KLING_ACCESS_KEY", "")
     kling_sk = os.getenv("KLING_SECRET_KEY", "")
+    tavily_key = os.getenv("TAVILY_API_KEY", "")
+
+    def _mask(val: str) -> str:
+        if not val or len(val) <= 8:
+            return "****"
+        return val[:4] + "***" + val[-4:]
 
     keys = {
         "openai": _is_set(openai_key, ["sk-proj-YOUR"]),
         "elevenlabs": _is_set(elevenlabs_key, ["YOUR_ELEVENLABS_API_KEY_HERE"]),
-        "gemini": _is_set(gemini_key),
+        "gemini": _is_set(gemini_key) or _is_set(gemini_keys),
         "claude_key": _is_set(claude_key),
         "kling_access": _is_set(kling_ak, ["YOUR"]),
         "kling_secret": _is_set(kling_sk, ["YOUR"]),
+        "tavily": _is_set(tavily_key),
+    }
+
+    # 마스킹된 키 목록 (프론트엔드 표시용)
+    from modules.utils.keys import get_all_google_keys, mask_key
+    all_google = get_all_google_keys()
+    masked_keys = {
+        "openai": [_mask(openai_key)] if _is_set(openai_key, ["sk-proj-YOUR"]) else [],
+        "elevenlabs": [_mask(elevenlabs_key)] if _is_set(elevenlabs_key, ["YOUR_ELEVENLABS_API_KEY_HERE"]) else [],
+        "gemini": [mask_key(k) for k in all_google] if all_google else [],
+        "claude_key": [_mask(claude_key)] if _is_set(claude_key) else [],
+        "kling_access": [_mask(kling_ak)] if _is_set(kling_ak, ["YOUR"]) else [],
+        "kling_secret": [_mask(kling_sk)] if _is_set(kling_sk, ["YOUR"]) else [],
+        "tavily": [_mask(tavily_key)] if _is_set(tavily_key) else [],
     }
 
     missing = [k for k, v in keys.items() if not v]
@@ -185,8 +268,38 @@ async def health_check():
         "status": "ok" if not missing else "missing_keys",
         "keys": keys,
         "missing": missing,
+        "masked_keys": masked_keys,
         "google_key_count": google_key_count,
     }
+
+
+@app.get("/api/model-limits")
+async def model_limits():
+    """모델별 Rate Limit + 잔여 호출 수를 반환합니다."""
+    usage_totals = get_service_usage_totals()
+    num_keys = max(count_google_keys(), 1)
+
+    # 서비스 이름 → 모델 ID 매핑 (Google 모델)
+    service_map = {
+        "gemini": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
+        "imagen": ["imagen-4.0-generate-001", "imagen-4.0-fast-generate-001"],
+        "veo3": ["veo-3.0-generate-001", "veo-3.0-fast-generate-001"],
+    }
+
+    result = {}
+    for model_id, limits in MODEL_RATE_LIMITS.items():
+        used = 0
+        total_rpd = limits["rpd"]
+        # Google 모델: 키 수 × RPD, 사용량은 서비스 단위 합산
+        for svc, model_ids in service_map.items():
+            if model_id in model_ids:
+                used = usage_totals.get(svc, 0)
+                total_rpd = limits["rpd"] * num_keys
+                break
+        remaining = max(total_rpd - used, 0)
+        result[model_id] = {**limits, "used": used, "total_rpd": total_rpd, "remaining": remaining}
+
+    return result
 
 
 def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | None, video_engine: str,
@@ -194,20 +307,23 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
     """파이프라인 시작 전 필수 키 검증. 누락된 키 이름 목록을 반환."""
     errors = []
 
-    # OpenAI 키: DALL-E 사용 시 또는 Whisper 자막에 필요
+    # OpenAI 키: DALL-E/GPT/Sora2 선택 시 필수, Whisper 자막은 경고만
     openai_key = api_key_override or os.getenv("OPENAI_API_KEY", "")
+    openai_missing = not openai_key or openai_key.startswith("sk-proj-YOUR")
     openai_needed_for = []
+    if llm_provider == "openai":
+        openai_needed_for.append("GPT 기획")
     if image_engine == "dalle":
         openai_needed_for.append("DALL-E 이미지")
-    openai_needed_for.append("Whisper 자막")
-    if llm_provider == "openai":
-        openai_needed_for.insert(0, "GPT 기획")
+    if video_engine == "sora2":
+        openai_needed_for.append("Sora2 비디오")
 
-    if (image_engine == "dalle" or llm_provider == "openai") and (not openai_key or openai_key.startswith("sk-proj-YOUR")):
+    if openai_missing and openai_needed_for:
+        openai_needed_for.append("Whisper 자막")
         errors.append(f"OPENAI_API_KEY ({' + '.join(openai_needed_for)}에 필수)")
-    elif not openai_key or openai_key.startswith("sk-proj-YOUR"):
-        # Whisper만 필요 - 경고 수준 (나중에 WARN으로 처리 가능)
-        errors.append("OPENAI_API_KEY (Whisper 자막 타임스탬프에 필수)")
+    elif openai_missing:
+        # Whisper만 필요 — Gemini 기반 구성에서는 경고만 (자막 없이 진행 가능)
+        print("  [경고] OPENAI_API_KEY 미설정 — Whisper 자막 타임스탬프 사용 불가")
 
     # Imagen 사용 시 Google 키 필요
     if image_engine == "imagen":
@@ -285,8 +401,28 @@ async def generate_video_endpoint(req: GenerateRequest):
     import uuid as _uuid
     generation_id = _uuid.uuid4().hex[:8]
 
+    # 모델 버전 오버라이드: 요청에 명시된 모델 → 환경변수로 임시 설정
+    _model_overrides: dict[str, str] = {}
+    if req.llmModel:
+        env_key = {"gemini": "GEMINI_MODEL", "openai": "OPENAI_MODEL", "claude": "CLAUDE_MODEL"}.get(llm_provider)
+        if env_key:
+            _model_overrides[env_key] = req.llmModel
+    if req.imageModel:
+        _model_overrides["IMAGEN_MODEL"] = req.imageModel
+    if req.videoModel:
+        _model_overrides["VEO_MODEL"] = req.videoModel
+    # 프론트엔드 멀티키 → 환경변수로 임시 설정 (로테이션용)
+    if req.geminiKeys:
+        _model_overrides["GEMINI_API_KEYS"] = req.geminiKeys
+
     async def sse_generator():
         global _active_generation_id
+
+        # 모델 오버라이드 적용 (요청 스코프)
+        _prev_env: dict[str, str | None] = {}
+        for k, v in _model_overrides.items():
+            _prev_env[k] = os.environ.get(k)
+            os.environ[k] = v
 
         # 이전 작업 취소 + 새 작업 등록
         with _generation_lock:
@@ -380,11 +516,17 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 단계 2 & 3: 이미지와 TTS 병렬 처리 (Threading)
             image_label = "Imagen 4" if image_engine == "imagen" else "DALL-E"
-            # 채널별 Voice ID 적용
+            # 음성 선택: 자동(주제 분석) > 프론트엔드 직접 선택 > 채널 설정 > 기본값
             channel_voice_id = None
-            channel_preset = get_channel_preset(req.channel)
-            if channel_preset:
-                channel_voice_id = channel_preset.get("voice_id")
+            if req.voiceId == "auto":
+                channel_voice_id = _auto_select_voice(req.topic, language)
+                yield {"data": f"[음성 자동 선택] 주제 분석 → {_voice_name(channel_voice_id)}\n"}
+            elif req.voiceId:
+                channel_voice_id = req.voiceId  # 프론트엔드에서 선택한 음성
+            if not channel_voice_id:
+                channel_preset = get_channel_preset(req.channel)
+                if channel_preset:
+                    channel_voice_id = channel_preset.get("voice_id")
 
             yield {"data": f"[생성 엔진] 아트 디렉터({image_label})와 성우(TTS) 동시 작업 중...\n"}
 
@@ -667,6 +809,12 @@ async def generate_video_endpoint(req: GenerateRequest):
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
           finally:
+            # 모델 오버라이드 복원
+            for k, prev in _prev_env.items():
+                if prev is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = prev
             # 작업 완료/취소 후 정리
             with _generation_lock:
                 if _active_generation_id == generation_id:
@@ -702,6 +850,7 @@ class PrepareRequest(BaseModel):
     apiKey: str | None = None
     llmProvider: str = "gemini"
     llmKey: str | None = None
+    geminiKeys: str | None = None  # 프론트엔드 멀티키 (쉼표 구분)
     imageEngine: str = "imagen"
     language: str = "ko"
     videoEngine: str = "none"  # prepare 단계에서는 비디오 미생성이 기본
@@ -711,6 +860,11 @@ class PrepareRequest(BaseModel):
 @app.post("/api/prepare")
 async def prepare_endpoint(req: PrepareRequest):
     """1단계: LLM 스크립트 + 이미지 생성만 수행. TTS/렌더는 하지 않음."""
+    # 프론트엔드 멀티키 → 환경변수 임시 설정
+    _prev_gemini_keys = os.environ.get("GEMINI_API_KEYS")
+    if req.geminiKeys:
+        os.environ["GEMINI_API_KEYS"] = req.geminiKeys
+
     async def sse_generator():
         try:
             llm_key_for_request = get_google_key(req.llmKey) if req.llmProvider == "gemini" else req.llmKey
@@ -792,6 +946,12 @@ async def prepare_endpoint(req: PrepareRequest):
         except Exception as e:
             traceback.print_exc()
             yield {"data": f"ERROR|[준비 오류] {str(e)}\n"}
+        finally:
+            # 프론트엔드 멀티키 환경변수 복원
+            if _prev_gemini_keys is not None:
+                os.environ["GEMINI_API_KEYS"] = _prev_gemini_keys
+            elif "GEMINI_API_KEYS" in os.environ and req.geminiKeys:
+                del os.environ["GEMINI_API_KEYS"]
 
     return EventSourceResponse(sse_generator())
 
@@ -1038,8 +1198,8 @@ async def youtube_upload(req: YouTubeUploadRequest):
     from modules.upload.youtube import upload_video
     try:
         # 경로 보안 검증
-        abs_path = os.path.abspath(req.video_path)
-        assets_dir = os.path.abspath("assets")
+        abs_path = os.path.abspath(os.path.realpath(req.video_path))
+        assets_dir = os.path.abspath(os.path.realpath("assets"))
         if not abs_path.startswith(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
@@ -1114,8 +1274,8 @@ async def tiktok_callback(code: str, state: str | None = None):
 async def tiktok_upload(req: TikTokUploadRequest):
     from modules.upload.tiktok import upload_video
     try:
-        abs_path = os.path.abspath(req.video_path)
-        assets_dir = os.path.abspath("assets")
+        abs_path = os.path.abspath(os.path.realpath(req.video_path))
+        assets_dir = os.path.abspath(os.path.realpath("assets"))
         if not abs_path.startswith(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
@@ -1188,8 +1348,8 @@ async def instagram_callback(code: str, state: str | None = None):
 async def instagram_upload(req: InstagramUploadRequest):
     from modules.upload.instagram import upload_reels
     try:
-        abs_path = os.path.abspath(req.video_path)
-        assets_dir = os.path.abspath("assets")
+        abs_path = os.path.abspath(os.path.realpath(req.video_path))
+        assets_dir = os.path.abspath(os.path.realpath("assets"))
         if not abs_path.startswith(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
@@ -1387,6 +1547,21 @@ async def upload_platforms():
         "tiktok": tt_status(),
         "instagram": ig_status(),
     }
+
+
+# ── Legal pages (TikTok/Instagram 앱 등록용) ─────────────────────
+
+@app.get("/terms", response_class=HTMLResponse)
+async def terms_of_service():
+    legal_path = os.path.join(os.path.dirname(__file__), "legal", "terms.html")
+    with open(legal_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_policy():
+    legal_path = os.path.join(os.path.dirname(__file__), "legal", "privacy.html")
+    with open(legal_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 
 if __name__ == "__main__":
