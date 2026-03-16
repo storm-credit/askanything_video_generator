@@ -8,6 +8,7 @@ from openai import OpenAI
 from PIL import Image, ImageOps
 
 from modules.utils.constants import MASTER_STYLE
+from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 
 def generate_image(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None) -> str:
     final_api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -20,6 +21,7 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
         raise ValueError(f"[DALL·E 이미지 오류] 프롬프트가 비어 있습니다 (index={index})")
 
     enhanced_prompt = MASTER_STYLE + prompt
+    safety_retry_count = 0  # safety fallback stage tracker
 
     max_retries = 3
     for attempt in range(max_retries):
@@ -53,10 +55,10 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
         except Exception as e:
             error_msg = str(e)
             if attempt < max_retries - 1:
-                if 'content_policy_violation' in error_msg:
+                if is_safety_error(error_msg):
+                    enhanced_prompt = get_safety_fallback_prompt(prompt, safety_retry_count)
+                    safety_retry_count += 1
                     print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 대체 프롬프트로 재시도합니다... ({attempt+1}/{max_retries})")
-                    topic_hint = " ".join(prompt.split()[:6])  # 첫 6단어로 맥락 보존
-                    enhanced_prompt = f"A very safe, beautiful cinematic visualization related to: {topic_hint}. National Geographic high-end documentary style, atmospheric lighting, strictly NO TEXT, NO LETTERS, NO WORDS."
                 elif '429' in error_msg or 'rate_limit' in error_msg.lower():
                     wait = min(2 ** (attempt + 1), 30) + random.uniform(0, 2)
                     print(f"  [DALL·E 429] 컷 {index+1} 속도 제한. {wait:.1f}초 후 재시도... ({attempt+1}/{max_retries})")
@@ -64,8 +66,6 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
                     continue
                 else:
                     print(f"  [DALL·E 경고] 컷 {index+1} 렌더링 실패. 3초 후 재시도합니다... ({attempt+1}/{max_retries}) | 사유: {e}")
-                # 안전 정책 위반이 아닌 경우 원본 프롬프트 복원
-                if 'content_policy_violation' not in error_msg:
                     enhanced_prompt = MASTER_STYLE + prompt
                 time.sleep(min(2 ** (attempt + 1), 10) + random.uniform(0, 1))
             else:

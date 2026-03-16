@@ -19,6 +19,22 @@ MAX_WAIT = 300  # 5분
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
 
+def _get_motion_style(prompt: str) -> str:
+    """감정 태그 기반 모션 스타일 결정"""
+    if "[SHOCK]" in prompt or "shock" in prompt.lower():
+        return "fast dynamic camera movement, sudden dramatic angles"
+    elif "[WONDER]" in prompt or "wonder" in prompt.lower():
+        return "slow graceful panning, gentle reveal shots"
+    elif "[TENSION]" in prompt or "tension" in prompt.lower():
+        return "slow creeping approach, tightening frame"
+    elif "[CALM]" in prompt or "calm" in prompt.lower():
+        return "very slow or static camera, peaceful ambient motion"
+    elif "[REVEAL]" in prompt or "reveal" in prompt.lower():
+        return "sudden camera shift, dramatic angle change"
+    else:
+        return "smooth cinematic camera movement"
+
+
 def generate_video_veo(
     image_path: str,
     prompt: str,
@@ -88,7 +104,7 @@ def generate_video_veo(
             try:
                 operation = client.models.generate_videos(
                     model=model_id,
-                    prompt=f"Cinematic movement, smooth camera motion, 4K quality. {prompt}",
+                    prompt=f"{_get_motion_style(prompt)}, 4K quality. {prompt}",
                     image=types.Image(image_bytes=img_bytes, mime_type=mime_type),
                     config=types.GenerateVideosConfig(
                         numberOfVideos=1,
@@ -131,7 +147,7 @@ def generate_video_veo(
                     mark_key_exhausted(final_key, service_tag)
                     continue
                 print(f"[{model_label} 오류] 컷 {index+1} 폴링 실패: {e}")
-                return None
+                break  # 이 모델 포기 → 다음 모델로 폴백
 
             # 비디오 다운로드
             output_dir = os.path.join("assets", topic_folder, "video_clips")

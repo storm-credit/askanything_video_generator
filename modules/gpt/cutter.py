@@ -159,23 +159,20 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   [CALM] = 여운/마무리 → 정적
 예시: "거대한 블랙홀이 빛을 삼키는 장면 [SHOCK]"
 
-[골든 예시 — 주제: "태양이 사라지면 생기는 일"]
+[골든 예시 — 주제: "태양이 사라지면 생기는 일" (대표 3컷만 표시, 실제로는 8~10컷 작성)]
 {
   "title": "태양이 사라지면 생기는 일",
   "expert_validation": "NASA 공식 데이터 기반, 물리학 법칙 검증 완료",
   "cuts": [
     {"description": "완전한 어둠 속 지구 전경, 태양 자리에 검은 void [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only, vertical 9:16, cinematic, no text", "script": "태양이 갑자기 사라지면 8분 동안 아무도 모른다고."},
-    {"description": "지구 표면에서 마지막 햇빛이 사라지는 순간 [REVEAL]", "image_prompt": "Last ray of golden sunlight disappearing over Earth's horizon into complete blackness, dramatic twilight moment, hyper-detailed atmosphere, vertical 9:16, cinematic, no text", "script": "빛이 8분 걸려서 오거든. 이미 없는데 모르는 거야."},
-    {"description": "얼어붙기 시작하는 도시 풍경 [TENSION]", "image_prompt": "Frozen cityscape with ice crystals forming on skyscrapers, temperature dropping rapidly, frost spreading across glass buildings, blue-cold lighting, vertical 9:16, cinematic, no text", "script": "근데 진짜 소름돋는 건 1주일이면 영하 40도야."},
-    {"description": "궤도를 이탈하는 지구의 우주 뷰 [SHOCK]", "image_prompt": "Earth drifting away from its orbital path into deep space, planetary trajectory visualization, dramatic wide shot showing empty solar system, vertical 9:16, cinematic, no text", "script": "사실 더 미친 게 있어. 지구가 우주로 날아간다고."},
     {"description": "중력 해방된 행성들이 흩어지는 태양계 [WONDER]", "image_prompt": "Solar system planets scattering in different directions without gravitational center, beautiful chaos of planetary bodies drifting apart, cosmic scale, vertical 9:16, cinematic, no text", "script": "태양 중력이 사라지면 행성 전부 흩어져버리거든."},
-    {"description": "광합성이 멈춘 죽어가는 숲 [TENSION]", "image_prompt": "Dense forest with all plants wilting and dying, leaves turning black, photosynthesis stopping, eerie bioluminescent fungi as only light source, vertical 9:16, cinematic, no text", "script": "식물 전멸. 산소도 곧 바닥나는 거지."},
-    {"description": "바다가 얼어붙는 극적인 장면 [SHOCK]", "image_prompt": "Ocean surface freezing over dramatically with massive ice sheets forming, underwater volcanic vents as only heat source, extreme wide shot, vertical 9:16, cinematic, no text", "script": "바다 표면이 통째로 얼어. 미쳤지?"},
-    {"description": "심해 열수구 주변의 생존 생물들 [WONDER]", "image_prompt": "Deep sea hydrothermal vents glowing with intense heat, bizarre creatures thriving around volcanic chimneys in complete darkness, bioluminescent life, vertical 9:16, cinematic, no text", "script": "근데 심해 생물은 살아남거든. 소름이지?"},
-    {"description": "우주를 떠도는 어두운 지구 [CALM]", "image_prompt": "Dark frozen Earth drifting alone through vast empty space, tiny pale blue dot becoming darker, melancholic cosmic loneliness, vertical 9:16, cinematic, no text", "script": "결국 지구는 우주를 떠도는 얼음 행성이 되는 거야."},
     {"description": "시청자를 향한 클로즈업 느낌의 우주 배경 [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos filled with distant galaxies, sense of insignificance and wonder, immersive vertical composition 9:16, cinematic, no text", "script": "이거 알고 나면 밤하늘 다르게 보일걸?"}
   ]
 }
+
+[JSON 출력 필수]
+- 마크다운 코드블록 없이 순수 JSON만 출력
+- 첫 문자: {  마지막 문자: }
 
 [Output Format]
 8~10컷, 다음 JSON만 출력:
@@ -231,23 +228,20 @@ Add an emotion tag at the END of each description:
   [CALM] = reflection/outro → static
 Example: "A massive black hole swallowing light [SHOCK]"
 
-[Golden Example — Topic: "What happens if the sun disappears"]
+[Golden Example — Topic: "What happens if the sun disappears" (3 representative cuts shown, write 8–10 in practice)]
 {
   "title": "The Sun Vanishes Tomorrow",
   "expert_validation": "Based on NASA data and verified physics",
   "cuts": [
     {"description": "Earth in complete darkness, empty void where sun was [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only, vertical 9:16, cinematic, no text", "script": "The sun vanishes and nobody knows for 8 minutes."},
-    {"description": "Last sunlight ray fading from Earth's horizon [REVEAL]", "image_prompt": "Last ray of golden sunlight disappearing over Earth's horizon into complete blackness, dramatic twilight, vertical 9:16, cinematic, no text", "script": "Light takes 8 minutes to reach us. It's already gone."},
-    {"description": "City freezing over rapidly [TENSION]", "image_prompt": "Frozen cityscape with ice crystals forming on skyscrapers, frost spreading across glass, blue-cold lighting, vertical 9:16, cinematic, no text", "script": "One week later? Minus 40 degrees. Everywhere."},
-    {"description": "Earth drifting from its orbit into space [SHOCK]", "image_prompt": "Earth drifting away from its orbital path into deep space, planetary trajectory visualization, vertical 9:16, cinematic, no text", "script": "But here's the insane part. Earth flies into space."},
     {"description": "Planets scattering without gravitational center [WONDER]", "image_prompt": "Solar system planets scattering in all directions, beautiful chaos of planetary bodies, cosmic scale, vertical 9:16, cinematic, no text", "script": "No sun gravity means every planet drifts apart."},
-    {"description": "Dying forest with no photosynthesis [TENSION]", "image_prompt": "Dense forest with plants wilting and dying, leaves turning black, bioluminescent fungi as only light, vertical 9:16, cinematic, no text", "script": "All plants die. Oxygen runs out. Dead serious."},
-    {"description": "Ocean surface freezing dramatically [SHOCK]", "image_prompt": "Ocean surface freezing over with massive ice sheets forming, underwater vents as only heat, extreme wide shot, vertical 9:16, cinematic, no text", "script": "The entire ocean freezes solid. Insane, right?"},
-    {"description": "Deep sea creatures surviving near vents [WONDER]", "image_prompt": "Deep sea hydrothermal vents glowing, bizarre creatures thriving around volcanic chimneys, bioluminescent life, vertical 9:16, cinematic, no text", "script": "But deep sea creatures? They survive. No way."},
-    {"description": "Dark frozen Earth drifting through space [CALM]", "image_prompt": "Dark frozen Earth drifting alone through vast empty space, melancholic cosmic loneliness, vertical 9:16, cinematic, no text", "script": "Earth becomes a frozen rock drifting forever."},
     {"description": "Vast cosmos perspective looking up [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos, distant galaxies, sense of wonder, vertical 9:16, cinematic, no text", "script": "You'll never look at the night sky the same."}
   ]
 }
+
+[JSON Output Required]
+- Output pure JSON only, no markdown code blocks
+- First character: {  Last character: }
 
 [Output Format]
 8–10 cuts, output ONLY this JSON:

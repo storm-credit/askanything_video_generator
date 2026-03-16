@@ -6,6 +6,7 @@ import io
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
 from modules.utils.constants import MASTER_STYLE, is_key_rotation_error
 from modules.utils.models import get_model_chain, get_service_tag
+from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
@@ -34,6 +35,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
 
         # 모델 체인 반복마다 프롬프트 초기화 (safety 폴백으로 변경된 프롬프트 리셋)
         enhanced_prompt = MASTER_STYLE + prompt
+        safety_retry_count = 0  # safety fallback stage tracker
 
         tried_keys: set[str] = set()
         current_key = api_key
@@ -84,19 +86,9 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                     mark_key_exhausted(final_api_key, service_tag)
                     print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → 다른 키로 전환...")
                     continue  # 다음 키로
-                is_safety = (
-                    "safety" in error_msg.lower() or "blocked" in error_msg.lower()
-                    or "SAFETY" in error_msg
-                    or "이미지가 없습니다" in error_msg
-                )
-                if is_safety:
-                    # 원본 프롬프트에서 핵심 키워드 추출하여 맥락 유지
-                    topic_hint = " ".join(prompt.split()[:6])  # 첫 6단어로 맥락 보존
-                    enhanced_prompt = (
-                        f"A safe, beautiful cinematic visualization related to: {topic_hint}. "
-                        "National Geographic documentary style, atmospheric lighting, "
-                        "bright and uplifting, vertical composition, NO TEXT, NO LETTERS."
-                    )
+                if is_safety_error(error_msg):
+                    enhanced_prompt = get_safety_fallback_prompt(prompt, safety_retry_count)
+                    safety_retry_count += 1
                     print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도...")
                     continue  # 같은 키로 대체 프롬프트 재시도
                 raise RuntimeError(f"[{model_label} 이미지 생성 실패] index={index}: {e}")
@@ -122,6 +114,7 @@ def _generate_imagen(api_key, prompt, model_name):
             number_of_images=1,
             aspect_ratio="9:16",
             safety_filter_level=safety_level,
+            http_options=types.HttpOptions(timeout=120_000),
         ),
     )
 
