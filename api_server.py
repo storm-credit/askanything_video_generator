@@ -8,6 +8,7 @@ import traceback
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -1387,6 +1388,21 @@ async def upload_platforms():
         "tiktok": tt_status(),
         "instagram": ig_status(),
     }
+
+
+# ── Legal pages (TikTok/Instagram 앱 등록용) ─────────────────────
+
+@app.get("/terms", response_class=HTMLResponse)
+async def terms_of_service():
+    legal_path = os.path.join(os.path.dirname(__file__), "legal", "terms.html")
+    with open(legal_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_policy():
+    legal_path = os.path.join(os.path.dirname(__file__), "legal", "privacy.html")
+    with open(legal_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 
 if __name__ == "__main__":
