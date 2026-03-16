@@ -91,6 +91,7 @@ class GenerateRequest(BaseModel):
     channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
     ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
+    captionSize: int = 48  # 자막 폰트 크기 (px): 32~72
 
     @field_validator("language")
     @classmethod
@@ -543,6 +544,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     bgm_theme=req.bgmTheme,
                     channel=req.channel,
                     platforms=req.platforms,
+                    caption_size=req.captionSize,
                 ),
             )
 

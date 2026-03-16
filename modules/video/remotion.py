@@ -154,7 +154,7 @@ PLATFORM_CONFIGS = {
 }
 
 
-def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str, title: str = "", camera_style: str = "dynamic", bgm_theme: str = "random", channel: str | None = None, platforms: list[str] | None = None) -> str | dict[str, str] | None:
+def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scripts: list[str], word_timestamps_list: list[list[dict]], topic_folder: str, title: str = "", camera_style: str = "dynamic", bgm_theme: str = "random", channel: str | None = None, platforms: list[str] | None = None, caption_size: int = 48) -> str | dict[str, str] | None:
     """
     Remotion 렌더링. platforms가 2개 이상이면 플랫폼별 영상을 각각 생성합니다.
     API 토큰 추가 비용 없이 로컬 렌더만 반복합니다.
@@ -278,6 +278,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             "bgmPath": bgm_path,
             "title": use_title,
             "cameraStyle": camera,
+            "captionSize": caption_size,
         }
 
         suffix = f"_{platform}" if multi else ""

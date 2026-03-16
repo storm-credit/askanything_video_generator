@@ -224,7 +224,8 @@ export const Main: React.FC<{
   bgmPath?: string;
   title?: string;
   cameraStyle?: CameraStyle;
-}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle = 'dynamic' }) => {
+  captionSize?: number;
+}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle = 'dynamic', captionSize = 48 }) => {
 
   const introFrames = introImagePath ? INTRO_DURATION_FRAMES : 0;
   const outroFrames = outroImagePath ? OUTRO_DURATION_FRAMES : 0;
@@ -272,7 +273,7 @@ export const Main: React.FC<{
                     <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} />
                 )}
                 <Audio src={audioSrc} />
-                <Captions wordTimestamps={cut.word_timestamps} />
+                <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} />
             </AbsoluteFill>
           </Sequence>
         );

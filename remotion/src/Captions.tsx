@@ -7,7 +7,7 @@ type WordProps = {
   end: number;
 };
 
-export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimestamps }) => {
+export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: number }> = ({ wordTimestamps, captionSize = 48 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
@@ -52,7 +52,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
               style={{
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 800,
-                fontSize: '48px',
+                fontSize: `${captionSize}px`,
                 color: color,
                 textShadow: textShadow,
                 WebkitTextStroke: '1.5px rgba(0, 0, 0, 0.5)',

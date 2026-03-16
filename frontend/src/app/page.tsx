@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -18,6 +18,7 @@ export default function Home() {
   const [channel, setChannel] = useState("");
   const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
   const [ttsSpeed, setTtsSpeed] = useState(0.9);
+  const [captionSize, setCaptionSize] = useState(48);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -186,6 +187,7 @@ export default function Home() {
           channel: channel || undefined,
           platforms,
           ttsSpeed,
+          captionSize,
         }),
       });
 
@@ -636,6 +638,23 @@ export default function Home() {
                 aria-label="음성 속도"
               />
               <span className="text-[10px] text-gray-500 w-8">{ttsSpeed}x</span>
+            </div>
+
+            {/* 자막 크기 */}
+            <div className="flex items-center gap-1">
+              <Type className="w-3.5 h-3.5 text-gray-500" />
+              <input
+                type="range"
+                min="32"
+                max="72"
+                step="4"
+                value={captionSize}
+                onChange={(e) => setCaptionSize(parseInt(e.target.value))}
+                disabled={isGenerating}
+                className="w-16 h-1 accent-indigo-500 cursor-pointer"
+                aria-label="자막 크기"
+              />
+              <span className="text-[10px] text-gray-500 w-8">{captionSize}px</span>
             </div>
           </div>
 
