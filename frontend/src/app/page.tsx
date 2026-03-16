@@ -19,6 +19,7 @@ export default function Home() {
   const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
   const [ttsSpeed, setTtsSpeed] = useState(0.9);
   const [captionSize, setCaptionSize] = useState(48);
+  const [captionY, setCaptionY] = useState(28);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -197,6 +198,7 @@ export default function Home() {
           platforms,
           ttsSpeed,
           captionSize,
+          captionY,
         }),
       });
 
@@ -430,6 +432,7 @@ export default function Home() {
           channel: channel || undefined,
           platforms,
           captionSize,
+          captionY,
           outputPath: outputPath.trim() || undefined,
         }),
       });
@@ -815,6 +818,23 @@ export default function Home() {
                 aria-label="자막 크기"
               />
               <span className="text-[10px] text-gray-500 w-8">{captionSize}px</span>
+            </div>
+
+            {/* 자막 높이 */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-gray-500">Y</span>
+              <input
+                type="range"
+                min="10"
+                max="50"
+                step="2"
+                value={captionY}
+                onChange={(e) => setCaptionY(parseInt(e.target.value))}
+                disabled={isGenerating}
+                className="w-16 h-1 accent-indigo-500 cursor-pointer"
+                aria-label="자막 높이"
+              />
+              <span className="text-[10px] text-gray-500 w-8">{captionY}%</span>
             </div>
           </div>
 

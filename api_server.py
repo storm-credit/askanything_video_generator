@@ -92,6 +92,7 @@ class GenerateRequest(BaseModel):
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
     ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
     captionSize: int = 48  # 자막 폰트 크기 (px): 32~72
+    captionY: int = 28  # 자막 높이 (%): 10~50, 하단 기준
 
     @field_validator("language")
     @classmethod
@@ -545,6 +546,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     channel=req.channel,
                     platforms=req.platforms,
                     caption_size=req.captionSize,
+                    caption_y=req.captionY,
                 ),
             )
 
@@ -775,6 +777,7 @@ class RenderRequest(BaseModel):
     channel: str | None = None
     platforms: list[str] = ["youtube"]
     captionSize: int = 48
+    captionY: int = 28
     outputPath: str | None = None
 
 
@@ -874,6 +877,7 @@ async def render_endpoint(req: RenderRequest):
                     camera_style=req.cameraStyle, bgm_theme=req.bgmTheme,
                     channel=req.channel, platforms=req.platforms,
                     caption_size=req.captionSize,
+                    caption_y=req.captionY,
                 ),
             )
 

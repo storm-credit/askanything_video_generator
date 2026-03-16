@@ -7,7 +7,7 @@ type WordProps = {
   end: number;
 };
 
-export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: number }> = ({ wordTimestamps, captionSize = 48 }) => {
+export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: number; captionY?: number }> = ({ wordTimestamps, captionSize = 48, captionY = 28 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
@@ -24,7 +24,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
   }, [wordTimestamps, quantizedTime]);
 
   return (
-    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '28%' }}>
+    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: `${captionY}%` }}>
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
