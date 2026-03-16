@@ -149,8 +149,8 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
 # tiktok/reels: 인트로/아웃트로/제목 없이 본편만
 PLATFORM_CONFIGS = {
     "youtube": {"intro": True, "outro": True, "title": True},
-    "tiktok":  {"intro": False, "outro": False, "title": False},
-    "reels":   {"intro": False, "outro": False, "title": False},
+    "tiktok":  {"intro": False, "outro": False, "title": True},
+    "reels":   {"intro": False, "outro": False, "title": True},
 }
 
 
