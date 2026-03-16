@@ -1,6 +1,8 @@
 import os
 import json
 import re
+import time
+import random
 from typing import Any
 from modules.utils.slugify import slugify_topic
 from modules.utils.constants import PROVIDER_LABELS
@@ -110,7 +112,7 @@ def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content:
 # 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
-                  channel: str | None = None) -> tuple[list[dict[str, Any]], str]:
+                  channel: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
     topic_folder = slugify_topic(topic, lang)
 
     # 저장 폴더 구조 생성
@@ -360,10 +362,9 @@ This is the channel's signature look — every image should feel cohesive with t
                     raise RuntimeError(f"[Gemini 할당량 초과] 등록된 모든 키({len(exhausted_keys)}개)의 쿼터가 소진되었습니다.") from e
             elif is_retryable:
                 # OpenAI/Claude 429: 지수 백오프 후 재시도
-                import time as _time, random as _random
-                wait = min(2 ** (attempt + 1), 30) + _random.uniform(0, 2)
+                wait = min(2 ** (attempt + 1), 30) + random.uniform(0, 2)
                 print(f"  [{provider_label} 429] {wait:.1f}초 후 재시도... ({attempt+1}/{max_key_attempts})")
-                _time.sleep(wait)
+                time.sleep(wait)
                 continue
             else:
                 raise  # 429가 아닌 에러는 그대로 전파

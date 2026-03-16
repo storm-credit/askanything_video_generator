@@ -149,12 +149,23 @@ def generate_video_veo(
                         print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
                         return final_path
                     elif hasattr(vid, "uri") and vid.uri:
+                        import tempfile as _tmpfile
                         print(f"-> [{model_label}] 컷 {index+1} 비디오 다운로드 중...")
                         resp = requests.get(vid.uri, stream=True, timeout=60)
                         resp.raise_for_status()
-                        with open(final_path, "wb") as f:
-                            for chunk in resp.iter_content(chunk_size=8192):
-                                f.write(chunk)
+                        fd, tmp_dl = _tmpfile.mkstemp(dir=output_dir, suffix=".tmp")
+                        os.close(fd)
+                        try:
+                            with open(tmp_dl, "wb") as f:
+                                for chunk in resp.iter_content(chunk_size=8192):
+                                    f.write(chunk)
+                            os.replace(tmp_dl, final_path)
+                        except Exception:
+                            try:
+                                os.remove(tmp_dl)
+                            except OSError:
+                                pass
+                            raise
                         record_key_usage(final_key, service_tag)
                         elapsed = time.time() - start
                         print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")

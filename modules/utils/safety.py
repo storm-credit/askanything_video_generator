@@ -36,6 +36,5 @@ def get_safety_fallback_prompt(original_prompt: str, retry_count: int) -> str:
     topic_hint = " ".join(original_prompt.split()[:6])
     return (
         f"A safe, beautiful cinematic visualization related to: {topic_hint}. "
-        "National Geographic documentary style, atmospheric lighting, "
-        "bright and uplifting, vertical composition, NO TEXT, NO LETTERS."
+        "Atmospheric lighting, detailed textures, peaceful scene."
     )

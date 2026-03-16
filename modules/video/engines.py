@@ -70,7 +70,7 @@ def check_engine_available(engine: str, google_key: str = None) -> tuple[bool, s
 
 def _get_available_engines(preferred_engine: str) -> list[str]:
     """Return engine list ordered by availability. Preferred engine first if available."""
-    from modules.utils.keys import get_google_key, get_key_state
+    from modules.utils.keys import get_google_key
 
     available = []
 
@@ -197,7 +197,7 @@ def _generate_via_openai_sora(
             model="sora",
             input=[
                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
-                {"type": "text", "text": f"Generate an 8-second cinematic video. {get_motion_style(prompt)}, 4K quality. {prompt}"},
+                {"type": "text", "text": f"{get_motion_style(prompt)}, 4K quality. {prompt}"},
             ],
             tools=[{"type": "video_generation", "resolution": "1080p", "duration": 8}],
         )

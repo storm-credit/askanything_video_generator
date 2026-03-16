@@ -604,7 +604,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                                 errors.append(f"타임스탬프: {exc}")
                             print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
 
-                whisper_result = [None]
+                whisper_result = [None]  # must be before _run_tts_and_whisper definition
 
                 threads = []
                 if img_path and active_video_engine != "none":
@@ -866,6 +866,7 @@ async def prepare_endpoint(req: PrepareRequest):
         os.environ["GEMINI_API_KEYS"] = req.geminiKeys
 
     async def sse_generator():
+      async with _generate_semaphore:
         try:
             llm_key_for_request = get_google_key(req.llmKey) if req.llmProvider == "gemini" else req.llmKey
             loop = asyncio.get_running_loop()
