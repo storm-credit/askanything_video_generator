@@ -125,6 +125,18 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
                 elapsed = (poll_iter + 1) * 5
                 print(f"  [Kling AI] 컷 {index+1} 렌더링 진행 중... ({elapsed}초 경과, 상태: {status})")
 
+        except requests.exceptions.HTTPError as e:
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code in (401, 403):
+                print(f"[Kling AI] JWT 만료/인증 오류 감지 — 토큰 재발급 후 재시도")
+                try:
+                    token = _generate_jwt(ak, sk)
+                    headers["Authorization"] = f"Bearer {token}"
+                except Exception as jwt_err:
+                    print(f"[Kling AI 오류] JWT 재발급 실패: {jwt_err}")
+                    return None
+            else:
+                print(f"[Kling AI 대기 중 오류] {e}")
+            continue
         except Exception as e:
             print(f"[Kling AI 대기 중 오류] {e}")
             continue

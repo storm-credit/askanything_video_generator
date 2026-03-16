@@ -97,16 +97,30 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
           const isEmphasized = isActive && w.emphasis;
           const highlightColor = getEmotionColor(emotion);
 
+          const EMOTION_EMPHASIS: Record<string, string> = {
+            SHOCK: '#FF4444',
+            WONDER: '#FFB800',
+            TENSION: '#FF6600',
+            REVEAL: '#00CC66',
+            CALM: '#5BB8E8',
+          };
+          const emphasisColor = emotion && EMOTION_EMPHASIS[emotion] ? EMOTION_EMPHASIS[emotion] : '#FF4444';
+
           const color = isEmphasized
-            ? '#FF4444'
+            ? emphasisColor
             : isActive
               ? highlightColor
               : 'rgba(255, 255, 255, 0.6)';
 
           const highlightGlow = `0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 6px ${highlightColor}4D`;
 
+          // emphasis glow uses emphasisColor for hex → rgba conversion
+          const emphasisR = parseInt(emphasisColor.slice(1, 3), 16);
+          const emphasisG = parseInt(emphasisColor.slice(3, 5), 16);
+          const emphasisB = parseInt(emphasisColor.slice(5, 7), 16);
+
           const textShadow = isEmphasized
-            ? '0px 2px 16px rgba(255, 68, 68, 0.6), 0px 0px 8px rgba(255, 68, 68, 0.4), 0px 2px 12px rgba(0, 0, 0, 0.9)'
+            ? `0px 2px 16px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.6), 0px 0px 8px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.4), 0px 2px 12px rgba(0, 0, 0, 0.9)`
             : isActive
               ? highlightGlow
               : '0px 2px 8px rgba(0, 0, 0, 0.8)';

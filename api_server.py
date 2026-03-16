@@ -1,6 +1,7 @@
 import os
 import sys
 import io
+import copy
 import shutil
 import asyncio
 import threading
@@ -535,6 +536,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             scripts = [cut["script"] for cut in cuts]
 
             # 이미지/TTS 동시성 제한 (API 레이트 리밋 방지)
+            # NOTE: MAX_CONCURRENT_GENERATE > 1 시 이 세마포어를 모듈 레벨로 이동 필요
             image_semaphore = threading.Semaphore(2)  # 이미지 최대 2개 동시
 
             # 이미지 엔진에 따라 생성 함수 선택
@@ -968,6 +970,7 @@ class RenderRequest(BaseModel):
     captionSize: int = 48
     captionY: int = 28
     outputPath: str | None = None
+    voiceId: str | None = None  # ElevenLabs 음성 ID ("auto" → 주제 분석 자동 선택)
 
 
 @app.post("/api/render")
@@ -980,7 +983,7 @@ async def render_endpoint(req: RenderRequest):
 
     async def sse_generator():
         try:
-            cuts = session["cuts"]
+            cuts = copy.deepcopy(session["cuts"])
             topic_folder = session["topic_folder"]
             video_title = session["title"]
             image_paths = session["image_paths"]
@@ -997,11 +1000,16 @@ async def render_endpoint(req: RenderRequest):
             scripts = [cut["script"] for cut in cuts]
             loop = asyncio.get_running_loop()
 
-            # 채널별 Voice ID
+            # 음성 선택: voiceId(auto/직접) > 채널 설정 > 기본값
             render_voice_id = None
-            render_preset = get_channel_preset(req.channel)
-            if render_preset:
-                render_voice_id = render_preset.get("voice_id")
+            if req.voiceId == "auto":
+                render_voice_id = _auto_select_voice(video_title, language)
+            elif req.voiceId:
+                render_voice_id = req.voiceId
+            if not render_voice_id:
+                render_preset = get_channel_preset(req.channel)
+                if render_preset:
+                    render_voice_id = render_preset.get("voice_id")
 
             yield {"data": "PROG|10\n"}
             yield {"data": "[음성] TTS 녹음 + 타임스탬프 추출 시작...\n"}
