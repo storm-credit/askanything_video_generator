@@ -664,6 +664,263 @@ async def generate_video_endpoint(req: GenerateRequest):
     return EventSourceResponse(sse_generator())
 
 
+# ── 미리보기 모드: prepare → preview → render ─────────────────────
+
+# 준비된 세션 저장소 (메모리 — 단일 사용자 기준)
+_prepared_sessions: dict[str, dict] = {}
+
+
+class PrepareRequest(BaseModel):
+    topic: str = Field(..., min_length=1, max_length=500)
+    apiKey: str | None = None
+    llmProvider: str = "gemini"
+    llmKey: str | None = None
+    imageEngine: str = "imagen"
+    language: str = "ko"
+    videoEngine: str = "none"  # prepare 단계에서는 비디오 미생성이 기본
+
+
+@app.post("/api/prepare")
+async def prepare_endpoint(req: PrepareRequest):
+    """1단계: LLM 스크립트 + 이미지 생성만 수행. TTS/렌더는 하지 않음."""
+    async def sse_generator():
+        try:
+            llm_key_for_request = get_google_key(req.llmKey) if req.llmProvider == "gemini" else req.llmKey
+            loop = asyncio.get_running_loop()
+
+            yield {"data": "PROG|10\n"}
+            yield {"data": f"[기획] '{req.topic}' 스크립트 생성 중...\n"}
+
+            cuts, topic_folder, video_title = await loop.run_in_executor(
+                None,
+                lambda: generate_cuts(
+                    req.topic, api_key_override=req.apiKey, lang=req.language,
+                    llm_provider=req.llmProvider, llm_key_override=llm_key_for_request,
+                ),
+            )
+
+            yield {"data": "PROG|30\n"}
+            yield {"data": f"[기획 완료] {len(cuts)}컷 스크립트 생성!\n"}
+
+            # 이미지 생성
+            gen_image_fn = generate_image_imagen if req.imageEngine == "imagen" else generate_image_dalle
+            image_label = "Imagen 4" if req.imageEngine == "imagen" else "DALL-E"
+            yield {"data": f"[이미지] {image_label}로 이미지 생성 중...\n"}
+
+            image_paths = []
+            for i, cut in enumerate(cuts):
+                try:
+                    img_key = get_google_key(req.llmKey, service="imagen") if req.imageEngine == "imagen" else req.apiKey
+                    img_path = await loop.run_in_executor(
+                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k)
+                    )
+                    image_paths.append(img_path)
+                except Exception as exc:
+                    print(f"[컷 {i+1} 이미지 실패] {exc}")
+                    image_paths.append(None)
+
+                prog = 30 + int(60 * ((i + 1) / len(cuts)))
+                yield {"data": f"PROG|{prog}\n"}
+                yield {"data": f"  -> 컷 {i+1}/{len(cuts)} 이미지 생성 완료\n"}
+
+            # 세션 저장
+            import uuid as _uuid
+            session_id = _uuid.uuid4().hex[:12]
+            _prepared_sessions[session_id] = {
+                "cuts": cuts,
+                "topic_folder": topic_folder,
+                "title": video_title,
+                "image_paths": image_paths,
+                "topic": req.topic,
+                "language": req.language,
+                "apiKey": req.apiKey,
+                "llmKey": req.llmKey,
+            }
+
+            # 미리보기 데이터 전송
+            preview_cuts = []
+            for i, cut in enumerate(cuts):
+                img_url = None
+                if image_paths[i] and os.path.exists(image_paths[i]):
+                    rel = image_paths[i].replace("\\", "/")
+                    idx = rel.find("assets/")
+                    if idx >= 0:
+                        img_url = f"/{rel[idx:]}"
+                preview_cuts.append({
+                    "index": i,
+                    "script": cut["script"],
+                    "prompt": cut.get("prompt", ""),
+                    "image_url": img_url,
+                })
+
+            import json
+            yield {"data": "PROG|100\n"}
+            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'cuts': preview_cuts}, ensure_ascii=False)}\n"}
+
+        except Exception as e:
+            traceback.print_exc()
+            yield {"data": f"ERROR|[준비 오류] {str(e)}\n"}
+
+    return EventSourceResponse(sse_generator())
+
+
+class RenderRequest(BaseModel):
+    sessionId: str
+    cuts: list[dict]  # 수정된 스크립트 포함: [{index, script}, ...]
+    elevenlabsKey: str | None = None
+    ttsSpeed: float = 0.9
+    videoEngine: str = "none"
+    cameraStyle: str = "dynamic"
+    bgmTheme: str = "random"
+    channel: str | None = None
+    platforms: list[str] = ["youtube"]
+    captionSize: int = 48
+    outputPath: str | None = None
+
+
+@app.post("/api/render")
+async def render_endpoint(req: RenderRequest):
+    """2단계: 수정된 스크립트로 TTS → Whisper → Remotion 렌더링."""
+    session = _prepared_sessions.get(req.sessionId)
+    if not session:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"error": "세션이 만료되었습니다. 다시 준비해주세요."})
+
+    async def sse_generator():
+        try:
+            cuts = session["cuts"]
+            topic_folder = session["topic_folder"]
+            video_title = session["title"]
+            image_paths = session["image_paths"]
+            language = session["language"]
+            api_key_override = session["apiKey"]
+            elevenlabs_key_override = req.elevenlabsKey or os.getenv("ELEVENLABS_API_KEY", "")
+
+            # 수정된 스크립트 반영
+            script_updates = {c["index"]: c["script"] for c in req.cuts if "script" in c}
+            for idx, new_script in script_updates.items():
+                if 0 <= idx < len(cuts):
+                    cuts[idx]["script"] = new_script
+
+            scripts = [cut["script"] for cut in cuts]
+            loop = asyncio.get_running_loop()
+
+            yield {"data": "PROG|10\n"}
+            yield {"data": "[음성] TTS 녹음 + 타임스탬프 추출 시작...\n"}
+
+            # TTS + Whisper (순차)
+            audio_paths = []
+            word_timestamps_list = []
+            for i, script in enumerate(scripts):
+                try:
+                    aud = await loop.run_in_executor(
+                        None, lambda idx=i, s=script: generate_tts(s, idx, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed)
+                    )
+                    if aud:
+                        aud = normalize_audio_lufs(aud)
+                    audio_paths.append(aud)
+                except Exception as exc:
+                    print(f"[컷 {i+1} TTS 실패] {exc}")
+                    audio_paths.append(None)
+
+                # Whisper 타임스탬프
+                words = []
+                if audio_paths[-1]:
+                    try:
+                        words = await loop.run_in_executor(
+                            None, lambda a=audio_paths[-1]: generate_word_timestamps(a, api_key_override, language=language)
+                        )
+                    except Exception as exc:
+                        print(f"[컷 {i+1} Whisper 실패] {exc}")
+                word_timestamps_list.append(words or [])
+
+                prog = 10 + int(50 * ((i + 1) / len(scripts)))
+                yield {"data": f"PROG|{prog}\n"}
+                yield {"data": f"  -> 컷 {i+1}/{len(scripts)} 음성 완료\n"}
+
+            # 비디오 변환 (선택)
+            visual_paths = list(image_paths)
+            active_video_engine = req.videoEngine
+            if active_video_engine != "none":
+                yield {"data": f"[비디오] {active_video_engine} 변환 중...\n"}
+                for i, img_path in enumerate(image_paths):
+                    if img_path and os.path.exists(img_path):
+                        try:
+                            llm_key = session.get("llmKey")
+                            vid_key = get_google_key(llm_key, service=active_video_engine)
+                            vid = await loop.run_in_executor(
+                                None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"]: generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vid_key)
+                            )
+                            if vid:
+                                visual_paths[i] = vid
+                        except Exception as exc:
+                            print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
+
+            # 실패 체크
+            failed = [i+1 for i, p in enumerate(audio_paths) if p is None]
+            if failed:
+                yield {"data": f"ERROR|[TTS 오류] 컷 {failed} 음성 생성 실패\n"}
+                return
+
+            yield {"data": "PROG|70\n"}
+            yield {"data": "[렌더링] Remotion 렌더링 시작...\n"}
+
+            # Remotion 렌더
+            render_result = await loop.run_in_executor(
+                None,
+                lambda: create_remotion_video(
+                    visual_paths, audio_paths, scripts,
+                    word_timestamps_list, topic_folder, title=video_title,
+                    camera_style=req.cameraStyle, bgm_theme=req.bgmTheme,
+                    channel=req.channel, platforms=req.platforms,
+                    caption_size=req.captionSize,
+                ),
+            )
+
+            if not render_result:
+                yield {"data": "ERROR|[Remotion 오류] 렌더링 실패\n"}
+                return
+
+            # 결과 처리
+            if isinstance(render_result, str):
+                video_paths_map = {"youtube": render_result}
+            else:
+                video_paths_map = render_result
+
+            primary_path = next(iter(video_paths_map.values()))
+
+            # Downloads 복사
+            downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            for plat, vpath in video_paths_map.items():
+                fname = os.path.basename(vpath)
+                if os.path.isdir(downloads_dir):
+                    try:
+                        await asyncio.to_thread(shutil.copy2, os.path.abspath(vpath), os.path.join(downloads_dir, fname))
+                        if len(video_paths_map) > 1:
+                            yield {"data": f"[저장] {plat.upper()} → Downloads/{fname}\n"}
+                    except Exception as cp_err:
+                        print(f"[Downloads 복사 실패] {cp_err}")
+
+            yield {"data": "PROG|100\n"}
+            final_filename = os.path.basename(primary_path)
+            relative_video_path = f"/assets/{topic_folder}/video/{final_filename}"
+            platform_count = len(video_paths_map)
+            if platform_count > 1:
+                yield {"data": f"[완료] {platform_count}개 플랫폼 영상 렌더링 대성공!\n"}
+            else:
+                yield {"data": f"[완료] 영상 렌더링 대성공! 📂 Downloads 폴더에 저장됨\n"}
+            yield {"data": f"DONE|{relative_video_path}|\n"}
+
+            # 세션 정리
+            _prepared_sessions.pop(req.sessionId, None)
+
+        except Exception as e:
+            traceback.print_exc()
+            yield {"data": f"ERROR|[렌더 오류] {str(e)}\n"}
+
+    return EventSourceResponse(sse_generator())
+
+
 # ── BGM 테마 목록 API ──────────────────────────────────────────────
 
 @app.get("/api/bgm-themes")

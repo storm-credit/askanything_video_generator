@@ -68,6 +68,15 @@ export default function Home() {
   // Instagram
   const [igConnected, setIgConnected] = useState(false);
 
+  // 미리보기 모드
+  const [previewMode, setPreviewMode] = useState(false);
+  const [previewData, setPreviewData] = useState<{
+    sessionId: string;
+    title: string;
+    cuts: { index: number; script: string; prompt: string; image_url: string | null }[];
+  } | null>(null);
+  const [editedScripts, setEditedScripts] = useState<Record<number, string>>({});
+
   // AbortController (생성 취소용)
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
@@ -293,6 +302,147 @@ export default function Home() {
     setLogs([]);
   };
 
+  // ── 미리보기 모드: prepare → preview → render ──
+
+  const readSSE = async (response: Response, onPreview?: (data: string) => void) => {
+    if (!response.body) throw new Error("No response body");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    const processLine = (line: string) => {
+      if (!line.startsWith("data:")) return;
+      const rawData = line.slice(5).trim();
+      if (!rawData) return;
+
+      if (rawData.startsWith("DONE|")) {
+        const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
+        const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
+        const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
+        const downloadUrl = `${API_BASE}${normalizedPath}`;
+        setGeneratedVideoPath(videoPath);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.setAttribute("download", videoPath.split('/').pop() || "AskAnything_Shorts.mp4");
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode?.removeChild(link);
+        setSuccessMessage("비디오 생성 성공!");
+        setIsGenerating(false);
+        setPreviewData(null);
+        checkPlatformStatus();
+      } else if (rawData.startsWith("PREVIEW|")) {
+        onPreview?.(rawData.slice(8));
+      } else if (rawData.startsWith("ERROR|")) {
+        setLogs(prev => [...prev.slice(-99), `ERROR:${rawData.slice(6)}`]);
+        setErrorMessage(rawData.slice(6));
+        setIsGenerating(false);
+      } else if (rawData.startsWith("WARN|")) {
+        setLogs(prev => [...prev.slice(-99), `WARN:${rawData.slice(5)}`]);
+      } else if (rawData.startsWith("PROG|")) {
+        const p = parseInt(rawData.slice(5), 10);
+        if (!isNaN(p)) setProgress(p);
+      } else {
+        setLogs(prev => [...prev.slice(-99), rawData]);
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) { if (buffer.trim()) processLine(buffer); break; }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) processLine(line);
+    }
+  };
+
+  const handlePrepare = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!topic.trim()) return;
+
+    setIsGenerating(true);
+    setProgress(0);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    setLogs([]);
+    setPreviewData(null);
+    setEditedScripts({});
+
+    try {
+      const response = await fetch(`${API_BASE}/api/prepare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          apiKey: pickKey("openai") || undefined,
+          llmProvider,
+          llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
+          imageEngine,
+          language,
+        }),
+      });
+
+      await readSSE(response, (previewJson) => {
+        try {
+          const data = JSON.parse(previewJson);
+          setPreviewData(data);
+          setPreviewMode(true);
+          setIsGenerating(false);
+        } catch (err) {
+          console.error("Preview parse error:", err);
+        }
+      });
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("[연결 실패] 백엔드 서버에 연결할 수 없습니다.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRender = async () => {
+    if (!previewData) return;
+
+    setIsGenerating(true);
+    setProgress(0);
+    setLogs([]);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const updatedCuts = previewData.cuts.map((cut) => ({
+      index: cut.index,
+      script: editedScripts[cut.index] ?? cut.script,
+    }));
+
+    try {
+      const response = await fetch(`${API_BASE}/api/render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: previewData.sessionId,
+          cuts: updatedCuts,
+          elevenlabsKey: pickKey("elevenlabs") || undefined,
+          ttsSpeed,
+          videoEngine,
+          cameraStyle,
+          bgmTheme,
+          channel: channel || undefined,
+          platforms,
+          captionSize,
+          outputPath: outputPath.trim() || undefined,
+        }),
+      });
+
+      await readSSE(response);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("[연결 실패] 렌더 서버에 연결할 수 없습니다.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // 전체 플랫폼 연동 상태 확인
   const checkPlatformStatus = useCallback(async () => {
     try {
@@ -503,13 +653,23 @@ export default function Home() {
                 취소
               </button>
             ) : (
-              <button
-                type="submit"
-                disabled={!topic.trim()}
-                className="absolute right-2 bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
-              >
-                생성하기
-              </button>
+              <div className="absolute right-2 flex gap-1">
+                <button
+                  type="button"
+                  onClick={handlePrepare}
+                  disabled={!topic.trim()}
+                  className="bg-indigo-600 text-white hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
+                >
+                  미리보기
+                </button>
+                <button
+                  type="submit"
+                  disabled={!topic.trim()}
+                  className="bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
+                >
+                  바로생성
+                </button>
+              </div>
             )}
           </div>
 
@@ -692,6 +852,73 @@ export default function Home() {
       <AnimatePresence>
         {isGenerating && (
           <ProgressPanel progress={progress} logs={logs} />
+        )}
+      </AnimatePresence>
+
+      {/* 미리보기 패널 */}
+      <AnimatePresence>
+        {previewMode && previewData && !isGenerating && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="mt-8 w-full max-w-2xl glass-panel p-6 rounded-3xl relative z-10 shadow-2xl shadow-indigo-500/20"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">{previewData.title}</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setPreviewMode(false); setPreviewData(null); }}
+                  className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 text-gray-300 rounded-lg transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleRender}
+                  className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors"
+                >
+                  확인 — 영상 만들기
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {previewData.cuts.map((cut) => (
+                <div key={cut.index} className="flex gap-3 bg-white/5 rounded-xl p-3">
+                  {/* 이미지 미리보기 */}
+                  <div className="w-20 h-36 flex-shrink-0 rounded-lg overflow-hidden bg-black/30">
+                    {cut.image_url ? (
+                      <img
+                        src={`${API_BASE}${cut.image_url}`}
+                        alt={`컷 ${cut.index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">
+                        이미지 없음
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 스크립트 편집 */}
+                  <div className="flex-1 flex flex-col gap-1">
+                    <span className="text-[10px] text-gray-500 uppercase">컷 {cut.index + 1}</span>
+                    <textarea
+                      value={editedScripts[cut.index] ?? cut.script}
+                      onChange={(e) => setEditedScripts(prev => ({ ...prev, [cut.index]: e.target.value }))}
+                      rows={3}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    />
+                    <span className="text-[10px] text-gray-600 truncate">{cut.prompt}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[10px] text-gray-500 mt-3 text-center">
+              스크립트를 수정한 뒤 &quot;확인&quot;을 누르면 수정된 내용으로 음성 녹음 + 영상 렌더링이 시작됩니다.
+            </p>
+          </motion.div>
         )}
       </AnimatePresence>
 
