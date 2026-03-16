@@ -248,13 +248,17 @@ export default function Home() {
     const selectedOpenaiKey = pickKey("openai");
     const selectedElevenlabsKey = pickKey("elevenlabs");
 
-    // LLM 프로바이더별 키 선택
+    // LLM 프로바이더별 키 선택 (단일)
     let llmKeyOverride: string | undefined;
     if (llmProvider === "gemini") {
       llmKeyOverride = pickKey("gemini");
     } else if (llmProvider === "claude") {
       llmKeyOverride = pickKey("claude_key");
     }
+
+    // Google 멀티키 전체 전달 (백엔드 로테이션용)
+    const geminiKeys = savedKeys["gemini"] || [];
+    const geminiKeysStr = geminiKeys.length > 0 ? geminiKeys.join(",") : undefined;
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -277,6 +281,7 @@ export default function Home() {
           videoModel: videoModel || undefined,
           language,
           llmKey: llmKeyOverride || undefined,
+          geminiKeys: geminiKeysStr,
           outputPath: outputPath.trim() || undefined,
           cameraStyle,
           bgmTheme,
@@ -423,7 +428,7 @@ export default function Home() {
         onPreview?.(rawData.slice(8));
       } else if (rawData.startsWith("ERROR|")) {
         setLogs(prev => [...prev.slice(-99), `ERROR:${rawData.slice(6)}`]);
-        setErrorMessage(rawData.slice(6));
+        setErrorMessage(prev => prev ? `${prev}\n${rawData.slice(6)}` : rawData.slice(6));
         setIsGenerating(false);
       } else if (rawData.startsWith("WARN|")) {
         setLogs(prev => [...prev.slice(-99), `WARN:${rawData.slice(5)}`]);
@@ -466,6 +471,7 @@ export default function Home() {
           apiKey: pickKey("openai") || undefined,
           llmProvider,
           llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
+          geminiKeys: (savedKeys["gemini"] || []).length > 0 ? savedKeys["gemini"].join(",") : undefined,
           imageEngine,
           language,
           channel: channel || undefined,
@@ -1407,7 +1413,7 @@ export default function Home() {
               <AlertCircle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
               <div className="space-y-2">
                 <h3 className="text-lg text-red-400 font-bold">오류 발생</h3>
-                <p className="text-gray-300 text-sm">{errorMessage}</p>
+                <p className="text-gray-300 text-sm whitespace-pre-line">{errorMessage}</p>
                 <button
                   onClick={handleClearError}
                   className="mt-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-300 text-sm rounded-xl transition-colors"

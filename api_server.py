@@ -90,6 +90,7 @@ class GenerateRequest(BaseModel):
     imageModel: str | None = None  # 이미지 모델 버전 (예: "imagen-4.0-fast-generate-001")
     videoModel: str | None = None  # 비디오 모델 버전 (예: "veo-3.0-fast-generate-001")
     llmKey: str | None = None
+    geminiKeys: str | None = None  # 프론트엔드 멀티키 (쉼표 구분)
     outputPath: str | None = None
     language: str = "ko"
     cameraStyle: str = "dynamic"
@@ -334,6 +335,9 @@ async def generate_video_endpoint(req: GenerateRequest):
         _model_overrides["IMAGEN_MODEL"] = req.imageModel
     if req.videoModel:
         _model_overrides["VEO_MODEL"] = req.videoModel
+    # 프론트엔드 멀티키 → 환경변수로 임시 설정 (로테이션용)
+    if req.geminiKeys:
+        _model_overrides["GEMINI_API_KEYS"] = req.geminiKeys
 
     async def sse_generator():
         global _active_generation_id
@@ -764,6 +768,7 @@ class PrepareRequest(BaseModel):
     apiKey: str | None = None
     llmProvider: str = "gemini"
     llmKey: str | None = None
+    geminiKeys: str | None = None  # 프론트엔드 멀티키 (쉼표 구분)
     imageEngine: str = "imagen"
     language: str = "ko"
     videoEngine: str = "none"  # prepare 단계에서는 비디오 미생성이 기본
@@ -773,6 +778,11 @@ class PrepareRequest(BaseModel):
 @app.post("/api/prepare")
 async def prepare_endpoint(req: PrepareRequest):
     """1단계: LLM 스크립트 + 이미지 생성만 수행. TTS/렌더는 하지 않음."""
+    # 프론트엔드 멀티키 → 환경변수 임시 설정
+    _prev_gemini_keys = os.environ.get("GEMINI_API_KEYS")
+    if req.geminiKeys:
+        os.environ["GEMINI_API_KEYS"] = req.geminiKeys
+
     async def sse_generator():
         try:
             llm_key_for_request = get_google_key(req.llmKey) if req.llmProvider == "gemini" else req.llmKey
@@ -854,6 +864,12 @@ async def prepare_endpoint(req: PrepareRequest):
         except Exception as e:
             traceback.print_exc()
             yield {"data": f"ERROR|[준비 오류] {str(e)}\n"}
+        finally:
+            # 프론트엔드 멀티키 환경변수 복원
+            if _prev_gemini_keys is not None:
+                os.environ["GEMINI_API_KEYS"] = _prev_gemini_keys
+            elif "GEMINI_API_KEYS" in os.environ and req.geminiKeys:
+                del os.environ["GEMINI_API_KEYS"]
 
     return EventSourceResponse(sse_generator())
 

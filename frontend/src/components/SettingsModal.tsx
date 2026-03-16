@@ -288,9 +288,9 @@ function KeySection({
         </div>
         {/* 서버 상태 표시 */}
         <div className="flex items-center gap-1.5 shrink-0 ml-3">
-          <div className={`w-2 h-2 rounded-full ${serverStatus === true ? "bg-green-500" : serverStatus === false ? "bg-gray-600" : "bg-gray-700 animate-pulse"}`} />
+          <div className={`w-2 h-2 rounded-full ${serverStatus === true ? "bg-green-500" : savedKeys.length > 0 ? "bg-blue-500" : serverStatus === false ? "bg-gray-600" : "bg-gray-700 animate-pulse"}`} />
           <span className="text-[10px] text-gray-500">
-            {serverStatus === true ? ".env 설정됨" : serverStatus === false ? "미설정" : "확인 중"}
+            {serverStatus === true ? ".env 설정됨" : savedKeys.length > 0 ? `브라우저 ${savedKeys.length}키` : serverStatus === false ? "미설정" : "확인 중"}
           </span>
         </div>
       </div>
