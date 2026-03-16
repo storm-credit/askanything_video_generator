@@ -26,7 +26,7 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
         try:
             if attempt == 0:
                 print(f"-> [아트 디렉터] 컷 {index+1} 마스터 렌더링 중...")
-                
+
             response = client.images.generate(
                 model="dall-e-3",
                 prompt=enhanced_prompt,
@@ -53,13 +53,19 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
         except Exception as e:
             error_msg = str(e)
             if attempt < max_retries - 1:
-                # 안전 정책 위반(Safety Policy) 에러 처리 로직
                 if 'content_policy_violation' in error_msg:
-                    print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 아주 안전하고 추상적인 대체 프롬프트로 재시도합니다... ({attempt+1}/{max_retries})")
-                    # DALL-E 3 가 무조건 통과시킬 만한 완전 기초적인 대체(fallback) 프롬프트로 강제 치환
+                    print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 대체 프롬프트로 재시도합니다... ({attempt+1}/{max_retries})")
                     enhanced_prompt = "A very safe, beautiful, abstract and highly detailed cinematic visualization illustrating the related concept, National Geographic high-end documentary style, atmospheric lighting, strictly NO TEXT, NO LETTERS, NO WORDS."
+                elif '429' in error_msg or 'rate_limit' in error_msg.lower():
+                    wait = min(2 ** (attempt + 1), 30) + random.uniform(0, 2)
+                    print(f"  [DALL·E 429] 컷 {index+1} 속도 제한. {wait:.1f}초 후 재시도... ({attempt+1}/{max_retries})")
+                    time.sleep(wait)
+                    continue
                 else:
-                    print(f"  [DALL·E 경고] 컷 {index+1} 렌더링 실패. 서버 지연으로 3초 후 재시도합니다... ({attempt+1}/{max_retries}) | 사유: {e}")
+                    print(f"  [DALL·E 경고] 컷 {index+1} 렌더링 실패. 3초 후 재시도합니다... ({attempt+1}/{max_retries}) | 사유: {e}")
+                # 안전 정책 위반이 아닌 경우 원본 프롬프트 복원
+                if 'content_policy_violation' not in error_msg:
+                    enhanced_prompt = MASTER_STYLE + prompt
                 time.sleep(min(2 ** (attempt + 1), 10) + random.uniform(0, 1))
             else:
                 raise RuntimeError(f"[DALL·E 이미지 생성 최종 실패] index={index}, 3회 재시도 실패. 오류: {error_msg}")

@@ -83,9 +83,9 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     
     print(f"-> [Kling AI] 컷 {index+1} 렌더링 클라우드 진행 상태 대기 중 (약 2~3분 소요 예상)...")
     
-    max_retries = 90  # 90 * 5초 = 450초 (7.5분)
+    max_polls = 90  # 90 * 5초 = 450초 (7.5분)
     timed_out = True
-    for poll_iter in range(max_retries):
+    for poll_iter in range(max_polls):
         time.sleep(5)
 
         try:
@@ -105,6 +105,11 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
                 reason = poll_data.get("data", {}).get("task_status_msg", "알 수 없는 오류")
                 print(f"[Kling AI 오류] 컷 {index+1} 클라우드 렌더링 실패: {reason}")
                 return None
+            # processing/pending/submitted → 계속 대기
+
+            if poll_iter > 0 and poll_iter % 12 == 0:
+                elapsed = (poll_iter + 1) * 5
+                print(f"  [Kling AI] 컷 {index+1} 렌더링 진행 중... ({elapsed}초 경과, 상태: {status})")
 
         except Exception as e:
             print(f"[Kling AI 대기 중 오류] {e}")
@@ -112,7 +117,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
 
     if not video_url:
         if timed_out:
-            print(f"[Kling AI 오류] 컷 {index+1} 렌더링 타임아웃 (최대 {max_retries * 5}초 초과).")
+            print(f"[Kling AI 오류] 컷 {index+1} 렌더링 타임아웃 (최대 {max_polls * 5}초 초과).")
         else:
             print(f"[Kling AI 오류] 컷 {index+1} 렌더링 성공했으나 비디오 URL이 비어 있습니다.")
         return None

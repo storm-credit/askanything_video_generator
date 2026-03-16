@@ -75,9 +75,6 @@ def generate_video_veo(
             if not final_key:
                 break  # 이 모델에 사용 가능한 키 없음 → 다음 모델로
 
-            if final_key in tried_keys:
-                break  # 새 키 없음 → 다음 모델로
-
             tried_keys.add(final_key)
             client = genai.Client(api_key=final_key)
 
@@ -124,8 +121,8 @@ def generate_video_veo(
 
                 result = operation.result
                 if not hasattr(result, "generated_videos") or not result.generated_videos:
-                    print(f"[{model_label} 오류] 컷 {index+1}: 비디오가 생성되지 않았습니다.")
-                    return None
+                    print(f"[{model_label} 오류] 컷 {index+1}: 비디오가 생성되지 않았습니다. 다른 키로 재시도...")
+                    continue  # 다음 키로 재시도
 
                 video_obj = result.generated_videos[0]
             except Exception as e:

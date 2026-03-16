@@ -343,7 +343,7 @@ This is the channel's signature look — every image should feel cohesive with t
         from modules.utils.keys import get_google_key, mark_key_exhausted, mask_key
         max_key_attempts = 10  # 최대 키 전환 횟수
     else:
-        max_key_attempts = 1  # Gemini 외 프로바이더는 단일 키
+        max_key_attempts = 3  # OpenAI/Claude도 429 시 최대 3회 재시도 (백오프)
 
     for attempt in range(max_key_attempts):
         try:
@@ -368,6 +368,13 @@ This is the channel's signature look — every image should feel cohesive with t
                     continue
                 else:
                     raise RuntimeError(f"[Gemini 할당량 초과] 등록된 모든 키({len(exhausted_keys)}개)의 쿼터가 소진되었습니다.") from e
+            elif is_retryable:
+                # OpenAI/Claude 429: 지수 백오프 후 재시도
+                import time as _time, random as _random
+                wait = min(2 ** (attempt + 1), 30) + _random.uniform(0, 2)
+                print(f"  [{provider_label} 429] {wait:.1f}초 후 재시도... ({attempt+1}/{max_key_attempts})")
+                _time.sleep(wait)
+                continue
             else:
                 raise  # 429가 아닌 에러는 그대로 전파
 
