@@ -89,6 +89,8 @@ class GenerateRequest(BaseModel):
     cameraStyle: str = "dynamic"
     bgmTheme: str = "random"
     channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
+    platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
+    ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
 
     @field_validator("language")
     @classmethod
@@ -431,7 +433,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 def _run_tts_and_whisper():
                     """TTS 생성 후 바로 Whisper 타임스탬프 추출 (순차 but 동일 스레드)"""
                     try:
-                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language)
+                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"TTS: {exc}")
@@ -528,10 +530,11 @@ async def generate_video_endpoint(req: GenerateRequest):
                 return
 
             yield {"data": "PROG|85\n"}
-            yield {"data": "[렌더링 마스터] Remotion (React) 동적 화면 및 호르모지 스타일 자막 합성 렌더링 시작...\n"}
+            platform_label = ", ".join(p.upper() for p in req.platforms)
+            yield {"data": f"[렌더링 마스터] Remotion 렌더링 시작 — 플랫폼: {platform_label}\n"}
 
-            # 단계 4: Remotion 비디오 렌더링
-            video_path = await loop.run_in_executor(
+            # 단계 4: Remotion 비디오 렌더링 (멀티 플랫폼 지원)
+            render_result = await loop.run_in_executor(
                 None,
                 lambda: create_remotion_video(
                     visual_paths, audio_paths, scripts,
@@ -539,14 +542,25 @@ async def generate_video_endpoint(req: GenerateRequest):
                     camera_style=req.cameraStyle,
                     bgm_theme=req.bgmTheme,
                     channel=req.channel,
+                    platforms=req.platforms,
                 ),
             )
 
-            if not video_path:
+            if not render_result:
                 yield {"data": "ERROR|[Remotion 오류] 영상 렌더링에 실패했습니다. remotion 폴더에서 'npm install'이 완료되었는지 확인해주세요.\n"}
                 return
 
+            # 멀티 플랫폼: dict, 단일: str → 통일 처리
+            if isinstance(render_result, str):
+                video_paths_map = {"youtube": render_result}
+            else:
+                video_paths_map = render_result
+
+            # 대표 영상 (첫 번째 = 주 플랫폼)
+            primary_platform = list(video_paths_map.keys())[0]
+            video_path = video_paths_map[primary_platform]
             final_abs_path = os.path.abspath(video_path)
+
             if not os.path.exists(final_abs_path):
                 yield {"data": f"ERROR|[파일 오류] 렌더링 성공 응답을 받았지만 파일이 없습니다: {final_abs_path}\n"}
                 return
@@ -571,7 +585,6 @@ async def generate_video_endpoint(req: GenerateRequest):
                 abs_output = os.path.realpath(output_path)
                 safe_base = os.path.realpath("assets")
                 home_dir = os.path.realpath(os.path.expanduser("~"))
-                # 허용: assets/ 내부 또는 사용자 홈 디렉토리 하위 (Path.relative_to로 검증)
                 try:
                     _P(abs_output).relative_to(safe_base)
                     path_ok = True
@@ -593,23 +606,32 @@ async def generate_video_endpoint(req: GenerateRequest):
                     except Exception as copy_err:
                         yield {"data": f"ERROR|[저장 오류] 지정 경로 복사 실패: {copy_err}\n"}
 
-            # Downloads 폴더로 자동 복사
-            final_filename = os.path.basename(video_path)
+            # Downloads 폴더로 자동 복사 (모든 플랫폼 영상)
             downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
             downloads_path = None
-            if os.path.isdir(downloads_dir):
-                try:
-                    downloads_path = os.path.join(downloads_dir, final_filename)
-                    await asyncio.to_thread(shutil.copy2, final_abs_path, downloads_path)
-                except Exception as cp_err:
-                    print(f"[Downloads 복사 실패] {cp_err}")
-                    downloads_path = None
+            for plat, vpath in video_paths_map.items():
+                fname = os.path.basename(vpath)
+                if os.path.isdir(downloads_dir):
+                    try:
+                        dl_path = os.path.join(downloads_dir, fname)
+                        await asyncio.to_thread(shutil.copy2, os.path.abspath(vpath), dl_path)
+                        if plat == primary_platform:
+                            downloads_path = dl_path
+                        if len(video_paths_map) > 1:
+                            yield {"data": f"[저장] {plat.upper()} 버전 → Downloads/{fname}\n"}
+                    except Exception as cp_err:
+                        print(f"[Downloads 복사 실패 {plat}] {cp_err}")
 
             # 프론트엔드 라우팅용 경로 (StaticFiles mount 기준)
+            final_filename = os.path.basename(video_path)
             relative_video_path = f"/assets/{topic_folder}/video/{final_filename}"
 
+            platform_count = len(video_paths_map)
             if downloads_path and os.path.exists(downloads_path):
-                yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 📂 Downloads 폴더에 저장됨: {final_filename}\n"}
+                if platform_count > 1:
+                    yield {"data": f"[완료] {platform_count}개 플랫폼 영상 렌더링 대성공! 📂 Downloads 폴더에 저장됨\n"}
+                else:
+                    yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 📂 Downloads 폴더에 저장됨: {final_filename}\n"}
             else:
                 yield {"data": f"[완료] 최종 비디오 렌더링 대성공! 경로: {relative_video_path}\n"}
             # 썸네일 경로도 함께 전달 (업로드 시 사용)

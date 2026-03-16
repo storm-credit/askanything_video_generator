@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -16,6 +16,8 @@ export default function Home() {
   const [cameraStyle, setCameraStyle] = useState("dynamic");
   const [bgmTheme, setBgmTheme] = useState("random");
   const [channel, setChannel] = useState("");
+  const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
+  const [ttsSpeed, setTtsSpeed] = useState(0.9);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -182,6 +184,8 @@ export default function Home() {
           cameraStyle,
           bgmTheme,
           channel: channel || undefined,
+          platforms,
+          ttsSpeed,
         }),
       });
 
@@ -616,6 +620,51 @@ export default function Home() {
                 <option value="wonderdrop" className="bg-gray-900">Wonder Drop</option>
               </select>
             </div>
+
+            {/* TTS 속도 */}
+            <div className="flex items-center gap-1">
+              <Mic className="w-3.5 h-3.5 text-gray-500" />
+              <input
+                type="range"
+                min="0.7"
+                max="1.2"
+                step="0.05"
+                value={ttsSpeed}
+                onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
+                disabled={isGenerating}
+                className="w-16 h-1 accent-indigo-500 cursor-pointer"
+                aria-label="음성 속도"
+              />
+              <span className="text-[10px] text-gray-500 w-8">{ttsSpeed}x</span>
+            </div>
+          </div>
+
+          {/* 플랫폼 선택 */}
+          <div className="flex items-center gap-3 mt-2">
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider">플랫폼</span>
+            {[
+              { id: "youtube", label: "YouTube", icon: Youtube, color: "text-red-400" },
+              { id: "tiktok", label: "TikTok", icon: Send, color: "text-cyan-400" },
+              { id: "reels", label: "Reels", icon: Instagram, color: "text-pink-400" },
+            ].map(({ id, label, icon: Icon, color }) => (
+              <label key={id} className="flex items-center gap-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={platforms.includes(id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setPlatforms((prev) => [...prev, id]);
+                    } else {
+                      setPlatforms((prev) => prev.filter((p) => p !== id) || ["youtube"]);
+                    }
+                  }}
+                  disabled={isGenerating}
+                  className="accent-indigo-500 w-3 h-3"
+                />
+                <Icon className={`w-3 h-3 ${color}`} />
+                <span className="text-xs text-gray-400">{label}</span>
+              </label>
+            ))}
           </div>
         </form>
       </motion.div>
