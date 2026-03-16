@@ -2,9 +2,6 @@
 
 import os
 
-# ── 캐시 디렉터리 ──
-IMAGE_CACHE_DIR = os.path.join("assets", ".cache", "images")
-
 # ── LLM 프로바이더 레이블 ──
 PROVIDER_LABELS = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
 
@@ -12,9 +9,24 @@ PROVIDER_LABELS = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
 # ── National Geographic 마스터 스타일 프롬프트 (DALL-E / Imagen 공용) ──
 MASTER_STYLE = (
     "Cinematic photograph, National Geographic documentary style, "
-    "detailed, bright uplifting lighting, vertical 9:16 composition, "
+    "detailed, vertical 9:16 composition, "
     "family-friendly. NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS. "
 )
+
+
+def get_motion_style(prompt: str) -> str:
+    """감정 태그 기반 모션 스타일 결정 (Veo/Kling/Sora 공용)"""
+    tag_styles = {
+        "[SHOCK]": "fast dynamic camera movement, sudden dramatic angles",
+        "[WONDER]": "slow graceful panning, gentle reveal shots",
+        "[TENSION]": "slow creeping approach, tightening frame",
+        "[CALM]": "very slow or static camera, peaceful ambient motion",
+        "[REVEAL]": "sudden camera shift, dramatic angle change",
+    }
+    for tag, style in tag_styles.items():
+        if tag in prompt:
+            return style
+    return "smooth cinematic camera movement"
 
 
 def is_quota_error(err_str: str) -> bool:

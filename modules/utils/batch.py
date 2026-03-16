@@ -28,7 +28,7 @@ def _init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             topic TEXT NOT NULL,
             language TEXT DEFAULT 'ko',
-            camera_style TEXT DEFAULT 'dynamic',
+            camera_style TEXT DEFAULT 'auto',
             bgm_theme TEXT DEFAULT 'random',
             llm_provider TEXT DEFAULT 'gemini',
             video_engine TEXT DEFAULT 'veo3',
@@ -73,11 +73,16 @@ def add_job(topic: str, language: str = "ko", camera_style: str = "dynamic",
             video_engine: str = "veo3", image_engine: str = "imagen",
             channel: str | None = None) -> int:
     """큐에 생성 작업을 추가합니다. 중복 주제 경고 후 작업 ID를 반환합니다."""
-    if has_duplicate_topic(topic):
-        print(f"[배치 경고] 동일 주제가 이미 큐에 있습니다: {topic[:30]}...")
     with _lock:
         conn = _get_conn()
         try:
+            # Duplicate check inside lock to prevent TOCTOU race
+            row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM batch_jobs WHERE topic = ? AND status IN ('pending', 'running')",
+                (topic,),
+            ).fetchone()
+            if row["cnt"] > 0:
+                print(f"[배치 경고] 동일 주제가 이미 큐에 있습니다: {topic[:30]}...")
             cur = conn.execute(
                 "INSERT INTO batch_jobs (topic, language, camera_style, bgm_theme, llm_provider, video_engine, image_engine, channel, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (topic, language, camera_style, bgm_theme, llm_provider, video_engine, image_engine, channel, datetime.now().isoformat()),

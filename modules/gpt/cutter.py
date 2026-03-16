@@ -1,6 +1,8 @@
 import os
 import json
 import re
+import time
+import random
 from typing import Any
 from modules.utils.slugify import slugify_topic
 from modules.utils.constants import PROVIDER_LABELS
@@ -110,7 +112,7 @@ def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content:
 # 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
-                  channel: str | None = None) -> tuple[list[dict[str, Any]], str]:
+                  channel: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
     topic_folder = slugify_topic(topic, lang)
 
     # 저장 폴더 구조 생성
@@ -141,7 +143,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 * "~입니다", "~합니다" 금지. "~거든", "~잖아", "~인 거야", "~라는 거지" 같은 구어체 어미 사용.
 * 감탄사/추임새 적극 활용: "미쳤지?", "소름이지?", "진짜야.", "ㄹㅇ."
 * 같은 문장 구조를 연속 사용하지 마라. Q&A, 명령문, 서술문을 섞어라.
-* [CRITICAL WARNING] 8~10컷으로 작성. 각 컷 약 3.5~5초 (총 30~50초 영상). 절대 5컷 이하 금지.
+* [CRITICAL WARNING] 7~10컷으로 작성. 각 컷 약 3.5~5초 (총 30~50초 영상). 절대 5컷 이하 금지.
 
 [이미지 프롬프트 규칙]
 * 반드시 영어로 작성. 한국어 금지.
@@ -159,13 +161,12 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   [CALM] = 여운/마무리 → 정적
 예시: "거대한 블랙홀이 빛을 삼키는 장면 [SHOCK]"
 
-[골든 예시 — 주제: "태양이 사라지면 생기는 일" (대표 3컷만 표시, 실제로는 8~10컷 작성)]
+[골든 예시 — 주제: "태양이 사라지면 생기는 일" (대표 3컷만 표시, 실제로는 7~10컷 작성)]
 {
   "title": "태양이 사라지면 생기는 일",
-  "expert_validation": "NASA 공식 데이터 기반, 물리학 법칙 검증 완료",
   "cuts": [
     {"description": "완전한 어둠 속 지구 전경, 태양 자리에 검은 void [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only, vertical 9:16, cinematic, no text", "script": "태양이 갑자기 사라지면 8분 동안 아무도 모른다고."},
-    {"description": "중력 해방된 행성들이 흩어지는 태양계 [WONDER]", "image_prompt": "Solar system planets scattering in different directions without gravitational center, beautiful chaos of planetary bodies drifting apart, cosmic scale, vertical 9:16, cinematic, no text", "script": "태양 중력이 사라지면 행성 전부 흩어져버리거든."},
+    {"description": "얼어붙는 바다 위로 거대한 빙하가 솟구치는 장면 [TENSION]", "image_prompt": "Frozen ocean surface cracking and massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot, vertical 9:16, cinematic, no text", "script": "근데 진짜 소름돋는 건 일주일 만에 바다가 얼어붙어."},
     {"description": "시청자를 향한 클로즈업 느낌의 우주 배경 [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos filled with distant galaxies, sense of insignificance and wonder, immersive vertical composition 9:16, cinematic, no text", "script": "이거 알고 나면 밤하늘 다르게 보일걸?"}
   ]
 }
@@ -175,11 +176,10 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 - 첫 문자: {  마지막 문자: }
 
 [Output Format]
-8~10컷, 다음 JSON만 출력:
+7~10컷, 다음 JSON만 출력:
 
 {
   "title": "[자극적이고 클릭을 부르는 한국어 제목 (15자 이내, ~하면 생기는 일, ~의 비밀 등)]",
-  "expert_validation": "[자가 검증]",
   "cuts": [
     {
       "description": "[컷 묘사 (한국어)] [감정태그]",
@@ -210,7 +210,7 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 * Each cut: 5–10 words MAX. Short. Punchy. One sentence only.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
 * Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
-* [CRITICAL WARNING] Write 8–10 cuts (~3.5–5 sec each). 30–50 second video. NEVER less than 5 cuts.
+* [CRITICAL WARNING] Write 7–10 cuts (~3.5–5 sec each). 30–50 second video. NEVER less than 5 cuts.
 
 [Image Prompt Rules]
 * ALL image prompts must be in English.
@@ -228,13 +228,12 @@ Add an emotion tag at the END of each description:
   [CALM] = reflection/outro → static
 Example: "A massive black hole swallowing light [SHOCK]"
 
-[Golden Example — Topic: "What happens if the sun disappears" (3 representative cuts shown, write 8–10 in practice)]
+[Golden Example — Topic: "What happens if the sun disappears" (3 representative cuts shown, write 7–10 in practice)]
 {
   "title": "The Sun Vanishes Tomorrow",
-  "expert_validation": "Based on NASA data and verified physics",
   "cuts": [
     {"description": "Earth in complete darkness, empty void where sun was [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only, vertical 9:16, cinematic, no text", "script": "The sun vanishes and nobody knows for 8 minutes."},
-    {"description": "Planets scattering without gravitational center [WONDER]", "image_prompt": "Solar system planets scattering in all directions, beautiful chaos of planetary bodies, cosmic scale, vertical 9:16, cinematic, no text", "script": "No sun gravity means every planet drifts apart."},
+    {"description": "Frozen ocean with massive glaciers rising in eerie glow [TENSION]", "image_prompt": "Frozen ocean surface cracking with massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot, vertical 9:16, cinematic, no text", "script": "Within a week the entire ocean freezes solid."},
     {"description": "Vast cosmos perspective looking up [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos, distant galaxies, sense of wonder, vertical 9:16, cinematic, no text", "script": "You'll never look at the night sky the same."}
   ]
 }
@@ -244,11 +243,10 @@ Example: "A massive black hole swallowing light [SHOCK]"
 - First character: {  Last character: }
 
 [Output Format]
-8–10 cuts, output ONLY this JSON:
+7–10 cuts, output ONLY this JSON:
 
 {
   "title": "[Click-bait English title (max 8 words)]",
-  "expert_validation": "[Self-validation]",
   "cuts": [
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
@@ -364,10 +362,9 @@ This is the channel's signature look — every image should feel cohesive with t
                     raise RuntimeError(f"[Gemini 할당량 초과] 등록된 모든 키({len(exhausted_keys)}개)의 쿼터가 소진되었습니다.") from e
             elif is_retryable:
                 # OpenAI/Claude 429: 지수 백오프 후 재시도
-                import time as _time, random as _random
-                wait = min(2 ** (attempt + 1), 30) + _random.uniform(0, 2)
+                wait = min(2 ** (attempt + 1), 30) + random.uniform(0, 2)
                 print(f"  [{provider_label} 429] {wait:.1f}초 후 재시도... ({attempt+1}/{max_key_attempts})")
-                _time.sleep(wait)
+                time.sleep(wait)
                 continue
             else:
                 raise  # 429가 아닌 에러는 그대로 전파
@@ -376,8 +373,8 @@ This is the channel's signature look — every image should feel cohesive with t
     if len(cuts) > 10:
         print(f"-> [검증] 컷 수 {len(cuts)}개 → 10개로 트림")
         cuts = cuts[:10]
-    elif len(cuts) < 6:
-        print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 기존 컷 기반 확장 요청합니다 (목표: 8~10컷).")
+    elif len(cuts) < 7:
+        print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 기존 컷 기반 확장 요청합니다 (목표: 7~10컷).")
         if llm_provider == "gemini":
             retry_key = get_google_key(None, service="gemini", exclude=exhausted_keys) or current_key
         else:
@@ -386,7 +383,7 @@ This is the channel's signature look — every image should feel cohesive with t
         existing_cuts_json = json.dumps([{"script": c["script"], "description": c.get("text", "")} for c in cuts], ensure_ascii=False)
         retry_user = (
             user_content
-            + f"\n\n기존에 {len(cuts)}컷이 생성되었습니다. 아래 기존 컷 사이에 중간 컷을 추가하여 총 8~10컷으로 확장하세요. "
+            + f"\n\n기존에 {len(cuts)}컷이 생성되었습니다. 아래 기존 컷 사이에 중간 컷을 추가하여 총 7~10컷으로 확장하세요. "
             + f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
         )
         try:
@@ -401,8 +398,8 @@ This is the channel's signature look — every image should feel cohesive with t
 
     if len(cuts) > 10:
         cuts = cuts[:10]
-    if len(cuts) < 6:
-        raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 6~10).")
+    if len(cuts) < 7:
+        raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 7~10).")
 
     # title이 비어있으면 topic을 폴백으로 사용
     if not title:

@@ -17,7 +17,7 @@ export default function Home() {
   const [videoEngine, setVideoEngine] = useState("none");
   const [videoModel, setVideoModel] = useState("");
   const [language, setLanguage] = useState("ko");
-  const [cameraStyle, setCameraStyle] = useState("dynamic");
+  const [cameraStyle, setCameraStyle] = useState("auto");
   const [bgmTheme, setBgmTheme] = useState("random");
   const [channel, setChannel] = useState("");
   const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
@@ -311,7 +311,8 @@ export default function Home() {
         if (!rawData) return;
 
         if (rawData.startsWith("DONE|")) {
-          const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
+          const parts = rawData.slice(5).split("|");
+          const videoPath = parts[0].trim().replace(/\\/g, '/');
           const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
           const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
           const downloadUrl = `${API_BASE}${normalizedPath}`;
@@ -415,7 +416,8 @@ export default function Home() {
       if (!rawData) return;
 
       if (rawData.startsWith("DONE|")) {
-        const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
+        const parts = rawData.slice(5).split("|");
+        const videoPath = parts[0].trim().replace(/\\/g, '/');
         const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
         const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
         const downloadUrl = `${API_BASE}${normalizedPath}`;
@@ -885,12 +887,9 @@ export default function Home() {
                     <span className="text-[10px] font-medium text-gray-400">카메라</span>
                   </div>
                   <select value={cameraStyle} onChange={(e) => setCameraStyle(e.target.value)} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-sky-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
-                    <option value="auto" className="bg-gray-900">자동</option>
+                    <option value="auto" className="bg-gray-900">자동 (감정 기반)</option>
                     <option value="dynamic" className="bg-gray-900">역동적</option>
-                    <option value="slow_zoom" className="bg-gray-900">느린 줌인</option>
-                    <option value="handheld" className="bg-gray-900">핸드헬드</option>
-                    <option value="gentle" className="bg-gray-900">부드러운 패닝</option>
-                    <option value="slowmo" className="bg-gray-900">슬로우 모션</option>
+                    <option value="gentle" className="bg-gray-900">부드러운</option>
                     <option value="static" className="bg-gray-900">고정</option>
                   </select>
                 </div>
@@ -971,7 +970,7 @@ export default function Home() {
                 { id: "reels", label: "Reels", icon: Instagram, color: "text-pink-400", accent: "checked:bg-pink-500" },
               ].map(({ id, label, icon: Icon, color }) => (
                 <label key={id} className={`flex items-center gap-1.5 cursor-pointer select-none px-3 py-1.5 rounded-full border transition-colors ${platforms.includes(id) ? "bg-white/10 border-white/20" : "bg-transparent border-transparent hover:bg-white/5"}`}>
-                  <input type="checkbox" checked={platforms.includes(id)} onChange={(e) => { if (e.target.checked) { setPlatforms((prev) => [...prev, id]); } else { setPlatforms((prev) => prev.filter((p) => p !== id) || ["youtube"]); } }} disabled={isGenerating} className="hidden" />
+                  <input type="checkbox" checked={platforms.includes(id)} onChange={(e) => { if (e.target.checked) { setPlatforms((prev) => [...prev, id]); } else { setPlatforms((prev) => { const next = prev.filter((p) => p !== id); return next.length > 0 ? next : ["youtube"]; }); } }} disabled={isGenerating} className="hidden" />
                   <Icon className={`w-3.5 h-3.5 ${platforms.includes(id) ? color : "text-gray-600"}`} />
                   <span className={`text-xs ${platforms.includes(id) ? "text-gray-200" : "text-gray-500"}`}>{label}</span>
                 </label>

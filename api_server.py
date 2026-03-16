@@ -39,7 +39,7 @@ async def _lifespan(app):
 app = FastAPI(lifespan=_lifespan)
 
 # 동시 생성 요청 제한 (GPU/API 과부하 방지)
-_generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "2")))
+_generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "1")))
 # 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
 _cut_executor = ThreadPoolExecutor(max_workers=4)
 
@@ -148,7 +148,7 @@ class GenerateRequest(BaseModel):
     geminiKeys: str | None = None  # 프론트엔드 멀티키 (쉼표 구분)
     outputPath: str | None = None
     language: str = "ko"
-    cameraStyle: str = "dynamic"
+    cameraStyle: str = "auto"
     bgmTheme: str = "random"
     channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
@@ -570,6 +570,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 # 비디오 변환과 TTS를 threading으로 병렬 실행 (데드락 방지: 직접 스레드 사용)
                 video_result = [None]  # mutable container for thread result
                 tts_result = [None]
+                whisper_result = [None]
 
                 def _run_video():
                     try:
@@ -603,8 +604,6 @@ async def generate_video_endpoint(req: GenerateRequest):
                             with errors_lock:
                                 errors.append(f"타임스탬프: {exc}")
                             print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
-
-                whisper_result = [None]
 
                 threads = []
                 if img_path and active_video_engine != "none":
@@ -866,6 +865,7 @@ async def prepare_endpoint(req: PrepareRequest):
         os.environ["GEMINI_API_KEYS"] = req.geminiKeys
 
     async def sse_generator():
+      async with _generate_semaphore:
         try:
             llm_key_for_request = get_google_key(req.llmKey) if req.llmProvider == "gemini" else req.llmKey
             loop = asyncio.get_running_loop()
@@ -962,7 +962,7 @@ class RenderRequest(BaseModel):
     elevenlabsKey: str | None = None
     ttsSpeed: float = 0.9
     videoEngine: str = "none"
-    cameraStyle: str = "dynamic"
+    cameraStyle: str = "auto"
     bgmTheme: str = "random"
     channel: str | None = None
     platforms: list[str] = ["youtube"]
@@ -1385,7 +1385,7 @@ async def instagram_disconnect():
 class BatchJobRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     language: str = "ko"
-    cameraStyle: str = "dynamic"
+    cameraStyle: str = "auto"
     bgmTheme: str = "random"
     llmProvider: str = "gemini"
     videoEngine: str = "veo3"

@@ -9,7 +9,7 @@ import time
 import requests
 
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
-from modules.utils.constants import is_key_rotation_error
+from modules.utils.constants import is_key_rotation_error, get_motion_style
 from modules.utils.models import get_model_chain, get_service_tag
 
 # Veo 모델 옵션 (환경변수로 오버라이드 가능)
@@ -17,22 +17,6 @@ DEFAULT_MODEL = "veo-3.0-generate-001"
 POLL_INTERVAL = 10  # 초
 MAX_WAIT = 300  # 5분
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
-
-
-def _get_motion_style(prompt: str) -> str:
-    """감정 태그 기반 모션 스타일 결정"""
-    if "[SHOCK]" in prompt or "shock" in prompt.lower():
-        return "fast dynamic camera movement, sudden dramatic angles"
-    elif "[WONDER]" in prompt or "wonder" in prompt.lower():
-        return "slow graceful panning, gentle reveal shots"
-    elif "[TENSION]" in prompt or "tension" in prompt.lower():
-        return "slow creeping approach, tightening frame"
-    elif "[CALM]" in prompt or "calm" in prompt.lower():
-        return "very slow or static camera, peaceful ambient motion"
-    elif "[REVEAL]" in prompt or "reveal" in prompt.lower():
-        return "sudden camera shift, dramatic angle change"
-    else:
-        return "smooth cinematic camera movement"
 
 
 def generate_video_veo(
@@ -104,7 +88,7 @@ def generate_video_veo(
             try:
                 operation = client.models.generate_videos(
                     model=model_id,
-                    prompt=f"{_get_motion_style(prompt)}, 4K quality. {prompt}",
+                    prompt=f"{get_motion_style(prompt)}, 4K quality. {prompt}",
                     image=types.Image(image_bytes=img_bytes, mime_type=mime_type),
                     config=types.GenerateVideosConfig(
                         numberOfVideos=1,
@@ -165,12 +149,23 @@ def generate_video_veo(
                         print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
                         return final_path
                     elif hasattr(vid, "uri") and vid.uri:
+                        import tempfile as _tmpfile
                         print(f"-> [{model_label}] 컷 {index+1} 비디오 다운로드 중...")
                         resp = requests.get(vid.uri, stream=True, timeout=60)
                         resp.raise_for_status()
-                        with open(final_path, "wb") as f:
-                            for chunk in resp.iter_content(chunk_size=8192):
-                                f.write(chunk)
+                        fd, tmp_dl = _tmpfile.mkstemp(dir=output_dir, suffix=".tmp")
+                        os.close(fd)
+                        try:
+                            with open(tmp_dl, "wb") as f:
+                                for chunk in resp.iter_content(chunk_size=8192):
+                                    f.write(chunk)
+                            os.replace(tmp_dl, final_path)
+                        except Exception:
+                            try:
+                                os.remove(tmp_dl)
+                            except OSError:
+                                pass
+                            raise
                         record_key_usage(final_key, service_tag)
                         elapsed = time.time() - start
                         print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
