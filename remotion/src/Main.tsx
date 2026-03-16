@@ -17,6 +17,7 @@ type CutProps = {
   audio_path: string;
   word_timestamps: WordProps[];
   duration_in_frames: number;
+  emotion?: 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
 };
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov'];
@@ -55,10 +56,27 @@ const CAMERA_PRESETS: Record<CameraStyle, KenBurnsPreset[]> = {
   ],
 };
 
-const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: number; cameraStyle?: CameraStyle }> = ({ src, durationInFrames, index, cameraStyle = 'dynamic' }) => {
+// Emotion → camera preset mapping (overrides round-robin when emotion tag present)
+type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
+const EMOTION_CAMERA: Record<EmotionTag, KenBurnsPreset> = {
+  SHOCK:   { startScale: 1.0, endScale: 1.2, startX: 0, endX: -4, startY: 0, endY: -3 },
+  WONDER:  { startScale: 1.0, endScale: 1.06, startX: -1, endX: 1, startY: 0, endY: -0.5 },
+  TENSION: { startScale: 1.08, endScale: 1.12, startX: 0, endX: 0, startY: 1, endY: -1 },
+  REVEAL:  { startScale: 1.18, endScale: 1.0, startX: -3, endX: 3, startY: -2, endY: 2 },
+  CALM:    { startScale: 1.0, endScale: 1.02, startX: 0, endX: 0, startY: 0, endY: 0 },
+};
+
+const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: number; cameraStyle?: CameraStyle; emotion?: EmotionTag }> = ({ src, durationInFrames, index, cameraStyle = 'dynamic', emotion }) => {
   const frame = useCurrentFrame();
-  const presets = CAMERA_PRESETS[cameraStyle] || CAMERA_PRESETS.dynamic;
-  const preset = presets[index % presets.length];
+
+  // Emotion-based camera takes priority over round-robin
+  let preset: KenBurnsPreset;
+  if (emotion && cameraStyle !== 'static' && EMOTION_CAMERA[emotion]) {
+    preset = EMOTION_CAMERA[emotion];
+  } else {
+    const presets = CAMERA_PRESETS[cameraStyle] || CAMERA_PRESETS.dynamic;
+    preset = presets[index % presets.length];
+  }
 
   const progress = interpolate(frame, [0, durationInFrames], [0, 1], { extrapolateRight: 'clamp' });
 
@@ -224,7 +242,9 @@ export const Main: React.FC<{
   bgmPath?: string;
   title?: string;
   cameraStyle?: CameraStyle;
-}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle = 'dynamic' }) => {
+  captionSize?: number;
+  captionY?: number;
+}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle = 'dynamic', captionSize = 48, captionY = 28 }) => {
 
   const introFrames = introImagePath ? INTRO_DURATION_FRAMES : 0;
   const outroFrames = outroImagePath ? OUTRO_DURATION_FRAMES : 0;
@@ -269,10 +289,10 @@ export const Main: React.FC<{
                       muted
                     />
                 ) : (
-                    <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} />
+                    <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={cut.emotion} />
                 )}
                 <Audio src={audioSrc} />
-                <Captions wordTimestamps={cut.word_timestamps} />
+                <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} />
             </AbsoluteFill>
           </Sequence>
         );

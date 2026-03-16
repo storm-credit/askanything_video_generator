@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -16,6 +16,10 @@ export default function Home() {
   const [cameraStyle, setCameraStyle] = useState("dynamic");
   const [bgmTheme, setBgmTheme] = useState("random");
   const [channel, setChannel] = useState("");
+  const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
+  const [ttsSpeed, setTtsSpeed] = useState(0.9);
+  const [captionSize, setCaptionSize] = useState(48);
+  const [captionY, setCaptionY] = useState(28);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -64,6 +68,15 @@ export default function Home() {
   const [ttPrivacy, setTtPrivacy] = useState("SELF_ONLY");
   // Instagram
   const [igConnected, setIgConnected] = useState(false);
+
+  // 미리보기 모드
+  const [previewMode, setPreviewMode] = useState(false);
+  const [previewData, setPreviewData] = useState<{
+    sessionId: string;
+    title: string;
+    cuts: { index: number; script: string; prompt: string; image_url: string | null }[];
+  } | null>(null);
+  const [editedScripts, setEditedScripts] = useState<Record<number, string>>({});
 
   // AbortController (생성 취소용)
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -182,6 +195,10 @@ export default function Home() {
           cameraStyle,
           bgmTheme,
           channel: channel || undefined,
+          platforms,
+          ttsSpeed,
+          captionSize,
+          captionY,
         }),
       });
 
@@ -285,6 +302,149 @@ export default function Home() {
   const handleClearError = () => {
     setErrorMessage(null);
     setLogs([]);
+  };
+
+  // ── 미리보기 모드: prepare → preview → render ──
+
+  const readSSE = async (response: Response, onPreview?: (data: string) => void) => {
+    if (!response.body) throw new Error("No response body");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    const processLine = (line: string) => {
+      if (!line.startsWith("data:")) return;
+      const rawData = line.slice(5).trim();
+      if (!rawData) return;
+
+      if (rawData.startsWith("DONE|")) {
+        const videoPath = rawData.slice(5).trim().replace(/\\/g, '/');
+        const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
+        const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
+        const downloadUrl = `${API_BASE}${normalizedPath}`;
+        setGeneratedVideoPath(videoPath);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.setAttribute("download", videoPath.split('/').pop() || "AskAnything_Shorts.mp4");
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode?.removeChild(link);
+        setSuccessMessage("비디오 생성 성공!");
+        setIsGenerating(false);
+        setPreviewData(null);
+        checkPlatformStatus();
+      } else if (rawData.startsWith("PREVIEW|")) {
+        onPreview?.(rawData.slice(8));
+      } else if (rawData.startsWith("ERROR|")) {
+        setLogs(prev => [...prev.slice(-99), `ERROR:${rawData.slice(6)}`]);
+        setErrorMessage(rawData.slice(6));
+        setIsGenerating(false);
+      } else if (rawData.startsWith("WARN|")) {
+        setLogs(prev => [...prev.slice(-99), `WARN:${rawData.slice(5)}`]);
+      } else if (rawData.startsWith("PROG|")) {
+        const p = parseInt(rawData.slice(5), 10);
+        if (!isNaN(p)) setProgress(p);
+      } else {
+        setLogs(prev => [...prev.slice(-99), rawData]);
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) { if (buffer.trim()) processLine(buffer); break; }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) processLine(line);
+    }
+  };
+
+  const handlePrepare = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!topic.trim()) return;
+
+    setIsGenerating(true);
+    setProgress(0);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    setLogs([]);
+    setPreviewData(null);
+    setEditedScripts({});
+
+    try {
+      const response = await fetch(`${API_BASE}/api/prepare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          apiKey: pickKey("openai") || undefined,
+          llmProvider,
+          llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
+          imageEngine,
+          language,
+          channel: channel || undefined,
+        }),
+      });
+
+      await readSSE(response, (previewJson) => {
+        try {
+          const data = JSON.parse(previewJson);
+          setPreviewData(data);
+          setPreviewMode(true);
+          setIsGenerating(false);
+        } catch (err) {
+          console.error("Preview parse error:", err);
+        }
+      });
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("[연결 실패] 백엔드 서버에 연결할 수 없습니다.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRender = async () => {
+    if (!previewData) return;
+
+    setIsGenerating(true);
+    setProgress(0);
+    setLogs([]);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const updatedCuts = previewData.cuts.map((cut) => ({
+      index: cut.index,
+      script: editedScripts[cut.index] ?? cut.script,
+    }));
+
+    try {
+      const response = await fetch(`${API_BASE}/api/render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: previewData.sessionId,
+          cuts: updatedCuts,
+          elevenlabsKey: pickKey("elevenlabs") || undefined,
+          ttsSpeed,
+          videoEngine,
+          cameraStyle,
+          bgmTheme,
+          channel: channel || undefined,
+          platforms,
+          captionSize,
+          captionY,
+          outputPath: outputPath.trim() || undefined,
+        }),
+      });
+
+      await readSSE(response);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("[연결 실패] 렌더 서버에 연결할 수 없습니다.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // 전체 플랫폼 연동 상태 확인
@@ -497,21 +657,30 @@ export default function Home() {
                 취소
               </button>
             ) : (
-              <button
-                type="submit"
-                disabled={!topic.trim()}
-                className="absolute right-2 bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
-              >
-                생성하기
-              </button>
+              <div className="absolute right-2 flex gap-1">
+                <button
+                  type="button"
+                  onClick={handlePrepare}
+                  disabled={!topic.trim()}
+                  className="bg-indigo-600 text-white hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
+                >
+                  미리보기
+                </button>
+                <button
+                  type="submit"
+                  disabled={!topic.trim()}
+                  className="bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
+                >
+                  바로생성
+                </button>
+              </div>
             )}
           </div>
 
-          {/* 엔진 선택 (언어 + LLM + 이미지) */}
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            {/* 언어 선택 */}
-            <div className="flex items-center gap-1">
-              <Globe className="w-3.5 h-3.5 text-gray-500" />
+          {/* Row 1: 엔진 선택 (언어 + LLM + 이미지 + 카메라) */}
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
@@ -539,9 +708,8 @@ export default function Home() {
               </select>
             </div>
 
-            {/* LLM 기획 엔진 */}
-            <div className="flex items-center gap-1">
-              <Brain className="w-3.5 h-3.5 text-gray-500" />
+            <div className="flex items-center gap-1.5">
+              <Brain className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={llmProvider}
                 onChange={(e) => setLlmProvider(e.target.value)}
@@ -555,9 +723,8 @@ export default function Home() {
               </select>
             </div>
 
-            {/* 이미지 엔진 */}
-            <div className="flex items-center gap-1">
-              <ImageIcon className="w-3.5 h-3.5 text-gray-500" />
+            <div className="flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={imageEngine}
                 onChange={(e) => setImageEngine(e.target.value)}
@@ -570,9 +737,8 @@ export default function Home() {
               </select>
             </div>
 
-            {/* 카메라 무빙 */}
-            <div className="flex items-center gap-1">
-              <Video className="w-3.5 h-3.5 text-gray-500" />
+            <div className="flex items-center gap-1.5">
+              <Video className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={cameraStyle}
                 onChange={(e) => setCameraStyle(e.target.value)}
@@ -585,10 +751,12 @@ export default function Home() {
                 <option value="static" className="bg-gray-900">고정</option>
               </select>
             </div>
+          </div>
 
-            {/* BGM */}
-            <div className="flex items-center gap-1">
-              <Music className="w-3.5 h-3.5 text-gray-500" />
+          {/* Row 2: 설정 (BGM + 채널 | 슬라이더) */}
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Music className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={bgmTheme}
                 onChange={(e) => setBgmTheme(e.target.value)}
@@ -601,21 +769,113 @@ export default function Home() {
               </select>
             </div>
 
-            {/* 채널 (인트로/아웃트로) */}
-            <div className="flex items-center gap-1">
-              <Tv className="w-3.5 h-3.5 text-gray-500" />
+            <div className="flex items-center gap-1.5">
+              <Tv className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <select
                 value={channel}
-                onChange={(e) => setChannel(e.target.value)}
+                onChange={(e) => {
+                  const ch = e.target.value;
+                  setChannel(ch);
+                  const presets: Record<string, { language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = {
+                    askanything: { language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 },
+                    wonderdrop: { language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
+                  };
+                  if (ch && presets[ch]) {
+                    const p = presets[ch];
+                    setLanguage(p.language);
+                    setTtsSpeed(p.ttsSpeed);
+                    setPlatforms(p.platforms);
+                    setCaptionSize(p.captionSize);
+                    setCaptionY(p.captionY);
+                  }
+                }}
                 disabled={isGenerating}
                 aria-label="채널 선택"
                 className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
               >
                 <option value="" className="bg-gray-900">채널 없음</option>
-                <option value="askanything" className="bg-gray-900">Ask Anything</option>
-                <option value="wonderdrop" className="bg-gray-900">Wonder Drop</option>
+                <option value="askanything" className="bg-gray-900">AskAnything 🇰🇷</option>
+                <option value="wonderdrop" className="bg-gray-900">WonderDrop 🇺🇸</option>
               </select>
             </div>
+
+            <div className="w-px h-4 bg-white/10" />
+
+            <div className="flex items-center gap-1.5">
+              <Mic className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+              <input
+                type="range"
+                min="0.7"
+                max="1.2"
+                step="0.05"
+                value={ttsSpeed}
+                onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
+                disabled={isGenerating}
+                className="w-16 h-1 accent-indigo-500 cursor-pointer"
+                aria-label="음성 속도"
+              />
+              <span className="text-[10px] text-gray-500 tabular-nums w-7 text-right">{ttsSpeed}x</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Type className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+              <input
+                type="range"
+                min="32"
+                max="72"
+                step="4"
+                value={captionSize}
+                onChange={(e) => setCaptionSize(parseInt(e.target.value))}
+                disabled={isGenerating}
+                className="w-16 h-1 accent-indigo-500 cursor-pointer"
+                aria-label="자막 크기"
+              />
+              <span className="text-[10px] text-gray-500 tabular-nums w-7 text-right">{captionSize}px</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <MoveVertical className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+              <input
+                type="range"
+                min="10"
+                max="50"
+                step="2"
+                value={captionY}
+                onChange={(e) => setCaptionY(parseInt(e.target.value))}
+                disabled={isGenerating}
+                className="w-16 h-1 accent-indigo-500 cursor-pointer"
+                aria-label="자막 높이"
+              />
+              <span className="text-[10px] text-gray-500 tabular-nums w-7 text-right">{captionY}%</span>
+            </div>
+          </div>
+
+          {/* Row 3: 플랫폼 선택 */}
+          <div className="flex items-center justify-center gap-4">
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider">플랫폼</span>
+            {[
+              { id: "youtube", label: "YouTube", icon: Youtube, color: "text-red-400" },
+              { id: "tiktok", label: "TikTok", icon: Send, color: "text-cyan-400" },
+              { id: "reels", label: "Reels", icon: Instagram, color: "text-pink-400" },
+            ].map(({ id, label, icon: Icon, color }) => (
+              <label key={id} className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={platforms.includes(id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setPlatforms((prev) => [...prev, id]);
+                    } else {
+                      setPlatforms((prev) => prev.filter((p) => p !== id) || ["youtube"]);
+                    }
+                  }}
+                  disabled={isGenerating}
+                  className="accent-indigo-500 w-3 h-3"
+                />
+                <Icon className={`w-3.5 h-3.5 ${color}`} />
+                <span className="text-xs text-gray-400">{label}</span>
+              </label>
+            ))}
           </div>
         </form>
       </motion.div>
@@ -624,6 +884,73 @@ export default function Home() {
       <AnimatePresence>
         {isGenerating && (
           <ProgressPanel progress={progress} logs={logs} />
+        )}
+      </AnimatePresence>
+
+      {/* 미리보기 패널 */}
+      <AnimatePresence>
+        {previewMode && previewData && !isGenerating && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="mt-8 w-full max-w-2xl glass-panel p-6 rounded-3xl relative z-10 shadow-2xl shadow-indigo-500/20"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">{previewData.title}</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setPreviewMode(false); setPreviewData(null); }}
+                  className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 text-gray-300 rounded-lg transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleRender}
+                  className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors"
+                >
+                  확인 — 영상 만들기
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {previewData.cuts.map((cut) => (
+                <div key={cut.index} className="flex gap-3 bg-white/5 rounded-xl p-3">
+                  {/* 이미지 미리보기 */}
+                  <div className="w-20 h-36 flex-shrink-0 rounded-lg overflow-hidden bg-black/30">
+                    {cut.image_url ? (
+                      <img
+                        src={`${API_BASE}${cut.image_url}`}
+                        alt={`컷 ${cut.index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">
+                        이미지 없음
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 스크립트 편집 */}
+                  <div className="flex-1 flex flex-col gap-1">
+                    <span className="text-[10px] text-gray-500 uppercase">컷 {cut.index + 1}</span>
+                    <textarea
+                      value={editedScripts[cut.index] ?? cut.script}
+                      onChange={(e) => setEditedScripts(prev => ({ ...prev, [cut.index]: e.target.value }))}
+                      rows={3}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    />
+                    <span className="text-[10px] text-gray-600 truncate">{cut.prompt}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[10px] text-gray-500 mt-3 text-center">
+              스크립트를 수정한 뒤 &quot;확인&quot;을 누르면 수정된 내용으로 음성 녹음 + 영상 렌더링이 시작됩니다.
+            </p>
+          </motion.div>
         )}
       </AnimatePresence>
 

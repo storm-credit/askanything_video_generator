@@ -50,7 +50,7 @@ def check_quota(api_key: str = None) -> dict | None:
     return None
 
 
-def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko") -> str | None:
+def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko", speed: float | None = None, voice_id: str | None = None) -> str | None:
     """
     ElevenLabs API를 사용하여 매우 사실적인 다큐멘터리/쇼츠용 음성(.mp3)을 생성합니다.
     빈 텍스트 → 기본 문구로 대체, 타임아웃/네트워크 오류 → 최대 3회 재시도.
@@ -70,14 +70,17 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         print("[ElevenLabs 오류] ELEVENLABS_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
         return None
 
-    VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "cjVigY5qzO86Huf0OWal")  # 기본: Eric
-    URL = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
+    final_voice_id = voice_id or os.getenv("ELEVENLABS_VOICE_ID", "cjVigY5qzO86Huf0OWal")  # 기본: Eric
+    URL = f"https://api.elevenlabs.io/v1/text-to-speech/{final_voice_id}"
 
     headers = {
         "Accept": "audio/mpeg",
         "Content-Type": "application/json",
         "xi-api-key": api_key
     }
+
+    # speed: 0.7(느리게) ~ 1.0(기본) ~ 1.2(빠르게), 숏폼은 0.85~0.9 권장
+    tts_speed = speed if speed is not None else float(os.getenv("ELEVENLABS_SPEED", "0.9"))
 
     data = {
         "text": text,
@@ -86,8 +89,9 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
             "stability": 0.5,
             "similarity_boost": 0.75,
             "style": 0.0,
-            "use_speaker_boost": True
-        }
+            "use_speaker_boost": True,
+        },
+        "speed": tts_speed,
     }
 
     output_dir = os.path.join("assets", topic_folder, "audio")
