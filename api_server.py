@@ -27,6 +27,7 @@ from modules.video.remotion import create_remotion_video
 from modules.utils.constants import PROVIDER_LABELS
 from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats
 from modules.utils.audio import normalize_audio_lufs
+from modules.utils.channel_config import get_channel_preset, get_channel_names
 
 @asynccontextmanager
 async def _lifespan(app):
@@ -365,6 +366,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     lang=language,
                     llm_provider=llm_provider,
                     llm_key_override=llm_key_for_request,
+                    channel=req.channel,
                 ),
             )
 
@@ -378,6 +380,12 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 단계 2 & 3: 이미지와 TTS 병렬 처리 (Threading)
             image_label = "Imagen 4" if image_engine == "imagen" else "DALL-E"
+            # 채널별 Voice ID 적용
+            channel_voice_id = None
+            channel_preset = get_channel_preset(req.channel)
+            if channel_preset:
+                channel_voice_id = channel_preset.get("voice_id")
+
             yield {"data": f"[생성 엔진] 아트 디렉터({image_label})와 성우(TTS) 동시 작업 중...\n"}
 
             visual_paths = [None] * len(cuts)
@@ -435,7 +443,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 def _run_tts_and_whisper():
                     """TTS 생성 후 바로 Whisper 타임스탬프 추출 (순차 but 동일 스레드)"""
                     try:
-                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed)
+                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=channel_voice_id)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"TTS: {exc}")
@@ -670,6 +678,22 @@ async def generate_video_endpoint(req: GenerateRequest):
 
 # 준비된 세션 저장소 (메모리 — 단일 사용자 기준)
 _prepared_sessions: dict[str, dict] = {}
+_SESSION_MAX_AGE = 3600  # 1시간 후 자동 만료
+_SESSION_MAX_COUNT = 10  # 최대 세션 수
+
+
+def _cleanup_sessions():
+    """오래된 세션 자동 정리 (메모리 누수 방지)."""
+    import time
+    now = time.time()
+    expired = [sid for sid, s in _prepared_sessions.items() if now - s.get("_created", 0) > _SESSION_MAX_AGE]
+    for sid in expired:
+        _prepared_sessions.pop(sid, None)
+    # 최대 개수 초과 시 가장 오래된 것부터 삭제
+    if len(_prepared_sessions) > _SESSION_MAX_COUNT:
+        sorted_sessions = sorted(_prepared_sessions.items(), key=lambda x: x[1].get("_created", 0))
+        for sid, _ in sorted_sessions[:len(_prepared_sessions) - _SESSION_MAX_COUNT]:
+            _prepared_sessions.pop(sid, None)
 
 
 class PrepareRequest(BaseModel):
@@ -680,6 +704,7 @@ class PrepareRequest(BaseModel):
     imageEngine: str = "imagen"
     language: str = "ko"
     videoEngine: str = "none"  # prepare 단계에서는 비디오 미생성이 기본
+    channel: str | None = None
 
 
 @app.post("/api/prepare")
@@ -698,6 +723,7 @@ async def prepare_endpoint(req: PrepareRequest):
                 lambda: generate_cuts(
                     req.topic, api_key_override=req.apiKey, lang=req.language,
                     llm_provider=req.llmProvider, llm_key_override=llm_key_for_request,
+                    channel=req.channel,
                 ),
             )
 
@@ -725,8 +751,10 @@ async def prepare_endpoint(req: PrepareRequest):
                 yield {"data": f"PROG|{prog}\n"}
                 yield {"data": f"  -> 컷 {i+1}/{len(cuts)} 이미지 생성 완료\n"}
 
-            # 세션 저장
+            # 세션 저장 (오래된 세션 자동 정리)
             import uuid as _uuid
+            import time as _time
+            _cleanup_sessions()
             session_id = _uuid.uuid4().hex[:12]
             _prepared_sessions[session_id] = {
                 "cuts": cuts,
@@ -737,6 +765,7 @@ async def prepare_endpoint(req: PrepareRequest):
                 "language": req.language,
                 "apiKey": req.apiKey,
                 "llmKey": req.llmKey,
+                "_created": _time.time(),
             }
 
             # 미리보기 데이터 전송
@@ -808,6 +837,12 @@ async def render_endpoint(req: RenderRequest):
             scripts = [cut["script"] for cut in cuts]
             loop = asyncio.get_running_loop()
 
+            # 채널별 Voice ID
+            render_voice_id = None
+            render_preset = get_channel_preset(req.channel)
+            if render_preset:
+                render_voice_id = render_preset.get("voice_id")
+
             yield {"data": "PROG|10\n"}
             yield {"data": "[음성] TTS 녹음 + 타임스탬프 추출 시작...\n"}
 
@@ -817,7 +852,7 @@ async def render_endpoint(req: RenderRequest):
             for i, script in enumerate(scripts):
                 try:
                     aud = await loop.run_in_executor(
-                        None, lambda idx=i, s=script: generate_tts(s, idx, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed)
+                        None, lambda idx=i, s=script: generate_tts(s, idx, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=render_voice_id)
                     )
                     if aud:
                         aud = normalize_audio_lufs(aud)
@@ -938,6 +973,20 @@ async def bgm_themes():
     elif os.path.exists(os.path.join("brand", "bgm.mp3")):
         themes = ["random", "none"]  # 단일 파일만 있으면 random = 그 파일
     return {"themes": themes}
+
+
+# ── 채널 프리셋 API ──────────────────────────────────────────────
+
+@app.get("/api/channels")
+async def list_channels():
+    """등록된 채널 목록 및 프리셋 반환."""
+    channels = {}
+    for name in get_channel_names():
+        preset = get_channel_preset(name)
+        if preset:
+            # voice_id는 내부용이므로 프론트엔드에 노출하지 않음
+            channels[name] = {k: v for k, v in preset.items() if k != "voice_id"}
+    return {"channels": channels}
 
 
 # ── YouTube 업로드 API ─────────────────────────────────────────────

@@ -109,7 +109,8 @@ def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content:
 
 # 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
-                  llm_provider: str = "gemini", llm_key_override: str = None) -> tuple[list[dict[str, Any]], str]:
+                  llm_provider: str = "gemini", llm_key_override: str = None,
+                  channel: str | None = None) -> tuple[list[dict[str, Any]], str]:
     topic_folder = slugify_topic(topic, lang)
 
     # 저장 폴더 구조 생성
@@ -212,6 +213,24 @@ You MUST write ALL "script" fields and the "title" field in {lang_name}.
 The "image_prompt" and "description" fields must remain in English.
 The narrator will speak in {lang_name}, so the script must be natural {lang_name}.
 """
+
+    # 채널별 비주얼 스타일 주입 (이미지 프롬프트 차별화 — 유튜브 스팸 회피)
+    if channel:
+        from modules.utils.channel_config import get_channel_preset
+        preset = get_channel_preset(channel)
+        if preset:
+            visual_style = preset.get("visual_style", "")
+            tone = preset.get("tone", "")
+            if visual_style:
+                system_prompt += f"""
+
+[CHANNEL VISUAL IDENTITY]
+All "image_prompt" fields MUST follow this visual style: {visual_style}
+This is the channel's signature look — every image should feel cohesive with this aesthetic.
+"""
+            if tone and lang != "ko" and lang != "en":
+                # 기타 언어용: 톤도 주입
+                system_prompt += f"\nNarrator tone: {tone}\n"
 
     # LLM 프로바이더별 API 키 결정
     provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")

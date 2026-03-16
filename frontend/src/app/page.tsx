@@ -382,6 +382,7 @@ export default function Home() {
           llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
           imageEngine,
           language,
+          channel: channel || undefined,
         }),
       });
 
@@ -770,19 +771,35 @@ export default function Home() {
               </select>
             </div>
 
-            {/* 채널 (인트로/아웃트로) */}
+            {/* 채널 (프리셋 자동 적용) */}
             <div className="flex items-center gap-1">
               <Tv className="w-3.5 h-3.5 text-gray-500" />
               <select
                 value={channel}
-                onChange={(e) => setChannel(e.target.value)}
+                onChange={(e) => {
+                  const ch = e.target.value;
+                  setChannel(ch);
+                  // 채널별 프리셋 자동 적용
+                  const presets: Record<string, { language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = {
+                    askanything: { language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 },
+                    wonderdrop: { language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
+                  };
+                  if (ch && presets[ch]) {
+                    const p = presets[ch];
+                    setLanguage(p.language);
+                    setTtsSpeed(p.ttsSpeed);
+                    setPlatforms(p.platforms);
+                    setCaptionSize(p.captionSize);
+                    setCaptionY(p.captionY);
+                  }
+                }}
                 disabled={isGenerating}
                 aria-label="채널 선택"
                 className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
               >
                 <option value="" className="bg-gray-900">채널 없음</option>
-                <option value="askanything" className="bg-gray-900">Ask Anything</option>
-                <option value="wonderdrop" className="bg-gray-900">Wonder Drop</option>
+                <option value="askanything" className="bg-gray-900">AskAnything 🇰🇷</option>
+                <option value="wonderdrop" className="bg-gray-900">WonderDrop 🇺🇸</option>
               </select>
             </div>
 
