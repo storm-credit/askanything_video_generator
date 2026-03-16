@@ -134,6 +134,10 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
 
     except subprocess.TimeoutExpired:
         print(f"[Remotion 렌더링 실패{label}] 10분 타임아웃 초과.")
+        try:
+            os.remove(props_json_path)
+        except OSError:
+            pass
         return None
     except subprocess.CalledProcessError as e:
         print(f"[Remotion 렌더링 실패{label}] 종료 코드: {e.returncode}")
@@ -141,6 +145,10 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
             print(f"  stdout: {e.stdout[-500:]}")
         if e.stderr:
             print(f"  stderr: {e.stderr[-500:]}")
+        try:
+            os.remove(props_json_path)
+        except OSError:
+            pass
         return None
 
 

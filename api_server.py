@@ -858,13 +858,13 @@ class PrepareRequest(BaseModel):
 @app.post("/api/prepare")
 async def prepare_endpoint(req: PrepareRequest):
     """1단계: LLM 스크립트 + 이미지 생성만 수행. TTS/렌더는 하지 않음."""
-    # 프론트엔드 멀티키 → 환경변수 임시 설정
-    _prev_gemini_keys = os.environ.get("GEMINI_API_KEYS")
-    if req.geminiKeys:
-        os.environ["GEMINI_API_KEYS"] = req.geminiKeys
 
     async def sse_generator():
       async with _generate_semaphore:
+        # 프론트엔드 멀티키 → 환경변수 임시 설정 (세마포어 내부 — 동시 요청 간 env 충돌 방지)
+        _prev_gemini_keys = os.environ.get("GEMINI_API_KEYS")
+        if req.geminiKeys:
+            os.environ["GEMINI_API_KEYS"] = req.geminiKeys
         try:
             llm_key_for_request = get_google_key(req.llmKey) if req.llmProvider == "gemini" else req.llmKey
             loop = asyncio.get_running_loop()
@@ -1047,7 +1047,7 @@ async def render_endpoint(req: RenderRequest):
                             llm_key = session.get("llmKey")
                             vid_key = get_google_key(llm_key, service=active_video_engine)
                             vid = await loop.run_in_executor(
-                                None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"]: generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vid_key)
+                                None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"], vk=vid_key: generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vk)
                             )
                             if vid:
                                 visual_paths[i] = vid
