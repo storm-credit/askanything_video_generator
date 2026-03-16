@@ -30,6 +30,22 @@ VIDEO_DOWNLOAD_TIMEOUT = 60  # 초
 MAX_IMAGE_SIZE_MB = 20       # Base64 인코딩 전 최대 이미지 크기
 
 
+def _get_motion_style(prompt: str) -> str:
+    """감정 태그 기반 모션 스타일 결정"""
+    if "[SHOCK]" in prompt or "shock" in prompt.lower():
+        return "fast dynamic camera movement, sudden dramatic angles"
+    elif "[WONDER]" in prompt or "wonder" in prompt.lower():
+        return "slow graceful panning, gentle reveal shots"
+    elif "[TENSION]" in prompt or "tension" in prompt.lower():
+        return "slow creeping approach, tightening frame"
+    elif "[CALM]" in prompt or "calm" in prompt.lower():
+        return "very slow or static camera, peaceful ambient motion"
+    elif "[REVEAL]" in prompt or "reveal" in prompt.lower():
+        return "sudden camera shift, dramatic angle change"
+    else:
+        return "smooth cinematic camera movement"
+
+
 def get_available_engines() -> list[dict]:
     """프론트엔드에 표시할 사용 가능한 엔진 목록을 반환합니다."""
     available = []
@@ -135,7 +151,7 @@ def _generate_via_openai_sora(
             model="sora",
             input=[
                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
-                {"type": "text", "text": f"Generate an 8-second cinematic video with smooth camera movement. {prompt}"},
+                {"type": "text", "text": f"Generate an 8-second cinematic video. {_get_motion_style(prompt)}, 4K quality. {prompt}"},
             ],
             tools=[{"type": "video_generation", "resolution": "1080p", "duration": 8}],
         )

@@ -44,18 +44,7 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None, langua
                     timestamp_granularities=["word"]
                 )
 
-            # OpenAI SDK v1.x: TranscriptionWord는 Pydantic 모델 (속성/딕셔너리 접근 모두 가능)
-            raw_words = None
-            if hasattr(transcript, "words") and transcript.words:
-                raw_words = transcript.words
-            elif isinstance(transcript, dict) and "words" in transcript:
-                raw_words = transcript["words"]
-            else:
-                try:
-                    data = transcript.model_dump()
-                    raw_words = data.get("words", [])
-                except Exception as dump_err:
-                    print(f"[Whisper 경고] model_dump() 실패: {dump_err}")
+            raw_words = getattr(transcript, "words", None) or []
 
             words = []
             if not raw_words:
