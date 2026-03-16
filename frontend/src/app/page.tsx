@@ -53,6 +53,8 @@ export default function Home() {
   });
   // 키 사용량 통계
   const [keyUsageStats, setKeyUsageStats] = useState<KeyUsageStats | null>(null);
+  // 모델별 잔여 호출 수
+  const [modelLimits, setModelLimits] = useState<Record<string, { rpm: number; rpd: number; used: number; total_rpd: number; remaining: number }> | null>(null);
   // 업로드 (멀티 플랫폼)
   const [generatedVideoPath, setGeneratedVideoPath] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -122,13 +124,22 @@ export default function Home() {
     }
   }, []);
 
-  // 모달 열릴 때마다 최신 서버 상태 조회
+  const fetchModelLimits = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/model-limits`);
+      if (res.ok) setModelLimits(await res.json());
+    } catch {}
+  }, []);
+
+  // 초기 로드 + 모달 열릴 때마다 최신 상태 조회
+  useEffect(() => { fetchModelLimits(); }, [fetchModelLimits]);
   useEffect(() => {
     if (isSettingsOpen) {
       fetchKeyStatus();
       fetchKeyUsage();
+      fetchModelLimits();
     }
-  }, [isSettingsOpen, fetchKeyStatus, fetchKeyUsage]);
+  }, [isSettingsOpen, fetchKeyStatus, fetchKeyUsage, fetchModelLimits]);
 
   const addKey = (configId: string) => {
     const value = (inputValues[configId] || "").trim();
@@ -150,40 +161,47 @@ export default function Home() {
   };
 
   // 키 랜덤 선택 (멀티키 로테이션)
+  // 잔여 호출 표시 헬퍼
+  const remainLabel = (modelId: string): string => {
+    if (!modelLimits || !modelLimits[modelId]) return "";
+    const m = modelLimits[modelId];
+    return ` [${m.remaining}/${m.total_rpd}회]`;
+  };
+
   // LLM 프로바이더별 모델 옵션
   const LLM_MODELS: Record<string, { value: string; label: string }[]> = {
     gemini: [
-      { value: "", label: "Gemini 2.5 Pro (기본) — 5 RPM" },
-      { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash — 10 RPM" },
-      { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash — 15 RPM" },
+      { value: "", label: `Gemini 2.5 Pro (기본)${remainLabel("gemini-2.5-pro")}` },
+      { value: "gemini-2.5-flash", label: `Gemini 2.5 Flash${remainLabel("gemini-2.5-flash")}` },
+      { value: "gemini-2.0-flash", label: `Gemini 2.0 Flash${remainLabel("gemini-2.0-flash")}` },
     ],
     openai: [
-      { value: "", label: "GPT-4o (기본) — 500 RPM" },
-      { value: "gpt-4o-mini", label: "GPT-4o Mini — 500 RPM" },
-      { value: "gpt-4.1", label: "GPT-4.1 — 500 RPM" },
-      { value: "gpt-4.1-mini", label: "GPT-4.1 Mini — 500 RPM" },
+      { value: "", label: `GPT-4o (기본)${remainLabel("gpt-4o")}` },
+      { value: "gpt-4o-mini", label: `GPT-4o Mini${remainLabel("gpt-4o-mini")}` },
+      { value: "gpt-4.1", label: `GPT-4.1${remainLabel("gpt-4.1")}` },
+      { value: "gpt-4.1-mini", label: `GPT-4.1 Mini${remainLabel("gpt-4.1-mini")}` },
     ],
     claude: [
-      { value: "", label: "Claude Sonnet 4 (기본) — 50 RPM" },
-      { value: "claude-opus-4-20250514", label: "Claude Opus 4 — 20 RPM" },
-      { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 3.5 — 50 RPM" },
+      { value: "", label: `Claude Sonnet 4 (기본)${remainLabel("claude-sonnet-4-20250514")}` },
+      { value: "claude-opus-4-20250514", label: `Claude Opus 4${remainLabel("claude-opus-4-20250514")}` },
+      { value: "claude-haiku-4-5-20251001", label: `Claude Haiku 3.5${remainLabel("claude-haiku-4-5-20251001")}` },
     ],
   };
 
   const IMAGE_MODELS: Record<string, { value: string; label: string }[]> = {
     imagen: [
-      { value: "", label: "Imagen 4 Standard (기본) — 10 RPM" },
-      { value: "imagen-4.0-fast-generate-001", label: "Imagen 4 Fast — 10 RPM" },
+      { value: "", label: `Imagen 4 Standard (기본)${remainLabel("imagen-4.0-generate-001")}` },
+      { value: "imagen-4.0-fast-generate-001", label: `Imagen 4 Fast${remainLabel("imagen-4.0-fast-generate-001")}` },
     ],
     dalle: [
-      { value: "", label: "DALL-E 3 (기본) — 7 RPM" },
+      { value: "", label: `DALL-E 3 (기본)${remainLabel("dall-e-3")}` },
     ],
   };
 
   const VIDEO_MODELS: Record<string, { value: string; label: string }[]> = {
     veo3: [
-      { value: "", label: "Veo 3 Standard (기본) — 2 RPM" },
-      { value: "veo-3.0-fast-generate-001", label: "Veo 3 Fast — 2 RPM" },
+      { value: "", label: `Veo 3 Standard (기본)${remainLabel("veo-3.0-generate-001")}` },
+      { value: "veo-3.0-fast-generate-001", label: `Veo 3 Fast${remainLabel("veo-3.0-fast-generate-001")}` },
     ],
     sora2: [{ value: "", label: "Sora 2 (기본)" }],
     kling: [{ value: "", label: "Kling v1 (기본)" }],

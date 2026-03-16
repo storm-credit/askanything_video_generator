@@ -26,7 +26,7 @@ from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
 from modules.utils.constants import PROVIDER_LABELS
-from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats
+from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats, get_service_usage_totals
 from modules.utils.models import MODEL_RATE_LIMITS
 from modules.utils.audio import normalize_audio_lufs
 from modules.utils.channel_config import get_channel_preset, get_channel_names
@@ -198,8 +198,31 @@ async def health_check():
 
 @app.get("/api/model-limits")
 async def model_limits():
-    """모델별 Rate Limit 정보를 반환합니다."""
-    return MODEL_RATE_LIMITS
+    """모델별 Rate Limit + 잔여 호출 수를 반환합니다."""
+    usage_totals = get_service_usage_totals()
+    num_keys = max(count_google_keys(), 1)
+
+    # 서비스 이름 → 모델 ID 매핑 (Google 모델)
+    service_map = {
+        "gemini": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
+        "imagen": ["imagen-4.0-generate-001", "imagen-4.0-fast-generate-001"],
+        "veo3": ["veo-3.0-generate-001", "veo-3.0-fast-generate-001"],
+    }
+
+    result = {}
+    for model_id, limits in MODEL_RATE_LIMITS.items():
+        used = 0
+        total_rpd = limits["rpd"]
+        # Google 모델: 키 수 × RPD, 사용량은 서비스 단위 합산
+        for svc, model_ids in service_map.items():
+            if model_id in model_ids:
+                used = usage_totals.get(svc, 0)
+                total_rpd = limits["rpd"] * num_keys
+                break
+        remaining = max(total_rpd - used, 0)
+        result[model_id] = {**limits, "used": used, "total_rpd": total_rpd, "remaining": remaining}
+
+    return result
 
 
 def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | None, video_engine: str,

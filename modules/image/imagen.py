@@ -10,7 +10,7 @@ from modules.utils.models import get_model_chain, get_service_tag
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
 
-def generate_image_imagen(prompt, index, topic_folder="default_topic", api_key=None):
+def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None) -> str:
     """
     Google Imagen 4 API로 이미지를 생성합니다.
     429 에러 시 다른 키로 자동 전환, 전 키 소진 시 Fast 모델로 자동 폴백.

@@ -60,7 +60,7 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None, langua
             words = []
             if not raw_words:
                 print(f"[Whisper 경고] API 응답에 word timestamp가 없습니다 ({os.path.basename(audio_path)}). 응답 타입: {type(transcript).__name__}")
-            if raw_words:
+            else:
                 for w in raw_words:
                     try:
                         if isinstance(w, dict):

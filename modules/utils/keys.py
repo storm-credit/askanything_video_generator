@@ -226,6 +226,17 @@ def get_key_usage_stats() -> list[dict]:
     return stats
 
 
+def get_service_usage_totals() -> dict[str, int]:
+    """서비스별 총 사용량 합산 (모든 키 합계). 예: {"imagen": 15, "veo3": 3, "gemini": 8}"""
+    with _usage_lock:
+        totals: dict[str, int] = {}
+        for key_usage in _key_usage.values():
+            for svc, cnt in key_usage.items():
+                base_svc = svc.split(":")[0] if ":" in svc else svc
+                totals[base_svc] = totals.get(base_svc, 0) + cnt
+        return totals
+
+
 # ═══════════════════════ 유틸 ═══════════════════════
 
 def mask_key(key: str) -> str:

@@ -33,8 +33,8 @@ const isEmphasisWord = (word: string): boolean => {
   if (/^\d/.test(clean)) return true;
   // 3) English content words: 7+ chars, not a stopword (stricter threshold)
   if (clean.length >= 7 && /^[a-z]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
-  // 4) Korean: 4+ Hangul chars (most 4+ syllable Korean words carry high info density)
-  if (clean.length >= 4 && /^[\u3131-\uD79D]+$/.test(clean)) return true;
+  // 4) Korean: 4+ Hangul syllables (most 4+ syllable Korean words carry high info density)
+  if (clean.length >= 4 && /^[\uAC00-\uD7A3]+$/.test(clean)) return true;
   return false;
 };
 
