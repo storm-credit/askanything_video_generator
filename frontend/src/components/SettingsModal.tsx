@@ -14,6 +14,8 @@ interface SettingsModalProps {
   keyUsageStats: KeyUsageStats | null;
   totalServerKeys: number;
   totalSavedKeys: number;
+  googleKeyCount: number;
+  serverMaskedKeys: Record<string, string[]>;
   onClose: () => void;
   onInputChange: (configId: string, value: string) => void;
   onAddKey: (configId: string) => void;
@@ -31,6 +33,8 @@ export function SettingsModal({
   keyUsageStats,
   totalServerKeys,
   totalSavedKeys,
+  googleKeyCount,
+  serverMaskedKeys,
   onClose,
   onInputChange,
   onAddKey,
@@ -128,6 +132,8 @@ export function SettingsModal({
                   savedKeys={savedKeys[config.id] || []}
                   inputValue={inputValues[config.id] || ""}
                   isVisible={visibleKeys[config.id] || false}
+                  serverKeyCount={config.id === "gemini" ? googleKeyCount : undefined}
+                  envMaskedKeys={serverMaskedKeys[config.statusKey] || []}
                   onInputChange={(v) => onInputChange(config.id, v)}
                   onAdd={() => onAddKey(config.id)}
                   onRemove={(idx) => onRemoveKey(config.id, idx)}
@@ -216,6 +222,7 @@ export function SettingsModal({
                   savedKeys={savedKeys[config.id] || []}
                   inputValue={inputValues[config.id] || ""}
                   isVisible={visibleKeys[config.id] || false}
+                  envMaskedKeys={serverMaskedKeys[config.statusKey] || []}
                   onInputChange={(v) => onInputChange(config.id, v)}
                   onAdd={() => onAddKey(config.id)}
                   onRemove={(idx) => onRemoveKey(config.id, idx)}
@@ -251,6 +258,8 @@ function KeySection({
   savedKeys,
   inputValue,
   isVisible,
+  serverKeyCount,
+  envMaskedKeys = [],
   onInputChange,
   onAdd,
   onRemove,
@@ -261,6 +270,8 @@ function KeySection({
   savedKeys: string[];
   inputValue: string;
   isVisible: boolean;
+  serverKeyCount?: number;
+  envMaskedKeys?: string[];
   onInputChange: (v: string) => void;
   onAdd: () => void;
   onRemove: (idx: number) => void;
@@ -270,6 +281,8 @@ function KeySection({
     if (key.length <= 8) return "****";
     return key.slice(0, 4) + "..." + key.slice(-4);
   };
+
+  const totalKeys = envMaskedKeys.length + savedKeys.length;
 
   return (
     <div className="mb-4 p-4 rounded-2xl bg-white/[0.03] border border-white/5">
@@ -286,24 +299,40 @@ function KeySection({
           </div>
           <p className="text-xs text-gray-500 mt-0.5">{config.description}</p>
         </div>
-        {/* 서버 상태 표시 */}
+        {/* 상태 표시 */}
         <div className="flex items-center gap-1.5 shrink-0 ml-3">
-          <div className={`w-2 h-2 rounded-full ${serverStatus === true ? "bg-green-500" : savedKeys.length > 0 ? "bg-blue-500" : serverStatus === false ? "bg-gray-600" : "bg-gray-700 animate-pulse"}`} />
+          <div className={`w-2 h-2 rounded-full ${totalKeys > 0 ? "bg-green-500" : serverStatus === false ? "bg-gray-600" : "bg-gray-700 animate-pulse"}`} />
           <span className="text-[10px] text-gray-500">
-            {serverStatus === true ? ".env 설정됨" : savedKeys.length > 0 ? `브라우저 ${savedKeys.length}키` : serverStatus === false ? "미설정" : "확인 중"}
+            {totalKeys > 0
+              ? `${totalKeys}키 등록됨`
+              : serverStatus === false ? "미설정" : "확인 중"}
           </span>
         </div>
       </div>
 
-      {/* 저장된 키 목록 */}
+      {/* .env 키 목록 (서버에서 마스킹된 키) */}
+      {envMaskedKeys.length > 0 && (
+        <div className="space-y-1 mb-2">
+          {envMaskedKeys.map((masked, idx) => (
+            <div key={`env-${idx}`} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+              <span className="text-xs text-green-300 font-mono flex-1">{masked}</span>
+              <span className="text-[10px] text-green-500/60">.env</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 브라우저 저장 키 목록 */}
       {savedKeys.length > 0 && (
-        <div className="space-y-1.5 mb-2">
+        <div className="space-y-1 mb-2">
           {savedKeys.map((key, idx) => (
             <div key={key} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
               <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
               <span className="text-xs text-blue-300 font-mono flex-1">
                 {isVisible ? key : maskKey(key)}
               </span>
+              <span className="text-[10px] text-blue-500/60">브라우저</span>
               <button onClick={onToggleVisible} aria-label={isVisible ? "API 키 숨기기" : "API 키 보기"} className="text-gray-500 hover:text-gray-300 transition-colors">
                 {isVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
               </button>

@@ -19,6 +19,8 @@ const defaultProps = {
   keyUsageStats: null as KeyUsageStats | null,
   totalServerKeys: 2,
   totalSavedKeys: 1,
+  googleKeyCount: 0,
+  serverMaskedKeys: {},
   onClose: vi.fn(),
   onInputChange: vi.fn(),
   onAddKey: vi.fn(),

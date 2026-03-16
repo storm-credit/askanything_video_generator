@@ -22,6 +22,7 @@ export default function Home() {
   const [channel, setChannel] = useState("");
   const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
   const [ttsSpeed, setTtsSpeed] = useState(0.9);
+  const [voiceId, setVoiceId] = useState("auto"); // 자동 선택 (기본)
   const [captionSize, setCaptionSize] = useState(48);
   const [captionY, setCaptionY] = useState(28);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -33,6 +34,8 @@ export default function Home() {
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [serverKeyStatus, setServerKeyStatus] = useState<KeyStatus | null>(null);
+  const [googleKeyCount, setGoogleKeyCount] = useState(0);
+  const [serverMaskedKeys, setServerMaskedKeys] = useState<Record<string, string[]>>({});
 
   // 멀티키 저장소: { openai: ["sk-..."], elevenlabs: ["sk_..."], ... }
   const [savedKeys, setSavedKeys] = useState<Record<string, string[]>>(() => {
@@ -94,6 +97,8 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setServerKeyStatus(data.keys || null);
+        if (data.google_key_count) setGoogleKeyCount(data.google_key_count);
+        if (data.masked_keys) setServerMaskedKeys(data.masked_keys);
       }
     } catch {
       // 서버 미실행 시 무시
@@ -288,6 +293,7 @@ export default function Home() {
           channel: channel || undefined,
           platforms,
           ttsSpeed,
+          voiceId,
           captionSize,
           captionY,
         }),
@@ -691,6 +697,8 @@ export default function Home() {
             keyUsageStats={keyUsageStats}
             totalServerKeys={totalServerKeys}
             totalSavedKeys={totalSavedKeys}
+            googleKeyCount={googleKeyCount}
+            serverMaskedKeys={serverMaskedKeys}
             onClose={() => setIsSettingsOpen(false)}
             onInputChange={(id, v) => setInputValues((prev) => ({ ...prev, [id]: v }))}
             onAddKey={addKey}
@@ -769,275 +777,206 @@ export default function Home() {
             )}
           </div>
 
-          {/* Row 1: 엔진 선택 (언어 + LLM + 이미지 + 카메라) */}
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                disabled={isGenerating}
-                aria-label="언어 선택"
-                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-              >
-                <option value="ko" className="bg-gray-900">한국어</option>
-                <option value="en" className="bg-gray-900">English</option>
-                <option value="de" className="bg-gray-900">Deutsch</option>
-                <option value="da" className="bg-gray-900">Dansk</option>
-                <option value="no" className="bg-gray-900">Norsk</option>
-                <option value="es" className="bg-gray-900">Español</option>
-                <option value="fr" className="bg-gray-900">Français</option>
-                <option value="pt" className="bg-gray-900">Português</option>
-                <option value="it" className="bg-gray-900">Italiano</option>
-                <option value="nl" className="bg-gray-900">Nederlands</option>
-                <option value="sv" className="bg-gray-900">Svenska</option>
-                <option value="ja" className="bg-gray-900">日本語</option>
-                <option value="zh" className="bg-gray-900">中文</option>
-                <option value="ar" className="bg-gray-900">العربية</option>
-                <option value="ru" className="bg-gray-900">Русский</option>
-                <option value="tr" className="bg-gray-900">Türkçe</option>
-                <option value="hi" className="bg-gray-900">हिन्दी</option>
-              </select>
-            </div>
+          {/* 컨트롤 패널 */}
+          <div className="w-full max-w-2xl mx-auto space-y-3">
 
-            <div className="flex items-center gap-1.5">
-              <Crown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <select
-                value={qualityPreset}
-                onChange={(e) => applyPreset(e.target.value)}
-                disabled={isGenerating}
-                aria-label="품질 모드 선택"
-                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-              >
-                <option value="best" className="bg-gray-900">최고 품질</option>
-                <option value="balanced" className="bg-gray-900">합리적</option>
-                <option value="fast" className="bg-gray-900">빠른 생성</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <Brain className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <select
-                value={llmProvider}
-                onChange={(e) => { setLlmProvider(e.target.value); setLlmModel(""); setQualityPreset("custom"); }}
-                disabled={isGenerating}
-                aria-label="LLM 기획 엔진 선택"
-                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-              >
-                <option value="gemini" className="bg-gray-900">Gemini</option>
-                <option value="openai" className="bg-gray-900">GPT</option>
-                <option value="claude" className="bg-gray-900">Claude</option>
-              </select>
-              {LLM_MODELS[llmProvider]?.length > 1 && (
-                <select
-                  value={llmModel}
-                  onChange={(e) => { setLlmModel(e.target.value); setQualityPreset("custom"); }}
-                  disabled={isGenerating}
-                  aria-label="LLM 모델 버전 선택"
-                  className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-                >
-                  {LLM_MODELS[llmProvider].map((m) => (
-                    <option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>
-                  ))}
+            {/* 글로벌 설정 — 품질 · 언어 · 채널 */}
+            <div className="flex items-center justify-center gap-1.5">
+              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
+                <Crown className="w-3.5 h-3.5 text-amber-400" />
+                <select value={qualityPreset} onChange={(e) => applyPreset(e.target.value)} disabled={isGenerating} className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
+                  <option value="best" className="bg-gray-900">최고 품질</option>
+                  <option value="balanced" className="bg-gray-900">합리적</option>
+                  <option value="fast" className="bg-gray-900">빠른 생성</option>
                 </select>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <select
-                value={imageEngine}
-                onChange={(e) => { setImageEngine(e.target.value); setImageModel(""); setQualityPreset("custom"); }}
-                disabled={isGenerating}
-                aria-label="이미지 엔진 선택"
-                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-              >
-                <option value="imagen" className="bg-gray-900">Imagen</option>
-                <option value="dalle" className="bg-gray-900">DALL-E</option>
-              </select>
-              {IMAGE_MODELS[imageEngine]?.length > 1 && (
-                <select
-                  value={imageModel}
-                  onChange={(e) => { setImageModel(e.target.value); setQualityPreset("custom"); }}
-                  disabled={isGenerating}
-                  aria-label="이미지 모델 버전 선택"
-                  className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-                >
-                  {IMAGE_MODELS[imageEngine].map((m) => (
-                    <option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>
-                  ))}
+              </div>
+              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
+                <Globe className="w-3.5 h-3.5 text-blue-400" />
+                <select value={language} onChange={(e) => setLanguage(e.target.value)} disabled={isGenerating} className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
+                  <option value="ko" className="bg-gray-900">한국어</option>
+                  <option value="en" className="bg-gray-900">English</option>
+                  <option value="ja" className="bg-gray-900">日本語</option>
+                  <option value="zh" className="bg-gray-900">中文</option>
+                  <option value="es" className="bg-gray-900">Español</option>
+                  <option value="fr" className="bg-gray-900">Français</option>
+                  <option value="de" className="bg-gray-900">Deutsch</option>
+                  <option value="pt" className="bg-gray-900">Português</option>
+                  <option value="ar" className="bg-gray-900">العربية</option>
+                  <option value="ru" className="bg-gray-900">Русский</option>
+                  <option value="hi" className="bg-gray-900">हिन्दी</option>
+                  <option value="it" className="bg-gray-900">Italiano</option>
+                  <option value="sv" className="bg-gray-900">Svenska</option>
+                  <option value="da" className="bg-gray-900">Dansk</option>
+                  <option value="no" className="bg-gray-900">Norsk</option>
+                  <option value="nl" className="bg-gray-900">Nederlands</option>
+                  <option value="tr" className="bg-gray-900">Türkçe</option>
                 </select>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <Film className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <select
-                value={videoEngine}
-                onChange={(e) => { setVideoEngine(e.target.value); setVideoModel(""); setQualityPreset("custom"); }}
-                disabled={isGenerating}
-                aria-label="비디오 엔진 선택"
-                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-              >
-                <option value="veo3" className="bg-gray-900">Veo 3</option>
-                <option value="sora2" className="bg-gray-900">Sora 2</option>
-                <option value="kling" className="bg-gray-900">Kling</option>
-                <option value="none" className="bg-gray-900">없음</option>
-              </select>
-              {VIDEO_MODELS[videoEngine]?.length > 1 && (
-                <select
-                  value={videoModel}
-                  onChange={(e) => { setVideoModel(e.target.value); setQualityPreset("custom"); }}
-                  disabled={isGenerating}
-                  aria-label="비디오 모델 버전 선택"
-                  className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-                >
-                  {VIDEO_MODELS[videoEngine].map((m) => (
-                    <option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>
-                  ))}
+              </div>
+              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
+                <Tv className="w-3.5 h-3.5 text-purple-400" />
+                <select value={channel} onChange={(e) => { const ch = e.target.value; setChannel(ch); const presets: Record<string, { language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = { askanything: { language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 }, wonderdrop: { language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 } }; if (ch && presets[ch]) { const p = presets[ch]; setLanguage(p.language); setTtsSpeed(p.ttsSpeed); setPlatforms(p.platforms); setCaptionSize(p.captionSize); setCaptionY(p.captionY); } }} disabled={isGenerating} className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
+                  <option value="" className="bg-gray-900">채널 없음</option>
+                  <option value="askanything" className="bg-gray-900">AskAnything</option>
+                  <option value="wonderdrop" className="bg-gray-900">WonderDrop</option>
                 </select>
-              )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <Video className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <select
-                value={cameraStyle}
-                onChange={(e) => setCameraStyle(e.target.value)}
-                disabled={isGenerating}
-                aria-label="카메라 스타일 선택"
-                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-              >
-                <option value="dynamic" className="bg-gray-900">역동적</option>
-                <option value="gentle" className="bg-gray-900">부드러움</option>
-                <option value="static" className="bg-gray-900">고정</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Row 2: 설정 (BGM + 채널 | 슬라이더) */}
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <Music className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <select
-                value={bgmTheme}
-                onChange={(e) => setBgmTheme(e.target.value)}
-                disabled={isGenerating}
-                aria-label="BGM 선택"
-                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-              >
-                <option value="random" className="bg-gray-900">BGM 랜덤</option>
-                <option value="none" className="bg-gray-900">BGM 없음</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <Tv className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <select
-                value={channel}
-                onChange={(e) => {
-                  const ch = e.target.value;
-                  setChannel(ch);
-                  const presets: Record<string, { language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = {
-                    askanything: { language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 },
-                    wonderdrop: { language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
-                  };
-                  if (ch && presets[ch]) {
-                    const p = presets[ch];
-                    setLanguage(p.language);
-                    setTtsSpeed(p.ttsSpeed);
-                    setPlatforms(p.platforms);
-                    setCaptionSize(p.captionSize);
-                    setCaptionY(p.captionY);
-                  }
-                }}
-                disabled={isGenerating}
-                aria-label="채널 선택"
-                className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md appearance-none cursor-pointer"
-              >
-                <option value="" className="bg-gray-900">채널 없음</option>
-                <option value="askanything" className="bg-gray-900">AskAnything 🇰🇷</option>
-                <option value="wonderdrop" className="bg-gray-900">WonderDrop 🇺🇸</option>
-              </select>
+            {/* AI 엔진 — 기획 · 이미지 · 비디오 */}
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Brain className="w-3.5 h-3.5 text-violet-400" />
+                    <span className="text-[10px] font-medium text-gray-400">기획</span>
+                  </div>
+                  <select value={llmProvider} onChange={(e) => { setLlmProvider(e.target.value); setLlmModel(""); setQualityPreset("custom"); }} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <option value="gemini" className="bg-gray-900">Gemini</option>
+                    <option value="openai" className="bg-gray-900">GPT</option>
+                    <option value="claude" className="bg-gray-900">Claude</option>
+                  </select>
+                  {LLM_MODELS[llmProvider]?.length > 1 && (
+                    <select value={llmModel} onChange={(e) => { setLlmModel(e.target.value); setQualityPreset("custom"); }} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                      {LLM_MODELS[llmProvider].map((m) => (<option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>))}
+                    </select>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-[10px] font-medium text-gray-400">이미지</span>
+                  </div>
+                  <select value={imageEngine} onChange={(e) => { setImageEngine(e.target.value); setImageModel(""); setQualityPreset("custom"); }} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <option value="imagen" className="bg-gray-900">Imagen</option>
+                    <option value="dalle" className="bg-gray-900">DALL-E</option>
+                  </select>
+                  {IMAGE_MODELS[imageEngine]?.length > 1 && (
+                    <select value={imageModel} onChange={(e) => { setImageModel(e.target.value); setQualityPreset("custom"); }} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                      {IMAGE_MODELS[imageEngine].map((m) => (<option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>))}
+                    </select>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Film className="w-3.5 h-3.5 text-rose-400" />
+                    <span className="text-[10px] font-medium text-gray-400">비디오</span>
+                  </div>
+                  <select value={videoEngine} onChange={(e) => { setVideoEngine(e.target.value); setVideoModel(""); setQualityPreset("custom"); }} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <option value="veo3" className="bg-gray-900">Veo 3</option>
+                    <option value="sora2" className="bg-gray-900">Sora 2</option>
+                    <option value="kling" className="bg-gray-900">Kling</option>
+                    <option value="none" className="bg-gray-900">없음</option>
+                  </select>
+                  {VIDEO_MODELS[videoEngine]?.length > 1 && (
+                    <select value={videoModel} onChange={(e) => { setVideoModel(e.target.value); setQualityPreset("custom"); }} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                      {VIDEO_MODELS[videoEngine].map((m) => (<option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>))}
+                    </select>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="w-px h-4 bg-white/10" />
-
-            <div className="flex items-center gap-1.5">
-              <Mic className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <input
-                type="range"
-                min="0.7"
-                max="1.2"
-                step="0.05"
-                value={ttsSpeed}
-                onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
-                disabled={isGenerating}
-                className="w-16 h-1 accent-indigo-500 cursor-pointer"
-                aria-label="음성 속도"
-              />
-              <span className="text-[10px] text-gray-500 tabular-nums w-7 text-right">{ttsSpeed}x</span>
+            {/* 연출 — 카메라 · BGM · 음성 */}
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5 text-sky-400" />
+                    <span className="text-[10px] font-medium text-gray-400">카메라</span>
+                  </div>
+                  <select value={cameraStyle} onChange={(e) => setCameraStyle(e.target.value)} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-sky-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <option value="auto" className="bg-gray-900">자동</option>
+                    <option value="dynamic" className="bg-gray-900">역동적</option>
+                    <option value="slow_zoom" className="bg-gray-900">느린 줌인</option>
+                    <option value="handheld" className="bg-gray-900">핸드헬드</option>
+                    <option value="gentle" className="bg-gray-900">부드러운 패닝</option>
+                    <option value="slowmo" className="bg-gray-900">슬로우 모션</option>
+                    <option value="static" className="bg-gray-900">고정</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Music className="w-3.5 h-3.5 text-orange-400" />
+                    <span className="text-[10px] font-medium text-gray-400">BGM</span>
+                  </div>
+                  <select value={bgmTheme} onChange={(e) => setBgmTheme(e.target.value)} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-orange-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <option value="random" className="bg-gray-900">랜덤</option>
+                    <option value="none" className="bg-gray-900">없음</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Mic className="w-3.5 h-3.5 text-pink-400" />
+                    <span className="text-[10px] font-medium text-gray-400">음성</span>
+                  </div>
+                  <select value={voiceId} onChange={(e) => setVoiceId(e.target.value)} disabled={isGenerating} className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-pink-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <option value="auto" className="bg-gray-900">자동</option>
+                    <option value="cjVigY5qzO86Huf0OWal" className="bg-gray-900">Eric (차분)</option>
+                    <option value="pNInz6obpgDQGcFmaJgB" className="bg-gray-900">Adam (권위)</option>
+                    <option value="nPczCjzI2devNBz1zQrb" className="bg-gray-900">Brian (내레이션)</option>
+                    <option value="pqHfZKP75CvOlQylNhV4" className="bg-gray-900">Bill (다큐)</option>
+                    <option value="onwK4e9ZLuTAKqWW03F9" className="bg-gray-900">Daniel (뉴스)</option>
+                    <option value="21m00Tcm4TlvDq8ikWAM" className="bg-gray-900">Rachel (여성)</option>
+                    <option value="EXAVITQu4vr4xnSDxMaL" className="bg-gray-900">Sarah (부드러운)</option>
+                    <option value="XrExE9yKIg1WjnnlVkGX" className="bg-gray-900">Matilda (따뜻한)</option>
+                    <option value="IKne3meq5aSn9XLyUdCD" className="bg-gray-900">Charlie (유머)</option>
+                    <option value="ErXwobaYiN019PkySvjV" className="bg-gray-900">Antoni (만능)</option>
+                    <option value="JBFqnCBsd6RMkjVDRZzb" className="bg-gray-900">George (공포)</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <Type className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <input
-                type="range"
-                min="32"
-                max="72"
-                step="4"
-                value={captionSize}
-                onChange={(e) => setCaptionSize(parseInt(e.target.value))}
-                disabled={isGenerating}
-                className="w-16 h-1 accent-indigo-500 cursor-pointer"
-                aria-label="자막 크기"
-              />
-              <span className="text-[10px] text-gray-500 tabular-nums w-7 text-right">{captionSize}px</span>
+            {/* 자막 설정 — 슬라이더 */}
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Zap className="w-3 h-3 text-indigo-400" />
+                      <span className="text-[10px] font-medium text-gray-400">속도</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-400/70 tabular-nums">{ttsSpeed}x</span>
+                  </div>
+                  <input type="range" min="0.7" max="1.2" step="0.05" value={ttsSpeed} onChange={(e) => setTtsSpeed(parseFloat(e.target.value))} disabled={isGenerating} className="w-full h-1 accent-indigo-500 cursor-pointer" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Type className="w-3 h-3 text-indigo-400" />
+                      <span className="text-[10px] font-medium text-gray-400">자막</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-400/70 tabular-nums">{captionSize}px</span>
+                  </div>
+                  <input type="range" min="32" max="72" step="4" value={captionSize} onChange={(e) => setCaptionSize(parseInt(e.target.value))} disabled={isGenerating} className="w-full h-1 accent-indigo-500 cursor-pointer" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <MoveVertical className="w-3 h-3 text-indigo-400" />
+                      <span className="text-[10px] font-medium text-gray-400">위치</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-400/70 tabular-nums">{captionY}%</span>
+                  </div>
+                  <input type="range" min="10" max="50" step="2" value={captionY} onChange={(e) => setCaptionY(parseInt(e.target.value))} disabled={isGenerating} className="w-full h-1 accent-indigo-500 cursor-pointer" />
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <MoveVertical className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-              <input
-                type="range"
-                min="10"
-                max="50"
-                step="2"
-                value={captionY}
-                onChange={(e) => setCaptionY(parseInt(e.target.value))}
-                disabled={isGenerating}
-                className="w-16 h-1 accent-indigo-500 cursor-pointer"
-                aria-label="자막 높이"
-              />
-              <span className="text-[10px] text-gray-500 tabular-nums w-7 text-right">{captionY}%</span>
+            {/* 플랫폼 */}
+            <div className="flex items-center justify-center gap-3">
+              {[
+                { id: "youtube", label: "YouTube", icon: Youtube, color: "text-red-400", accent: "checked:bg-red-500" },
+                { id: "tiktok", label: "TikTok", icon: Send, color: "text-cyan-400", accent: "checked:bg-cyan-500" },
+                { id: "reels", label: "Reels", icon: Instagram, color: "text-pink-400", accent: "checked:bg-pink-500" },
+              ].map(({ id, label, icon: Icon, color }) => (
+                <label key={id} className={`flex items-center gap-1.5 cursor-pointer select-none px-3 py-1.5 rounded-full border transition-colors ${platforms.includes(id) ? "bg-white/10 border-white/20" : "bg-transparent border-transparent hover:bg-white/5"}`}>
+                  <input type="checkbox" checked={platforms.includes(id)} onChange={(e) => { if (e.target.checked) { setPlatforms((prev) => [...prev, id]); } else { setPlatforms((prev) => prev.filter((p) => p !== id) || ["youtube"]); } }} disabled={isGenerating} className="hidden" />
+                  <Icon className={`w-3.5 h-3.5 ${platforms.includes(id) ? color : "text-gray-600"}`} />
+                  <span className={`text-xs ${platforms.includes(id) ? "text-gray-200" : "text-gray-500"}`}>{label}</span>
+                </label>
+              ))}
             </div>
-          </div>
-
-          {/* Row 3: 플랫폼 선택 */}
-          <div className="flex items-center justify-center gap-4">
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider">플랫폼</span>
-            {[
-              { id: "youtube", label: "YouTube", icon: Youtube, color: "text-red-400" },
-              { id: "tiktok", label: "TikTok", icon: Send, color: "text-cyan-400" },
-              { id: "reels", label: "Reels", icon: Instagram, color: "text-pink-400" },
-            ].map(({ id, label, icon: Icon, color }) => (
-              <label key={id} className="flex items-center gap-1.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={platforms.includes(id)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setPlatforms((prev) => [...prev, id]);
-                    } else {
-                      setPlatforms((prev) => prev.filter((p) => p !== id) || ["youtube"]);
-                    }
-                  }}
-                  disabled={isGenerating}
-                  className="accent-indigo-500 w-3 h-3"
-                />
-                <Icon className={`w-3.5 h-3.5 ${color}`} />
-                <span className="text-xs text-gray-400">{label}</span>
-              </label>
-            ))}
           </div>
         </form>
       </motion.div>

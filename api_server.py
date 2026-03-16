@@ -79,6 +79,61 @@ app.add_middleware(
 )
 
 
+# ═══════════════════════ 자동 음성 선택 ═══════════════════════
+
+# ElevenLabs premade voice IDs
+_VOICE_MAP = {
+    "eric":    "cjVigY5qzO86Huf0OWal",  # 차분/다큐
+    "adam":    "pNInz6obpgDQGcFmaJgB",  # 깊은/권위
+    "brian":   "nPczCjzI2devNBz1zQrb",  # 내레이션
+    "bill":    "pqHfZKP75CvOlQylNhV4",  # 다큐/진지
+    "daniel":  "onwK4e9ZLuTAKqWW03F9",  # 뉴스/정보
+    "rachel":  "21m00Tcm4TlvDq8ikWAM",  # 차분/여성
+    "sarah":   "EXAVITQu4vr4xnSDxMaL",  # 부드러운
+    "matilda": "XrExE9yKIg1WjnnlVkGX",  # 따뜻한
+    "charlie": "IKne3meq5aSn9XLyUdCD",  # 유머/캐주얼
+    "antoni":  "ErXwobaYiN019PkySvjV",  # 만능
+    "george":  "JBFqnCBsd6RMkjVDRZzb",  # 거친/공포
+}
+
+_VOICE_ID_TO_NAME = {v: k.capitalize() for k, v in _VOICE_MAP.items()}
+
+# 주제 키워드 → 최적 음성 매핑 (우선순위 순)
+_TONE_RULES: list[tuple[list[str], str]] = [
+    # 공포/미스터리/범죄
+    (["공포", "호러", "귀신", "유령", "살인", "미스터리", "괴담", "소름", "horror", "ghost", "murder", "creepy", "dark", "죽음", "저주", "심령", "폐허"], "george"),
+    # 유머/재미/밈
+    (["웃긴", "유머", "밈", "meme", "funny", "코미디", "개그", "ㅋㅋ", "레전드", "웃음", "드립", "짤"], "charlie"),
+    # 과학/기술/교육
+    (["과학", "기술", "AI", "인공지능", "우주", "NASA", "양자", "물리", "화학", "생물", "science", "tech", "quantum", "로봇", "컴퓨터", "프로그래밍"], "daniel"),
+    # 역사/다큐
+    (["역사", "전쟁", "고대", "조선", "제국", "세계대전", "history", "ancient", "war", "왕조", "문명", "유적"], "bill"),
+    # 감성/힐링/동기부여
+    (["감동", "힐링", "동기부여", "motivation", "inspiring", "감성", "위로", "희망", "사랑", "인생", "명언"], "matilda"),
+    # 뉴스/시사/경제
+    (["뉴스", "시사", "경제", "정치", "주식", "투자", "부동산", "금리", "인플레이션", "news", "economy", "stock", "비트코인", "코인"], "adam"),
+    # 자연/동물/여행
+    (["자연", "동물", "여행", "바다", "산", "nature", "animal", "travel", "풍경", "safari", "ocean"], "sarah"),
+]
+
+
+def _auto_select_voice(topic: str, language: str = "ko") -> str:
+    """주제 키워드를 분석하여 최적의 ElevenLabs 음성을 자동 선택합니다."""
+    topic_lower = topic.lower()
+    for keywords, voice_name in _TONE_RULES:
+        for kw in keywords:
+            if kw.lower() in topic_lower:
+                print(f"[음성 자동 선택] '{kw}' 매칭 → {voice_name} ({_VOICE_MAP[voice_name][:12]}...)")
+                return _VOICE_MAP[voice_name]
+    # 기본값: Eric (차분한 다큐 톤, 만능)
+    return _VOICE_MAP["eric"]
+
+
+def _voice_name(voice_id: str) -> str:
+    """음성 ID를 이름으로 변환합니다."""
+    return _VOICE_ID_TO_NAME.get(voice_id, voice_id[:12] + "...")
+
+
 class GenerateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     apiKey: str | None = None
@@ -98,6 +153,7 @@ class GenerateRequest(BaseModel):
     channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
     ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
+    voiceId: str | None = None  # ElevenLabs 음성 ID
     captionSize: int = 48  # 자막 폰트 크기 (px): 32~72
     captionY: int = 28  # 자막 높이 (%): 10~50, 하단 기준
 
@@ -172,19 +228,38 @@ async def health_check():
     openai_key = os.getenv("OPENAI_API_KEY", "")
     elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
     gemini_key = os.getenv("GEMINI_API_KEY", "")
+    gemini_keys = os.getenv("GEMINI_API_KEYS", "")
     claude_key = os.getenv("ANTHROPIC_API_KEY", "")
     kling_ak = os.getenv("KLING_ACCESS_KEY", "")
     kling_sk = os.getenv("KLING_SECRET_KEY", "")
     tavily_key = os.getenv("TAVILY_API_KEY", "")
 
+    def _mask(val: str) -> str:
+        if not val or len(val) <= 8:
+            return "****"
+        return val[:4] + "***" + val[-4:]
+
     keys = {
         "openai": _is_set(openai_key, ["sk-proj-YOUR"]),
         "elevenlabs": _is_set(elevenlabs_key, ["YOUR_ELEVENLABS_API_KEY_HERE"]),
-        "gemini": _is_set(gemini_key),
+        "gemini": _is_set(gemini_key) or _is_set(gemini_keys),
         "claude_key": _is_set(claude_key),
         "kling_access": _is_set(kling_ak, ["YOUR"]),
         "kling_secret": _is_set(kling_sk, ["YOUR"]),
         "tavily": _is_set(tavily_key),
+    }
+
+    # 마스킹된 키 목록 (프론트엔드 표시용)
+    from modules.utils.keys import get_all_google_keys, mask_key
+    all_google = get_all_google_keys()
+    masked_keys = {
+        "openai": [_mask(openai_key)] if _is_set(openai_key, ["sk-proj-YOUR"]) else [],
+        "elevenlabs": [_mask(elevenlabs_key)] if _is_set(elevenlabs_key, ["YOUR_ELEVENLABS_API_KEY_HERE"]) else [],
+        "gemini": [mask_key(k) for k in all_google] if all_google else [],
+        "claude_key": [_mask(claude_key)] if _is_set(claude_key) else [],
+        "kling_access": [_mask(kling_ak)] if _is_set(kling_ak, ["YOUR"]) else [],
+        "kling_secret": [_mask(kling_sk)] if _is_set(kling_sk, ["YOUR"]) else [],
+        "tavily": [_mask(tavily_key)] if _is_set(tavily_key) else [],
     }
 
     missing = [k for k, v in keys.items() if not v]
@@ -193,6 +268,7 @@ async def health_check():
         "status": "ok" if not missing else "missing_keys",
         "keys": keys,
         "missing": missing,
+        "masked_keys": masked_keys,
         "google_key_count": google_key_count,
     }
 
@@ -440,11 +516,17 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 단계 2 & 3: 이미지와 TTS 병렬 처리 (Threading)
             image_label = "Imagen 4" if image_engine == "imagen" else "DALL-E"
-            # 채널별 Voice ID 적용
+            # 음성 선택: 자동(주제 분석) > 프론트엔드 직접 선택 > 채널 설정 > 기본값
             channel_voice_id = None
-            channel_preset = get_channel_preset(req.channel)
-            if channel_preset:
-                channel_voice_id = channel_preset.get("voice_id")
+            if req.voiceId == "auto":
+                channel_voice_id = _auto_select_voice(req.topic, language)
+                yield {"data": f"[음성 자동 선택] 주제 분석 → {_voice_name(channel_voice_id)}\n"}
+            elif req.voiceId:
+                channel_voice_id = req.voiceId  # 프론트엔드에서 선택한 음성
+            if not channel_voice_id:
+                channel_preset = get_channel_preset(req.channel)
+                if channel_preset:
+                    channel_voice_id = channel_preset.get("voice_id")
 
             yield {"data": f"[생성 엔진] 아트 디렉터({image_label})와 성우(TTS) 동시 작업 중...\n"}
 
