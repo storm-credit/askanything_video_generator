@@ -1,4 +1,4 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, spring } from 'remotion';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
 import React, { useMemo } from 'react';
 
 type WordProps = {
@@ -24,7 +24,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
   }, [wordTimestamps, quantizedTime]);
 
   return (
-    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '15%' }}>
+    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '28%' }}>
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -41,21 +41,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
 
           if (!isVisible && !hasPassed && !isActive) return null;
 
-          const wordStartFrame = Math.round(w.start * fps);
-          const elapsed = frame - wordStartFrame;
-          const scale = elapsed > 10 ? 1 : spring({
-            fps,
-            frame: elapsed,
-            config: {
-              damping: 14,
-              stiffness: 180,
-              mass: 0.4,
-            },
-            durationInFrames: 10,
-          });
-
           const color = isActive ? '#FFD700' : 'rgba(255, 255, 255, 0.6)';
-          const transformScale = isActive ? 1 + (scale * 0.08) : 1;
           const textShadow = isActive
             ? '0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 6px rgba(255, 215, 0, 0.3)'
             : '0px 2px 8px rgba(0, 0, 0, 0.8)';
@@ -66,9 +52,8 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[] }> = ({ wordTimest
               style={{
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 800,
-                fontSize: isActive ? '56px' : '48px',
+                fontSize: '48px',
                 color: color,
-                transform: `scale(${transformScale})`,
                 textShadow: textShadow,
                 WebkitTextStroke: '1.5px rgba(0, 0, 0, 0.5)',
                 lineHeight: '1.3',
