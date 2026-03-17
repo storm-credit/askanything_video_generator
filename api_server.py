@@ -586,7 +586,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                     try:
                         cut_video_key = get_google_key(llm_key_override, service=active_video_engine)
                         video_result[0] = generate_video_from_image(
-                            img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key
+                            img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key,
+                            description=cut.get("description", "")
                         )
                     except Exception as exc:
                         with errors_lock:
@@ -1103,7 +1104,7 @@ async def render_endpoint(req: RenderRequest):
                             llm_key = req.llmKey  # 세션 대신 요청에서 키 수신 (보안)
                             vid_key = get_google_key(llm_key, service=active_video_engine)
                             vid = await loop.run_in_executor(
-                                None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"], vk=vid_key: generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vk)
+                                None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"], vk=vid_key, desc=cuts[idx].get("description", ""): generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vk, description=desc)
                             )
                             if vid:
                                 visual_paths[i] = vid

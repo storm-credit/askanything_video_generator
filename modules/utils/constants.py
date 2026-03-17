@@ -14,8 +14,11 @@ MASTER_STYLE = (
 )
 
 
-def get_motion_style(prompt: str) -> str:
-    """감정 태그 기반 모션 스타일 결정 (Veo/Kling/Sora 공용)"""
+def get_motion_style(prompt: str, description: str = "") -> str:
+    """감정 태그 기반 모션 스타일 결정 (Veo/Kling/Sora 공용).
+
+    감정 태그([SHOCK] 등)는 description에 포함됨. prompt도 폴백으로 검색.
+    """
     tag_styles = {
         "[SHOCK]": "fast dynamic camera movement, sudden dramatic angles",
         "[WONDER]": "slow graceful panning, gentle reveal shots",
@@ -23,8 +26,9 @@ def get_motion_style(prompt: str) -> str:
         "[CALM]": "very slow or static camera, peaceful ambient motion",
         "[REVEAL]": "sudden camera shift, dramatic angle change",
     }
+    search_text = f"{description} {prompt}"
     for tag, style in tag_styles.items():
-        if tag in prompt:
+        if tag in search_text:
             return style
     return "smooth cinematic camera movement"
 

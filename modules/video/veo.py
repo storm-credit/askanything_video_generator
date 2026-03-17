@@ -25,6 +25,7 @@ def generate_video_veo(
     index: int,
     topic_folder: str,
     api_key: str = None,
+    description: str = "",
 ) -> str | None:
     """
     Google Veo 3로 이미지를 비디오로 변환합니다.
@@ -88,7 +89,7 @@ def generate_video_veo(
             try:
                 operation = client.models.generate_videos(
                     model=model_id,
-                    prompt=f"{get_motion_style(prompt)}, 4K quality. {prompt}",
+                    prompt=f"{get_motion_style(prompt, description)}, 4K quality. {prompt}",
                     image=types.Image(image_bytes=img_bytes, mime_type=mime_type),
                     config=types.GenerateVideosConfig(
                         numberOfVideos=1,

@@ -20,7 +20,7 @@ def _generate_jwt(ak: str, sk: str) -> str:
     }
     return jwt.encode(payload, sk, headers=headers)
 
-def generate_video_from_image(image_path: str, prompt: str, index: int, topic_folder: str, ak_override: str = None, sk_override: str = None) -> str | None:
+def generate_video_from_image(image_path: str, prompt: str, index: int, topic_folder: str, ak_override: str = None, sk_override: str = None, description: str = "") -> str | None:
     """
     Kling AI를 사용하여 정지 이미지를 5초짜리 시네마틱 숏폼 비디오로 변환합니다.
     """
@@ -59,7 +59,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     payload = {
         "model": "kling-v1",
         "image": img_b64,
-        "prompt": f"{get_motion_style(prompt)}, 4K quality. {prompt}",
+        "prompt": f"{get_motion_style(prompt, description)}, 4K quality. {prompt}",
         "duration": "5"
     }
     

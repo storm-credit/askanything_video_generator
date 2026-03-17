@@ -105,6 +105,7 @@ def generate_video_from_image(
     topic_folder: str,
     engine: str = "kling",
     google_api_key: str = None,
+    description: str = "",
 ) -> str | None:
     """
     선택된 엔진으로 이미지를 비디오로 변환합니다.
@@ -127,7 +128,7 @@ def generate_video_from_image(
         return None
 
     for eng in engines_to_try:
-        result = _try_engine(eng, image_path, prompt, index, topic_folder, google_api_key)
+        result = _try_engine(eng, image_path, prompt, index, topic_folder, google_api_key, description=description)
         if result is not None:
             return result
         print(f"[비디오 엔진] {eng} 실패 → 다음 엔진 시도")
@@ -143,18 +144,19 @@ def _try_engine(
     index: int,
     topic_folder: str,
     google_api_key: str = None,
+    description: str = "",
 ) -> str | None:
     """단일 엔진으로 비디오 생성을 시도합니다."""
     try:
         if engine == "veo3":
             from modules.video.veo import generate_video_veo
-            return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key)
+            return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key, description=description)
 
         if engine == "sora2":
-            return _generate_via_openai_sora(image_path, prompt, index, topic_folder)
+            return _generate_via_openai_sora(image_path, prompt, index, topic_folder, description=description)
 
         if engine == "kling":
-            return _generate_via_kling_direct(image_path, prompt, index, topic_folder)
+            return _generate_via_kling_direct(image_path, prompt, index, topic_folder, description=description)
     except Exception as e:
         print(f"[비디오 엔진 오류] {engine} 예외: {e}")
         return None
@@ -164,7 +166,7 @@ def _try_engine(
 
 
 def _generate_via_openai_sora(
-    image_path: str, prompt: str, index: int, topic_folder: str
+    image_path: str, prompt: str, index: int, topic_folder: str, description: str = ""
 ) -> str | None:
     """OpenAI Sora 2 API를 통한 비디오 생성"""
     api_key = os.getenv("OPENAI_API_KEY")
@@ -197,7 +199,7 @@ def _generate_via_openai_sora(
             model="sora",
             input=[
                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
-                {"type": "text", "text": f"{get_motion_style(prompt)}, 4K quality. {prompt}"},
+                {"type": "text", "text": f"{get_motion_style(prompt, description)}, 4K quality. {prompt}"},
             ],
             tools=[{"type": "video_generation", "resolution": "1080p", "duration": 8}],
         )
@@ -246,11 +248,11 @@ def _generate_via_openai_sora(
 
 
 def _generate_via_kling_direct(
-    image_path: str, prompt: str, index: int, topic_folder: str
+    image_path: str, prompt: str, index: int, topic_folder: str, description: str = ""
 ) -> str | None:
     """기존 Kling AI 직접 연동"""
     from modules.video.kling import generate_video_from_image as kling_generate
-    return kling_generate(image_path, prompt, index, topic_folder)
+    return kling_generate(image_path, prompt, index, topic_folder, description=description)
 
 
 def _download_video(
