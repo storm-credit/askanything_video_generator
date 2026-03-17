@@ -1,7 +1,6 @@
 ---
 name: code-review
 description: Review changed files for bugs, security issues, and best practices
-disable-model-invocation: true
 context: fork
 ---
 
