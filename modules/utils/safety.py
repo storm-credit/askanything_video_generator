@@ -37,7 +37,8 @@ def get_safety_fallback_prompt(original_prompt: str, retry_count: int) -> str:
     words = _BANNED_KEYWORDS.sub("", original_prompt).split()
     topic_hint = " ".join(w for w in words if len(w) > 2)[:150]  # 짧은 단어 제외, 150자 제한
     if not topic_hint:
-        topic_hint = " ".join(original_prompt.split()[:6])
+        # 폴백에도 금지어 제거 적용
+        topic_hint = " ".join(_BANNED_KEYWORDS.sub("", original_prompt).split()[:6])
     return (
         f"A safe, beautiful cinematic visualization: {topic_hint}. "
         "Atmospheric lighting, detailed textures, peaceful scene, vertical 9:16 composition."

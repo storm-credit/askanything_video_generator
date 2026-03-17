@@ -949,16 +949,17 @@ async def prepare_endpoint(req: PrepareRequest):
             import time as _time
             _cleanup_sessions()
             session_id = _uuid.uuid4().hex[:12]
-            _prepared_sessions[session_id] = {
-                "cuts": cuts,
-                "topic_folder": topic_folder,
-                "title": video_title,
-                "image_paths": image_paths,
-                "topic": req.topic,
-                "language": req.language,
-                # API 키는 세션에 저장하지 않음 (보안) — 렌더 요청 시 재전달 필요
-                "_created": _time.time(),
-            }
+            with _session_lock:
+                _prepared_sessions[session_id] = {
+                    "cuts": cuts,
+                    "topic_folder": topic_folder,
+                    "title": video_title,
+                    "image_paths": image_paths,
+                    "topic": req.topic,
+                    "language": req.language,
+                    # API 키는 세션에 저장하지 않음 (보안) — 렌더 요청 시 재전달 필요
+                    "_created": _time.time(),
+                }
 
             # 미리보기 데이터 전송
             preview_cuts = []
@@ -1015,7 +1016,8 @@ class RenderRequest(BaseModel):
 async def render_endpoint(req: RenderRequest):
     """2단계: 수정된 스크립트로 TTS → Whisper → Remotion 렌더링."""
     _cleanup_sessions()
-    session = _prepared_sessions.get(req.sessionId)
+    with _session_lock:
+        session = _prepared_sessions.get(req.sessionId)
     if not session:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"error": "세션이 만료되었습니다. 다시 준비해주세요."})
@@ -1091,7 +1093,7 @@ async def render_endpoint(req: RenderRequest):
                 for i, img_path in enumerate(image_paths):
                     if img_path and os.path.exists(img_path):
                         try:
-                            llm_key = session.get("llmKey")
+                            llm_key = req.llmKey  # 세션 대신 요청에서 키 수신 (보안)
                             vid_key = get_google_key(llm_key, service=active_video_engine)
                             vid = await loop.run_in_executor(
                                 None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"], vk=vid_key: generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vk)
