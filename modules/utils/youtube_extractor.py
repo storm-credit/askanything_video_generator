@@ -172,7 +172,6 @@ def extract_youtube_reference(url: str, api_key: str | None = None) -> dict:
             "view_count": int,
             "transcript": str,
             "structure": { hook, ending, style, sentence_count, ... },
-            "context_string": str  # LLM에 주입할 포맷팅된 문자열
         }
     """
     video_id = _parse_video_id(url)

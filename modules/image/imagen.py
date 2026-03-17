@@ -5,7 +5,7 @@ from PIL import Image, ImageOps
 import io
 
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
-from modules.utils.constants import MASTER_STYLE, is_key_rotation_error
+from modules.utils.constants import is_key_rotation_error
 from modules.utils.cache import get_cached_image, save_to_cache
 from modules.utils.models import get_model_chain, get_service_tag
 from modules.utils.safety import is_safety_error, get_safety_fallback_prompt

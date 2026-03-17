@@ -58,9 +58,9 @@ _active_generation_id: str | None = None
 _generation_lock = threading.Lock()
 _CANCEL_EVENT_TTL = 120  # 2분 후 미정리 이벤트 자동 삭제 (SSE 끊김 시 빠른 정리)
 
-# ElevenLabs 쿼터 캐시 (매 요청 HTTP 호출 방지)
-_elevenlabs_quota_cache: dict | None = None
-_elevenlabs_quota_ts: float = 0.0
+# ElevenLabs 쿼터 캐시 (매 요청 HTTP 호출 방지, 키별 캐시)
+_elevenlabs_quota_cache: dict[str, tuple[float, dict | None]] = {}  # key_hash → (timestamp, quota_info)
+_elevenlabs_quota_lock = threading.Lock()
 _ELEVENLABS_QUOTA_TTL = 60  # 60초 캐시
 
 
@@ -243,7 +243,7 @@ class GenerateRequest(BaseModel):
     def valid_cost_tier(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        allowed = {"free", "standard", "premium"}
+        allowed = set(get_cost_tier_names())
         if v not in allowed:
             raise ValueError(f"지원하지 않는 비용 티어: {v}. 허용: {allowed}")
         return v
@@ -473,16 +473,17 @@ async def generate_video_endpoint(req: GenerateRequest):
     if req.costTier:
         tier = get_cost_tier(req.costTier)
         if tier:
-            # 사용자가 명시적으로 설정하지 않은 값만 프리셋으로 대체
-            if req.llmProvider == "gemini":  # 기본값인 경우만
+            # 사용자가 명시적으로 설정한 필드는 건드리지 않음 (Pydantic model_fields_set)
+            _user_set = req.model_fields_set
+            if "llmProvider" not in _user_set:
                 req.llmProvider = tier.get("llm_provider", req.llmProvider)
-            if not req.llmModel:
+            if "llmModel" not in _user_set:
                 req.llmModel = tier.get("llm_model")
-            if req.imageEngine == "imagen":
+            if "imageEngine" not in _user_set:
                 req.imageEngine = tier.get("image_engine", req.imageEngine)
-            if not req.imageModel:
+            if "imageModel" not in _user_set:
                 req.imageModel = tier.get("image_model")
-            if req.videoEngine == "none":
+            if "videoEngine" not in _user_set:
                 req.videoEngine = tier.get("video_engine", req.videoEngine)
 
     topic = req.topic
@@ -539,14 +540,19 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": "ERROR|.env 파일을 확인하거나, 프론트엔드에서 API Key를 입력해주세요.\n"}
                 return
 
-            # 사전 검증: API 쿼터 체크 (경고만, 차단 안 함, 60초 캐시)
-            import time as _time_mod
+            # 사전 검증: API 쿼터 체크 (경고만, 차단 안 함, 키별 60초 캐시)
+            import time as _time_mod, hashlib as _hl
             el_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
-            global _elevenlabs_quota_cache, _elevenlabs_quota_ts
-            if _time_mod.time() - _elevenlabs_quota_ts > _ELEVENLABS_QUOTA_TTL:
-                _elevenlabs_quota_cache = check_elevenlabs_quota(el_key)
-                _elevenlabs_quota_ts = _time_mod.time()
-            quota_info = _elevenlabs_quota_cache
+            _el_key_hash = _hl.sha256(el_key.encode()).hexdigest()[:12] if el_key else ""
+            quota_info = None
+            with _elevenlabs_quota_lock:
+                cached_q = _elevenlabs_quota_cache.get(_el_key_hash)
+                if cached_q and _time_mod.time() - cached_q[0] < _ELEVENLABS_QUOTA_TTL:
+                    quota_info = cached_q[1]
+            if quota_info is None and el_key:
+                quota_info = check_elevenlabs_quota(el_key)
+                with _elevenlabs_quota_lock:
+                    _elevenlabs_quota_cache[_el_key_hash] = (_time_mod.time(), quota_info)
             if quota_info:
                 remaining = quota_info["remaining"]
                 limit = quota_info["limit"]
@@ -670,7 +676,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 with image_semaphore:
                     try:
                         cut_image_key = _get_image_key()
-                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, channel=req.channel) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
+                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, channel=req.channel) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, channel=req.channel)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"이미지: {exc}")
@@ -1699,7 +1705,7 @@ async def generate_multilang(req: MultiLangRequest):
                         if image_engine == "imagen":
                             img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key, model_override=None, gemini_api_keys=gemini_keys_override, channel=req.channel))
                         else:
-                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key))
+                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key, channel=req.channel))
                     visual_paths[i] = img_path
                 except Exception as img_err:
                     print(f"[다국어 이미지 오류] 컷 {i+1}: {img_err}")
@@ -2037,7 +2043,8 @@ async def batch_start():
                             _batch_channel = job.get("channel")
                             img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_imagen(c["prompt"], idx, topic_folder, channel=_batch_channel))
                         else:
-                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_dalle(c["prompt"], idx, topic_folder))
+                            _batch_ch = job.get("channel")
+                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_dalle(c["prompt"], idx, topic_folder, channel=_batch_ch))
                         visual_paths.append(img)
 
                         aud = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_tts(c["script"], idx, topic_folder, language=job["language"]))

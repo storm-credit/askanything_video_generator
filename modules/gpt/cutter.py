@@ -153,12 +153,13 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
     prompt_hash = _hashlib.sha256(system_prompt.encode()).hexdigest()[:16]
     cache_key = f"{api_key}:{model_name}:{prompt_hash}"
     with _gemini_cache_lock:
+        # 만료 엔트리 전체 정리 (TTL 580초)
+        now = time.time()
+        expired = [k for k, (ts, _) in _gemini_cache.items() if now - ts > 580]
+        for k in expired:
+            _gemini_cache.pop(k, None)
         cached_entry = _gemini_cache.get(cache_key)
-        # TTL 체크 (10분 = 600초)
-        if cached_entry and (time.time() - cached_entry[0]) > 580:
-            _gemini_cache.pop(cache_key, None)
-            cached_entry = None
-        # 만료 엔트리 정리 (캐시 크기 초과 시 가장 오래된 제거)
+        # 크기 초과 시 가장 오래된 제거
         if len(_gemini_cache) > _GEMINI_CACHE_MAX:
             oldest = min(_gemini_cache, key=lambda k: _gemini_cache[k][0])
             _gemini_cache.pop(oldest, None)
@@ -447,7 +448,7 @@ Example: "A massive black hole swallowing light [SHOCK]"
     {"description": "Thermometer plummeting, frost crystals forming [TENSION]", "image_prompt": "Extreme close-up of thermometer plummeting to minus 50, frost crystals rapidly forming on glass, cold blue lighting, macro lens", "script": "One week. Minus 50. The ocean starts freezing."},
     {"description": "Entire frozen Earth from space [SHOCK]", "image_prompt": "Frozen ocean surface cracking with massive glaciers rising, dark sky, eerie blue-green ice glow, low angle dramatic shot", "script": "One month and Earth is a solid ice ball."},
     {"description": "Deep sea creatures thriving near vents [WONDER]", "image_prompt": "Bioluminescent deep sea creatures near hydrothermal vents in total darkness, glowing jellyfish and tube worms, underwater macro", "script": "But deep in the ocean, life survives."},
-    {"description": "Earth drifting alone, callback to first cut [CALM]", "image_prompt": "Earth drifting alone through vast dark cosmos, tiny blue marble against infinite black void, callback to first cut, profound solitude", "script": "For 8 minutes everyone was smiling. That was the last normal moment ever."}
+    {"description": "Earth drifting alone, callback to first cut [CALM]", "image_prompt": "Earth drifting alone through vast dark cosmos, tiny blue marble against infinite black void, callback to first cut, profound solitude", "script": "For 8 minutes, everyone smiled. It was already over."}
   ]
 }
 
@@ -502,9 +503,9 @@ Exception: #Shorts tag stays in English. The "image_prompt" and "description" fi
 The narrator will speak in {lang_name}, so the script must be natural {lang_name}.
 """
 
-    # 채널별 비주얼 스타일 주입 (이미지 프롬프트 차별화 — 유튜브 스팸 회피)
+    # 채널별 비주얼 스타일 + 내러티브 구조 주입 (유튜브 스팸/중복 감지 회피)
     if channel:
-        from modules.utils.channel_config import get_channel_preset
+        from modules.utils.channel_config import get_channel_preset, get_narrative_style
         preset = get_channel_preset(channel)
         if preset:
             visual_style = preset.get("visual_style", "")
@@ -516,9 +517,22 @@ The narrator will speak in {lang_name}, so the script must be natural {lang_name
 All "image_prompt" fields MUST follow this visual style: {visual_style}
 This is the channel's signature look — every image should feel cohesive with this aesthetic.
 """
-            if tone and lang != "ko" and lang != "en":
-                # 기타 언어용: 톤도 주입
-                system_prompt += f"\nNarrator tone: {tone}\n"
+            if tone:
+                system_prompt += f"\n[CHANNEL TONE] Narrator tone: {tone}\n"
+
+        # 채널별 내러티브 구조 주입 (같은 공식 반복 방지 — YouTube 템플릿 감지 대응)
+        narrative = get_narrative_style(channel)
+        if narrative:
+            hook_instr = narrative.get("hook_instruction_en" if lang == "en" else "hook_instruction_ko", "")
+            ending = narrative.get("ending_style", "")
+            if hook_instr:
+                system_prompt += f"""
+
+[CHANNEL NARRATIVE STRUCTURE]
+Hook strategy: {hook_instr}
+Ending strategy: {ending}
+Follow this channel's unique storytelling pattern — do NOT use a generic formula.
+"""
 
     # LLM 프로바이더별 API 키 결정
     provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
@@ -557,9 +571,15 @@ This is the channel's signature look — every image should feel cohesive with t
             "위 주제에 대한 숏폼 기획안을 작성해주세요."
         )
     if fact_context:
-        user_content += f"\n\n<fact_check_data>\n{fact_context}\n</fact_check_data>"
+        user_content += (
+            "\n\n<fact_check_data>\n" + fact_context + "\n</fact_check_data>"
+            "\nIf <fact_check_data> is provided, cross-reference your facts against it and prefer verified data."
+        )
 
-    # 레퍼런스 영상 분석 주입 (XML 구조화)
+    # 레퍼런스 영상 분석 주입 (XML 구조화 + 이스케이프)
+    def _esc(s: str) -> str:
+        return s.replace("<", "&lt;").replace(">", "&gt;") if s else ""
+
     if reference_url:
         try:
             from modules.utils.youtube_extractor import extract_youtube_reference
@@ -567,14 +587,14 @@ This is the channel's signature look — every image should feel cohesive with t
             if ref_data:
                 ref_block = "\n\n<reference_analysis>"
                 if ref_data.get("title"):
-                    ref_block += f"\n  <source>{ref_data['title']}</source>"
+                    ref_block += f"\n  <source>{_esc(ref_data['title'])}</source>"
                 struct = ref_data.get("structure", {})
                 if struct.get("hook"):
-                    ref_block += f"\n  <hook_technique>{struct['hook']}</hook_technique>"
+                    ref_block += f"\n  <hook_technique>{_esc(struct['hook'])}</hook_technique>"
                 if struct.get("ending"):
-                    ref_block += f"\n  <ending_technique>{struct['ending']}</ending_technique>"
+                    ref_block += f"\n  <ending_technique>{_esc(struct['ending'])}</ending_technique>"
                 if struct.get("style"):
-                    ref_block += f"\n  <tone>{struct['style']}</tone>"
+                    ref_block += f"\n  <tone>{_esc(struct['style'])}</tone>"
                 if ref_data.get("transcript"):
                     # 첫 문장 + 마지막 문장 + 중간 피벗만 추출
                     sentences = [s.strip() for s in ref_data["transcript"].split(".") if s.strip()]
