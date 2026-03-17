@@ -6,15 +6,6 @@ import os
 PROVIDER_LABELS = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
 
 
-# ── 기본 마스터 스타일 프롬프트 (DALL-E / Imagen 공용) ──
-# 채널별 차별화된 스타일은 channel_config.get_master_style() 사용
-MASTER_STYLE = (
-    "Cinematic photograph, National Geographic documentary style, "
-    "detailed, vertical 9:16 composition, "
-    "family-friendly. NO TEXT, NO WATERMARKS. "
-)
-
-
 def get_motion_style(prompt: str, description: str = "") -> str:
     """감정 태그 기반 모션 스타일 결정 (Veo/Kling/Sora 공용).
 

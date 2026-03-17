@@ -24,9 +24,9 @@ COST_TIERS: dict[str, dict] = {
     "standard": {
         "label": "표준 (Standard)",
         "llm_provider": "gemini",
-        "llm_model": "gemini-2.5-flash",
+        "llm_model": "gemini-2.5-pro",           # Pro 기획 (free=Flash 대비 품질↑)
         "image_engine": "imagen",
-        "image_model": None,                     # 기본 체인: Standard → Fast 폴백
+        "image_model": "imagen-4.0-generate-001", # Standard 모델 (free=Fast 대비 품질↑)
         "video_engine": "none",
         "tts_engine": "elevenlabs",
         "whisper_model": "whisper-1",

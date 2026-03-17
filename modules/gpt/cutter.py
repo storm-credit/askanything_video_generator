@@ -359,8 +359,6 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 }
 
 [Output Format — 순수 JSON만 출력, 마크다운 코드블록 금지]
-7~10컷:
-
 {
   "title": "[자극적이고 클릭을 부르는 한국어 제목 (15~25자, ~하면 생기는 일, ~의 비밀 등)]",
   "seo_description": "[업로드용 설명문 150자 이내, 핵심 키워드 2~3개 포함]",
@@ -468,8 +466,6 @@ Example: "A massive black hole swallowing light [SHOCK]"
 }
 
 [Output Format — pure JSON only, no markdown code blocks]
-7–10 cuts:
-
 {
   "title": "[Click-bait English title (4-8 words, 20-40 chars)]",
   "seo_description": "[Upload description under 150 chars, 2-3 core keywords]",
@@ -528,10 +524,10 @@ This is the channel's signature look — every image should feel cohesive with t
             if hook_instr:
                 system_prompt += f"""
 
-[CHANNEL NARRATIVE STRUCTURE]
+[CHANNEL NARRATIVE STRUCTURE — OVERRIDES base hook/ending rules]
 Hook strategy: {hook_instr}
 Ending strategy: {ending}
-Follow this channel's unique storytelling pattern — do NOT use a generic formula.
+This OVERRIDES the default Cut 1 hook rule above. Follow this channel's unique storytelling pattern.
 """
 
     # LLM 프로바이더별 API 키 결정

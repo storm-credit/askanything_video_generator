@@ -152,6 +152,7 @@ def _generate_imagen(api_key: str, prompt: str, model_name: str) -> bytes:
             number_of_images=1,
             aspect_ratio="9:16",
             safety_filter_level=safety_level,
+            person_generation="ALLOW_ALL",  # 인물 포함 프롬프트 safety 차단 방지
             http_options=types.HttpOptions(timeout=120_000),
         ),
     )

@@ -2,14 +2,27 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Film, DollarSign } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
 
+// ── 비용 티어 프리셋 (컴포넌트 외부 — 리렌더 시 재생성 방지) ──
+const COST_TIER_PRESETS: Record<string, { llmProvider: string; llmModel: string; imageEngine: string; imageModel: string; videoEngine: string; videoModel: string; label: string; cost: string; color: string }> = {
+  free: { llmProvider: "gemini", llmModel: "gemini-2.5-flash", imageEngine: "imagen", imageModel: "imagen-4.0-fast-generate-001", videoEngine: "none", videoModel: "", label: "무료", cost: "$0", color: "text-green-400" },
+  standard: { llmProvider: "gemini", llmModel: "gemini-2.5-pro", imageEngine: "imagen", imageModel: "", videoEngine: "none", videoModel: "", label: "표준", cost: "$0.3~0.5", color: "text-blue-400" },
+  premium: { llmProvider: "gemini", llmModel: "", imageEngine: "imagen", imageModel: "", videoEngine: "veo3", videoModel: "", label: "프리미엄", cost: "$2~5", color: "text-amber-400" },
+};
+
+// ── 채널 프리셋 (컴포넌트 외부) ──
+const CHANNEL_PRESETS: Record<string, { language: string; voiceId: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = {
+  askanything: { language: "ko", voiceId: "cjVigY5qzO86Huf0OWal", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 },
+  wonderdrop: { language: "en", voiceId: "pNInz6obpgDQGcFmaJgB", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
+};
+
 export default function Home() {
   const [topic, setTopic] = useState("");
-  const [qualityPreset, setQualityPreset] = useState("best");
+  const [costTier, setCostTier] = useState("");  // "" = 수동, "free", "standard", "premium"
   const [llmProvider, setLlmProvider] = useState("gemini");
   const [llmModel, setLlmModel] = useState("");
   const [imageEngine, setImageEngine] = useState("imagen");
@@ -220,24 +233,28 @@ export default function Home() {
     none: [],
   };
 
-  const applyPreset = (preset: string) => {
-    setQualityPreset(preset);
-    switch (preset) {
-      case "best":
-        setLlmProvider("gemini"); setLlmModel("");
-        setImageEngine("imagen"); setImageModel("");
-        setVideoEngine("none"); setVideoModel("");
-        break;
-      case "balanced":
-        setLlmProvider("gemini"); setLlmModel("");
-        setImageEngine("imagen"); setImageModel("imagen-4.0-fast-generate-001");
-        setVideoEngine("none"); setVideoModel("");
-        break;
-      case "fast":
-        setLlmProvider("gemini"); setLlmModel("gemini-2.5-flash");
-        setImageEngine("imagen"); setImageModel("imagen-4.0-fast-generate-001");
-        setVideoEngine("none"); setVideoModel("");
-        break;
+  const applyCostTier = (tier: string) => {
+    setCostTier(tier);
+    if (!tier) return; // 수동 모드
+    const preset = COST_TIER_PRESETS[tier];
+    if (!preset) return;
+    setLlmProvider(preset.llmProvider); setLlmModel(preset.llmModel);
+    setImageEngine(preset.imageEngine); setImageModel(preset.imageModel);
+    setVideoEngine(preset.videoEngine); setVideoModel(preset.videoModel);
+  };
+
+  const applyChannelPreset = (ch: string) => {
+    setChannel(ch);
+    if (ch && CHANNEL_PRESETS[ch]) {
+      const p = CHANNEL_PRESETS[ch];
+      setLanguage(p.language);
+      setVoiceId(p.voiceId);
+      setTtsSpeed(p.ttsSpeed);
+      setPlatforms(p.platforms);
+      setCaptionSize(p.captionSize);
+      setCaptionY(p.captionY);
+    } else {
+      setVoiceId("auto");
     }
   };
 
@@ -299,6 +316,7 @@ export default function Home() {
           cameraStyle,
           bgmTheme,
           channel: channel || undefined,
+          costTier: costTier || undefined,
           platforms,
           ttsSpeed,
           voiceId,
@@ -485,11 +503,14 @@ export default function Home() {
           topic,
           apiKey: pickKey("openai") || undefined,
           llmProvider,
+          llmModel: llmModel || undefined,
           llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
           geminiKeys: (savedKeys["gemini"] || []).length > 0 ? savedKeys["gemini"].join(",") : undefined,
           imageEngine,
+          imageModel: imageModel || undefined,
           language,
           channel: channel || undefined,
+          costTier: costTier || undefined,
           referenceUrl: detectedRefUrl,
         }),
       });
@@ -824,11 +845,12 @@ export default function Home() {
             {/* 글로벌 설정 — 품질 · 언어 · 채널 */}
             <div className="flex items-center justify-center gap-1.5">
               <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
-                <select value={qualityPreset} onChange={(e) => applyPreset(e.target.value)} disabled={isGenerating} aria-label="품질 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
-                  <option value="best" className="bg-gray-900">최고 품질</option>
-                  <option value="balanced" className="bg-gray-900">합리적</option>
-                  <option value="fast" className="bg-gray-900">빠른 생성</option>
+                <DollarSign className={`w-3.5 h-3.5 ${costTier ? COST_TIER_PRESETS[costTier]?.color || "text-gray-400" : "text-gray-400"}`} />
+                <select value={costTier} onChange={(e) => applyCostTier(e.target.value)} disabled={isGenerating} aria-label="비용 티어 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
+                  <option value="" className="bg-gray-900">수동 설정</option>
+                  <option value="free" className="bg-gray-900">무료 ($0)</option>
+                  <option value="standard" className="bg-gray-900">표준 ($0.3~0.5)</option>
+                  <option value="premium" className="bg-gray-900">프리미엄 ($2~5)</option>
                 </select>
               </div>
               <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
@@ -855,7 +877,7 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
                 <Tv className="w-3.5 h-3.5 text-purple-400" />
-                <select value={channel} onChange={(e) => { const ch = e.target.value; setChannel(ch); const presets: Record<string, { language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = { askanything: { language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 }, wonderdrop: { language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 } }; if (ch && presets[ch]) { const p = presets[ch]; setLanguage(p.language); setTtsSpeed(p.ttsSpeed); setPlatforms(p.platforms); setCaptionSize(p.captionSize); setCaptionY(p.captionY); } }} disabled={isGenerating} aria-label="채널 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
+                <select value={channel} onChange={(e) => applyChannelPreset(e.target.value)} disabled={isGenerating} aria-label="채널 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
                   <option value="" className="bg-gray-900">채널 없음</option>
                   <option value="askanything" className="bg-gray-900">AskAnything</option>
                   <option value="wonderdrop" className="bg-gray-900">WonderDrop</option>
@@ -871,13 +893,13 @@ export default function Home() {
                     <Brain className="w-3.5 h-3.5 text-violet-400" />
                     <span className="text-[10px] font-medium text-gray-400">기획</span>
                   </div>
-                  <select value={llmProvider} onChange={(e) => { setLlmProvider(e.target.value); setLlmModel(""); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="LLM 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                  <select value={llmProvider} onChange={(e) => { setLlmProvider(e.target.value); setLlmModel(""); setCostTier(""); }} disabled={isGenerating} aria-label="LLM 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                     <option value="gemini" className="bg-gray-900">Gemini</option>
                     <option value="openai" className="bg-gray-900">GPT</option>
                     <option value="claude" className="bg-gray-900">Claude</option>
                   </select>
                   {LLM_MODELS[llmProvider]?.length > 1 && (
-                    <select value={llmModel} onChange={(e) => { setLlmModel(e.target.value); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="LLM 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <select value={llmModel} onChange={(e) => { setLlmModel(e.target.value); setCostTier(""); }} disabled={isGenerating} aria-label="LLM 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                       {LLM_MODELS[llmProvider].map((m) => (<option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>))}
                     </select>
                   )}
@@ -887,12 +909,12 @@ export default function Home() {
                     <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
                     <span className="text-[10px] font-medium text-gray-400">이미지</span>
                   </div>
-                  <select value={imageEngine} onChange={(e) => { setImageEngine(e.target.value); setImageModel(""); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="이미지 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                  <select value={imageEngine} onChange={(e) => { setImageEngine(e.target.value); setImageModel(""); setCostTier(""); }} disabled={isGenerating} aria-label="이미지 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                     <option value="imagen" className="bg-gray-900">Imagen</option>
                     <option value="dalle" className="bg-gray-900">DALL-E</option>
                   </select>
                   {IMAGE_MODELS[imageEngine]?.length > 1 && (
-                    <select value={imageModel} onChange={(e) => { setImageModel(e.target.value); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="이미지 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <select value={imageModel} onChange={(e) => { setImageModel(e.target.value); setCostTier(""); }} disabled={isGenerating} aria-label="이미지 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                       {IMAGE_MODELS[imageEngine].map((m) => (<option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>))}
                     </select>
                   )}
@@ -902,14 +924,14 @@ export default function Home() {
                     <Film className="w-3.5 h-3.5 text-rose-400" />
                     <span className="text-[10px] font-medium text-gray-400">비디오</span>
                   </div>
-                  <select value={videoEngine} onChange={(e) => { setVideoEngine(e.target.value); setVideoModel(""); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="비디오 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                  <select value={videoEngine} onChange={(e) => { setVideoEngine(e.target.value); setVideoModel(""); setCostTier(""); }} disabled={isGenerating} aria-label="비디오 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                     <option value="veo3" className="bg-gray-900">Veo 3</option>
                     <option value="sora2" className="bg-gray-900">Sora 2</option>
                     <option value="kling" className="bg-gray-900">Kling</option>
                     <option value="none" className="bg-gray-900">없음</option>
                   </select>
                   {VIDEO_MODELS[videoEngine]?.length > 1 && (
-                    <select value={videoModel} onChange={(e) => { setVideoModel(e.target.value); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="비디오 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <select value={videoModel} onChange={(e) => { setVideoModel(e.target.value); setCostTier(""); }} disabled={isGenerating} aria-label="비디오 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                       {VIDEO_MODELS[videoEngine].map((m) => (<option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>))}
                     </select>
                   )}

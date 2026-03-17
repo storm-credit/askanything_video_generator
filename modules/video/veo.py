@@ -9,7 +9,7 @@ import time
 import requests
 
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
-from modules.utils.constants import is_key_rotation_error, get_motion_style
+from modules.utils.constants import is_key_rotation_error
 from modules.utils.models import get_model_chain, get_service_tag
 
 # Veo 모델 옵션 (환경변수로 오버라이드 가능)
@@ -93,7 +93,7 @@ def generate_video_veo(
             try:
                 operation = client.models.generate_videos(
                     model=model_id,
-                    prompt=f"{get_motion_style(prompt, description)}, 4K quality. {prompt}",
+                    prompt=prompt,  # engines.py에서 이미 motion_style + 4K 적용됨
                     image=types.Image(image_bytes=img_bytes, mime_type=mime_type),
                     config=types.GenerateVideosConfig(
                         numberOfVideos=1,
