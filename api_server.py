@@ -40,7 +40,7 @@ async def _lifespan(app):
 app = FastAPI(lifespan=_lifespan)
 
 # 동시 생성 요청 제한 (GPU/API 과부하 방지)
-# ⚠️ MAX_CONCURRENT_GENERATE > 1 금지: os.environ 직접 변경 때문에 동시 요청 간 env 충돌 발생
+# 모델/키 오버라이드는 함수 파라미터로 전달 — os.environ 미사용으로 동시 요청 안전
 _generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "1")))
 # 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
 _cut_executor = ThreadPoolExecutor(max_workers=4)
@@ -404,19 +404,11 @@ async def generate_video_endpoint(req: GenerateRequest):
     import uuid as _uuid
     generation_id = _uuid.uuid4().hex[:8]
 
-    # 모델 버전 오버라이드: 요청에 명시된 모델 → 환경변수로 임시 설정
-    _model_overrides: dict[str, str] = {}
-    if req.llmModel:
-        env_key = {"gemini": "GEMINI_MODEL", "openai": "OPENAI_MODEL", "claude": "CLAUDE_MODEL"}.get(llm_provider)
-        if env_key:
-            _model_overrides[env_key] = req.llmModel
-    if req.imageModel:
-        _model_overrides["IMAGEN_MODEL"] = req.imageModel
-    if req.videoModel:
-        _model_overrides["VEO_MODEL"] = req.videoModel
-    # 프론트엔드 멀티키 → 환경변수로 임시 설정 (로테이션용)
-    if req.geminiKeys:
-        _model_overrides["GEMINI_API_KEYS"] = req.geminiKeys
+    # 모델 버전 오버라이드: 함수 파라미터로 직접 전달 (os.environ 비사용)
+    llm_model_override = req.llmModel or None
+    image_model_override = req.imageModel or None
+    video_model_override = req.videoModel or None
+    gemini_keys_override = req.geminiKeys or None
 
     async def sse_generator():
         global _active_generation_id
@@ -443,11 +435,6 @@ async def generate_video_endpoint(req: GenerateRequest):
         if _generate_semaphore.locked():
             yield {"data": "WARN|[대기열] 다른 비디오가 생성 중입니다. 순서를 기다리는 중...\n"}
         async with _generate_semaphore:
-          # 모델 오버라이드 적용 (세마포어 내부 — 동시 요청 간 env 충돌 방지)
-          _prev_env: dict[str, str | None] = {}
-          for k, v in _model_overrides.items():
-              _prev_env[k] = os.environ.get(k)
-              os.environ[k] = v
           try:
             # 사전 검증: 필수 API 키 확인
             missing = _validate_keys(api_key_override, elevenlabs_key_override, video_engine, image_engine, llm_provider, llm_key_override)
@@ -471,8 +458,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                     yield {"data": f"WARN|[ElevenLabs 크레딧 경고] {remaining:,}/{limit:,}자 남음 ({pct:.0f}%).\n"}
 
             # Google 키 가용성 경고
-            total_keys = count_google_keys()
-            avail_keys = count_available_keys()
+            total_keys = count_google_keys(extra_keys=gemini_keys_override)
+            avail_keys = count_available_keys(extra_keys=gemini_keys_override)
             if total_keys > 0 and avail_keys < total_keys:
                 blocked_count = total_keys - avail_keys
                 if avail_keys == 0:
@@ -487,7 +474,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # Google 키 로테이션 (비디오 엔진용 — 서비스별 차단 고려)
             video_svc = active_video_engine if active_video_engine in ("veo3",) else None
-            google_key_for_video = get_google_key(llm_key_override, service=video_svc)
+            google_key_for_video = get_google_key(llm_key_override, service=video_svc, extra_keys=gemini_keys_override)
 
             # 비디오 엔진 사전 검증
             if active_video_engine != "none":
@@ -501,7 +488,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 단계 1: LLM 기획 (Gemini / ChatGPT / Claude 선택)
             # Gemini 프로바이더일 때 키 로테이션 적용
-            llm_key_for_request = get_google_key(llm_key_override) if llm_provider == "gemini" else llm_key_override
+            llm_key_for_request = get_google_key(llm_key_override, extra_keys=gemini_keys_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
             cuts, topic_folder, video_title = await loop.run_in_executor(
                 None,
@@ -512,6 +499,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     llm_provider=llm_provider,
                     llm_key_override=llm_key_for_request,
                     channel=req.channel,
+                    llm_model=llm_model_override,
                 ),
             )
 
@@ -554,7 +542,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             def _get_image_key():
                 """이미지 생성 시마다 다른 키 사용 (로테이션)"""
                 if image_engine == "imagen":
-                    return get_google_key(llm_key_override, service="imagen")
+                    return get_google_key(llm_key_override, service="imagen", extra_keys=gemini_keys_override)
                 return api_key_override
 
             def process_cut(i, cut):
@@ -571,7 +559,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 with image_semaphore:
                     try:
                         cut_image_key = _get_image_key()
-                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
+                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"이미지: {exc}")
@@ -584,10 +572,11 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 def _run_video():
                     try:
-                        cut_video_key = get_google_key(llm_key_override, service=active_video_engine)
+                        cut_video_key = get_google_key(llm_key_override, service=active_video_engine, extra_keys=gemini_keys_override)
                         video_result[0] = generate_video_from_image(
                             img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key,
-                            description=cut.get("description", "")
+                            description=cut.get("description", ""),
+                            veo_model=video_model_override, gemini_api_keys=gemini_keys_override,
                         )
                     except Exception as exc:
                         with errors_lock:
@@ -819,12 +808,6 @@ async def generate_video_endpoint(req: GenerateRequest):
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
           finally:
-            # 모델 오버라이드 복원
-            for k, prev in _prev_env.items():
-                if prev is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = prev
             # 작업 완료/취소 후 정리
             with _generation_lock:
                 if _active_generation_id == generation_id:
@@ -908,12 +891,10 @@ async def prepare_endpoint(req: PrepareRequest):
 
     async def sse_generator():
       async with _generate_semaphore:
-        # 프론트엔드 멀티키 → 환경변수 임시 설정 (세마포어 내부 — 동시 요청 간 env 충돌 방지)
-        _prev_gemini_keys = os.environ.get("GEMINI_API_KEYS")
-        if req.geminiKeys:
-            os.environ["GEMINI_API_KEYS"] = req.geminiKeys
+        # 프론트엔드 멀티키: 파라미터로 직접 전달 (os.environ 비사용)
+        _gemini_keys = req.geminiKeys or None
         try:
-            llm_key_for_request = get_google_key(req.llmKey) if req.llmProvider == "gemini" else req.llmKey
+            llm_key_for_request = get_google_key(req.llmKey, extra_keys=_gemini_keys) if req.llmProvider == "gemini" else req.llmKey
             loop = asyncio.get_running_loop()
 
             yield {"data": "PROG|10\n"}
@@ -939,9 +920,9 @@ async def prepare_endpoint(req: PrepareRequest):
             image_paths = []
             for i, cut in enumerate(cuts):
                 try:
-                    img_key = get_google_key(req.llmKey, service="imagen") if req.imageEngine == "imagen" else req.apiKey
+                    img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys) if req.imageEngine == "imagen" else req.apiKey
                     img_path = await loop.run_in_executor(
-                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k)
+                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, gemini_api_keys=_gemini_keys)
                     )
                     image_paths.append(img_path)
                 except Exception as exc:
@@ -993,11 +974,7 @@ async def prepare_endpoint(req: PrepareRequest):
             traceback.print_exc()
             yield {"data": f"ERROR|[준비 오류] {str(e)}\n"}
         finally:
-            # 프론트엔드 멀티키 환경변수 복원
-            if _prev_gemini_keys is not None:
-                os.environ["GEMINI_API_KEYS"] = _prev_gemini_keys
-            elif req.geminiKeys:
-                os.environ.pop("GEMINI_API_KEYS", None)
+            pass  # env 변수 미사용 — 정리 불필요
 
     return EventSourceResponse(sse_generator())
 

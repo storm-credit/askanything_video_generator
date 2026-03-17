@@ -13,7 +13,7 @@ from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
 
-def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None) -> str:
+def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None, model_override: str | None = None, gemini_api_keys: str | None = None) -> str:
     """
     Google Imagen 4 API로 이미지를 생성합니다.
     429 에러 시 다른 키로 자동 전환, 전 키 소진 시 Fast 모델로 자동 폴백.
@@ -32,8 +32,8 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
         print(f"[이미지 캐시] 히트 — 재생성 스킵 (컷 {index+1})")
         return filename
 
-    # 모델 체인: 환경변수 오버라이드 시 단일 모델, 아니면 Standard → Fast
-    override_model = os.getenv("IMAGEN_MODEL")
+    # 모델 체인: 파라미터 오버라이드 → 환경변수 → 기본 모델 체인
+    override_model = model_override or os.getenv("IMAGEN_MODEL")
     if override_model:
         model_chain = [{"id": override_model, "tag": "override", "label": override_model}]
     else:
@@ -52,13 +52,14 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
 
         tried_keys: set[str] = set()
         current_key = api_key
+        key_attempt = 0
 
-        for key_attempt in range(MAX_KEY_RETRIES):
+        while key_attempt < MAX_KEY_RETRIES:
             # 키 선택 (이전에 429 난 키 제외)
             if key_attempt == 0:
-                final_api_key = current_key or get_google_key(service=service_tag)
+                final_api_key = current_key or get_google_key(service=service_tag, extra_keys=gemini_api_keys)
             else:
-                final_api_key = get_google_key(service=service_tag, exclude=tried_keys)
+                final_api_key = get_google_key(service=service_tag, exclude=tried_keys, extra_keys=gemini_api_keys)
 
             if not final_api_key:
                 break  # 이 모델에 사용 가능한 키 없음 → 다음 모델로
@@ -110,13 +111,14 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 if is_key_rotation_error(error_msg):
                     mark_key_exhausted(final_api_key, service_tag)
                     print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → 다른 키로 전환...")
-                    continue  # 다음 키로
+                    key_attempt += 1  # 키 전환만 카운터 증가
+                    continue
                 if is_safety_error(error_msg) and safety_retry_count < 3:
                     enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count)
                     safety_retry_count += 1
-                    tried_keys.discard(final_api_key)  # safety 재시도는 같은 키로 (키 카운터 소모 방지)
+                    tried_keys.discard(final_api_key)  # safety 재시도는 같은 키로
                     print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도... ({safety_retry_count}/3)")
-                    continue  # 같은 키로 대체 프롬프트 재시도
+                    continue  # key_attempt 증가 안 함 — 키 로테이션 예산 소모 방지
                 raise RuntimeError(f"[{model_label} 이미지 생성 실패] index={index}: {e}")
 
         # 이 모델의 키 전부 소진 → 다음 모델로 폴백

@@ -45,10 +45,10 @@ def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str]:
     return cuts, title
 
 
-def _request_openai(api_key: str, system_prompt: str, user_content: str) -> str | None:
+def _request_openai(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str | None:
     """OpenAI GPT API로 기획안을 생성합니다."""
     from openai import OpenAI
-    model = os.getenv("OPENAI_MODEL", "gpt-4o")
+    model = model_override or os.getenv("OPENAI_MODEL", "gpt-4o")
     client = OpenAI(api_key=api_key, timeout=120)
     response = client.chat.completions.create(
         model=model,
@@ -64,11 +64,11 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str) -> str 
     return (response.choices[0].message.content or "").strip()
 
 
-def _request_gemini(api_key: str, system_prompt: str, user_content: str) -> str:
+def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
     """Google Gemini API로 기획안을 생성합니다 (google-genai SDK)."""
     from google import genai
     from google.genai import types
-    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+    model_name = model_override or os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
         model=model_name,
@@ -83,10 +83,10 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str) -> str:
     return (response.text or "").strip()
 
 
-def _request_claude(api_key: str, system_prompt: str, user_content: str) -> str:
+def _request_claude(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
     """Anthropic Claude API로 기획안을 생성합니다."""
     import anthropic
-    model_name = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+    model_name = model_override or os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
     client = anthropic.Anthropic(api_key=api_key, timeout=120)
     json_instruction = "\n\n[CRITICAL] 반드시 순수 JSON만 출력하세요. 마크다운 코드블록이나 설명 텍스트 없이 JSON 객체만 반환하십시오."
     response = client.messages.create(
@@ -101,21 +101,21 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str) -> str:
     return (response.content[0].text or "").strip()
 
 
-def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str) -> tuple[list[dict[str, str]], str]:
+def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> tuple[list[dict[str, str]], str]:
     """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다. (cuts, title) 반환."""
     if provider == "gemini":
-        content = _request_gemini(api_key, system_prompt, user_content)
+        content = _request_gemini(api_key, system_prompt, user_content, model_override)
     elif provider == "claude":
-        content = _request_claude(api_key, system_prompt, user_content)
+        content = _request_claude(api_key, system_prompt, user_content, model_override)
     else:
-        content = _request_openai(api_key, system_prompt, user_content)
+        content = _request_openai(api_key, system_prompt, user_content, model_override)
     return _parse_cuts(content)
 
 
 # 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
-                  channel: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
+                  channel: str | None = None, llm_model: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
     topic_folder = slugify_topic(topic, lang)
 
     # 저장 폴더 구조 생성
@@ -343,7 +343,7 @@ This is the channel's signature look — every image should feel cohesive with t
     last_error: Exception | None = None
     for attempt in range(max_key_attempts):
         try:
-            cuts, title = _request_cuts(llm_provider, current_key, system_prompt, user_content)
+            cuts, title = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
             break  # 성공
         except Exception as e:
             last_error = e
@@ -396,7 +396,7 @@ This is the channel's signature look — every image should feel cohesive with t
             + f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
         )
         try:
-            cuts, title = _request_cuts(llm_provider, retry_key, system_prompt, retry_user)
+            cuts, title = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
         except Exception as retry_err:
             err_str = str(retry_err)
             if llm_provider == "gemini" and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str):

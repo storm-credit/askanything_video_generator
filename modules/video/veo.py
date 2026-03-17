@@ -26,6 +26,8 @@ def generate_video_veo(
     topic_folder: str,
     api_key: str = None,
     description: str = "",
+    model_override: str | None = None,
+    gemini_api_keys: str | None = None,
 ) -> str | None:
     """
     Google Veo 3로 이미지를 비디오로 변환합니다.
@@ -49,8 +51,8 @@ def generate_video_veo(
     mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/png")
 
-    # 모델 체인: 환경변수 오버라이드 시 단일 모델, 아니면 Standard → Fast
-    override_model = os.getenv("VEO_MODEL")
+    # 모델 체인: 파라미터 오버라이드 → 환경변수 → 기본 모델 체인
+    override_model = model_override or os.getenv("VEO_MODEL")
     if override_model:
         model_chain = [{"id": override_model, "tag": "override", "label": override_model}]
     else:
@@ -69,9 +71,9 @@ def generate_video_veo(
         for attempt in range(MAX_KEY_RETRIES):
             # 키 선택 (이전에 실패한 키 제외)
             if attempt == 0:
-                final_key = current_key or get_google_key(service=service_tag)
+                final_key = current_key or get_google_key(service=service_tag, extra_keys=gemini_api_keys)
             else:
-                final_key = get_google_key(service=service_tag, exclude=tried_keys)
+                final_key = get_google_key(service=service_tag, exclude=tried_keys, extra_keys=gemini_api_keys)
 
             if not final_key:
                 break  # 이 모델에 사용 가능한 키 없음 → 다음 모델로

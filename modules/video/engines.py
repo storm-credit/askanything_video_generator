@@ -106,6 +106,8 @@ def generate_video_from_image(
     engine: str = "kling",
     google_api_key: str = None,
     description: str = "",
+    veo_model: str | None = None,
+    gemini_api_keys: str | None = None,
 ) -> str | None:
     """
     선택된 엔진으로 이미지를 비디오로 변환합니다.
@@ -128,7 +130,7 @@ def generate_video_from_image(
         return None
 
     for eng in engines_to_try:
-        result = _try_engine(eng, image_path, prompt, index, topic_folder, google_api_key, description=description)
+        result = _try_engine(eng, image_path, prompt, index, topic_folder, google_api_key, description=description, veo_model=veo_model, gemini_api_keys=gemini_api_keys)
         if result is not None:
             return result
         print(f"[비디오 엔진] {eng} 실패 → 다음 엔진 시도")
@@ -145,12 +147,14 @@ def _try_engine(
     topic_folder: str,
     google_api_key: str = None,
     description: str = "",
+    veo_model: str | None = None,
+    gemini_api_keys: str | None = None,
 ) -> str | None:
     """단일 엔진으로 비디오 생성을 시도합니다."""
     try:
         if engine == "veo3":
             from modules.video.veo import generate_video_veo
-            return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key, description=description)
+            return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key, description=description, model_override=veo_model, gemini_api_keys=gemini_api_keys)
 
         if engine == "sora2":
             return _generate_via_openai_sora(image_path, prompt, index, topic_folder, description=description)
