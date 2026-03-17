@@ -23,7 +23,7 @@ def run_test():
     try:
         # GPT 컷 분할
         print("\n[1단계] GPT 컷 생성 중...")
-        cuts, topic_folder, _title = generate_cuts(topic)
+        cuts, topic_folder, _title, _tags = generate_cuts(topic)
         print(f"OK 생성된 컷 수: {len(cuts)}")
         
         # 제한 해제: 전체 컷을 테스트합니다.

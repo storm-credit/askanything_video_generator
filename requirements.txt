@@ -2,7 +2,7 @@ python-dotenv>=1.2,<2
 openai>=2.15,<3
 requests>=2.32,<3
 Pillow>=11.0,<12
-konlpy
+konlpy>=0.6,<1
 fastapi>=0.128,<1
 uvicorn>=0.40,<1
 sse-starlette>=3.3,<4
@@ -16,3 +16,4 @@ soundfile>=0.13,<1
 google-auth-oauthlib>=1.3,<2
 google-api-python-client>=2.188,<3
 google-auth>=2.48,<3
+youtube-transcript-api>=1.0,<2

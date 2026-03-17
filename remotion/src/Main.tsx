@@ -395,6 +395,7 @@ export const Main: React.FC<{
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
         const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
         const isVideo = isVideoPath(visualSrc);
+        const emotion = extractEmotion(cut);
 
         return (
           <Sequence key={index} from={startFrame} durationInFrames={cut.duration_in_frames}>
@@ -408,10 +409,10 @@ export const Main: React.FC<{
                         muted
                       />
                   ) : (
-                      <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={extractEmotion(cut)} />
+                      <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={emotion} />
                   )}
                   <Audio src={audioSrc} />
-                  <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={extractEmotion(cut)} />
+                  <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={emotion} />
               </AbsoluteFill>
             </FadeIn>
           </Sequence>

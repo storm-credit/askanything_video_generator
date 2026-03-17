@@ -14,7 +14,9 @@ from modules.utils.models import get_model_chain, get_service_tag
 
 # Veo 모델 옵션 (환경변수로 오버라이드 가능)
 DEFAULT_MODEL = "veo-3.0-generate-001"
-POLL_INTERVAL = 10  # 초
+POLL_INTERVAL_INITIAL = 5   # 초 (시작)
+POLL_INTERVAL_MID = 10      # 1분 후
+POLL_INTERVAL_LATE = 15     # 2분 후
 MAX_WAIT = 300  # 5분
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
@@ -115,7 +117,9 @@ def generate_video_veo(
 
             try:
                 while not operation.done:
-                    time.sleep(POLL_INTERVAL)
+                    elapsed = time.time() - start
+                    poll_interval = POLL_INTERVAL_INITIAL if elapsed < 60 else (POLL_INTERVAL_MID if elapsed < 120 else POLL_INTERVAL_LATE)
+                    time.sleep(poll_interval)
                     operation = client.operations.get(operation)
                     elapsed = time.time() - start
                     if elapsed > MAX_WAIT:
