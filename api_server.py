@@ -1,6 +1,7 @@
 import os
 import sys
 import io
+import re
 import copy
 import shutil
 import asyncio
@@ -44,6 +45,8 @@ app = FastAPI(lifespan=_lifespan)
 _generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "1")))
 # 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
 _cut_executor = ThreadPoolExecutor(max_workers=4)
+# 이미지 동시 생성 제한 (모듈 레벨 — MAX_CONCURRENT_GENERATE > 1 에서도 전역 제한)
+_image_semaphore = threading.Semaphore(3)
 
 # 취소 토큰: 요청별 이벤트 (generation_id → (Event, created_time))
 _cancel_events: dict[str, tuple[threading.Event, float]] = {}
@@ -159,6 +162,7 @@ class GenerateRequest(BaseModel):
     voiceId: str | None = None  # ElevenLabs 음성 ID
     captionSize: int = Field(48, ge=32, le=72)  # 자막 폰트 크기 (px)
     captionY: int = Field(28, ge=10, le=50)  # 자막 높이 (%): 하단 기준
+    referenceUrl: str | None = None  # YouTube 레퍼런스 URL (분석 후 스타일 반영)
 
     @field_validator("language")
     @classmethod
@@ -213,6 +217,29 @@ async def key_usage():
         "total_keys": count_google_keys(),
         "keys": stats,
         "note": "서버 재시작 시 카운터가 초기화됩니다. Veo 3는 유료 계정 기준 일일 한도가 있습니다.",
+    }
+
+
+class AnalyzeShortsRequest(BaseModel):
+    url: str = Field(..., min_length=5)
+
+
+@app.post("/api/analyze-shorts")
+async def analyze_shorts(req: AnalyzeShortsRequest):
+    """YouTube URL을 분석하여 메타데이터 + 자막 + 구조를 반환합니다."""
+    from modules.utils.youtube_extractor import extract_youtube_reference
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, lambda: extract_youtube_reference(req.url))
+    if not result:
+        return JSONResponse(status_code=400, content={"error": "유효한 YouTube URL이 아니거나 분석에 실패했습니다."})
+    return {
+        "video_id": result.get("video_id", ""),
+        "title": result.get("title", ""),
+        "channel": result.get("channel", ""),
+        "view_count": result.get("view_count", 0),
+        "like_count": result.get("like_count", 0),
+        "transcript": result.get("transcript", "")[:1000],  # 프리뷰용 1000자 제한
+        "structure": result.get("structure", {}),
     }
 
 
@@ -484,13 +511,20 @@ async def generate_video_endpoint(req: GenerateRequest):
                     active_video_engine = "none"
 
             yield {"data": "PROG|10\n"}
+            # YouTube URL 자동 감지: referenceUrl이 없으면 topic에서 URL 추출
+            _yt_pattern = re.compile(r"(?:youtube\.com/(?:shorts/|watch\?v=)|youtu\.be/)")
+            ref_url = req.referenceUrl
+            if not ref_url and _yt_pattern.search(topic):
+                ref_url = topic
+                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 분석 후 스타일을 참고합니다\n"}
+
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
 
             # 단계 1: LLM 기획 (Gemini / ChatGPT / Claude 선택)
             # Gemini 프로바이더일 때 키 로테이션 적용
             llm_key_for_request = get_google_key(llm_key_override, extra_keys=gemini_keys_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
-            cuts, topic_folder, video_title = await loop.run_in_executor(
+            cuts, topic_folder, video_title, video_tags = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
                     topic,
@@ -500,6 +534,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     llm_key_override=llm_key_for_request,
                     channel=req.channel,
                     llm_model=llm_model_override,
+                    reference_url=ref_url,
                 ),
             )
 
@@ -532,9 +567,8 @@ async def generate_video_endpoint(req: GenerateRequest):
             word_timestamps_list = [None] * len(cuts)
             scripts = [cut["script"] for cut in cuts]
 
-            # 이미지/TTS 동시성 제한 (API 레이트 리밋 방지)
-            # NOTE: MAX_CONCURRENT_GENERATE > 1 시 이 세마포어를 모듈 레벨로 이동 필요
-            image_semaphore = threading.Semaphore(3)  # 이미지 최대 3개 동시
+            # 이미지 동시성 제한 — 모듈 레벨 _image_semaphore 사용
+            image_semaphore = _image_semaphore
 
             # 이미지 엔진에 따라 생성 함수 선택
             gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
@@ -606,10 +640,16 @@ async def generate_video_endpoint(req: GenerateRequest):
                             print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
 
                 threads = []
-                if img_path and active_video_engine != "none":
+                # Hero cut 선택: SHOCK/REVEAL 태그만 비디오 생성, 나머지는 Ken Burns (비용 50-70% 절감)
+                _hero_emotions = {"SHOCK", "REVEAL"}
+                _cut_desc = cut.get("description", "")
+                _is_hero = any(f"[{e}]" in _cut_desc for e in _hero_emotions)
+                if img_path and active_video_engine != "none" and _is_hero:
                     t = threading.Thread(target=_run_video, name=f"video-cut{i}", daemon=True)
                     t.start()
                     threads.append(t)
+                elif img_path and active_video_engine != "none" and not _is_hero:
+                    print(f"[컷 {i+1}] 히어로 컷 아님 ({_cut_desc[:30]}…) → Ken Burns 사용")
                 t_tts = threading.Thread(target=_run_tts_and_whisper, name=f"tts-cut{i}", daemon=True)
                 t_tts.start()
                 threads.append(t_tts)
@@ -806,7 +846,9 @@ async def generate_video_endpoint(req: GenerateRequest):
             elif "connection" in err_str.lower() or "network" in err_str.lower():
                 yield {"data": "ERROR|[네트워크 오류] API 서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.\n"}
             else:
-                yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
+                # 원시 예외에 API 키 파편이 포함될 수 있으므로 마스킹
+                safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", err_str[:200])
+                yield {"data": f"ERROR|[시스템 오류] {safe_msg}\n"}
           finally:
             # 작업 완료/취소 후 정리
             with _generation_lock:
@@ -853,6 +895,7 @@ class PrepareRequest(BaseModel):
     language: str = "ko"
     videoEngine: str = "none"  # prepare 단계에서는 비디오 미생성이 기본
     channel: str | None = None
+    referenceUrl: str | None = None  # YouTube 레퍼런스 URL
 
     @field_validator("language")
     @classmethod
@@ -900,14 +943,22 @@ async def prepare_endpoint(req: PrepareRequest):
             loop = asyncio.get_running_loop()
 
             yield {"data": "PROG|10\n"}
+            # YouTube URL 자동 감지
+            _yt_pat = re.compile(r"(?:youtube\.com/(?:shorts/|watch\?v=)|youtu\.be/)")
+            prep_ref_url = req.referenceUrl
+            if not prep_ref_url and _yt_pat.search(req.topic):
+                prep_ref_url = req.topic
+                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 분석 후 스타일을 참고합니다\n"}
+
             yield {"data": f"[기획] '{req.topic}' 스크립트 생성 중...\n"}
 
-            cuts, topic_folder, video_title = await loop.run_in_executor(
+            cuts, topic_folder, video_title, video_tags = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
                     req.topic, api_key_override=req.apiKey, lang=req.language,
                     llm_provider=req.llmProvider, llm_key_override=llm_key_for_request,
                     channel=req.channel, llm_model=req.llmModel,
+                    reference_url=prep_ref_url,
                 ),
             )
 
@@ -965,6 +1016,7 @@ async def prepare_endpoint(req: PrepareRequest):
                     "index": i,
                     "script": cut["script"],
                     "prompt": cut.get("prompt", ""),
+                    "description": cut.get("description", ""),
                     "image_url": img_url,
                 })
 
@@ -974,7 +1026,8 @@ async def prepare_endpoint(req: PrepareRequest):
 
         except Exception as e:
             traceback.print_exc()
-            yield {"data": f"ERROR|[준비 오류] {str(e)}\n"}
+            safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(e)[:200])
+            yield {"data": f"ERROR|[준비 오류] {safe_msg}\n"}
 
     return EventSourceResponse(sse_generator())
 
@@ -1070,13 +1123,18 @@ async def render_endpoint(req: RenderRequest):
                 yield {"data": f"PROG|{prog}\n"}
                 yield {"data": f"  -> 컷 {i+1}/{len(scripts)} 음성 완료\n"}
 
-            # 비디오 변환 (선택)
+            # 비디오 변환 (선택) — 히어로 컷(SHOCK/REVEAL)만 비디오 생성
             visual_paths = list(image_paths)
             active_video_engine = req.videoEngine
+            _hero_emotions = {"SHOCK", "REVEAL"}
             if active_video_engine != "none":
+                hero_indices = [i for i, c in enumerate(cuts) if any(f"[{e}]" in c.get("description", "") for e in _hero_emotions)]
+                skip_count = len(cuts) - len(hero_indices)
+                if skip_count > 0:
+                    yield {"data": f"[비디오] 히어로 컷 {len(hero_indices)}개만 비디오 생성 (나머지 {skip_count}개는 Ken Burns)\n"}
                 yield {"data": f"[비디오] {active_video_engine} 변환 중...\n"}
                 for i, img_path in enumerate(image_paths):
-                    if img_path and os.path.exists(img_path):
+                    if img_path and os.path.exists(img_path) and i in hero_indices:
                         try:
                             llm_key = req.llmKey  # 세션 대신 요청에서 키 수신 (보안)
                             vid_key = get_google_key(llm_key, service=active_video_engine)
@@ -1150,7 +1208,8 @@ async def render_endpoint(req: RenderRequest):
 
         except Exception as e:
             traceback.print_exc()
-            yield {"data": f"ERROR|[렌더 오류] {str(e)}\n"}
+            safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(e)[:200])
+            yield {"data": f"ERROR|[렌더 오류] {safe_msg}\n"}
 
     return EventSourceResponse(sse_generator())
 
@@ -1193,6 +1252,7 @@ class YouTubeUploadRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     privacy: str = Field("private", pattern="^(private|unlisted|public)$")
     channel_id: str | None = None
+    publish_at: str | None = Field(None, description="예약 공개 시간 (ISO 8601, e.g. 2026-03-20T15:00:00Z)")
 
 
 @app.get("/api/youtube/status")
@@ -1248,12 +1308,13 @@ async def youtube_upload(req: YouTubeUploadRequest):
                 tags=req.tags,
                 privacy=req.privacy,
                 channel_id=req.channel_id,
+                publish_at=req.publish_at,
             )
         )
         return result
     except PermissionError as e:
         return {"error": str(e), "need_auth": True}
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         return {"error": str(e)}
     except Exception as e:
         return {"error": f"업로드 실패: {e}"}
@@ -1272,6 +1333,7 @@ class TikTokUploadRequest(BaseModel):
     title: str = Field(..., max_length=150)
     privacy_level: str = Field("SELF_ONLY", pattern="^(SELF_ONLY|MUTUAL_FOLLOW_FRIENDS|FOLLOWER_OF_CREATOR|PUBLIC_TO_EVERYONE)$")
     user_id: str | None = None
+    schedule_time: int | None = Field(None, description="예약 발행 UTC Unix timestamp (15분~75일 이내)")
 
 
 @app.get("/api/tiktok/status")
@@ -1324,12 +1386,13 @@ async def tiktok_upload(req: TikTokUploadRequest):
                 title=req.title,
                 privacy_level=req.privacy_level,
                 user_id=req.user_id,
+                schedule_time=req.schedule_time,
             )
         )
         return result
     except PermissionError as e:
         return {"error": str(e), "need_auth": True}
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         return {"error": str(e)}
     except Exception as e:
         return {"error": f"업로드 실패: {e}"}
@@ -1491,7 +1554,7 @@ async def batch_start():
                     for _attempt in range(max(count_google_keys(), 1)):
                         llm_key = get_google_key(None, service="gemini", exclude=_excluded) if job["llm_provider"] == "gemini" else None
                         try:
-                            cuts, topic_folder, title = await loop.run_in_executor(
+                            cuts, topic_folder, title, _tags = await loop.run_in_executor(
                                 None, lambda k=llm_key: generate_cuts(job["topic"], lang=job["language"], llm_provider=job["llm_provider"], llm_key_override=k)
                             )
                             break

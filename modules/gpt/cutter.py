@@ -30,8 +30,8 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str]:
-    """LLM 응답 텍스트에서 cuts 데이터와 제목을 파싱합니다."""
+def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str, list[str]]:
+    """LLM 응답 텍스트에서 cuts 데이터, 제목, 태그를 파싱합니다."""
     if not content:
         raise ValueError("LLM 응답 content가 비어 있습니다.")
     try:
@@ -42,7 +42,66 @@ def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str]:
     if not cuts:
         raise ValueError("LLM 응답에 유효한 cuts가 없습니다.")
     title = data.get("title", "").strip()
-    return cuts, title
+    tags = data.get("tags", ["#Shorts"])
+    return cuts, title, tags
+
+
+_CUTS_JSON_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "video_cuts",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "cuts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "description": {"type": "string"},
+                            "image_prompt": {"type": "string"},
+                            "script": {"type": "string"},
+                        },
+                        "required": ["description", "image_prompt", "script"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["title", "tags", "cuts"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+_GEMINI_RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "title": {"type": "STRING"},
+        "tags": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"},
+        },
+        "cuts": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "description": {"type": "STRING"},
+                    "image_prompt": {"type": "STRING"},
+                    "script": {"type": "STRING"},
+                },
+                "required": ["description", "image_prompt", "script"],
+            },
+        },
+    },
+    "required": ["title", "tags", "cuts"],
+}
 
 
 def _request_openai(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str | None:
@@ -56,7 +115,7 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str, model_o
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        response_format={"type": "json_object"},
+        response_format=_CUTS_JSON_SCHEMA,
         temperature=0.75,
     )
     if not response.choices:
@@ -64,22 +123,71 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str, model_o
     return (response.choices[0].message.content or "").strip()
 
 
+_gemini_cache: dict[str, object] = {}  # key → cached_content
+
 def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
-    """Google Gemini API로 기획안을 생성합니다 (google-genai SDK)."""
+    """Google Gemini API로 기획안을 생성합니다 (google-genai SDK). 시스템 프롬프트 캐싱 지원."""
     from google import genai
     from google.genai import types
     model_name = model_override or os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
     client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=model_name,
-        contents=user_content,
-        config=types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            response_mime_type="application/json",
-            temperature=0.75,
-            http_options=types.HttpOptions(timeout=120_000),
-        ),
-    )
+
+    # Context Caching: 시스템 프롬프트를 캐시하여 토큰 비용 절감
+    cache_key = f"{api_key}:{model_name}"
+    cached = _gemini_cache.get(cache_key)
+    try:
+        if cached:
+            # 캐시된 컨텍스트 사용
+            response = client.models.generate_content(
+                model=model_name,
+                contents=user_content,
+                config=types.GenerateContentConfig(
+                    cached_content=cached,
+                    response_mime_type="application/json",
+                    response_schema=_GEMINI_RESPONSE_SCHEMA,
+                    temperature=0.75,
+                    http_options=types.HttpOptions(timeout=120_000),
+                ),
+            )
+            return (response.text or "").strip()
+    except Exception:
+        # 캐시 만료 등 실패 시 일반 요청으로 폴백
+        _gemini_cache.pop(cache_key, None)
+
+    # 캐시 생성 시도 (실패해도 일반 요청으로 진행)
+    try:
+        cached = client.caches.create(
+            model=model_name,
+            config=types.CreateCachedContentConfig(
+                system_instruction=system_prompt,
+                ttl="600s",
+            ),
+        )
+        _gemini_cache[cache_key] = cached.name
+        response = client.models.generate_content(
+            model=model_name,
+            contents=user_content,
+            config=types.GenerateContentConfig(
+                cached_content=cached.name,
+                response_mime_type="application/json",
+                response_schema=_GEMINI_RESPONSE_SCHEMA,
+                temperature=0.75,
+                http_options=types.HttpOptions(timeout=120_000),
+            ),
+        )
+    except Exception:
+        # 캐시 미지원 모델이거나 에러 → 일반 요청
+        response = client.models.generate_content(
+            model=model_name,
+            contents=user_content,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                response_schema=_GEMINI_RESPONSE_SCHEMA,
+                temperature=0.75,
+                http_options=types.HttpOptions(timeout=120_000),
+            ),
+        )
     return (response.text or "").strip()
 
 
@@ -101,8 +209,8 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str, model_o
     return (response.content[0].text or "").strip()
 
 
-def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> tuple[list[dict[str, str]], str]:
-    """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다. (cuts, title) 반환."""
+def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> tuple[list[dict[str, str]], str, list[str]]:
+    """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다. (cuts, title, tags) 반환."""
     if provider == "gemini":
         content = _request_gemini(api_key, system_prompt, user_content, model_override)
     elif provider == "claude":
@@ -115,7 +223,8 @@ def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content:
 # 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
-                  channel: str | None = None, llm_model: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
+                  channel: str | None = None, llm_model: str | None = None,
+                  reference_url: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
     topic_folder = slugify_topic(topic, lang)
 
     # 저장 폴더 구조 생성
@@ -132,25 +241,34 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 [바이럴 숏폼 공식 (반드시 준수)]
 
 1. [Cut 1] 결론 폭탄 (Hook): 가장 충격적인 결론/팩트를 첫 문장에 던져라. "~한다고?" "~라는 거 알아?" 식의 구어체 단정문. 질문형 금지. 답을 먼저 때려라.
+   ★ [1.7초 법칙] 시청자의 71%가 1.7초 내에 이탈을 결정한다. Cut 1의 image_prompt는 반드시 시각적 충격이 있어야 한다 (극단적 스케일, 강렬한 색상 대비, 비현실적 장면).
    나쁜 예: "블랙홀에 빠지면 어떻게 될까요?" → 좋은 예: "블랙홀에 빠지면 몸이 스파게티처럼 늘어난다."
-   후크 패턴: 숫자 대비("1000배"), 부정+반전("사실은 반대야"), 시간 긴급성("3년 안에")
+   후크 패턴: 숫자 대비("1000배"), 부정+반전("사실은 반대야"), 시간 긴급성("3년 안에"), 직관 파괴("상식이 틀렸어")
 2. [Cut 2~3] 충격 확장: "근데 진짜 소름돋는 건..." "더 미친 건 말이야..." 식으로 충격을 연쇄시켜라.
 3. [Cut 4~5] 반전 빌드업 + 미니 훅: "근데 여기서 반전이 있어" "사실 이건 시작에 불과해" — 긴장을 최고조로 끌어올려라.
    ★ 중간 이탈 방지: Cut 4에 반드시 새로운 충격 팩트를 던져 "두 번째 훅" 역할을 하게 하라 (리텐션 U자형 곡선 대응).
+   ★ [패턴 인터럽트] 매 2~3컷마다 카메라 앵글/조명/스케일을 급격히 바꿔라. 단조로운 시각은 이탈률 85% 증가 원인.
 4. [Cut 6~8] 클라이맥스: 가장 강력한 팩트, 비유, 숫자를 터뜨려라. 직관적인 비유 필수 ("지구 100개를 한 줄로 세운 것과 같아").
-5. [Cut 9~10] 여운 + 떡밥: "이거 알고 나면 밤에 잠 못 잘걸?" "다음에 더 소름돋는 거 알려줄게" — 댓글/공유를 유도하는 마무리.
+5. [Cut 9~10] 의문 해소 + 여운: Cut 1에서 던진 훅/충격 팩트를 마지막에 반드시 회수하라. 시청자가 "아 그래서 그랬구나"라고 납득하게 만들어라.
+   ★ [마무리 필수 규칙]
+   - 마지막 컷은 훅에서 제기한 의문/주장에 대한 결론적 답변이어야 한다.
+   - 의문문("~걸?", "~일까?")으로 끝내지 마라. 답을 주고 끝내라.
+   - 단, 딱딱한 서술형("~이다", "~한다") 금지. 대화체("~거든", "~인 거야", "~라는 거지")로 마무리.
+   - 마지막 한 줄에 여운/떡밥을 살짝 얹어라: "다음엔 더 소름돋는 거 알려줄게" 식의 CTA 한 문장.
+   좋은 예: Cut1 "블랙홀에 빠지면 스파게티가 돼" → 마지막 "근데 진짜 무서운 건 네가 그걸 느끼면서 죽는다는 거야"
+   나쁜 예: "이거 알고 나면 밤하늘이 다르게 보일걸?" (의문만 던지고 답 없음)
 
 [대본 스타일 규칙]
 * 반말 + 구어체. 딱딱한 존댓말 금지. 친구한테 신기한 거 알려주듯이 써라.
-* 한 컷 대본은 15~25자. 짧고 강렬하게. 한 문장 이상 넣지 마라.
+* 한 컷 대본은 15~30자. 짧고 강렬하게. 한 문장 이상 넣지 마라.
 * "~입니다", "~합니다" 금지. "~거든", "~잖아", "~인 거야", "~라는 거지" 같은 구어체 어미 사용.
 * 감탄사/추임새 적극 활용: "미쳤지?", "소름이지?", "진짜야.", "ㄹㅇ."
 * 같은 문장 구조를 연속 사용하지 마라. Q&A, 명령문, 서술문을 섞어라.
-* [CRITICAL WARNING] 7~10컷으로 작성. 각 컷 약 3.5~5초 (총 30~50초 영상). 절대 5컷 이하 금지.
+* [CRITICAL WARNING] 7~10컷으로 작성. 각 컷 약 5~7초 (총 50~60초 영상 목표 — 시청시간 극대화). 절대 7컷 미만 금지.
 
 [이미지 프롬프트 규칙]
 * 반드시 영어로 작성. 한국어 금지.
-* (MASTER_STYLE이 자동 적용됨 — vertical/no-text는 별도 기재 불필요)
+* 시스템이 자동으로 "vertical 9:16, cinematic, no text" 스타일을 이미지 프롬프트 앞에 추가하므로 직접 쓰지 마라.
 * 매 컷마다 카메라 앵글/조명을 다르게 설정 (단조로움 방지).
 * 사람 얼굴 정면 클로즈업 금지 (AI 생성 얼굴은 언캐니밸리).
 * 구체적 시각 디테일 포함: 색온도, 재질감, 스케일 비교 (예: "car-sized asteroid").
@@ -168,29 +286,37 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 {
   "title": "태양이 사라지면 생기는 일",
   "cuts": [
-    {"description": "완전한 어둠 속 지구 전경, 태양 자리에 검은 void [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only, vertical 9:16, cinematic, no text", "script": "태양이 갑자기 사라지면 8분 동안 아무도 모른다고."},
-    {"description": "얼어붙는 바다 위로 거대한 빙하가 솟구치는 장면 [TENSION]", "image_prompt": "Frozen ocean surface cracking and massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot, vertical 9:16, cinematic, no text", "script": "근데 진짜 소름돋는 건 일주일 만에 바다가 얼어붙어."},
-    {"description": "시청자를 향한 클로즈업 느낌의 우주 배경 [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos filled with distant galaxies, sense of insignificance and wonder, immersive vertical composition 9:16, cinematic, no text", "script": "이거 알고 나면 밤하늘 다르게 보일걸?"}
+    {"description": "완전한 어둠 속 지구 전경, 태양 자리에 검은 void [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only", "script": "태양이 갑자기 사라지면 8분 동안 아무도 모른다고."},
+    {"description": "얼어붙는 바다 위로 거대한 빙하가 솟구치는 장면 [TENSION]", "image_prompt": "Frozen ocean surface cracking and massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot", "script": "근데 진짜 소름돋는 건 일주일 만에 바다가 얼어붙어."},
+    {"description": "시청자를 향한 클로즈업 느낌의 우주 배경 [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos filled with distant galaxies, sense of insignificance and wonder, immersive composition", "script": "근데 진짜 소름돋는 건 8분 동안 아무도 모른 채 웃고 있었다는 거야."}
   ]
 }
 
-[JSON 출력 필수]
-- 마크다운 코드블록 없이 순수 JSON만 출력
-- 첫 문자: {  마지막 문자: }
+[골든 예시 2 — 주제: "잠을 안 자면 생기는 일" (일상/과학 주제)]
+{
+  "title": "잠을 안 자면 생기는 일",
+  "cuts": [
+    {"description": "핏발 선 눈동자 극단적 클로즈업 [SHOCK]", "image_prompt": "Extreme macro close-up of a bloodshot human eye with dilated pupil, dark red veins spreading across sclera, dramatic side lighting, shallow depth of field", "script": "3일만 안 자도 뇌가 스스로를 먹기 시작해."},
+    {"description": "뇌 속 독소가 쌓이는 시각화 장면 [TENSION]", "image_prompt": "Cross-section of human brain with glowing toxic particles accumulating between neurons, dark purple and neon green, microscopic medical visualization", "script": "근데 진짜 무서운 건 그걸 본인이 모른다는 거야."},
+    {"description": "깊은 수면 중 뇌 청소 시스템 시각화 [CALM]", "image_prompt": "Serene visualization of glymphatic system cleaning the brain during sleep, flowing blue-white fluid washing through neural pathways, peaceful bioluminescent glow", "script": "결국 잠이 뇌를 청소하는 유일한 방법인 거지."}
+  ]
+}
 
-[Output Format]
-7~10컷, 다음 JSON만 출력:
+[Output Format — 순수 JSON만 출력, 마크다운 코드블록 금지]
+7~10컷:
 
 {
   "title": "[자극적이고 클릭을 부르는 한국어 제목 (15자 이내, ~하면 생기는 일, ~의 비밀 등)]",
+  "tags": ["#Shorts", "#주제관련태그1", "#주제관련태그2", "#주제관련태그3"],
   "cuts": [
     {
       "description": "[컷 묘사 (한국어)] [감정태그]",
-      "image_prompt": "[DALL-E 3 영어 프롬프트: 세로 9:16, 시네마틱, 극적 조명, 텍스트 없이]",
-      "script": "[성우 대본: 구어체 반말, 15~25자]"
+      "image_prompt": "[DALL-E 3 영어 프롬프트 (MASTER_STYLE 자동 적용됨)]",
+      "script": "[성우 대본: 구어체 반말, 15~30자]"
     }
   ]
 }
+[태그 규칙] tags 배열에 #Shorts 필수 + 주제 관련 해시태그 3~4개 (총 4~5개). 한국어 주제면 한국어 태그.
 """
 
     _SYSTEM_PROMPT_EN = """
@@ -200,24 +326,32 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 [Viral Short-form Formula (MUST FOLLOW)]
 
 1. [Cut 1] Conclusion Bomb (Hook): Drop the most shocking fact/conclusion in the FIRST sentence. Use declarative statements, NOT questions. Lead with the answer.
+   ★ [1.7-SECOND RULE] 71% of viewers decide to swipe away within 1.7 seconds. Cut 1's image_prompt MUST have extreme visual impact (extreme scale, vivid color contrast, surreal scene).
    BAD: "What happens if you fall into a black hole?" → GOOD: "If you fall into a black hole, your body stretches like spaghetti."
-   Hook patterns: Numerical contrast ("1000x more"), Negation+reveal ("It's actually the opposite"), Time urgency ("Within 3 years")
+   Hook patterns: Numerical contrast ("1000x more"), Negation+reveal ("It's actually the opposite"), Time urgency ("Within 3 years"), Intuition breaker ("Common sense is wrong")
 2. [Cut 2–3] Shock Chain: "But here's the insane part..." "What's even crazier is..." — chain the shock.
 3. [Cut 4–5] Twist Build-up + Mini Hook: "But here's the plot twist" "And this is just the beginning" — maximize tension.
    ★ Mid-video retention: Cut 4 MUST introduce a brand-new shocking fact as a "second hook" (counters U-shaped retention drop).
 4. [Cut 6–8] Climax: Drop the hardest facts, analogies, numbers. Use intuitive comparisons ("That's like lining up 100 Earths").
-5. [Cut 9–10] Cliffhanger + Bait: "You won't sleep tonight after knowing this" "I'll tell you something even crazier next time" — drive comments/shares.
+5. [Cut 9–10] Resolution + Afterglow: The final cut MUST resolve the question/claim raised in Cut 1. Give the viewer a satisfying "so THAT's why" moment.
+   ★ [ENDING RULE]
+   - The final cut must ANSWER the hook, not leave it as another question.
+   - NEVER end with a question ("right?", "isn't it?"). Deliver the answer.
+   - Use conversational tone, not dry statements. End with a punchy conclusion.
+   - Optionally add a one-line CTA teaser: "Next time I'll show you something even crazier."
+   GOOD: Cut1 "Your body stretches like spaghetti" → Final "But the terrifying part is you'd feel every second of it."
+   BAD: "You'll never look at the sky the same, right?" (just a question, no resolution)
 
 [Script Style Rules]
 * Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
 * Each cut: 5–10 words MAX. Short. Punchy. One sentence only.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
 * Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
-* [CRITICAL WARNING] Write 7–10 cuts (~3.5–5 sec each). 30–50 second video. NEVER less than 5 cuts.
+* [CRITICAL WARNING] Write 7–10 cuts (~5–7 sec each). Target 50–60 second video for maximum watch time. NEVER less than 7 cuts.
 
 [Image Prompt Rules]
 * ALL image prompts must be in English.
-* (MASTER_STYLE is auto-prepended — no need to write vertical/no-text yourself)
+* The system auto-prepends "vertical 9:16, cinematic, no text" style to your image prompts — do NOT write these yourself.
 * Vary camera angle and lighting per cut (avoid visual monotony).
 * NO frontal close-ups of human faces (AI-generated faces trigger uncanny valley).
 * Include specific visual details: color temperature, material textures, scale comparisons (e.g. "car-sized asteroid").
@@ -235,29 +369,37 @@ Example: "A massive black hole swallowing light [SHOCK]"
 {
   "title": "The Sun Vanishes Tomorrow",
   "cuts": [
-    {"description": "Earth in complete darkness, empty void where sun was [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only, vertical 9:16, cinematic, no text", "script": "The sun vanishes and nobody knows for 8 minutes."},
-    {"description": "Frozen ocean with massive glaciers rising in eerie glow [TENSION]", "image_prompt": "Frozen ocean surface cracking with massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot, vertical 9:16, cinematic, no text", "script": "Within a week the entire ocean freezes solid."},
-    {"description": "Vast cosmos perspective looking up [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos, distant galaxies, sense of wonder, vertical 9:16, cinematic, no text", "script": "You'll never look at the night sky the same."}
+    {"description": "Earth in complete darkness, empty void where sun was [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only", "script": "The sun vanishes and nobody knows for 8 minutes."},
+    {"description": "Frozen ocean with massive glaciers rising in eerie glow [TENSION]", "image_prompt": "Frozen ocean surface cracking with massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot", "script": "Within a week the entire ocean freezes solid."},
+    {"description": "Vast cosmos perspective looking up [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos, distant galaxies, sense of wonder, immersive composition", "script": "But here's the terrifying part — for 8 minutes, everyone was smiling, not knowing it was already over."}
   ]
 }
 
-[JSON Output Required]
-- Output pure JSON only, no markdown code blocks
-- First character: {  Last character: }
+[Golden Example 2 — Topic: "What happens if you never sleep"]
+{
+  "title": "Never Sleeping Destroys Your Brain",
+  "cuts": [
+    {"description": "Extreme close-up of bloodshot eye [SHOCK]", "image_prompt": "Extreme macro close-up of a bloodshot human eye with dilated pupil, dark red veins spreading across sclera, dramatic side lighting, shallow depth of field", "script": "After 3 days without sleep your brain starts eating itself."},
+    {"description": "Toxic buildup in brain cross-section [TENSION]", "image_prompt": "Cross-section of human brain with glowing toxic particles accumulating between neurons, dark purple and neon green, microscopic medical visualization", "script": "The scariest part? You won't even realize it's happening."},
+    {"description": "Glymphatic brain cleaning system visualization [CALM]", "image_prompt": "Serene visualization of glymphatic system cleaning the brain during sleep, flowing blue-white fluid washing through neural pathways, peaceful bioluminescent glow", "script": "Sleep is literally the only way your brain takes out the trash."}
+  ]
+}
 
-[Output Format]
-7–10 cuts, output ONLY this JSON:
+[Output Format — pure JSON only, no markdown code blocks]
+7–10 cuts:
 
 {
   "title": "[Click-bait English title (max 8 words)]",
+  "tags": ["#Shorts", "#TopicTag1", "#TopicTag2", "#TopicTag3"],
   "cuts": [
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
-      "image_prompt": "[DALL-E 3 English prompt: vertical 9:16, cinematic, dramatic lighting, no text]",
+      "image_prompt": "[DALL-E 3 English prompt (MASTER_STYLE auto-applied)]",
       "script": "[Voice-over: casual, 5-10 words]"
     }
   ]
 }
+[Tag Rules] tags array MUST include #Shorts + 3-4 topic-specific hashtags (total 4-5).
 """
 
     # 언어별 프롬프트 매핑
@@ -328,11 +470,45 @@ This is the channel's signature look — every image should feel cohesive with t
     if fact_context:
         user_content += f"\n\n{fact_context}"
 
+    # 레퍼런스 영상 분석 주입 (XML 구조화)
+    if reference_url:
+        try:
+            from modules.utils.youtube_extractor import extract_youtube_reference
+            ref_data = extract_youtube_reference(reference_url)
+            if ref_data:
+                ref_block = "\n\n<reference_analysis>"
+                if ref_data.get("title"):
+                    ref_block += f"\n  <source>{ref_data['title']}</source>"
+                struct = ref_data.get("structure", {})
+                if struct.get("hook"):
+                    ref_block += f"\n  <hook_technique>{struct['hook']}</hook_technique>"
+                if struct.get("ending"):
+                    ref_block += f"\n  <ending_technique>{struct['ending']}</ending_technique>"
+                if struct.get("style"):
+                    ref_block += f"\n  <tone>{struct['style']}</tone>"
+                if ref_data.get("transcript"):
+                    # 첫 문장 + 마지막 문장 + 중간 피벗만 추출
+                    sentences = [s.strip() for s in ref_data["transcript"].split(".") if s.strip()]
+                    key_parts = []
+                    if sentences:
+                        key_parts.append(sentences[0])
+                    if len(sentences) > 2:
+                        key_parts.append(sentences[len(sentences)//2])
+                    if len(sentences) > 1:
+                        key_parts.append(sentences[-1])
+                    ref_block += f"\n  <key_sentences>{'. '.join(key_parts)}.</key_sentences>"
+                ref_block += "\n</reference_analysis>"
+                ref_block += "\n[레퍼런스 활용 지시] 위 분석의 hook_technique/ending_technique/tone을 참고하되 내용은 완전히 새롭게 써라. 복사 금지."
+                user_content += ref_block
+        except Exception as e:
+            print(f"[레퍼런스 분석] 실패, 무시하고 진행: {e}")
+
     # 429 자동 키 전환: 실패한 키를 차단하고 다른 키로 재시도
     exhausted_keys: set[str] = set()
     current_key = final_api_key
     cuts: list[dict[str, str]] = []
     title: str = ""
+    tags: list[str] = ["#Shorts"]
 
     if llm_provider == "gemini":
         from modules.utils.keys import get_google_key, mark_key_exhausted, mask_key
@@ -340,10 +516,12 @@ This is the channel's signature look — every image should feel cohesive with t
     else:
         max_key_attempts = 3  # OpenAI/Claude도 429 시 최대 3회 재시도 (백오프)
 
+    cuts: list[dict[str, Any]] = []
+    title: str = ""
     last_error: Exception | None = None
     for attempt in range(max_key_attempts):
         try:
-            cuts, title = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
+            cuts, title, tags = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
             break  # 성공
         except Exception as e:
             last_error = e
@@ -396,7 +574,7 @@ This is the channel's signature look — every image should feel cohesive with t
             + f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
         )
         try:
-            cuts, title = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
+            cuts, title, tags = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
         except Exception as retry_err:
             err_str = str(retry_err)
             if llm_provider == "gemini" and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str):
@@ -414,5 +592,9 @@ This is the channel's signature look — every image should feel cohesive with t
     if not title:
         title = topic
 
-    print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title}")
-    return cuts, topic_folder, title
+    # tags 기본값 보장
+    if not tags or not isinstance(tags, list):
+        tags = ["#Shorts"]
+
+    print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
+    return cuts, topic_folder, title, tags

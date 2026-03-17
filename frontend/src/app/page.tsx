@@ -19,6 +19,10 @@ export default function Home() {
   const [language, setLanguage] = useState("ko");
   const [cameraStyle, setCameraStyle] = useState("auto");
   const [bgmTheme, setBgmTheme] = useState("random");
+
+  // YouTube URL 자동 감지 (토픽 입력란에서)
+  const isYouTubeUrl = (text: string) => /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)/.test(text.trim());
+  const detectedRefUrl = isYouTubeUrl(topic) ? topic.trim() : undefined;
   const [channel, setChannel] = useState("");
   const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
   const [ttsSpeed, setTtsSpeed] = useState(0.9);
@@ -60,6 +64,7 @@ export default function Home() {
   const [modelLimits, setModelLimits] = useState<Record<string, { rpm: number; rpd: number; used: number; total_rpd: number; remaining: number }> | null>(null);
   // 업로드 (멀티 플랫폼)
   const [generatedVideoPath, setGeneratedVideoPath] = useState<string | null>(null);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadPlatform, setUploadPlatform] = useState<"youtube" | "tiktok" | "instagram">("youtube");
   const [uploadTitle, setUploadTitle] = useState("");
@@ -67,7 +72,9 @@ export default function Home() {
   const [uploadTags, setUploadTags] = useState("");
   const [uploadPrivacy, setUploadPrivacy] = useState("private");
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{ success: boolean; url?: string; error?: string } | null>(null);
+  const [uploadResult, setUploadResult] = useState<{ success: boolean; url?: string; error?: string; scheduled_at?: string } | null>(null);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
   // YouTube
   const [ytConnected, setYtConnected] = useState(false);
   const [ytChannels, setYtChannels] = useState<{ id: string; title: string; connected: boolean }[]>([]);
@@ -83,7 +90,7 @@ export default function Home() {
   const [previewData, setPreviewData] = useState<{
     sessionId: string;
     title: string;
-    cuts: { index: number; script: string; prompt: string; image_url: string | null }[];
+    cuts: { index: number; script: string; prompt: string; description?: string; image_url: string | null }[];
   } | null>(null);
   const [editedScripts, setEditedScripts] = useState<Record<number, string>>({});
 
@@ -249,6 +256,7 @@ export default function Home() {
     setSuccessMessage(null);
     setErrorMessage(null);
     setLogs([]);
+    setGeneratedVideoUrl(null);
 
     const selectedOpenaiKey = pickKey("openai");
     const selectedElevenlabsKey = pickKey("elevenlabs");
@@ -296,6 +304,7 @@ export default function Home() {
           voiceId,
           captionSize,
           captionY,
+          referenceUrl: detectedRefUrl,
         }),
       });
 
@@ -317,18 +326,11 @@ export default function Home() {
           const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
           const downloadUrl = `${API_BASE}${normalizedPath}`;
 
-          // YouTube 업로드용 경로 저장
+          // YouTube 업로드용 경로 저장 + 인라인 재생용 URL
           setGeneratedVideoPath(videoPath);
+          setGeneratedVideoUrl(downloadUrl);
 
-          const link = document.createElement("a");
-          link.href = downloadUrl;
-          const fileName = videoPath.split('/').pop() || "AskAnything_Shorts.mp4";
-          link.setAttribute("download", fileName);
-          document.body.appendChild(link);
-          link.click();
-          link.parentNode?.removeChild(link);
-
-          setSuccessMessage("비디오 생성 성공! 영상이 안전하게 다운로드되었습니다.");
+          setSuccessMessage("비디오 생성 성공!");
           setIsGenerating(false);
           // YouTube 상태 확인
           checkPlatformStatus();
@@ -487,6 +489,7 @@ export default function Home() {
           imageEngine,
           language,
           channel: channel || undefined,
+          referenceUrl: detectedRefUrl,
         }),
       });
 
@@ -516,6 +519,7 @@ export default function Home() {
     setLogs([]);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setGeneratedVideoUrl(null);
 
     const updatedCuts = previewData.cuts.map((cut) => ({
       index: cut.index,
@@ -632,8 +636,9 @@ export default function Home() {
           title: uploadTitle || topic,
           description: uploadDescription,
           tags: uploadTags.split(",").map(t => t.trim()).filter(Boolean),
-          privacy: uploadPrivacy,
+          privacy: scheduleEnabled ? "private" : uploadPrivacy,
           channel_id: ytSelectedChannel || undefined,
+          ...(scheduleEnabled && scheduleDate ? { publish_at: new Date(scheduleDate).toISOString() } : {}),
         };
       } else if (uploadPlatform === "tiktok") {
         endpoint = "/api/tiktok/upload";
@@ -641,6 +646,7 @@ export default function Home() {
           video_path: generatedVideoPath,
           title: uploadTitle || topic,
           privacy_level: ttPrivacy,
+          ...(scheduleEnabled && scheduleDate ? { schedule_time: Math.floor(new Date(scheduleDate).getTime() / 1000) } : {}),
         };
       } else {
         endpoint = "/api/instagram/upload";
@@ -657,7 +663,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.success) {
-        setUploadResult({ success: true, url: data.url });
+        setUploadResult({ success: true, url: data.url, scheduled_at: data.scheduled_at });
       } else {
         if (data.need_auth) {
           if (uploadPlatform === "youtube") setYtConnected(false);
@@ -760,7 +766,7 @@ export default function Home() {
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               disabled={isGenerating}
-              placeholder="예: 블랙홀에 떨어지면 어떻게 될까?"
+              placeholder="주제 또는 YouTube URL — 예: 블랙홀에 떨어지면 어떻게 될까?"
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-6 pr-32 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-lg backdrop-blur-md"
             />
             {isGenerating ? (
@@ -793,6 +799,23 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          {/* YouTube URL 감지 안내 */}
+          <AnimatePresence>
+            {detectedRefUrl && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="w-full max-w-2xl mx-auto"
+              >
+                <div className="flex items-center gap-2 px-3 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
+                  <Youtube className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>YouTube URL 감지 — 이 영상을 레퍼런스로 분석하여 비슷한 스타일의 영상을 생성합니다</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* 컨트롤 패널 */}
           <div className="w-full max-w-2xl mx-auto space-y-3">
@@ -1009,10 +1032,16 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="mt-8 w-full max-w-2xl glass-panel p-6 rounded-3xl relative z-10 shadow-2xl shadow-indigo-500/20"
+            className="mt-8 w-full max-w-3xl glass-panel p-6 rounded-3xl relative z-10 shadow-2xl shadow-indigo-500/20 border border-white/[0.08]"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-white">{previewData.title}</h3>
+            {/* 헤더 */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-bold text-white">{previewData.title}</h3>
+                <span className="text-[11px] text-gray-400 bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10">
+                  {previewData.cuts.length}컷 · 약 {Math.round(previewData.cuts.length * 4)}초
+                </span>
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => { setPreviewMode(false); setPreviewData(null); }}
@@ -1022,54 +1051,93 @@ export default function Home() {
                 </button>
                 <button
                   onClick={handleRender}
-                  className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors"
+                  className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-indigo-500/25"
                 >
                   확인 — 영상 만들기
                 </button>
               </div>
             </div>
 
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-              {previewData.cuts.map((cut) => (
-                <div key={cut.index} className="flex gap-3 bg-white/5 rounded-xl p-3">
-                  {/* 이미지 미리보기 */}
-                  <div className="w-20 h-36 flex-shrink-0 rounded-lg overflow-hidden bg-black/30">
-                    {cut.image_url ? (
-                      <img
-                        src={`${API_BASE}${cut.image_url}`}
-                        alt={`컷 ${cut.index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">
-                        이미지 없음
-                      </div>
-                    )}
-                  </div>
+            <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+              {previewData.cuts.map((cut, i) => {
+                const emotionMatch = (cut.description || "").match(/\[(SHOCK|WONDER|TENSION|REVEAL|CALM)\]/);
+                const emotion = emotionMatch ? emotionMatch[1] : null;
+                const emotionColors: Record<string, { bg: string; text: string; label: string }> = {
+                  SHOCK: { bg: "bg-red-500/20", text: "text-red-400", label: "충격" },
+                  WONDER: { bg: "bg-amber-500/20", text: "text-amber-400", label: "경이" },
+                  TENSION: { bg: "bg-orange-500/20", text: "text-orange-400", label: "긴장" },
+                  REVEAL: { bg: "bg-emerald-500/20", text: "text-emerald-400", label: "반전" },
+                  CALM: { bg: "bg-sky-500/20", text: "text-sky-400", label: "여운" },
+                };
+                const eColor = emotion ? emotionColors[emotion] : null;
 
-                  {/* 스크립트 편집 */}
-                  <div className="flex-1 flex flex-col gap-1">
-                    <span className="text-[10px] text-gray-500 uppercase">컷 {cut.index + 1}</span>
-                    <textarea
-                      value={editedScripts[cut.index] ?? cut.script}
-                      onChange={(e) => setEditedScripts(prev => ({ ...prev, [cut.index]: e.target.value }))}
-                      rows={3}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
-                    />
-                    <span className="text-[10px] text-gray-600 truncate">{cut.prompt}</span>
-                  </div>
-                </div>
-              ))}
+                return (
+                  <motion.div
+                    key={cut.index}
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05, duration: 0.3 }}
+                    className="group flex gap-3 bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] hover:border-white/[0.12] rounded-xl p-3 transition-all duration-200"
+                  >
+                    {/* 썸네일 + 컷 번호 */}
+                    <div className="relative w-24 h-40 flex-shrink-0 rounded-lg overflow-hidden bg-black/40 group-hover:scale-[1.02] transition-transform duration-200">
+                      {cut.image_url ? (
+                        <img
+                          src={`${API_BASE}${cut.image_url}`}
+                          alt={`컷 ${cut.index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">
+                          이미지 없음
+                        </div>
+                      )}
+                      {/* 컷 번호 뱃지 */}
+                      <div className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-indigo-600/90 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold text-white shadow-md">
+                        {cut.index + 1}
+                      </div>
+                      {/* 감정 태그 뱃지 */}
+                      {eColor && (
+                        <div className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium ${eColor.bg} ${eColor.text} backdrop-blur-sm`}>
+                          {eColor.label}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 스크립트 편집 */}
+                    <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-500 font-medium">컷 {cut.index + 1}</span>
+                        <span className="text-[10px] text-gray-600">
+                          {(editedScripts[cut.index] ?? cut.script)?.length || 0}자
+                        </span>
+                      </div>
+                      <textarea
+                        value={editedScripts[cut.index] ?? cut.script}
+                        onChange={(e) => setEditedScripts(prev => ({ ...prev, [cut.index]: e.target.value }))}
+                        rows={3}
+                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-gray-200 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/30 transition-colors"
+                      />
+                      <details className="group/prompt">
+                        <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-gray-400 transition-colors select-none">
+                          이미지 프롬프트 보기
+                        </summary>
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">{cut.prompt}</p>
+                      </details>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
 
-            <p className="text-[10px] text-gray-500 mt-3 text-center">
+            <p className="text-[10px] text-gray-500 mt-4 text-center">
               스크립트를 수정한 뒤 &quot;확인&quot;을 누르면 수정된 내용으로 음성 녹음 + 영상 렌더링이 시작됩니다.
             </p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 성공 패널 */}
+      {/* 성공 패널 — 인라인 비디오 플레이어 + 업로드 */}
       <AnimatePresence>
         {successMessage && !isGenerating && !errorMessage && (
           <motion.div
@@ -1078,17 +1146,42 @@ export default function Home() {
             exit={{ opacity: 0, scale: 0.9 }}
             className="mt-16 w-full max-w-sm glass-panel p-6 rounded-[2.5rem] relative z-10 flex flex-col justify-center items-center shadow-2xl shadow-indigo-500/20 text-center space-y-4"
           >
-            <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
+            {/* 인라인 비디오 플레이어 */}
+            {generatedVideoUrl ? (
+              <div className="w-full rounded-2xl overflow-hidden bg-black/50 border border-white/10">
+                <video
+                  src={generatedVideoUrl}
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                  className="w-full aspect-[9/16] max-h-[50vh] object-contain"
+                />
+              </div>
+            ) : (
+              <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
+            )}
             <h3 className="text-xl text-white font-bold">생성 성공!</h3>
-            <p className="text-gray-400 text-sm">최고 수준의 숏폼 비디오가 성공적으로 기기 다운로드 폴더에 저장되었습니다.</p>
             {generatedVideoPath && (
               <div className="flex flex-col gap-2 w-full">
+                {/* 다운로드 버튼 */}
+                <a
+                  href={generatedVideoUrl || "#"}
+                  download={generatedVideoPath.split('/').pop() || "AskAnything_Shorts.mp4"}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-xl transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  다운로드
+                </a>
+                {/* 업로드 버튼들 */}
                 <button
                   onClick={() => {
                     setUploadTitle(topic);
                     setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
                     setUploadTags(topic);
                     setUploadResult(null);
+                    setScheduleEnabled(false);
+                    setScheduleDate("");
                     setUploadPlatform("youtube");
                     setShowUploadModal(true);
                     checkPlatformStatus();
@@ -1104,6 +1197,8 @@ export default function Home() {
                       setUploadTitle(topic);
                       setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
                       setUploadResult(null);
+                      setScheduleEnabled(false);
+                      setScheduleDate("");
                       setUploadPlatform("tiktok");
                       setShowUploadModal(true);
                       checkPlatformStatus();
@@ -1118,6 +1213,8 @@ export default function Home() {
                       setUploadTitle(topic);
                       setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
                       setUploadResult(null);
+                      setScheduleEnabled(false);
+                      setScheduleDate("");
                       setUploadPlatform("instagram");
                       setShowUploadModal(true);
                       checkPlatformStatus();
@@ -1214,7 +1311,14 @@ export default function Home() {
               ) : uploadResult?.success ? (
                 <div className="space-y-4 text-center py-4">
                   <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
-                  <h4 className="text-white font-bold">업로드 완료!</h4>
+                  <h4 className="text-white font-bold">
+                    {uploadResult.scheduled_at ? "예약 업로드 완료!" : "업로드 완료!"}
+                  </h4>
+                  {uploadResult.scheduled_at && (
+                    <p className="text-indigo-300 text-sm">
+                      {new Date(typeof uploadResult.scheduled_at === "number" ? uploadResult.scheduled_at * 1000 : uploadResult.scheduled_at).toLocaleString("ko-KR")}에 공개됩니다.
+                    </p>
+                  )}
                   {uploadResult.url && (
                     <a
                       href={uploadResult.url}
@@ -1316,9 +1420,44 @@ export default function Home() {
                     )}
                   </div>
 
+                  {/* 예약 업로드 (YouTube / TikTok만) */}
+                  {uploadPlatform !== "instagram" && (
+                    <div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={scheduleEnabled}
+                          onChange={(e) => { setScheduleEnabled(e.target.checked); if (!e.target.checked) setScheduleDate(""); }}
+                          className="w-4 h-4 rounded bg-white/5 border-white/20 text-indigo-500 focus:ring-indigo-500/50"
+                        />
+                        <span className="text-gray-300 text-sm">예약 업로드</span>
+                      </label>
+                      {scheduleEnabled && (
+                        <div className="mt-2">
+                          <input
+                            type="datetime-local"
+                            value={scheduleDate}
+                            onChange={(e) => setScheduleDate(e.target.value)}
+                            min={new Date(Date.now() + (uploadPlatform === "tiktok" ? 15 * 60 * 1000 : 60 * 1000)).toISOString().slice(0, 16)}
+                            max={uploadPlatform === "tiktok" ? new Date(Date.now() + 75 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16) : undefined}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                          />
+                          <p className="text-gray-500 text-xs mt-1">
+                            {uploadPlatform === "youtube"
+                              ? "비공개로 업로드 후 예약 시간에 자동 공개됩니다."
+                              : "15분 ~ 75일 이내로 설정해주세요."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Instagram 경고 */}
                   {uploadPlatform === "instagram" && (
-                    <p className="text-amber-400/80 text-xs">Instagram은 공개 URL이 필요합니다. PUBLIC_SERVER_URL 또는 ngrok 설정이 필요할 수 있습니다.</p>
+                    <div>
+                      <p className="text-amber-400/80 text-xs">Instagram은 공개 URL이 필요합니다. PUBLIC_SERVER_URL 또는 ngrok 설정이 필요할 수 있습니다.</p>
+                      <p className="text-gray-500 text-xs mt-1">Instagram은 API를 통한 예약 업로드를 지원하지 않습니다.</p>
+                    </div>
                   )}
 
                   {uploadResult && !uploadResult.success && (
@@ -1327,7 +1466,7 @@ export default function Home() {
 
                   <button
                     onClick={handleUpload}
-                    disabled={uploading || !uploadTitle.trim()}
+                    disabled={uploading || !uploadTitle.trim() || (scheduleEnabled && !scheduleDate)}
                     className={`w-full py-3 disabled:bg-gray-700 disabled:text-gray-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
                       uploadPlatform === "youtube" ? "bg-red-600 hover:bg-red-500" :
                       uploadPlatform === "tiktok" ? "bg-gray-700 hover:bg-gray-600" :
@@ -1342,7 +1481,10 @@ export default function Home() {
                     ) : (
                       <>
                         <Upload className="w-4 h-4" />
-                        {uploadPlatform === "youtube" ? "YouTube 업로드" : uploadPlatform === "tiktok" ? "TikTok 업로드" : "Reels 업로드"}
+                        {scheduleEnabled
+                          ? (uploadPlatform === "youtube" ? "YouTube 예약 업로드" : "TikTok 예약 업로드")
+                          : (uploadPlatform === "youtube" ? "YouTube 업로드" : uploadPlatform === "tiktok" ? "TikTok 업로드" : "Reels 업로드")
+                        }
                       </>
                     )}
                   </button>
