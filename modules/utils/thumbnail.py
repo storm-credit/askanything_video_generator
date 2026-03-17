@@ -44,7 +44,7 @@ def select_best_thumbnail(image_paths: list[str], descriptions: list[str] | None
 
     valid = []
     for i, p in enumerate(image_paths):
-        if not os.path.exists(p):
+        if not p or not os.path.exists(p):
             continue
         score = _sharpness_score(p)
         emotion_score = 0

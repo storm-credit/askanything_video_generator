@@ -1027,6 +1027,7 @@ class PrepareRequest(BaseModel):
     videoEngine: str = "none"  # prepare 단계에서는 비디오 미생성이 기본
     channel: str | None = None
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL
+    costTier: str | None = None  # 비용 티어 (free/standard/premium)
 
     @field_validator("language")
     @classmethod
@@ -1064,6 +1065,22 @@ class PrepareRequest(BaseModel):
 @app.post("/api/prepare")
 async def prepare_endpoint(req: PrepareRequest):
     """1단계: LLM 스크립트 + 이미지 생성만 수행. TTS/렌더는 하지 않음."""
+
+    # 비용 티어 적용 (prepare에서도 엔진/모델 오버라이드)
+    if req.costTier:
+        tier = get_cost_tier(req.costTier)
+        if tier:
+            _user_set = req.model_fields_set
+            if "llmProvider" not in _user_set:
+                req.llmProvider = tier.get("llm_provider", req.llmProvider)
+            if "llmModel" not in _user_set:
+                req.llmModel = tier.get("llm_model")
+            if "imageEngine" not in _user_set:
+                req.imageEngine = tier.get("image_engine", req.imageEngine)
+            if "imageModel" not in _user_set:
+                req.imageModel = tier.get("image_model")
+            if "videoEngine" not in _user_set:
+                req.videoEngine = tier.get("video_engine", req.videoEngine)
 
     async def sse_generator():
       async with _generate_semaphore:
@@ -1757,9 +1774,9 @@ async def generate_multilang(req: MultiLangRequest):
                     cut_image_key = get_google_key(api_key_override, service="imagen", extra_keys=gemini_keys_override) if image_engine == "imagen" else api_key_override
                     with _image_semaphore:
                         if image_engine == "imagen":
-                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key, model_override=None, gemini_api_keys=gemini_keys_override, channel=req.channel))
+                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut, k=cut_image_key: gen_image_fn(c["prompt"], idx, topic_folder, k, model_override=None, gemini_api_keys=gemini_keys_override, channel=req.channel))
                         else:
-                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key, channel=req.channel))
+                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut, k=cut_image_key: gen_image_fn(c["prompt"], idx, topic_folder, k, channel=req.channel))
                     visual_paths[i] = img_path
                 except Exception as img_err:
                     print(f"[다국어 이미지 오류] 컷 {i+1}: {img_err}")

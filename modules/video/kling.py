@@ -145,7 +145,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
 
     if not video_url:
         if timed_out:
-            print(f"[Kling AI 오류] 컷 {index+1} 렌더링 타임아웃 (최대 {max_polls * 5}초 초과).")
+            print(f"[Kling AI 오류] 컷 {index+1} 렌더링 타임아웃 ({_elapsed}초 경과).")
         else:
             print(f"[Kling AI 오류] 컷 {index+1} 렌더링 성공했으나 비디오 URL이 비어 있습니다.")
         return None
