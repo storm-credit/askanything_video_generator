@@ -57,7 +57,7 @@ def _mask_error(e: Exception, max_len: int = 200) -> str:
 _cancel_events: dict[str, tuple[threading.Event, float]] = {}
 _active_generation_id: str | None = None
 _generation_lock = threading.Lock()
-_CANCEL_EVENT_TTL = 120  # 2분 후 미정리 이벤트 자동 삭제 (SSE 끊김 시 빠른 정리)
+_CANCEL_EVENT_TTL = 600  # 10분 후 미정리 이벤트 자동 삭제 (비디오 생성 ~8분 고려)
 
 # ElevenLabs 쿼터 캐시 (매 요청 HTTP 호출 방지, 키별 캐시)
 _elevenlabs_quota_cache: dict[str, tuple[float, dict | None]] = {}  # key_hash → (timestamp, quota_info)

@@ -5,7 +5,7 @@ import jwt
 import requests
 import base64
 
-from modules.utils.constants import get_motion_style
+
 
 
 def _generate_jwt(ak: str, sk: str) -> str:
@@ -59,7 +59,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     payload = {
         "model": "kling-v1",
         "image": img_b64,
-        "prompt": f"{get_motion_style(prompt, description)}, 4K quality. {prompt}",
+        "prompt": prompt,  # engines.py _optimize_prompt_for_engine()에서 이미 motion_style 적용됨
         "duration": "5"
     }
     

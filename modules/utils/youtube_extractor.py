@@ -29,6 +29,8 @@ def _parse_video_id(url: str) -> str | None:
 
 def _fetch_metadata_ytdlp(video_id: str) -> dict:
     """yt-dlp로 메타데이터를 추출한다 (API 쿼터 소비 0, 무료)."""
+    if not re.fullmatch(r'[a-zA-Z0-9_-]{11}', video_id):
+        return {}
     try:
         import subprocess, json as _json
         result = subprocess.run(
