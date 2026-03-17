@@ -371,8 +371,8 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
 async def cancel_generation():
     """현재 진행 중인 생성 작업을 취소합니다."""
     with _generation_lock:
-        if _active_generation_id:
-            _cancel_event.set()
+        if _active_generation_id and _active_generation_id in _cancel_events:
+            _cancel_events[_active_generation_id].set()
             print(f"[취소] 생성 작업 취소 요청: {_active_generation_id}")
             return {"status": "cancelled", "generation_id": _active_generation_id}
         return {"status": "idle", "message": "진행 중인 생성 작업이 없습니다."}
