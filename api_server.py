@@ -1419,8 +1419,16 @@ async def list_channels():
     for name in get_channel_names():
         preset = get_channel_preset(name)
         if preset:
-            # voice_id는 내부용이므로 프론트엔드에 노출하지 않음
-            channels[name] = {k: v for k, v in preset.items() if k != "voice_id"}
+            channels[name] = {
+                "language": preset.get("language", "ko"),
+                "platforms": preset.get("platforms", ["youtube"]),
+                "tts_speed": preset.get("tts_speed", 0.9),
+                "caption_size": preset.get("caption_size", 48),
+                "caption_y": preset.get("caption_y", 28),
+                "visual_style": preset.get("visual_style", ""),
+                "tone": preset.get("tone", ""),
+                "upload_accounts": preset.get("upload_accounts", {}),
+            }
     return {"channels": channels}
 
 
