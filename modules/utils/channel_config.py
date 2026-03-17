@@ -73,6 +73,12 @@ CHANNEL_MASTER_STYLES: dict[str, str] = {
         "vertical 9:16 composition, "
         "family-friendly. NO TEXT, NO WATERMARKS. "
     ),
+    "exploratodo": (
+        "Bold photograph, adventurous explorer documentary style, "
+        "warm sunset tones, earthy terracotta and teal palette, "
+        "vertical 9:16 composition, "
+        "family-friendly. NO TEXT, NO WATERMARKS. "
+    ),
 }
 
 # 기본 MASTER_STYLE (채널 미지정 시)
@@ -104,6 +110,13 @@ CHANNEL_NARRATIVE_STYLES: dict[str, dict] = {
         "hook_instruction_ko": "가장 궁금증을 자극하는 현상/사실을 던져라. 답은 마지막에.",
         "hook_instruction_en": "Present the most curiosity-triggering phenomenon. Save the answer for the end.",
         "ending_style": "answer_reveal",  # 마지막에 답 공개
+    },
+    "exploratodo": {
+        "hook_type": "bold_claim",  # 대담한 주장으로 시작
+        "hook_instruction_ko": "믿기 어려운 사실을 단언하라. '~라는 거 알고 있었어?'",
+        "hook_instruction_en": "Start with a bold, unbelievable claim. 'Did you know that...?'",
+        "hook_instruction_es": "Empieza con una afirmación audaz e increíble. '¿Sabías que...?'",
+        "ending_style": "call_to_action",  # 구독/좋아요 유도
     },
 }
 
@@ -153,6 +166,24 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tone": "curious, wonder-filled, educational storytelling",
         "caption_font_color": "#FFFDE7",
         "caption_stroke_color": "#1B5E20",
+        "upload_accounts": {
+            "youtube": None,
+            "tiktok": None,
+            "instagram": None,
+        },
+    },
+    "exploratodo": {
+        "language": "es",
+        "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
+        "tts_speed": 0.9,
+        "bgm_theme": "random",
+        "platforms": ["youtube", "tiktok"],
+        "caption_size": 44,
+        "caption_y": 28,
+        "visual_style": "bold, adventurous, warm sunset tones, explorer aesthetic",
+        "tone": "energético, apasionado, como un amigo que te cuenta algo increíble",
+        "caption_font_color": "#FFF8E1",
+        "caption_stroke_color": "#BF360C",
         "upload_accounts": {
             "youtube": None,
             "tiktok": None,
