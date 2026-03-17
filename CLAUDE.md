@@ -47,7 +47,7 @@ KLING_SECRET_KEY=     # Cinematic video (optional)
 - Imagen/DALL-E images: vertical 1024x1792, NO text in images
 - Audio: ElevenLabs primary, LUFS normalized to -14 dB
 - Veo3/Kling: async polling with timeout, fallback to static image
-- Remotion: 24fps, 9:16 aspect ratio
+- Remotion: 30fps, 9:16 aspect ratio (no intro, outro only)
 
 ## Git
 - Branch: feature branches off main

@@ -126,7 +126,9 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str, model_o
     return (response.choices[0].message.content or "").strip()
 
 
+import threading as _threading
 _gemini_cache: dict[str, object] = {}  # key → cached_content
+_gemini_cache_lock = _threading.Lock()
 
 def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
     """Google Gemini API로 기획안을 생성합니다 (google-genai SDK). 시스템 프롬프트 캐싱 지원."""
@@ -138,7 +140,8 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
 
     # Context Caching: 시스템 프롬프트를 캐시하여 토큰 비용 절감
     cache_key = f"{api_key}:{model_name}"
-    cached = _gemini_cache.get(cache_key)
+    with _gemini_cache_lock:
+        cached = _gemini_cache.get(cache_key)
     try:
         if cached:
             # 캐시된 컨텍스트 사용
@@ -156,7 +159,8 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
             return (response.text or "").strip()
     except Exception:
         # 캐시 만료 등 실패 시 일반 요청으로 폴백
-        _gemini_cache.pop(cache_key, None)
+        with _gemini_cache_lock:
+            _gemini_cache.pop(cache_key, None)
 
     # 캐시 생성 시도 (실패해도 일반 요청으로 진행)
     try:
@@ -167,7 +171,8 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
                 ttl="600s",
             ),
         )
-        _gemini_cache[cache_key] = cached.name
+        with _gemini_cache_lock:
+            _gemini_cache[cache_key] = cached.name
         response = client.models.generate_content(
             model=model_name,
             contents=user_content,

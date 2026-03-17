@@ -157,12 +157,12 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
 
 
 # 플랫폼별 렌더링 설정
-# youtube: 인트로 + 아웃트로 + 제목 오버레이 포함
-# tiktok/reels: 인트로/아웃트로/제목 없이 본편만
+# 숏폼 리텐션 연구: 인트로는 첫 1.7초 이탈의 주범 → 전 플랫폼에서 제거
+# 아웃트로만 공통 적용 (CTA + 채널 브랜딩)
 PLATFORM_CONFIGS = {
-    "youtube": {"intro": True, "outro": True, "title": True},
-    "tiktok":  {"intro": False, "outro": False, "title": True},
-    "reels":   {"intro": False, "outro": False, "title": True},
+    "youtube": {"intro": False, "outro": True, "title": True},
+    "tiktok":  {"intro": False, "outro": True, "title": True},
+    "reels":   {"intro": False, "outro": True, "title": True},
 }
 
 

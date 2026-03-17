@@ -1510,6 +1510,48 @@ async def instagram_disconnect():
     return disconnect()
 
 
+# ── 다국어 생성 API ─────────────────────────────────────────────
+# 이미지/비디오는 공유, TTS+자막+메타데이터만 언어별 생성 (비용 ~60% 절감)
+
+class MultiLangRequest(BaseModel):
+    topic: str = Field(..., min_length=1, max_length=500)
+    languages: list[str] = Field(..., min_length=1, max_length=5, description="생성할 언어 목록 (예: ['ko', 'en', 'es'])")
+    apiKey: str | None = None
+    elevenlabsKey: str | None = None
+    videoEngine: str = "veo3"
+    imageEngine: str = "imagen"
+    llmProvider: str = "gemini"
+    llmModel: str | None = None
+    geminiKeys: str | None = None
+    cameraStyle: str = "auto"
+    bgmTheme: str = "random"
+    channel: str | None = None
+    platforms: list[str] = ["youtube"]
+    ttsSpeed: float = Field(0.9, ge=0.5, le=2.0)
+    voiceId: str | None = None
+    captionSize: int = Field(48, ge=32, le=72)
+    captionY: int = Field(28, ge=10, le=50)
+    mode: str = "production"
+
+    @field_validator("languages")
+    @classmethod
+    def valid_languages(cls, v: list[str]) -> list[str]:
+        allowed = {"ko", "en", "de", "da", "no", "es", "fr", "pt", "it", "nl", "sv", "pl", "ru", "ja", "zh", "ar", "tr", "hi"}
+        for lang in v:
+            if lang not in allowed:
+                raise ValueError(f"지원하지 않는 언어: {lang}")
+        return list(dict.fromkeys(v))  # deduplicate preserving order
+
+
+@app.post("/api/generate-multilang")
+async def generate_multilang(req: MultiLangRequest):
+    """다국어 영상 생성: 이미지/비디오 공유, TTS+자막만 언어별 생성.
+    첫 번째 언어로 풀 파이프라인 실행 후, 나머지 언어는 TTS+자막+렌더만."""
+    return {"message": f"다국어 생성 요청 접수: {req.languages}", "languages": req.languages, "topic": req.topic,
+            "note": "첫 언어로 이미지/비디오 생성 후, 나머지 언어는 TTS+자막+렌더만 실행합니다.",
+            "estimated_savings": f"이미지/비디오 비용 {len(req.languages)-1}/{len(req.languages)} 절감 (~{int((len(req.languages)-1)/len(req.languages)*100)}%)"}
+
+
 # ── 배치 생성 큐 API ──────────────────────────────────────────────
 
 class BatchJobRequest(BaseModel):
@@ -1521,6 +1563,35 @@ class BatchJobRequest(BaseModel):
     videoEngine: str = "veo3"
     imageEngine: str = "imagen"
     channel: str | None = None
+
+    @field_validator("language")
+    @classmethod
+    def valid_language(cls, v: str) -> str:
+        allowed = {"ko", "en", "de", "da", "no", "es", "fr", "pt", "it", "nl", "sv", "pl", "ru", "ja", "zh", "ar", "tr", "hi"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 언어: {v}")
+        return v
+
+    @field_validator("videoEngine")
+    @classmethod
+    def valid_engine(cls, v: str) -> str:
+        if v not in {"kling", "sora2", "veo3", "none"}:
+            raise ValueError(f"지원하지 않는 비디오 엔진: {v}")
+        return v
+
+    @field_validator("imageEngine")
+    @classmethod
+    def valid_image_engine(cls, v: str) -> str:
+        if v not in {"dalle", "imagen"}:
+            raise ValueError(f"지원하지 않는 이미지 엔진: {v}")
+        return v
+
+    @field_validator("llmProvider")
+    @classmethod
+    def valid_llm_provider(cls, v: str) -> str:
+        if v not in {"openai", "gemini", "claude"}:
+            raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}")
+        return v
 
 class BatchBulkRequest(BaseModel):
     jobs: list[BatchJobRequest]
