@@ -7,6 +7,8 @@ export interface KeyStatus {
   claude_key: boolean;
   kling_access: boolean;
   kling_secret: boolean;
+  hailuo: boolean;
+  runway: boolean;
   tavily: boolean;
 }
 
@@ -80,6 +82,16 @@ export const KEY_CONFIGS: KeyConfig[] = [
     group: "extra",
   },
   {
+    id: "hailuo",
+    label: "HailuoAI API Key",
+    description: "HailuoAI (MiniMax) 비디오 엔진",
+    envName: "HAILUO_API_KEY",
+    statusKey: "hailuo",
+    required: false,
+    multiKey: false,
+    group: "extra",
+  },
+  {
     id: "kling_access",
     label: "Kling Access Key",
     description: "Kling AI 비디오 엔진 (Access Key)",
@@ -95,6 +107,16 @@ export const KEY_CONFIGS: KeyConfig[] = [
     description: "Kling AI 비디오 엔진 (Secret Key)",
     envName: "KLING_SECRET_KEY",
     statusKey: "kling_secret",
+    required: false,
+    multiKey: false,
+    group: "extra",
+  },
+  {
+    id: "runway",
+    label: "Runway API Key",
+    description: "Runway Gen-4 비디오 엔진",
+    envName: "RUNWAY_API_KEY",
+    statusKey: "runway",
     required: false,
     multiKey: false,
     group: "extra",

@@ -3,6 +3,8 @@
 - Veo 3: Google genai SDK 직접 연동 (Gemini 키 사용)
 - Sora 2: OpenAI API 직접 연동
 - Kling: Kling AI 직접 연동 (KLING_ACCESS_KEY/SECRET_KEY)
+- HailuoAI: MiniMax API 연동 (HAILUO_API_KEY)
+- Runway: Runway Gen-4 API 연동 (RUNWAY_API_KEY)
 """
 
 import os
@@ -14,9 +16,11 @@ import base64
 
 # 지원 엔진 목록 (프론트엔드 드롭다운용)
 SUPPORTED_ENGINES = {
+    "veo3": {"name": "Veo 3", "desc": "Google API 직접 연동", "provider": "google"},
+    "hailuo": {"name": "HailuoAI", "desc": "MiniMax 비디오 생성", "provider": "minimax"},
     "kling": {"name": "Kling 3.0", "desc": "시네마틱 모션", "provider": "kling_direct"},
     "sora2": {"name": "Sora 2", "desc": "최고 품질 (OpenAI)", "provider": "openai"},
-    "veo3": {"name": "Veo 3", "desc": "Google API 직접 연동", "provider": "google"},
+    "runway": {"name": "Runway Gen-4", "desc": "Runway ML 비디오", "provider": "runway"},
     "none": {"name": "비디오 없음", "desc": "정지 이미지만 사용", "provider": "none"},
 }
 
@@ -36,25 +40,36 @@ from modules.utils.constants import get_motion_style
 def _optimize_prompt_for_engine(engine: str, prompt: str, description: str = "") -> str:
     """엔진별 최적화된 비디오 프롬프트를 생성합니다 (논문 기반).
     - Veo: 구조화된 프롬프트 (카메라·조명·동작 명시)
-    - Kling: 최소화 프롬프트 (주체 + 단일 동작)
+    - Kling: 최소화 프롬프트 (주체 + 단일 동작, 최소 10단어 보존)
     - Sora: 동작 벡터 중심 프롬프트
+    - HailuoAI: 자연어 서술 스타일 (동작 + 분위기)
+    - Runway: 모션 벡터 + 씬 디스크립션
     """
     motion = get_motion_style(prompt, description)
 
     if engine == "veo3":
-        # Veo responds best to structured prompts with explicit camera + start/end state
         return f"{motion}. {prompt}. Cinematic lighting, smooth transition, 4K quality."
 
     if engine == "kling":
-        # Kling is sensitive to over-specification — keep it minimal
-        # Extract core subject and single motion verb
-        words = prompt.split(",")
-        core = words[0].strip() if words else prompt
-        return f"{core}, {motion.split(',')[0].strip().lower()}"
+        # Kling: 과도한 절삭 방지 — 최소 10단어 보존
+        parts = prompt.split(",")
+        core = parts[0].strip()
+        # 첫 콤마 세그먼트가 너무 짧으면 더 포함
+        if len(core.split()) < 10 and len(parts) > 1:
+            core = ", ".join(p.strip() for p in parts[:3])
+        motion_short = motion.split(",")[0].strip().lower()
+        return f"{core}, {motion_short}"
 
     if engine == "sora2":
-        # Sora thinks in motion vectors — emphasize forces and movement
         return f"{motion}, 4K quality. {prompt}"
+
+    if engine == "hailuo":
+        # HailuoAI: 자연어 서술 스타일, 동작과 분위기 강조
+        return f"{prompt}. {motion}. Smooth cinematic motion."
+
+    if engine == "runway":
+        # Runway Gen-4: 씬 디스크립션 + 모션 벡터
+        return f"{motion}. {prompt}. High quality, cinematic."
 
     return f"{motion}. {prompt}"
 
@@ -91,6 +106,18 @@ def check_engine_available(engine: str, google_key: str = None) -> tuple[bool, s
             return True, "Kling AI 직접 연동"
         return False, "KLING_ACCESS_KEY + KLING_SECRET_KEY 필요"
 
+    if engine == "hailuo":
+        key = os.getenv("HAILUO_API_KEY")
+        if key:
+            return True, "HailuoAI (MiniMax) 직접 연동"
+        return False, "HAILUO_API_KEY 필요"
+
+    if engine == "runway":
+        key = os.getenv("RUNWAY_API_KEY")
+        if key:
+            return True, "Runway Gen-4 직접 연동"
+        return False, "RUNWAY_API_KEY 필요"
+
     return False, f"알 수 없는 엔진: {engine}"
 
 
@@ -103,8 +130,10 @@ def _get_available_engines(preferred_engine: str) -> list[str]:
     # Check each engine's key availability
     engine_checks = {
         "veo3": lambda: get_google_key(service="veo3") is not None,
+        "hailuo": lambda: bool(os.getenv("HAILUO_API_KEY")),
         "kling": lambda: bool(os.getenv("KLING_ACCESS_KEY")),
         "sora2": lambda: bool(os.getenv("OPENAI_API_KEY")),
+        "runway": lambda: bool(os.getenv("RUNWAY_API_KEY")),
     }
 
     # Preferred engine first
@@ -188,6 +217,12 @@ def _try_engine(
 
         if engine == "kling":
             return _generate_via_kling_direct(image_path, optimized_prompt, index, topic_folder, description=description)
+
+        if engine == "hailuo":
+            return _generate_via_hailuo(image_path, optimized_prompt, index, topic_folder, description=description)
+
+        if engine == "runway":
+            return _generate_via_runway(image_path, optimized_prompt, index, topic_folder, description=description)
     except Exception as e:
         print(f"[비디오 엔진 오류] {engine} 예외: {e}")
         return None
@@ -288,6 +323,29 @@ def _generate_via_kling_direct(
     """기존 Kling AI 직접 연동"""
     from modules.video.kling import generate_video_from_image as kling_generate
     return kling_generate(image_path, prompt, index, topic_folder, description=description)
+
+
+def _generate_via_hailuo(
+    image_path: str, prompt: str, index: int, topic_folder: str, description: str = ""
+) -> str | None:
+    """HailuoAI (MiniMax) 직접 연동"""
+    from modules.video.hailuo import generate_video_from_image as hailuo_generate
+    return hailuo_generate(image_path, prompt, index, topic_folder, description=description)
+
+
+def _generate_via_runway(
+    image_path: str, prompt: str, index: int, topic_folder: str, description: str = ""
+) -> str | None:
+    """Runway Gen-4 직접 연동 (향후 구현)"""
+    api_key = os.getenv("RUNWAY_API_KEY")
+    if not api_key:
+        print("[Runway 오류] RUNWAY_API_KEY가 없습니다.")
+        return None
+
+    # Runway Gen-4 API 연동 (향후 구현 예정)
+    # https://docs.dev.runwayml.com/
+    print("[Runway] Gen-4 API 연동은 아직 구현되지 않았습니다. 다른 엔진으로 폴백합니다.")
+    return None
 
 
 def _download_video(

@@ -55,6 +55,8 @@ def _mask_error(e: Exception, max_len: int = 200) -> str:
 
 # 취소 토큰: 요청별 이벤트 (generation_id → (Event, created_time))
 _cancel_events: dict[str, tuple[threading.Event, float]] = {}
+# NOTE: _active_generation_id는 MAX_CONCURRENT_GENERATE=1 전제 (단일 활성 요청 추적)
+# 동시 생성 > 1 필요 시 dict 기반으로 리팩토링 필요
 _active_generation_id: str | None = None
 _generation_lock = threading.Lock()
 _CANCEL_EVENT_TTL = 600  # 10분 후 미정리 이벤트 자동 삭제 (비디오 생성 ~8분 고려)
@@ -200,7 +202,7 @@ class GenerateRequest(BaseModel):
     @field_validator("videoEngine")
     @classmethod
     def valid_engine(cls, v: str) -> str:
-        allowed = {"kling", "sora2", "veo3", "none"}
+        allowed = {"veo3", "hailuo", "kling", "sora2", "runway", "none"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
         return v
@@ -348,6 +350,8 @@ async def health_check():
     claude_key = os.getenv("ANTHROPIC_API_KEY", "")
     kling_ak = os.getenv("KLING_ACCESS_KEY", "")
     kling_sk = os.getenv("KLING_SECRET_KEY", "")
+    hailuo_key = os.getenv("HAILUO_API_KEY", "")
+    runway_key = os.getenv("RUNWAY_API_KEY", "")
     tavily_key = os.getenv("TAVILY_API_KEY", "")
 
     def _mask(val: str) -> str:
@@ -362,6 +366,8 @@ async def health_check():
         "claude_key": _is_set(claude_key),
         "kling_access": _is_set(kling_ak, ["YOUR"]),
         "kling_secret": _is_set(kling_sk, ["YOUR"]),
+        "hailuo": _is_set(hailuo_key),
+        "runway": _is_set(runway_key),
         "tavily": _is_set(tavily_key),
     }
 
@@ -375,6 +381,8 @@ async def health_check():
         "claude_key": [_mask(claude_key)] if _is_set(claude_key) else [],
         "kling_access": [_mask(kling_ak)] if _is_set(kling_ak, ["YOUR"]) else [],
         "kling_secret": [_mask(kling_sk)] if _is_set(kling_sk, ["YOUR"]) else [],
+        "hailuo": [_mask(hailuo_key)] if _is_set(hailuo_key) else [],
+        "runway": [_mask(runway_key)] if _is_set(runway_key) else [],
         "tavily": [_mask(tavily_key)] if _is_set(tavily_key) else [],
     }
 
@@ -477,6 +485,16 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
         openai_check = api_key_override or os.getenv("OPENAI_API_KEY", "")
         if not openai_check or openai_check.startswith("sk-proj-YOUR"):
             errors.append("OPENAI_API_KEY (Sora 2 비디오 엔진에 필수)")
+
+    if video_engine == "hailuo":
+        hailuo_check = os.getenv("HAILUO_API_KEY", "")
+        if not hailuo_check:
+            errors.append("HAILUO_API_KEY (HailuoAI 비디오 엔진에 필수)")
+
+    if video_engine == "runway":
+        runway_check = os.getenv("RUNWAY_API_KEY", "")
+        if not runway_check:
+            errors.append("RUNWAY_API_KEY (Runway Gen-4 비디오 엔진에 필수)")
 
     return errors
 
@@ -1064,7 +1082,7 @@ class PrepareRequest(BaseModel):
     @field_validator("videoEngine")
     @classmethod
     def valid_video_engine(cls, v: str) -> str:
-        allowed = {"veo3", "kling", "sora2", "none"}
+        allowed = {"veo3", "hailuo", "kling", "sora2", "runway", "none"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
         return v
@@ -1225,7 +1243,7 @@ class RenderRequest(BaseModel):
     @field_validator("videoEngine")
     @classmethod
     def valid_video_engine(cls, v: str) -> str:
-        allowed = {"veo3", "kling", "sora2", "none"}
+        allowed = {"veo3", "hailuo", "kling", "sora2", "runway", "none"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
         return v
