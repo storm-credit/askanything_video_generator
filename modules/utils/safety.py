@@ -32,9 +32,14 @@ def get_safety_fallback_prompt(original_prompt: str, retry_count: int) -> str:
         if cleaned:
             return cleaned
         # If nothing left after filtering, fall through to generic
-    # Second retry or empty after filter: generic safe prompt
-    topic_hint = " ".join(original_prompt.split()[:6])
+    # Second retry or empty after filter: safe prompt retaining more context
+    # 원본에서 금지 키워드를 제거한 뒤 핵심 단어를 최대 15개 보존
+    words = _BANNED_KEYWORDS.sub("", original_prompt).split()
+    topic_hint = " ".join(w for w in words if len(w) > 2)[:150]  # 짧은 단어 제외, 150자 제한
+    if not topic_hint:
+        # 폴백에도 금지어 제거 적용
+        topic_hint = " ".join(_BANNED_KEYWORDS.sub("", original_prompt).split()[:6])
     return (
-        f"A safe, beautiful cinematic visualization related to: {topic_hint}. "
-        "Atmospheric lighting, detailed textures, peaceful scene."
+        f"A safe, beautiful cinematic visualization: {topic_hint}. "
+        "Atmospheric lighting, detailed textures, peaceful scene, vertical 9:16 composition."
     )

@@ -1,6 +1,7 @@
 import os
 import sys
 import io
+import copy
 import shutil
 import asyncio
 import threading
@@ -39,14 +40,16 @@ async def _lifespan(app):
 app = FastAPI(lifespan=_lifespan)
 
 # 동시 생성 요청 제한 (GPU/API 과부하 방지)
+# 모델/키 오버라이드는 함수 파라미터로 전달 — os.environ 미사용으로 동시 요청 안전
 _generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "1")))
 # 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
 _cut_executor = ThreadPoolExecutor(max_workers=4)
 
-# 취소 토큰: 현재 진행 중인 생성 작업을 중단할 수 있는 이벤트
-_cancel_event = threading.Event()
+# 취소 토큰: 요청별 이벤트 (generation_id → (Event, created_time))
+_cancel_events: dict[str, tuple[threading.Event, float]] = {}
 _active_generation_id: str | None = None
 _generation_lock = threading.Lock()
+_CANCEL_EVENT_TTL = 600  # 10분 후 미정리 이벤트 자동 삭제
 
 
 @app.get("/")
@@ -66,7 +69,7 @@ os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # CORS 설정 (프론트엔드 연동)
-_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:*").split(",")
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000").split(",")
 # 개발 환경: 와일드카드 포함 시 모든 origin 허용
 if any("*" in o for o in _cors_origins):
     _cors_origins = ["*"]
@@ -154,8 +157,8 @@ class GenerateRequest(BaseModel):
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
     ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
     voiceId: str | None = None  # ElevenLabs 음성 ID
-    captionSize: int = 48  # 자막 폰트 크기 (px): 32~72
-    captionY: int = 28  # 자막 높이 (%): 10~50, 하단 기준
+    captionSize: int = Field(48, ge=32, le=72)  # 자막 폰트 크기 (px)
+    captionY: int = Field(28, ge=10, le=50)  # 자막 높이 (%): 하단 기준
 
     @field_validator("language")
     @classmethod
@@ -369,8 +372,8 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
 async def cancel_generation():
     """현재 진행 중인 생성 작업을 취소합니다."""
     with _generation_lock:
-        if _active_generation_id:
-            _cancel_event.set()
+        if _active_generation_id and _active_generation_id in _cancel_events:
+            _cancel_events[_active_generation_id][0].set()
             print(f"[취소] 생성 작업 취소 요청: {_active_generation_id}")
             return {"status": "cancelled", "generation_id": _active_generation_id}
         return {"status": "idle", "message": "진행 중인 생성 작업이 없습니다."}
@@ -401,39 +404,32 @@ async def generate_video_endpoint(req: GenerateRequest):
     import uuid as _uuid
     generation_id = _uuid.uuid4().hex[:8]
 
-    # 모델 버전 오버라이드: 요청에 명시된 모델 → 환경변수로 임시 설정
-    _model_overrides: dict[str, str] = {}
-    if req.llmModel:
-        env_key = {"gemini": "GEMINI_MODEL", "openai": "OPENAI_MODEL", "claude": "CLAUDE_MODEL"}.get(llm_provider)
-        if env_key:
-            _model_overrides[env_key] = req.llmModel
-    if req.imageModel:
-        _model_overrides["IMAGEN_MODEL"] = req.imageModel
-    if req.videoModel:
-        _model_overrides["VEO_MODEL"] = req.videoModel
-    # 프론트엔드 멀티키 → 환경변수로 임시 설정 (로테이션용)
-    if req.geminiKeys:
-        _model_overrides["GEMINI_API_KEYS"] = req.geminiKeys
+    # 모델 버전 오버라이드: 함수 파라미터로 직접 전달 (os.environ 비사용)
+    llm_model_override = req.llmModel or None
+    image_model_override = req.imageModel or None
+    video_model_override = req.videoModel or None
+    gemini_keys_override = req.geminiKeys or None
 
     async def sse_generator():
         global _active_generation_id
 
-        # 모델 오버라이드 적용 (요청 스코프)
-        _prev_env: dict[str, str | None] = {}
-        for k, v in _model_overrides.items():
-            _prev_env[k] = os.environ.get(k)
-            os.environ[k] = v
-
-        # 이전 작업 취소 + 새 작업 등록
+        # 이전 작업 취소 + 새 작업 등록 (요청별 이벤트로 격리)
+        import time as _t
+        cancel_event = threading.Event()
         with _generation_lock:
-            if _active_generation_id:
-                _cancel_event.set()
+            # 오래된 이벤트 정리 (메모리 누수 방지)
+            now = _t.time()
+            stale = [gid for gid, (_, ts) in _cancel_events.items() if now - ts > _CANCEL_EVENT_TTL]
+            for gid in stale:
+                _cancel_events.pop(gid, None)
+            if _active_generation_id and _active_generation_id in _cancel_events:
+                _cancel_events[_active_generation_id][0].set()
                 print(f"[취소] 새 요청으로 이전 작업({_active_generation_id}) 자동 취소")
-            _cancel_event.clear()
+            _cancel_events[generation_id] = (cancel_event, now)
             _active_generation_id = generation_id
 
         def _is_cancelled() -> bool:
-            return _cancel_event.is_set()
+            return cancel_event.is_set()
 
         # 동시 요청 제한: 슬롯 부족 시 대기 안내
         if _generate_semaphore.locked():
@@ -462,8 +458,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                     yield {"data": f"WARN|[ElevenLabs 크레딧 경고] {remaining:,}/{limit:,}자 남음 ({pct:.0f}%).\n"}
 
             # Google 키 가용성 경고
-            total_keys = count_google_keys()
-            avail_keys = count_available_keys()
+            total_keys = count_google_keys(extra_keys=gemini_keys_override)
+            avail_keys = count_available_keys(extra_keys=gemini_keys_override)
             if total_keys > 0 and avail_keys < total_keys:
                 blocked_count = total_keys - avail_keys
                 if avail_keys == 0:
@@ -478,7 +474,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # Google 키 로테이션 (비디오 엔진용 — 서비스별 차단 고려)
             video_svc = active_video_engine if active_video_engine in ("veo3",) else None
-            google_key_for_video = get_google_key(llm_key_override, service=video_svc)
+            google_key_for_video = get_google_key(llm_key_override, service=video_svc, extra_keys=gemini_keys_override)
 
             # 비디오 엔진 사전 검증
             if active_video_engine != "none":
@@ -492,7 +488,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 단계 1: LLM 기획 (Gemini / ChatGPT / Claude 선택)
             # Gemini 프로바이더일 때 키 로테이션 적용
-            llm_key_for_request = get_google_key(llm_key_override) if llm_provider == "gemini" else llm_key_override
+            llm_key_for_request = get_google_key(llm_key_override, extra_keys=gemini_keys_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
             cuts, topic_folder, video_title = await loop.run_in_executor(
                 None,
@@ -503,6 +499,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     llm_provider=llm_provider,
                     llm_key_override=llm_key_for_request,
                     channel=req.channel,
+                    llm_model=llm_model_override,
                 ),
             )
 
@@ -536,7 +533,8 @@ async def generate_video_endpoint(req: GenerateRequest):
             scripts = [cut["script"] for cut in cuts]
 
             # 이미지/TTS 동시성 제한 (API 레이트 리밋 방지)
-            image_semaphore = threading.Semaphore(2)  # 이미지 최대 2개 동시
+            # NOTE: MAX_CONCURRENT_GENERATE > 1 시 이 세마포어를 모듈 레벨로 이동 필요
+            image_semaphore = threading.Semaphore(3)  # 이미지 최대 3개 동시
 
             # 이미지 엔진에 따라 생성 함수 선택
             gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
@@ -544,7 +542,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             def _get_image_key():
                 """이미지 생성 시마다 다른 키 사용 (로테이션)"""
                 if image_engine == "imagen":
-                    return get_google_key(llm_key_override, service="imagen")
+                    return get_google_key(llm_key_override, service="imagen", extra_keys=gemini_keys_override)
                 return api_key_override
 
             def process_cut(i, cut):
@@ -561,7 +559,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 with image_semaphore:
                     try:
                         cut_image_key = _get_image_key()
-                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
+                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"이미지: {exc}")
@@ -574,9 +572,11 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 def _run_video():
                     try:
-                        cut_video_key = get_google_key(llm_key_override, service=active_video_engine)
+                        cut_video_key = get_google_key(llm_key_override, service=active_video_engine, extra_keys=gemini_keys_override)
                         video_result[0] = generate_video_from_image(
-                            img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key
+                            img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key,
+                            description=cut.get("description", ""),
+                            veo_model=video_model_override, gemini_api_keys=gemini_keys_override,
                         )
                     except Exception as exc:
                         with errors_lock:
@@ -808,16 +808,11 @@ async def generate_video_endpoint(req: GenerateRequest):
             else:
                 yield {"data": f"ERROR|[시스템 오류] {err_str}\n"}
           finally:
-            # 모델 오버라이드 복원
-            for k, prev in _prev_env.items():
-                if prev is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = prev
             # 작업 완료/취소 후 정리
             with _generation_lock:
                 if _active_generation_id == generation_id:
                     _active_generation_id = None
+                _cancel_events.pop(generation_id, None)
 
     return EventSourceResponse(sse_generator())
 
@@ -826,6 +821,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
 # 준비된 세션 저장소 (메모리 — 단일 사용자 기준)
 _prepared_sessions: dict[str, dict] = {}
+_session_lock = threading.Lock()
 _SESSION_MAX_AGE = 3600  # 1시간 후 자동 만료
 _SESSION_MAX_COUNT = 10  # 최대 세션 수
 
@@ -834,14 +830,15 @@ def _cleanup_sessions():
     """오래된 세션 자동 정리 (메모리 누수 방지)."""
     import time
     now = time.time()
-    expired = [sid for sid, s in _prepared_sessions.items() if now - s.get("_created", 0) > _SESSION_MAX_AGE]
-    for sid in expired:
-        _prepared_sessions.pop(sid, None)
-    # 최대 개수 초과 시 가장 오래된 것부터 삭제
-    if len(_prepared_sessions) > _SESSION_MAX_COUNT:
-        sorted_sessions = sorted(_prepared_sessions.items(), key=lambda x: x[1].get("_created", 0))
-        for sid, _ in sorted_sessions[:len(_prepared_sessions) - _SESSION_MAX_COUNT]:
+    with _session_lock:
+        expired = [sid for sid, s in _prepared_sessions.items() if now - s.get("_created", 0) > _SESSION_MAX_AGE]
+        for sid in expired:
             _prepared_sessions.pop(sid, None)
+        # 최대 개수 초과 시 가장 오래된 것부터 삭제
+        if len(_prepared_sessions) > _SESSION_MAX_COUNT:
+            sorted_sessions = sorted(_prepared_sessions.items(), key=lambda x: x[1].get("_created", 0))
+            for sid, _ in sorted_sessions[:len(_prepared_sessions) - _SESSION_MAX_COUNT]:
+                _prepared_sessions.pop(sid, None)
 
 
 class PrepareRequest(BaseModel):
@@ -849,25 +846,57 @@ class PrepareRequest(BaseModel):
     apiKey: str | None = None
     llmProvider: str = "gemini"
     llmKey: str | None = None
+    llmModel: str | None = None      # LLM 모델 오버라이드
+    imageModel: str | None = None    # 이미지 모델 오버라이드
     geminiKeys: str | None = None  # 프론트엔드 멀티키 (쉼표 구분)
     imageEngine: str = "imagen"
     language: str = "ko"
     videoEngine: str = "none"  # prepare 단계에서는 비디오 미생성이 기본
     channel: str | None = None
 
+    @field_validator("language")
+    @classmethod
+    def valid_language(cls, v: str) -> str:
+        allowed = {"ko", "en", "de", "da", "no", "es", "fr", "pt", "it", "nl", "sv", "pl", "ru", "ja", "zh", "ar", "tr", "hi"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 언어: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("imageEngine")
+    @classmethod
+    def valid_image_engine(cls, v: str) -> str:
+        allowed = {"imagen", "dalle"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 이미지 엔진: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("videoEngine")
+    @classmethod
+    def valid_video_engine(cls, v: str) -> str:
+        allowed = {"veo3", "kling", "sora2", "none"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("llmProvider")
+    @classmethod
+    def valid_llm_provider(cls, v: str) -> str:
+        allowed = {"gemini", "openai", "claude"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}. 허용: {allowed}")
+        return v
+
 
 @app.post("/api/prepare")
 async def prepare_endpoint(req: PrepareRequest):
     """1단계: LLM 스크립트 + 이미지 생성만 수행. TTS/렌더는 하지 않음."""
-    # 프론트엔드 멀티키 → 환경변수 임시 설정
-    _prev_gemini_keys = os.environ.get("GEMINI_API_KEYS")
-    if req.geminiKeys:
-        os.environ["GEMINI_API_KEYS"] = req.geminiKeys
 
     async def sse_generator():
       async with _generate_semaphore:
+        # 프론트엔드 멀티키: 파라미터로 직접 전달 (os.environ 비사용)
+        _gemini_keys = req.geminiKeys or None
         try:
-            llm_key_for_request = get_google_key(req.llmKey) if req.llmProvider == "gemini" else req.llmKey
+            llm_key_for_request = get_google_key(req.llmKey, extra_keys=_gemini_keys) if req.llmProvider == "gemini" else req.llmKey
             loop = asyncio.get_running_loop()
 
             yield {"data": "PROG|10\n"}
@@ -878,7 +907,7 @@ async def prepare_endpoint(req: PrepareRequest):
                 lambda: generate_cuts(
                     req.topic, api_key_override=req.apiKey, lang=req.language,
                     llm_provider=req.llmProvider, llm_key_override=llm_key_for_request,
-                    channel=req.channel,
+                    channel=req.channel, llm_model=req.llmModel,
                 ),
             )
 
@@ -893,9 +922,9 @@ async def prepare_endpoint(req: PrepareRequest):
             image_paths = []
             for i, cut in enumerate(cuts):
                 try:
-                    img_key = get_google_key(req.llmKey, service="imagen") if req.imageEngine == "imagen" else req.apiKey
+                    img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys) if req.imageEngine == "imagen" else req.apiKey
                     img_path = await loop.run_in_executor(
-                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k)
+                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys)
                     )
                     image_paths.append(img_path)
                 except Exception as exc:
@@ -911,17 +940,17 @@ async def prepare_endpoint(req: PrepareRequest):
             import time as _time
             _cleanup_sessions()
             session_id = _uuid.uuid4().hex[:12]
-            _prepared_sessions[session_id] = {
-                "cuts": cuts,
-                "topic_folder": topic_folder,
-                "title": video_title,
-                "image_paths": image_paths,
-                "topic": req.topic,
-                "language": req.language,
-                "apiKey": req.apiKey,
-                "llmKey": req.llmKey,
-                "_created": _time.time(),
-            }
+            with _session_lock:
+                _prepared_sessions[session_id] = {
+                    "cuts": cuts,
+                    "topic_folder": topic_folder,
+                    "title": video_title,
+                    "image_paths": image_paths,
+                    "topic": req.topic,
+                    "language": req.language,
+                    # API 키는 세션에 저장하지 않음 (보안) — 렌더 요청 시 재전달 필요
+                    "_created": _time.time(),
+                }
 
             # 미리보기 데이터 전송
             preview_cuts = []
@@ -946,12 +975,6 @@ async def prepare_endpoint(req: PrepareRequest):
         except Exception as e:
             traceback.print_exc()
             yield {"data": f"ERROR|[준비 오류] {str(e)}\n"}
-        finally:
-            # 프론트엔드 멀티키 환경변수 복원
-            if _prev_gemini_keys is not None:
-                os.environ["GEMINI_API_KEYS"] = _prev_gemini_keys
-            elif "GEMINI_API_KEYS" in os.environ and req.geminiKeys:
-                del os.environ["GEMINI_API_KEYS"]
 
     return EventSourceResponse(sse_generator())
 
@@ -959,6 +982,8 @@ async def prepare_endpoint(req: PrepareRequest):
 class RenderRequest(BaseModel):
     sessionId: str
     cuts: list[dict]  # 수정된 스크립트 포함: [{index, script}, ...]
+    apiKey: str | None = None       # 렌더 단계에서 재전달 (세션에 저장하지 않음)
+    llmKey: str | None = None       # 렌더 단계에서 재전달
     elevenlabsKey: str | None = None
     ttsSpeed: float = 0.9
     videoEngine: str = "none"
@@ -966,27 +991,30 @@ class RenderRequest(BaseModel):
     bgmTheme: str = "random"
     channel: str | None = None
     platforms: list[str] = ["youtube"]
-    captionSize: int = 48
-    captionY: int = 28
+    captionSize: int = Field(48, ge=32, le=72)
+    captionY: int = Field(28, ge=10, le=50)
     outputPath: str | None = None
+    voiceId: str | None = None  # ElevenLabs 음성 ID ("auto" → 주제 분석 자동 선택)
 
 
 @app.post("/api/render")
 async def render_endpoint(req: RenderRequest):
     """2단계: 수정된 스크립트로 TTS → Whisper → Remotion 렌더링."""
-    session = _prepared_sessions.get(req.sessionId)
+    _cleanup_sessions()
+    with _session_lock:
+        session = _prepared_sessions.get(req.sessionId)
     if not session:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"error": "세션이 만료되었습니다. 다시 준비해주세요."})
 
     async def sse_generator():
         try:
-            cuts = session["cuts"]
+            cuts = copy.deepcopy(session["cuts"])
             topic_folder = session["topic_folder"]
             video_title = session["title"]
             image_paths = session["image_paths"]
             language = session["language"]
-            api_key_override = session["apiKey"]
+            api_key_override = req.apiKey or os.getenv("OPENAI_API_KEY", "")
             elevenlabs_key_override = req.elevenlabsKey or os.getenv("ELEVENLABS_API_KEY", "")
 
             # 수정된 스크립트 반영
@@ -998,11 +1026,16 @@ async def render_endpoint(req: RenderRequest):
             scripts = [cut["script"] for cut in cuts]
             loop = asyncio.get_running_loop()
 
-            # 채널별 Voice ID
+            # 음성 선택: voiceId(auto/직접) > 채널 설정 > 기본값
             render_voice_id = None
-            render_preset = get_channel_preset(req.channel)
-            if render_preset:
-                render_voice_id = render_preset.get("voice_id")
+            if req.voiceId == "auto":
+                render_voice_id = _auto_select_voice(video_title, language)
+            elif req.voiceId:
+                render_voice_id = req.voiceId
+            if not render_voice_id:
+                render_preset = get_channel_preset(req.channel)
+                if render_preset:
+                    render_voice_id = render_preset.get("voice_id")
 
             yield {"data": "PROG|10\n"}
             yield {"data": "[음성] TTS 녹음 + 타임스탬프 추출 시작...\n"}
@@ -1045,10 +1078,10 @@ async def render_endpoint(req: RenderRequest):
                 for i, img_path in enumerate(image_paths):
                     if img_path and os.path.exists(img_path):
                         try:
-                            llm_key = session.get("llmKey")
+                            llm_key = req.llmKey  # 세션 대신 요청에서 키 수신 (보안)
                             vid_key = get_google_key(llm_key, service=active_video_engine)
                             vid = await loop.run_in_executor(
-                                None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"]: generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vid_key)
+                                None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"], vk=vid_key, desc=cuts[idx].get("description", ""): generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vk, description=desc)
                             )
                             if vid:
                                 visual_paths[i] = vid
@@ -1190,7 +1223,8 @@ async def youtube_callback(code: str, state: str | None = None):
             "<script>window.close()</script></body></html>"
         )
     except Exception as e:
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{e}</p></body></html>", status_code=400)
+        import html as _html
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
 
 
 @app.post("/api/youtube/upload")
@@ -1198,9 +1232,10 @@ async def youtube_upload(req: YouTubeUploadRequest):
     from modules.upload.youtube import upload_video
     try:
         # 경로 보안 검증
+        from pathlib import Path as _P
         abs_path = os.path.abspath(os.path.realpath(req.video_path))
         assets_dir = os.path.abspath(os.path.realpath("assets"))
-        if not abs_path.startswith(assets_dir):
+        if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
         loop = asyncio.get_running_loop()
@@ -1267,16 +1302,18 @@ async def tiktok_callback(code: str, state: str | None = None):
             "<script>window.close()</script></body></html>"
         )
     except Exception as e:
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{e}</p></body></html>", status_code=400)
+        import html as _html
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
 
 
 @app.post("/api/tiktok/upload")
 async def tiktok_upload(req: TikTokUploadRequest):
     from modules.upload.tiktok import upload_video
     try:
+        from pathlib import Path as _P
         abs_path = os.path.abspath(os.path.realpath(req.video_path))
         assets_dir = os.path.abspath(os.path.realpath("assets"))
-        if not abs_path.startswith(assets_dir):
+        if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
         loop = asyncio.get_running_loop()
@@ -1341,16 +1378,18 @@ async def instagram_callback(code: str, state: str | None = None):
             "<script>window.close()</script></body></html>"
         )
     except Exception as e:
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{e}</p></body></html>", status_code=400)
+        import html as _html
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
 
 
 @app.post("/api/instagram/upload")
 async def instagram_upload(req: InstagramUploadRequest):
     from modules.upload.instagram import upload_reels
     try:
+        from pathlib import Path as _P
         abs_path = os.path.abspath(os.path.realpath(req.video_path))
         assets_dir = os.path.abspath(os.path.realpath("assets"))
-        if not abs_path.startswith(assets_dir):
+        if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
         loop = asyncio.get_running_loop()

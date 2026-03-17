@@ -20,7 +20,7 @@ def _generate_jwt(ak: str, sk: str) -> str:
     }
     return jwt.encode(payload, sk, headers=headers)
 
-def generate_video_from_image(image_path: str, prompt: str, index: int, topic_folder: str, ak_override: str = None, sk_override: str = None) -> str | None:
+def generate_video_from_image(image_path: str, prompt: str, index: int, topic_folder: str, ak_override: str = None, sk_override: str = None, description: str = "") -> str | None:
     """
     Kling AI를 사용하여 정지 이미지를 5초짜리 시네마틱 숏폼 비디오로 변환합니다.
     """
@@ -59,7 +59,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     payload = {
         "model": "kling-v1",
         "image": img_b64,
-        "prompt": f"{get_motion_style(prompt)}, 4K quality. {prompt}",
+        "prompt": f"{get_motion_style(prompt, description)}, 4K quality. {prompt}",
         "duration": "5"
     }
     
@@ -99,8 +99,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     max_polls = 90  # 90 * 5초 = 450초 (7.5분)
     timed_out = True
     for poll_iter in range(max_polls):
-        if poll_iter > 0:
-            time.sleep(5)
+        time.sleep(5)  # 매 반복 대기 (첫 폴링도 제출 직후 낭비 방지)
 
         try:
             poll_resp = requests.get(poll_url, headers=headers, timeout=30)
@@ -125,6 +124,18 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
                 elapsed = (poll_iter + 1) * 5
                 print(f"  [Kling AI] 컷 {index+1} 렌더링 진행 중... ({elapsed}초 경과, 상태: {status})")
 
+        except requests.exceptions.HTTPError as e:
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code in (401, 403):
+                print(f"[Kling AI] JWT 만료/인증 오류 감지 — 토큰 재발급 후 재시도")
+                try:
+                    token = _generate_jwt(ak, sk)
+                    headers["Authorization"] = f"Bearer {token}"
+                except Exception as jwt_err:
+                    print(f"[Kling AI 오류] JWT 재발급 실패: {jwt_err}")
+                    return None
+            else:
+                print(f"[Kling AI 대기 중 오류] {e}")
+            continue
         except Exception as e:
             print(f"[Kling AI 대기 중 오류] {e}")
             continue

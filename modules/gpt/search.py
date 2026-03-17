@@ -15,7 +15,7 @@ def get_fact_check_context(topic: str) -> str:
     GPT 컨텍스트로 주입할 문자열을 반환합니다. 동일 주제는 1시간 캐시됩니다.
     """
     # 캐시 확인 (스레드 안전)
-    topic_hash = hashlib.md5(topic.encode()).hexdigest()
+    topic_hash = hashlib.sha256(topic.encode()).hexdigest()
     with _cache_lock:
         cached = _fact_cache.get(topic_hash)
         if cached and time.time() - cached[0] < _CACHE_TTL:

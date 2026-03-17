@@ -25,6 +25,9 @@ def generate_video_veo(
     index: int,
     topic_folder: str,
     api_key: str = None,
+    description: str = "",
+    model_override: str | None = None,
+    gemini_api_keys: str | None = None,
 ) -> str | None:
     """
     Google Veo 3로 이미지를 비디오로 변환합니다.
@@ -48,8 +51,8 @@ def generate_video_veo(
     mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/png")
 
-    # 모델 체인: 환경변수 오버라이드 시 단일 모델, 아니면 Standard → Fast
-    override_model = os.getenv("VEO_MODEL")
+    # 모델 체인: 파라미터 오버라이드 → 환경변수 → 기본 모델 체인
+    override_model = model_override or os.getenv("VEO_MODEL")
     if override_model:
         model_chain = [{"id": override_model, "tag": "override", "label": override_model}]
     else:
@@ -68,9 +71,9 @@ def generate_video_veo(
         for attempt in range(MAX_KEY_RETRIES):
             # 키 선택 (이전에 실패한 키 제외)
             if attempt == 0:
-                final_key = current_key or get_google_key(service=service_tag)
+                final_key = current_key or get_google_key(service=service_tag, extra_keys=gemini_api_keys)
             else:
-                final_key = get_google_key(service=service_tag, exclude=tried_keys)
+                final_key = get_google_key(service=service_tag, exclude=tried_keys, extra_keys=gemini_api_keys)
 
             if not final_key:
                 break  # 이 모델에 사용 가능한 키 없음 → 다음 모델로
@@ -88,7 +91,7 @@ def generate_video_veo(
             try:
                 operation = client.models.generate_videos(
                     model=model_id,
-                    prompt=f"{get_motion_style(prompt)}, 4K quality. {prompt}",
+                    prompt=f"{get_motion_style(prompt, description)}, 4K quality. {prompt}",
                     image=types.Image(image_bytes=img_bytes, mime_type=mime_type),
                     config=types.GenerateVideosConfig(
                         numberOfVideos=1,
@@ -116,8 +119,11 @@ def generate_video_veo(
                     operation = client.operations.get(operation)
                     elapsed = time.time() - start
                     if elapsed > MAX_WAIT:
-                        print(f"[{model_label} 타임아웃] 컷 {index+1}: {MAX_WAIT}초 초과")
-                        return None
+                        print(f"[{model_label} 타임아웃] 컷 {index+1}: {MAX_WAIT}초 초과, 다른 키로 재시도...")
+                        break  # return None → break: 다음 키/모델로 폴백
+
+                if not operation.done:
+                    continue  # 타임아웃으로 break됨 → 다음 키 시도
 
                 result = operation.result
                 if not hasattr(result, "generated_videos") or not result.generated_videos:
@@ -142,8 +148,19 @@ def generate_video_veo(
                 if hasattr(video_obj, "video") and video_obj.video:
                     vid = video_obj.video
                     if hasattr(vid, "video_bytes") and vid.video_bytes:
-                        with open(final_path, "wb") as f:
-                            f.write(vid.video_bytes)
+                        import tempfile as _tmpfile2
+                        fd, tmp_vb = _tmpfile2.mkstemp(dir=output_dir, suffix=".tmp")
+                        os.close(fd)
+                        try:
+                            with open(tmp_vb, "wb") as f:
+                                f.write(vid.video_bytes)
+                            os.replace(tmp_vb, final_path)
+                        except Exception:
+                            try:
+                                os.remove(tmp_vb)
+                            except OSError:
+                                pass
+                            raise
                         record_key_usage(final_key, service_tag)
                         elapsed = time.time() - start
                         print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")

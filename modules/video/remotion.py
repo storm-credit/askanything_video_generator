@@ -96,9 +96,13 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
     abs_video_path = os.path.abspath(video_path)
     abs_props_path = os.path.abspath(props_json_path)
 
+    # CPU 코어 수에 맞춰 병렬 렌더링 (최소 2, 최대 os.cpu_count)
+    concurrency = max(2, min(os.cpu_count() or 4, 8))
+
     cmd = [
         "npx", "remotion", "render", "src/index.ts", "Main",
         abs_video_path, "--props", abs_props_path, "--public-dir", assets_dir,
+        "--concurrency", str(concurrency),
     ]
 
     total_frames = props_data.get("totalDurationInFrames", 0)
@@ -134,6 +138,10 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
 
     except subprocess.TimeoutExpired:
         print(f"[Remotion 렌더링 실패{label}] 10분 타임아웃 초과.")
+        try:
+            os.remove(props_json_path)
+        except OSError:
+            pass
         return None
     except subprocess.CalledProcessError as e:
         print(f"[Remotion 렌더링 실패{label}] 종료 코드: {e.returncode}")
@@ -141,6 +149,10 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
             print(f"  stdout: {e.stdout[-500:]}")
         if e.stderr:
             print(f"  stderr: {e.stderr[-500:]}")
+        try:
+            os.remove(props_json_path)
+        except OSError:
+            pass
         return None
 
 

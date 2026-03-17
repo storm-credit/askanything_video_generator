@@ -2,6 +2,7 @@ import os
 import time
 import struct
 import random
+import tempfile
 import requests
 
 
@@ -107,16 +108,33 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
             response = requests.post(URL, json=data, headers=headers, timeout=30, stream=True)
 
             if response.status_code == 200:
-                with open(audio_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=4096):
-                        if chunk:
-                            f.write(chunk)
-                if os.path.getsize(audio_path) == 0:
-                    print(f"[ElevenLabs 오류] 컷 {index+1} 음성 파일이 비어 있습니다.")
-                    try:
-                        os.remove(audio_path)
-                    except OSError:
-                        pass
+                tmp_path = None
+                try:
+                    fd, tmp_path = tempfile.mkstemp(dir=output_dir, suffix=".tmp")
+                    os.close(fd)
+                    with open(tmp_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=4096):
+                            if chunk:
+                                f.write(chunk)
+                    if os.path.getsize(tmp_path) == 0:
+                        print(f"[ElevenLabs 오류] 컷 {index+1} 음성 파일이 비어 있습니다.")
+                        try:
+                            os.remove(tmp_path)
+                        except OSError:
+                            pass
+                        if attempt < MAX_RETRIES - 1:
+                            time.sleep(_backoff_delay(attempt))
+                            continue
+                        return None
+                    os.replace(tmp_path, audio_path)
+                    tmp_path = None  # 성공 — 정리 불필요
+                except Exception as write_exc:
+                    print(f"[ElevenLabs 오류] 컷 {index+1} 파일 쓰기 실패: {write_exc}")
+                    if tmp_path:
+                        try:
+                            os.remove(tmp_path)
+                        except OSError:
+                            pass
                     if attempt < MAX_RETRIES - 1:
                         time.sleep(_backoff_delay(attempt))
                         continue

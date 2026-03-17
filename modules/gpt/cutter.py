@@ -45,10 +45,10 @@ def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str]:
     return cuts, title
 
 
-def _request_openai(api_key: str, system_prompt: str, user_content: str) -> str | None:
+def _request_openai(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str | None:
     """OpenAI GPT API로 기획안을 생성합니다."""
     from openai import OpenAI
-    model = os.getenv("OPENAI_MODEL", "gpt-4o")
+    model = model_override or os.getenv("OPENAI_MODEL", "gpt-4o")
     client = OpenAI(api_key=api_key, timeout=120)
     response = client.chat.completions.create(
         model=model,
@@ -57,17 +57,18 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str) -> str 
             {"role": "user", "content": user_content},
         ],
         response_format={"type": "json_object"},
+        temperature=0.75,
     )
     if not response.choices:
         raise ValueError("OpenAI 응답에 choices가 비어 있습니다.")
     return (response.choices[0].message.content or "").strip()
 
 
-def _request_gemini(api_key: str, system_prompt: str, user_content: str) -> str:
+def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
     """Google Gemini API로 기획안을 생성합니다 (google-genai SDK)."""
     from google import genai
     from google.genai import types
-    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+    model_name = model_override or os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
         model=model_name,
@@ -75,21 +76,23 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str) -> str:
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
             response_mime_type="application/json",
+            temperature=0.75,
             http_options=types.HttpOptions(timeout=120_000),
         ),
     )
     return (response.text or "").strip()
 
 
-def _request_claude(api_key: str, system_prompt: str, user_content: str) -> str:
+def _request_claude(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
     """Anthropic Claude API로 기획안을 생성합니다."""
     import anthropic
-    model_name = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+    model_name = model_override or os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
     client = anthropic.Anthropic(api_key=api_key, timeout=120)
     json_instruction = "\n\n[CRITICAL] 반드시 순수 JSON만 출력하세요. 마크다운 코드블록이나 설명 텍스트 없이 JSON 객체만 반환하십시오."
     response = client.messages.create(
         model=model_name,
         max_tokens=4096,
+        temperature=0.75,
         system=system_prompt + json_instruction,
         messages=[{"role": "user", "content": user_content}],
     )
@@ -98,21 +101,21 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str) -> str:
     return (response.content[0].text or "").strip()
 
 
-def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str) -> tuple[list[dict[str, str]], str]:
+def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> tuple[list[dict[str, str]], str]:
     """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다. (cuts, title) 반환."""
     if provider == "gemini":
-        content = _request_gemini(api_key, system_prompt, user_content)
+        content = _request_gemini(api_key, system_prompt, user_content, model_override)
     elif provider == "claude":
-        content = _request_claude(api_key, system_prompt, user_content)
+        content = _request_claude(api_key, system_prompt, user_content, model_override)
     else:
-        content = _request_openai(api_key, system_prompt, user_content)
+        content = _request_openai(api_key, system_prompt, user_content, model_override)
     return _parse_cuts(content)
 
 
 # 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
-                  channel: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
+                  channel: str | None = None, llm_model: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
     topic_folder = slugify_topic(topic, lang)
 
     # 저장 폴더 구조 생성
@@ -147,7 +150,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [이미지 프롬프트 규칙]
 * 반드시 영어로 작성. 한국어 금지.
-* "vertical 9:16, cinematic, no text" 필수 포함.
+* (MASTER_STYLE이 자동 적용됨 — vertical/no-text는 별도 기재 불필요)
 * 매 컷마다 카메라 앵글/조명을 다르게 설정 (단조로움 방지).
 * 사람 얼굴 정면 클로즈업 금지 (AI 생성 얼굴은 언캐니밸리).
 * 구체적 시각 디테일 포함: 색온도, 재질감, 스케일 비교 (예: "car-sized asteroid").
@@ -214,7 +217,7 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 
 [Image Prompt Rules]
 * ALL image prompts must be in English.
-* MUST include "vertical 9:16, cinematic, no text" in every prompt.
+* (MASTER_STYLE is auto-prepended — no need to write vertical/no-text yourself)
 * Vary camera angle and lighting per cut (avoid visual monotony).
 * NO frontal close-ups of human faces (AI-generated faces trigger uncanny valley).
 * Include specific visual details: color temperature, material textures, scale comparisons (e.g. "car-sized asteroid").
@@ -337,11 +340,13 @@ This is the channel's signature look — every image should feel cohesive with t
     else:
         max_key_attempts = 3  # OpenAI/Claude도 429 시 최대 3회 재시도 (백오프)
 
+    last_error: Exception | None = None
     for attempt in range(max_key_attempts):
         try:
-            cuts, title = _request_cuts(llm_provider, current_key, system_prompt, user_content)
+            cuts, title = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
             break  # 성공
         except Exception as e:
+            last_error = e
             err_str = str(e)
             is_retryable = (
                 "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
@@ -369,6 +374,10 @@ This is the channel's signature look — every image should feel cohesive with t
             else:
                 raise  # 429가 아닌 에러는 그대로 전파
 
+    # 전체 재시도 실패 시 마지막 에러 전파
+    if not cuts and last_error:
+        raise RuntimeError(f"[{provider_label}] 모든 재시도 실패 ({max_key_attempts}회)") from last_error
+
     # 컷 수 검증 — 초과 시 트림, 부족 시 기존 컷 기반 확장 요청 (전체 재생성 방지)
     if len(cuts) > 10:
         print(f"-> [검증] 컷 수 {len(cuts)}개 → 10개로 트림")
@@ -387,7 +396,7 @@ This is the channel's signature look — every image should feel cohesive with t
             + f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
         )
         try:
-            cuts, title = _request_cuts(llm_provider, retry_key, system_prompt, retry_user)
+            cuts, title = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
         except Exception as retry_err:
             err_str = str(retry_err)
             if llm_provider == "gemini" and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str):

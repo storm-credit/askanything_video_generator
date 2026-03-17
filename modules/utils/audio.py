@@ -102,7 +102,9 @@ def _convert_wav_to_mp3(wav_path: str, mp3_path: str) -> None:
         "ffmpeg", "-y", "-i", wav_path,
         "-codec:a", "libmp3lame", "-b:a", "192k", mp3_path,
     ]
-    subprocess.run(
+    result = subprocess.run(
         cmd, capture_output=True, timeout=30,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
+    if result.returncode != 0:
+        raise RuntimeError(f"WAV→MP3 변환 실패: {result.stderr[:200] if result.stderr else 'unknown error'}")

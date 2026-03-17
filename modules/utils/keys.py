@@ -71,8 +71,12 @@ def _is_key_warned(key: str, service: str = None) -> bool:
         threshold = _WARN_THRESHOLD.get(service, _DEFAULT_WARN_THRESHOLD)
         return used >= threshold
     else:
-        total = sum(_key_usage[key].values())
-        return total >= sum(_WARN_THRESHOLD.values())
+        # 서비스별 경고 여부 개별 확인: 하나라도 경고면 True
+        for svc, cnt in _key_usage[key].items():
+            threshold = _WARN_THRESHOLD.get(svc, _DEFAULT_WARN_THRESHOLD)
+            if cnt >= threshold:
+                return True
+        return False
 
 
 def get_key_state(key: str, service: str = None) -> str:
@@ -116,7 +120,7 @@ def record_key_usage(api_key: str, service: str, count: int = 1):
 
 # ═══════════════════════ 키 선택 ═══════════════════════
 
-def get_google_key(override: str = None, service: str = None, exclude: set = None) -> str | None:
+def get_google_key(override: str = None, service: str = None, exclude: set = None, extra_keys: str | None = None) -> str | None:
     """
     최적의 Google API 키를 반환합니다.
 
@@ -130,13 +134,14 @@ def get_google_key(override: str = None, service: str = None, exclude: set = Non
         override: 프론트엔드에서 전달한 키 (최우선)
         service: 'veo3', 'imagen', 'gemini' 등 — 서비스별 차단 확인
         exclude: 이번 요청에서 이미 실패한 키 집합 (자동 전환용)
+        extra_keys: 프론트엔드 멀티키 (쉼표 구분) — os.environ 대신 직접 전달
     """
     if override:
         return override
 
     exclude = exclude or set()
 
-    multi_keys = os.getenv("GEMINI_API_KEYS", "")
+    multi_keys = extra_keys or os.getenv("GEMINI_API_KEYS", "")
     if multi_keys:
         keys = [k.strip() for k in multi_keys.split(",") if k.strip()]
         if keys:
@@ -246,10 +251,10 @@ def mask_key(key: str) -> str:
     return key[:8] + "***" + key[-2:]
 
 
-def get_all_google_keys() -> list[str]:
+def get_all_google_keys(extra_keys: str | None = None) -> list[str]:
     """등록된 모든 Google API 키 목록."""
     keys = set()
-    multi_keys = os.getenv("GEMINI_API_KEYS", "")
+    multi_keys = extra_keys or os.getenv("GEMINI_API_KEYS", "")
     if multi_keys:
         for k in multi_keys.split(","):
             k = k.strip()
@@ -264,13 +269,13 @@ def get_all_google_keys() -> list[str]:
     return list(keys)
 
 
-def count_google_keys() -> int:
+def count_google_keys(extra_keys: str | None = None) -> int:
     """등록된 Google API 키 개수."""
-    return len(get_all_google_keys())
+    return len(get_all_google_keys(extra_keys))
 
 
-def count_available_keys(service: str = None) -> int:
+def count_available_keys(service: str = None, extra_keys: str | None = None) -> int:
     """특정 서비스에 대해 차단 안 된 키 개수."""
-    all_keys = get_all_google_keys()
+    all_keys = get_all_google_keys(extra_keys)
     with _usage_lock:
         return sum(1 for k in all_keys if not _is_key_blocked(k, service))
