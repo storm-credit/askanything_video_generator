@@ -152,11 +152,23 @@ def upload_video(
     title: str,
     privacy_level: str = "SELF_ONLY",
     user_id: str | None = None,
+    schedule_time: int | None = None,
 ) -> dict:
     """TikTok에 동영상을 업로드합니다.
 
     privacy_level: SELF_ONLY | MUTUAL_FOLLOW_FRIENDS | FOLLOWER_OF_CREATOR | PUBLIC_TO_EVERYONE
+    schedule_time: 예약 발행 UTC Unix timestamp (15분~75일 이내)
     """
+    # 예약 시간 검증
+    if schedule_time is not None:
+        now = time.time()
+        min_time = now + 15 * 60  # 15분 후
+        max_time = now + 75 * 24 * 60 * 60  # 75일 후
+        if schedule_time < min_time:
+            raise ValueError("TikTok 예약은 최소 15분 이후부터 가능합니다.")
+        if schedule_time > max_time:
+            raise ValueError("TikTok 예약은 최대 75일 이내만 가능합니다.")
+
     token = _load_token(user_id or "default")
     if not token:
         raise PermissionError("TikTok 인증이 필요합니다. 먼저 계정을 연동해주세요.")
@@ -210,35 +222,45 @@ def upload_video(
         raise Exception(f"TikTok 파일 업로드 실패: {upload_resp.status_code}")
 
     # Step 3: Publish
+    publish_body: dict = {
+        "post_info": {
+            "title": title[:150],
+            "privacy_level": privacy_level,
+            "disable_duet": False,
+            "disable_comment": False,
+            "disable_stitch": False,
+        },
+        "source_info": {
+            "source": "PULL_FROM_URL",
+            "video_url": upload_url,
+        },
+    }
+
+    # 예약 발행
+    if schedule_time is not None:
+        publish_body["publish_info"] = {"schedule_time": schedule_time}
+
     publish_resp = requests.post(
         "https://open.tiktokapis.com/v2/post/publish/video/init/",
         headers=headers,
-        json={
-            "post_info": {
-                "title": title[:150],
-                "privacy_level": privacy_level,
-                "disable_duet": False,
-                "disable_comment": False,
-                "disable_stitch": False,
-            },
-            "source_info": {
-                "source": "PULL_FROM_URL",
-                "video_url": upload_url,
-            },
-        },
+        json=publish_body,
         timeout=30,
     )
 
     if publish_resp.status_code != 200:
         raise Exception(f"TikTok 발행 실패 ({publish_resp.status_code}): {publish_resp.text[:300]}")
 
-    print(f"OK [TikTok] 업로드 완료!")
-    return {
+    schedule_msg = f" (예약: {schedule_time})" if schedule_time else ""
+    print(f"OK [TikTok] 업로드 완료!{schedule_msg}")
+    result = {
         "success": True,
         "publish_id": publish_id,
         "title": title,
         "privacy": privacy_level,
     }
+    if schedule_time is not None:
+        result["scheduled_at"] = schedule_time
+    return result
 
 
 def disconnect(user_id: str | None = None) -> dict:

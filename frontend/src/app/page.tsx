@@ -67,7 +67,9 @@ export default function Home() {
   const [uploadTags, setUploadTags] = useState("");
   const [uploadPrivacy, setUploadPrivacy] = useState("private");
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{ success: boolean; url?: string; error?: string } | null>(null);
+  const [uploadResult, setUploadResult] = useState<{ success: boolean; url?: string; error?: string; scheduled_at?: string } | null>(null);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
   // YouTube
   const [ytConnected, setYtConnected] = useState(false);
   const [ytChannels, setYtChannels] = useState<{ id: string; title: string; connected: boolean }[]>([]);
@@ -632,8 +634,9 @@ export default function Home() {
           title: uploadTitle || topic,
           description: uploadDescription,
           tags: uploadTags.split(",").map(t => t.trim()).filter(Boolean),
-          privacy: uploadPrivacy,
+          privacy: scheduleEnabled ? "private" : uploadPrivacy,
           channel_id: ytSelectedChannel || undefined,
+          ...(scheduleEnabled && scheduleDate ? { publish_at: new Date(scheduleDate).toISOString() } : {}),
         };
       } else if (uploadPlatform === "tiktok") {
         endpoint = "/api/tiktok/upload";
@@ -641,6 +644,7 @@ export default function Home() {
           video_path: generatedVideoPath,
           title: uploadTitle || topic,
           privacy_level: ttPrivacy,
+          ...(scheduleEnabled && scheduleDate ? { schedule_time: Math.floor(new Date(scheduleDate).getTime() / 1000) } : {}),
         };
       } else {
         endpoint = "/api/instagram/upload";
@@ -657,7 +661,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.success) {
-        setUploadResult({ success: true, url: data.url });
+        setUploadResult({ success: true, url: data.url, scheduled_at: data.scheduled_at });
       } else {
         if (data.need_auth) {
           if (uploadPlatform === "youtube") setYtConnected(false);
@@ -1089,6 +1093,8 @@ export default function Home() {
                     setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
                     setUploadTags(topic);
                     setUploadResult(null);
+                    setScheduleEnabled(false);
+                    setScheduleDate("");
                     setUploadPlatform("youtube");
                     setShowUploadModal(true);
                     checkPlatformStatus();
@@ -1104,6 +1110,8 @@ export default function Home() {
                       setUploadTitle(topic);
                       setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
                       setUploadResult(null);
+                      setScheduleEnabled(false);
+                      setScheduleDate("");
                       setUploadPlatform("tiktok");
                       setShowUploadModal(true);
                       checkPlatformStatus();
@@ -1118,6 +1126,8 @@ export default function Home() {
                       setUploadTitle(topic);
                       setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
                       setUploadResult(null);
+                      setScheduleEnabled(false);
+                      setScheduleDate("");
                       setUploadPlatform("instagram");
                       setShowUploadModal(true);
                       checkPlatformStatus();
@@ -1214,7 +1224,14 @@ export default function Home() {
               ) : uploadResult?.success ? (
                 <div className="space-y-4 text-center py-4">
                   <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
-                  <h4 className="text-white font-bold">업로드 완료!</h4>
+                  <h4 className="text-white font-bold">
+                    {uploadResult.scheduled_at ? "예약 업로드 완료!" : "업로드 완료!"}
+                  </h4>
+                  {uploadResult.scheduled_at && (
+                    <p className="text-indigo-300 text-sm">
+                      {new Date(typeof uploadResult.scheduled_at === "number" ? uploadResult.scheduled_at * 1000 : uploadResult.scheduled_at).toLocaleString("ko-KR")}에 공개됩니다.
+                    </p>
+                  )}
                   {uploadResult.url && (
                     <a
                       href={uploadResult.url}
@@ -1316,9 +1333,44 @@ export default function Home() {
                     )}
                   </div>
 
+                  {/* 예약 업로드 (YouTube / TikTok만) */}
+                  {uploadPlatform !== "instagram" && (
+                    <div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={scheduleEnabled}
+                          onChange={(e) => { setScheduleEnabled(e.target.checked); if (!e.target.checked) setScheduleDate(""); }}
+                          className="w-4 h-4 rounded bg-white/5 border-white/20 text-indigo-500 focus:ring-indigo-500/50"
+                        />
+                        <span className="text-gray-300 text-sm">예약 업로드</span>
+                      </label>
+                      {scheduleEnabled && (
+                        <div className="mt-2">
+                          <input
+                            type="datetime-local"
+                            value={scheduleDate}
+                            onChange={(e) => setScheduleDate(e.target.value)}
+                            min={new Date(Date.now() + (uploadPlatform === "tiktok" ? 15 * 60 * 1000 : 60 * 1000)).toISOString().slice(0, 16)}
+                            max={uploadPlatform === "tiktok" ? new Date(Date.now() + 75 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16) : undefined}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                          />
+                          <p className="text-gray-500 text-xs mt-1">
+                            {uploadPlatform === "youtube"
+                              ? "비공개로 업로드 후 예약 시간에 자동 공개됩니다."
+                              : "15분 ~ 75일 이내로 설정해주세요."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Instagram 경고 */}
                   {uploadPlatform === "instagram" && (
-                    <p className="text-amber-400/80 text-xs">Instagram은 공개 URL이 필요합니다. PUBLIC_SERVER_URL 또는 ngrok 설정이 필요할 수 있습니다.</p>
+                    <div>
+                      <p className="text-amber-400/80 text-xs">Instagram은 공개 URL이 필요합니다. PUBLIC_SERVER_URL 또는 ngrok 설정이 필요할 수 있습니다.</p>
+                      <p className="text-gray-500 text-xs mt-1">Instagram은 API를 통한 예약 업로드를 지원하지 않습니다.</p>
+                    </div>
                   )}
 
                   {uploadResult && !uploadResult.success && (
@@ -1327,7 +1379,7 @@ export default function Home() {
 
                   <button
                     onClick={handleUpload}
-                    disabled={uploading || !uploadTitle.trim()}
+                    disabled={uploading || !uploadTitle.trim() || (scheduleEnabled && !scheduleDate)}
                     className={`w-full py-3 disabled:bg-gray-700 disabled:text-gray-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
                       uploadPlatform === "youtube" ? "bg-red-600 hover:bg-red-500" :
                       uploadPlatform === "tiktok" ? "bg-gray-700 hover:bg-gray-600" :
@@ -1342,7 +1394,10 @@ export default function Home() {
                     ) : (
                       <>
                         <Upload className="w-4 h-4" />
-                        {uploadPlatform === "youtube" ? "YouTube 업로드" : uploadPlatform === "tiktok" ? "TikTok 업로드" : "Reels 업로드"}
+                        {scheduleEnabled
+                          ? (uploadPlatform === "youtube" ? "YouTube 예약 업로드" : "TikTok 예약 업로드")
+                          : (uploadPlatform === "youtube" ? "YouTube 업로드" : uploadPlatform === "tiktok" ? "TikTok 업로드" : "Reels 업로드")
+                        }
                       </>
                     )}
                   </button>

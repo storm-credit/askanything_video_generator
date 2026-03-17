@@ -153,8 +153,15 @@ def upload_video(
     privacy: str = "private",
     category_id: str = "22",
     channel_id: str = None,
+    publish_at: str | None = None,
 ) -> dict:
-    """YouTube에 동영상을 업로드합니다."""
+    """YouTube에 동영상을 업로드합니다.
+
+    publish_at: 예약 공개 시간 (ISO 8601, e.g. "2026-03-20T15:00:00Z").
+               설정 시 privacyStatus가 자동으로 "private"으로 변경됩니다.
+    """
+    from datetime import datetime, timezone
+
     creds = _get_credentials(channel_id)
     if not creds:
         raise PermissionError("YouTube 인증이 필요합니다. 먼저 계정을 연동해주세요.")
@@ -162,7 +169,23 @@ def upload_video(
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"동영상 파일을 찾을 수 없습니다: {video_path}")
 
+    # 예약 공개 검증
+    if publish_at:
+        try:
+            scheduled_dt = datetime.fromisoformat(publish_at.replace("Z", "+00:00"))
+        except ValueError:
+            raise ValueError(f"예약 시간 형식이 올바르지 않습니다: {publish_at} (ISO 8601 필요)")
+        if scheduled_dt <= datetime.now(timezone.utc):
+            raise ValueError("예약 시간은 현재 시간 이후여야 합니다.")
+
     youtube = build("youtube", "v3", credentials=creds)
+
+    status_body: dict = {
+        "privacyStatus": "private" if publish_at else privacy,
+        "selfDeclaredMadeForKids": False,
+    }
+    if publish_at:
+        status_body["publishAt"] = publish_at
 
     body = {
         "snippet": {
@@ -171,10 +194,7 @@ def upload_video(
             "tags": tags or [],
             "categoryId": category_id,
         },
-        "status": {
-            "privacyStatus": privacy,
-            "selfDeclaredMadeForKids": False,
-        },
+        "status": status_body,
     }
 
     media = MediaFileUpload(
@@ -202,13 +222,17 @@ def upload_video(
     video_url = f"https://youtube.com/shorts/{video_id}"
     print(f"OK [YouTube] 업로드 완료! {video_url}")
 
-    return {
+    result = {
         "success": True,
         "video_id": video_id,
         "url": video_url,
         "title": title,
-        "privacy": privacy,
+        "privacy": "private" if publish_at else privacy,
     }
+    if publish_at:
+        result["scheduled_at"] = publish_at
+        print(f"   [YouTube] 예약 공개: {publish_at}")
+    return result
 
 
 def disconnect(channel_id: str = None) -> dict:

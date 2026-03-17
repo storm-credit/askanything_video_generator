@@ -65,7 +65,7 @@ def run_test():
             
         # 5. 비디오 렌더링 (Remotion)
         print("\n[최종 단계] Remotion 비디오 렌더링 중...")
-        video_path = create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_list, topic_folder)
+        video_path = create_remotion_video(visual_paths, audio_paths, scripts, word_timestamps_list, topic_folder, title=_title)
         
         if video_path:
             print(f"SUCCESS 성공! 비디오 생성 완료: {video_path}")

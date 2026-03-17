@@ -1193,6 +1193,7 @@ class YouTubeUploadRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     privacy: str = Field("private", pattern="^(private|unlisted|public)$")
     channel_id: str | None = None
+    publish_at: str | None = Field(None, description="예약 공개 시간 (ISO 8601, e.g. 2026-03-20T15:00:00Z)")
 
 
 @app.get("/api/youtube/status")
@@ -1248,12 +1249,13 @@ async def youtube_upload(req: YouTubeUploadRequest):
                 tags=req.tags,
                 privacy=req.privacy,
                 channel_id=req.channel_id,
+                publish_at=req.publish_at,
             )
         )
         return result
     except PermissionError as e:
         return {"error": str(e), "need_auth": True}
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         return {"error": str(e)}
     except Exception as e:
         return {"error": f"업로드 실패: {e}"}
@@ -1272,6 +1274,7 @@ class TikTokUploadRequest(BaseModel):
     title: str = Field(..., max_length=150)
     privacy_level: str = Field("SELF_ONLY", pattern="^(SELF_ONLY|MUTUAL_FOLLOW_FRIENDS|FOLLOWER_OF_CREATOR|PUBLIC_TO_EVERYONE)$")
     user_id: str | None = None
+    schedule_time: int | None = Field(None, description="예약 발행 UTC Unix timestamp (15분~75일 이내)")
 
 
 @app.get("/api/tiktok/status")
@@ -1324,12 +1327,13 @@ async def tiktok_upload(req: TikTokUploadRequest):
                 title=req.title,
                 privacy_level=req.privacy_level,
                 user_id=req.user_id,
+                schedule_time=req.schedule_time,
             )
         )
         return result
     except PermissionError as e:
         return {"error": str(e), "need_auth": True}
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         return {"error": str(e)}
     except Exception as e:
         return {"error": f"업로드 실패: {e}"}
