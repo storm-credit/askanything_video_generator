@@ -519,8 +519,11 @@ This is the channel's signature look — every image should feel cohesive with t
         # 채널별 내러티브 구조 주입 (같은 공식 반복 방지 — YouTube 템플릿 감지 대응)
         narrative = get_narrative_style(channel)
         if narrative:
-            hook_key = f"hook_instruction_{lang}" if narrative.get(f"hook_instruction_{lang}") else ("hook_instruction_en" if lang != "ko" else "hook_instruction_ko")
-            hook_instr = narrative.get(hook_key, "")
+            hook_instr = (
+                narrative.get(f"hook_instruction_{lang}")
+                or narrative.get("hook_instruction_en")
+                or narrative.get("hook_instruction_ko", "")
+            )
             ending = narrative.get("ending_style", "")
             if hook_instr:
                 system_prompt += f"""

@@ -21,6 +21,7 @@ type ChannelPreset = { language: string; voiceId: string; ttsSpeed: number; plat
 const DEFAULT_CHANNEL_PRESETS: Record<string, ChannelPreset> = {
   askanything: { language: "ko", voiceId: "cjVigY5qzO86Huf0OWal", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 },
   wonderdrop: { language: "en", voiceId: "pNInz6obpgDQGcFmaJgB", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
+  exploratodo: { language: "es", voiceId: "onwK4e9ZLuTAKqWW03F9", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
 };
 
 export default function Home() {
