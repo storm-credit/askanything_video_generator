@@ -10,7 +10,7 @@ import traceback
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -74,7 +74,7 @@ app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 # CORS 설정 (프론트엔드 연동)
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000").split(",")
 # 개발 환경: 와일드카드 포함 시 모든 origin 허용
-if any("*" in o for o in _cors_origins):
+if "*" in _cors_origins:
     _cors_origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -158,7 +158,7 @@ class GenerateRequest(BaseModel):
     bgmTheme: str = "random"
     channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
-    ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
+    ttsSpeed: float = Field(0.9, ge=0.5, le=2.0)  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
     voiceId: str | None = None  # ElevenLabs 음성 ID
     mode: str = "production"  # "draft" = 비디오 생성 스킵 (Ken Burns만), "production" = 풀 파이프라인
     captionSize: int = Field(48, ge=32, le=72)  # 자막 폰트 크기 (px)
@@ -624,8 +624,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                         print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
 
                 # 감정 태그 추출 (TTS 감정 매핑용)
-                import re as _re
-                _emotion_match = _re.search(r'\[(SHOCK|WONDER|TENSION|REVEAL|CALM)\]', cut.get("description", ""))
+                _emotion_match = re.search(r'\[(SHOCK|WONDER|TENSION|REVEAL|CALM)\]', cut.get("description", ""))
                 _cut_emotion = _emotion_match.group(1) if _emotion_match else None
 
                 def _run_tts_and_whisper():
@@ -667,7 +666,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 # 완료 대기 (비디오: 최대 5분, TTS+Whisper: 최대 2분)
                 for t in threads:
-                    timeout = 300 if "video" in t.name.lower() else 120
+                    timeout = 480 if "video" in t.name.lower() else 120
                     t.join(timeout=timeout)
                     if t.is_alive():
                         with errors_lock:
@@ -1050,7 +1049,7 @@ class RenderRequest(BaseModel):
     apiKey: str | None = None       # 렌더 단계에서 재전달 (세션에 저장하지 않음)
     llmKey: str | None = None       # 렌더 단계에서 재전달
     elevenlabsKey: str | None = None
-    ttsSpeed: float = 0.9
+    ttsSpeed: float = Field(0.9, ge=0.5, le=2.0)
     videoEngine: str = "none"
     cameraStyle: str = "auto"
     bgmTheme: str = "random"
@@ -1257,6 +1256,11 @@ async def list_channels():
 
 # ── YouTube 업로드 API ─────────────────────────────────────────────
 
+# AI 공시 문구 (EU AI Act 2024/1689 + YouTube/TikTok 정책 준수)
+_AI_DISCLOSURE_SUFFIX = "\n\n🤖 This video uses AI-generated visuals and narration."
+_AI_DISCLOSURE_SUFFIX_KO = "\n\n🤖 이 영상은 AI 생성 이미지와 내레이션을 사용합니다."
+
+
 class YouTubeUploadRequest(BaseModel):
     video_path: str = Field(..., description="업로드할 동영상 경로")
     title: str = Field(..., max_length=100)
@@ -1265,6 +1269,7 @@ class YouTubeUploadRequest(BaseModel):
     privacy: str = Field("private", pattern="^(private|unlisted|public)$")
     channel_id: str | None = None
     publish_at: str | None = Field(None, description="예약 공개 시간 (ISO 8601, e.g. 2026-03-20T15:00:00Z)")
+    ai_disclosure: bool = Field(True, description="AI 생성 콘텐츠 공시 자동 추가")
 
 
 @app.get("/api/youtube/status")
@@ -1310,13 +1315,18 @@ async def youtube_upload(req: YouTubeUploadRequest):
         if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
+        # AI 공시 자동 추가 (EU AI Act + YouTube 정책)
+        upload_desc = req.description
+        if req.ai_disclosure and _AI_DISCLOSURE_SUFFIX_KO not in upload_desc and _AI_DISCLOSURE_SUFFIX not in upload_desc:
+            upload_desc += _AI_DISCLOSURE_SUFFIX_KO
+
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             _cut_executor,
             lambda: upload_video(
                 video_path=abs_path,
                 title=req.title,
-                description=req.description,
+                description=upload_desc,
                 tags=req.tags,
                 privacy=req.privacy,
                 channel_id=req.channel_id,
@@ -1346,6 +1356,7 @@ class TikTokUploadRequest(BaseModel):
     privacy_level: str = Field("SELF_ONLY", pattern="^(SELF_ONLY|MUTUAL_FOLLOW_FRIENDS|FOLLOWER_OF_CREATOR|PUBLIC_TO_EVERYONE)$")
     user_id: str | None = None
     schedule_time: int | None = Field(None, description="예약 발행 UTC Unix timestamp (15분~75일 이내)")
+    ai_disclosure: bool = Field(True, description="AI 생성 콘텐츠 공시 (TikTok AIGC 정책)")
 
 
 @app.get("/api/tiktok/status")
@@ -1390,12 +1401,17 @@ async def tiktok_upload(req: TikTokUploadRequest):
         if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
+        # AI 공시 자동 추가 (TikTok AIGC 정책 — 2026 Q1 230만 건 삭제)
+        upload_title = req.title
+        if req.ai_disclosure and "[AI Generated]" not in upload_title:
+            upload_title = upload_title.rstrip() + " #AI생성"
+
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             _cut_executor,
             lambda: upload_video(
                 video_path=abs_path,
-                title=req.title,
+                title=upload_title,
                 privacy_level=req.privacy_level,
                 user_id=req.user_id,
                 schedule_time=req.schedule_time,

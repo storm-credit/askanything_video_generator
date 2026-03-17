@@ -132,7 +132,8 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
     """Google Gemini API로 기획안을 생성합니다 (google-genai SDK). 시스템 프롬프트 캐싱 지원."""
     from google import genai
     from google.genai import types
-    model_name = model_override or os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+    # Flash 모델 기본 사용 (비용 최적화: Pro 대비 ~90% 절감, 컷 기획 품질 동등)
+    model_name = model_override or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     client = genai.Client(api_key=api_key)
 
     # Context Caching: 시스템 프롬프트를 캐시하여 토큰 비용 절감
@@ -291,9 +292,16 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   [CALM] = 여운/마무리 → 정적
 예시: "거대한 블랙홀이 빛을 삼키는 장면 [SHOCK]"
 
+[페이싱 커브 규칙 — 리텐션 U자형 대응]
+★ Cut 1~2는 반드시 3~4초 분량 (10~15자 대본). 훅 윈도우에서 최대 임팩트.
+★ Cut 3~6은 5~7초 분량 (15~30자 대본). 정보 전달 구간.
+★ Cut 7~10은 3~5초 분량 (10~20자 대본). 클라이맥스 가속.
+★ [호기심 스태킹] 매 2~3컷마다 새로운 마이크로 질문/충격 팩트를 삽입하라. 하나의 궁금증을 풀면서 동시에 새로운 궁금증을 열어라.
+
 [골든 예시 — 주제: "태양이 사라지면 생기는 일" (대표 3컷만 표시, 실제로는 7~10컷 작성)]
 {
   "title": "태양이 사라지면 생기는 일",
+  "seo_description": "태양이 갑자기 사라지면 지구에 무슨 일이? 8분의 공백, 얼어붙는 바다, 인류의 운명 #우주 #과학",
   "cuts": [
     {"description": "완전한 어둠 속 지구 전경, 태양 자리에 검은 void [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only", "script": "태양이 갑자기 사라지면 8분 동안 아무도 모른다고."},
     {"description": "얼어붙는 바다 위로 거대한 빙하가 솟구치는 장면 [TENSION]", "image_prompt": "Frozen ocean surface cracking and massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot", "script": "근데 진짜 소름돋는 건 일주일 만에 바다가 얼어붙어."},
@@ -304,6 +312,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 [골든 예시 2 — 주제: "잠을 안 자면 생기는 일" (일상/과학 주제)]
 {
   "title": "잠을 안 자면 생기는 일",
+  "seo_description": "3일 안 자면 뇌가 스스로를 먹는다? 수면 부족의 충격적 진실과 뇌 청소 시스템 #수면 #뇌과학",
   "cuts": [
     {"description": "핏발 선 눈동자 극단적 클로즈업 [SHOCK]", "image_prompt": "Extreme macro close-up of a bloodshot human eye with dilated pupil, dark red veins spreading across sclera, dramatic side lighting, shallow depth of field", "script": "3일만 안 자도 뇌가 스스로를 먹기 시작해."},
     {"description": "뇌 속 독소가 쌓이는 시각화 장면 [TENSION]", "image_prompt": "Cross-section of human brain with glowing toxic particles accumulating between neurons, dark purple and neon green, microscopic medical visualization", "script": "근데 진짜 무서운 건 그걸 본인이 모른다는 거야."},
@@ -327,6 +336,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 }
 [태그 규칙] tags 배열에 #Shorts 필수 + 주제 관련 해시태그 3~4개 (총 4~5개). 한국어 주제면 한국어 태그.
 [SEO 설명문] "seo_description" 필드에 업로드용 설명문을 150자 이내로 작성. 핵심 키워드 2~3개 포함, 호기심 유발 문장.
+[플랫폼 최적화] 태그에 플랫폼 공통으로 사용 가능한 트렌디한 해시태그를 포함하라. YouTube=#Shorts 필수, TikTok용 트렌드 태그, Instagram용 검색 키워드 겸용 태그.
 """
 
     _SYSTEM_PROMPT_EN = """
@@ -381,9 +391,16 @@ Add an emotion tag at the END of each description:
   [CALM] = reflection/outro → static
 Example: "A massive black hole swallowing light [SHOCK]"
 
+[PACING CURVE — Retention U-curve Optimization]
+★ Cuts 1–2: MUST be 3–4 seconds (5–8 words script). Maximum impact in the hook window.
+★ Cuts 3–6: 5–7 seconds (8–15 words script). Information delivery zone.
+★ Cuts 7–10: 3–5 seconds (5–10 words script). Climax acceleration.
+★ [CURIOSITY STACKING] Every 2–3 cuts, insert a new micro-question or shocking fact. Answer one curiosity while opening another.
+
 [Golden Example — Topic: "What happens if the sun disappears" (3 representative cuts shown, write 7–10 in practice)]
 {
   "title": "The Sun Vanishes Tomorrow",
+  "seo_description": "What happens to Earth when the sun suddenly disappears? 8 minutes of ignorance, frozen oceans, humanity's fate #space #science",
   "cuts": [
     {"description": "Earth in complete darkness, empty void where sun was [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only", "script": "The sun vanishes and nobody knows for 8 minutes."},
     {"description": "Frozen ocean with massive glaciers rising in eerie glow [TENSION]", "image_prompt": "Frozen ocean surface cracking with massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot", "script": "Within a week the entire ocean freezes solid."},
@@ -394,6 +411,7 @@ Example: "A massive black hole swallowing light [SHOCK]"
 [Golden Example 2 — Topic: "What happens if you never sleep"]
 {
   "title": "Never Sleeping Destroys Your Brain",
+  "seo_description": "After 3 days without sleep your brain eats itself? The shocking truth about sleep deprivation #sleep #neuroscience",
   "cuts": [
     {"description": "Extreme close-up of bloodshot eye [SHOCK]", "image_prompt": "Extreme macro close-up of a bloodshot human eye with dilated pupil, dark red veins spreading across sclera, dramatic side lighting, shallow depth of field", "script": "After 3 days without sleep your brain starts eating itself."},
     {"description": "Toxic buildup in brain cross-section [TENSION]", "image_prompt": "Cross-section of human brain with glowing toxic particles accumulating between neurons, dark purple and neon green, microscopic medical visualization", "script": "The scariest part? You won't even realize it's happening."},
@@ -417,6 +435,7 @@ Example: "A massive black hole swallowing light [SHOCK]"
 }
 [Tag Rules] tags array MUST include #Shorts + 3-4 topic-specific hashtags (total 4-5).
 [SEO Description] Write "seo_description" field: upload description under 150 chars with 2-3 core keywords. Curiosity-inducing sentence.
+[Platform Optimization] Include cross-platform hashtags: YouTube requires #Shorts, add TikTok trending tags and Instagram search-friendly keyword tags.
 """
 
     # 언어별 프롬프트 매핑

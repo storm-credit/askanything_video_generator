@@ -80,27 +80,44 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         "xi-api-key": api_key
     }
 
-    # 감정 태그 → TTS 스타일/속도 매핑 (ElevenLabs v3 연구 기반)
+    # 감정 태그 → TTS 스타일/속도/안정성 매핑 (EmoSteer-TTS arXiv 2025 + ElevenLabs 베스트 프랙티스 기반)
+    # stability: 낮을수록 감정 폭 넓음, 높을수록 안정적 (ElevenLabs docs)
     _EMOTION_STYLE = {
-        "SHOCK": {"style": 0.7, "speed_boost": 0.05},     # 긴박, 빠르게
-        "REVEAL": {"style": 0.6, "speed_boost": 0.03},     # 반전, 약간 빠르게
-        "TENSION": {"style": 0.4, "speed_boost": -0.05},   # 긴장, 느리게
-        "WONDER": {"style": 0.3, "speed_boost": -0.02},    # 경이, 약간 느리게
-        "CALM": {"style": 0.1, "speed_boost": -0.05},      # 차분, 느리게
+        "SHOCK":   {"style": 0.7, "speed_boost": 0.05, "stability": 0.3, "similarity": 0.70},
+        "REVEAL":  {"style": 0.6, "speed_boost": 0.03, "stability": 0.35, "similarity": 0.72},
+        "TENSION": {"style": 0.4, "speed_boost": -0.05, "stability": 0.40, "similarity": 0.75},
+        "WONDER":  {"style": 0.3, "speed_boost": -0.02, "stability": 0.45, "similarity": 0.78},
+        "CALM":    {"style": 0.1, "speed_boost": -0.05, "stability": 0.70, "similarity": 0.80},
+    }
+
+    # 감정 스테이지 디렉션 — TTS 텍스트 앞에 감정 힌트 삽입 (ElevenLabs가 문맥에서 감정 추론)
+    _EMOTION_DIRECTION = {
+        "SHOCK": "(speaking with urgency and intensity) ",
+        "REVEAL": "(speaking with dramatic emphasis) ",
+        "TENSION": "(speaking slowly with suspense) ",
+        "WONDER": "(speaking with awe and amazement) ",
+        "CALM": "(speaking softly and reflectively) ",
     }
 
     # speed: 0.7(느리게) ~ 1.0(기본) ~ 1.2(빠르게), 숏폼은 0.85~0.9 권장
     emotion_cfg = _EMOTION_STYLE.get(emotion, {})
     style_val = emotion_cfg.get("style", 0.0)
     speed_boost = emotion_cfg.get("speed_boost", 0.0)
+    stability_val = emotion_cfg.get("stability", 0.5)
+    similarity_val = emotion_cfg.get("similarity", 0.75)
     tts_speed = (speed if speed is not None else float(os.getenv("ELEVENLABS_SPEED", "0.9"))) + speed_boost
 
+    # 감정 스테이지 디렉션 삽입 (ElevenLabs가 텍스트 문맥에서 감정을 추론)
+    tts_text = text
+    if emotion and emotion in _EMOTION_DIRECTION:
+        tts_text = _EMOTION_DIRECTION[emotion] + text
+
     data = {
-        "text": text,
+        "text": tts_text,
         "model_id": os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2"),
         "voice_settings": {
-            "stability": 0.5,
-            "similarity_boost": 0.75,
+            "stability": stability_val,
+            "similarity_boost": similarity_val,
             "style": style_val,
             "use_speaker_boost": True,
         },

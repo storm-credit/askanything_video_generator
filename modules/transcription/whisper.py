@@ -6,6 +6,45 @@ from openai import OpenAI
 
 MAX_RETRIES = 2
 
+# 타임스탬프 정규화 상수 (Eye-tracking 자막 인지 연구, Dec 2024 기반)
+_MIN_WORD_DURATION = 0.20   # 최소 단어 표시 시간 (200ms)
+_MAX_WORD_DURATION = 0.80   # 최대 단어 표시 시간 (800ms)
+_PRE_DISPLAY_OFFSET = 0.05  # 음성보다 50ms 먼저 표시 (가독성 향상)
+
+
+def _normalize_timestamps(words: list[dict]) -> list[dict]:
+    """Whisper 타임스탬프를 정규화합니다.
+    - 최소/최대 표시 시간 보장
+    - 50ms 선행 오프셋 (자막이 음성보다 약간 먼저 표시)
+    - 겹침 방지
+    """
+    if not words:
+        return words
+
+    normalized = []
+    for i, w in enumerate(words):
+        start = max(0, w["start"] - _PRE_DISPLAY_OFFSET)
+        end = w["end"]
+        duration = end - start
+
+        # 최소 표시 시간 보장
+        if duration < _MIN_WORD_DURATION:
+            end = start + _MIN_WORD_DURATION
+
+        # 최대 표시 시간 제한
+        if end - start > _MAX_WORD_DURATION:
+            end = start + _MAX_WORD_DURATION
+
+        # 이전 단어와 겹침 방지
+        if normalized and start < normalized[-1]["end"]:
+            start = normalized[-1]["end"]
+            if end <= start:
+                end = start + _MIN_WORD_DURATION
+
+        normalized.append({"word": w["word"], "start": round(start, 3), "end": round(end, 3)})
+
+    return normalized
+
 
 def generate_word_timestamps(audio_path: str, api_key: str | None = None, language: str = "ko") -> list[dict]:
     """
@@ -60,7 +99,9 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None, langua
                         print(f"[Whisper 경고] 단어 파싱 실패 (건너뜀): {parse_err} | 원본: {w}")
                         continue
 
+            # 타임스탬프 정규화 (Eye-tracking 연구 기반: 최소 200ms + 50ms 선행 오프셋)
             if words:
+                words = _normalize_timestamps(words)
                 print(f"OK [동적 자막] {len(words)}개 단어 타임스탬프 추출 완료 ({os.path.basename(audio_path)})")
             else:
                 print(f"[Whisper 경고] 단어 타임스탬프가 비어 있습니다 ({os.path.basename(audio_path)})")

@@ -33,6 +33,32 @@ MAX_IMAGE_SIZE_MB = 20       # Base64 인코딩 전 최대 이미지 크기
 from modules.utils.constants import get_motion_style
 
 
+def _optimize_prompt_for_engine(engine: str, prompt: str, description: str = "") -> str:
+    """엔진별 최적화된 비디오 프롬프트를 생성합니다 (논문 기반).
+    - Veo: 구조화된 프롬프트 (카메라·조명·동작 명시)
+    - Kling: 최소화 프롬프트 (주체 + 단일 동작)
+    - Sora: 동작 벡터 중심 프롬프트
+    """
+    motion = get_motion_style(prompt, description)
+
+    if engine == "veo3":
+        # Veo responds best to structured prompts with explicit camera + start/end state
+        return f"{motion}. {prompt}. Cinematic lighting, smooth transition, 4K quality."
+
+    if engine == "kling":
+        # Kling is sensitive to over-specification — keep it minimal
+        # Extract core subject and single motion verb
+        words = prompt.split(",")
+        core = words[0].strip() if words else prompt
+        return f"{core}, {motion.split(',')[0].strip().lower()}"
+
+    if engine == "sora2":
+        # Sora thinks in motion vectors — emphasize forces and movement
+        return f"{motion}, 4K quality. {prompt}"
+
+    return f"{motion}. {prompt}"
+
+
 def get_available_engines() -> list[dict]:
     """프론트엔드에 표시할 사용 가능한 엔진 목록을 반환합니다."""
     available = []
@@ -150,17 +176,18 @@ def _try_engine(
     veo_model: str | None = None,
     gemini_api_keys: str | None = None,
 ) -> str | None:
-    """단일 엔진으로 비디오 생성을 시도합니다."""
+    """단일 엔진으로 비디오 생성을 시도합니다. 엔진별 프롬프트 최적화 적용."""
+    optimized_prompt = _optimize_prompt_for_engine(engine, prompt, description)
     try:
         if engine == "veo3":
             from modules.video.veo import generate_video_veo
-            return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key, description=description, model_override=veo_model, gemini_api_keys=gemini_api_keys)
+            return generate_video_veo(image_path, optimized_prompt, index, topic_folder, google_api_key, description=description, model_override=veo_model, gemini_api_keys=gemini_api_keys)
 
         if engine == "sora2":
-            return _generate_via_openai_sora(image_path, prompt, index, topic_folder, description=description)
+            return _generate_via_openai_sora(image_path, optimized_prompt, index, topic_folder, description=description)
 
         if engine == "kling":
-            return _generate_via_kling_direct(image_path, prompt, index, topic_folder, description=description)
+            return _generate_via_kling_direct(image_path, optimized_prompt, index, topic_folder, description=description)
     except Exception as e:
         print(f"[비디오 엔진 오류] {engine} 예외: {e}")
         return None
@@ -268,6 +295,7 @@ def _download_video(
     final_path = os.path.join(output_dir, f"{engine}_cut_{index:02d}.mp4")
 
     engine_name = SUPPORTED_ENGINES.get(engine, {}).get("name", engine)
+    _MAX_DOWNLOAD_SIZE = 500 * 1024 * 1024  # 500MB safety limit
     tmp_path = None
     try:
         print(f"-> [{engine_name}] 컷 {index+1} 렌더링 완료! 비디오 다운로드 중...")
@@ -276,8 +304,12 @@ def _download_video(
         # Write to temp file first to prevent partial downloads
         fd, tmp_path = tempfile.mkstemp(dir=output_dir, suffix=".tmp")
         os.close(fd)
+        downloaded = 0
         with open(tmp_path, "wb") as f:
             for chunk in vid_resp.iter_content(chunk_size=8192):
+                downloaded += len(chunk)
+                if downloaded > _MAX_DOWNLOAD_SIZE:
+                    raise RuntimeError(f"다운로드 크기 초과 ({downloaded // 1024 // 1024}MB > 500MB)")
                 f.write(chunk)
         os.replace(tmp_path, final_path)  # atomic rename
         return final_path
