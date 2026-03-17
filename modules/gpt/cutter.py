@@ -524,13 +524,19 @@ This is the channel's signature look — every image should feel cohesive with t
                 or narrative.get("hook_instruction_en")
                 or narrative.get("hook_instruction_ko", "")
             )
-            ending = narrative.get("ending_style", "")
+            ending_key = narrative.get("ending_style", "")
+            _ending_instructions = {
+                "callback": "End by calling back to the opening hook — echo or reframe the first sentence to create a satisfying loop.",
+                "answer_reveal": "Save the answer to the opening mystery for the LAST cut. Build suspense, then deliver the reveal.",
+                "call_to_action": "End with a compelling call-to-action: ask viewers to subscribe, like, or comment with their opinion.",
+            }
+            ending_prose = _ending_instructions.get(ending_key, ending_key)
             if hook_instr:
                 system_prompt += f"""
 
 [CHANNEL NARRATIVE STRUCTURE — OVERRIDES base hook/ending rules]
 Hook strategy: {hook_instr}
-Ending strategy: {ending}
+Ending strategy: {ending_prose}
 IMPORTANT: This OVERRIDES the "[바이럴 숏폼 공식]" / "[Viral Shorts Formula]" Cut 1 rule above.
 If this says "mystery question" or "curiosity-triggering", you MAY use question-style hooks (overriding "질문형 금지" / "No questions" rule).
 If this says "answer_reveal", save the answer for the LAST cut (overriding "결론 먼저" / "conclusion first" rule).
@@ -557,7 +563,7 @@ If this says "answer_reveal", save the answer for the LAST cut (overriding "결�
     # RAG 기법: 실시간 검색 팩트체크 주입
     fact_context = get_fact_check_context(topic)
     # 프롬프트 인젝션 방지: XML 구분자로 유저 입력 격리
-    _safe_topic = topic.replace("<", "&lt;").replace(">", "&gt;")  # XML 탈출 방지
+    _safe_topic = topic.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")  # XML 탈출 방지
     if lang == "en":
         user_content = (
             f"<user_topic>{_safe_topic}</user_topic>\n"
@@ -573,7 +579,7 @@ If this says "answer_reveal", save the answer for the LAST cut (overriding "결�
             "위 주제에 대한 숏폼 기획안을 작성해주세요."
         )
     if fact_context:
-        _safe_fact = fact_context.replace("<", "&lt;").replace(">", "&gt;")
+        _safe_fact = fact_context.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         if lang == "en":
             user_content += (
                 "\n\n<fact_check_data>\n" + _safe_fact + "\n</fact_check_data>"
@@ -589,7 +595,7 @@ If this says "answer_reveal", save the answer for the LAST cut (overriding "결�
 
     # 레퍼런스 영상 분석 주입 (XML 구조화 + 이스케이프)
     def _esc(s: str) -> str:
-        return s.replace("<", "&lt;").replace(">", "&gt;") if s else ""
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") if s else ""
 
     if reference_url:
         try:

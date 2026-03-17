@@ -1413,7 +1413,7 @@ async def youtube_auth():
         url = create_auth_url()
         return {"auth_url": url}
     except FileNotFoundError as e:
-        return {"error": str(e)}
+        return {"error": _mask_error(e)}
 
 
 @app.get("/api/youtube/callback")
@@ -1429,7 +1429,7 @@ async def youtube_callback(code: str, state: str | None = None):
         )
     except Exception as e:
         import html as _html
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(_mask_error(e))}</p></body></html>", status_code=400)
 
 
 @app.post("/api/youtube/upload")
@@ -1500,7 +1500,7 @@ async def tiktok_auth():
         url = create_auth_url()
         return {"auth_url": url}
     except ValueError as e:
-        return {"error": str(e)}
+        return {"error": _mask_error(e)}
 
 
 @app.get("/api/tiktok/callback")
@@ -1516,7 +1516,7 @@ async def tiktok_callback(code: str, state: str | None = None):
         )
     except Exception as e:
         import html as _html
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(_mask_error(e))}</p></body></html>", status_code=400)
 
 
 @app.post("/api/tiktok/upload")
@@ -1582,7 +1582,7 @@ async def instagram_auth():
         url = create_auth_url()
         return {"auth_url": url}
     except ValueError as e:
-        return {"error": str(e)}
+        return {"error": _mask_error(e)}
 
 
 @app.get("/api/instagram/callback")
@@ -1598,7 +1598,7 @@ async def instagram_callback(code: str, state: str | None = None):
         )
     except Exception as e:
         import html as _html
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(_mask_error(e))}</p></body></html>", status_code=400)
 
 
 @app.post("/api/instagram/upload")
