@@ -96,10 +96,14 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     
     print(f"-> [Kling AI] 컷 {index+1} 렌더링 클라우드 진행 상태 대기 중 (약 2~3분 소요 예상)...")
     
-    max_polls = 90  # 90 * 5초 = 450초 (7.5분)
+    max_polls = 90  # 적응형 폴링으로 실제 최대 ~10분
     timed_out = True
+    _elapsed = 0
     for poll_iter in range(max_polls):
-        time.sleep(5)  # 매 반복 대기 (첫 폴링도 제출 직후 낭비 방지)
+        # 적응형 폴링: 초반 5초 → 1분후 10초 → 2분후 15초 (불필요 API 호출 절감)
+        _poll_wait = 5 if _elapsed < 60 else (10 if _elapsed < 120 else 15)
+        time.sleep(_poll_wait)
+        _elapsed += _poll_wait
 
         try:
             poll_resp = requests.get(poll_url, headers=headers, timeout=30)
@@ -121,8 +125,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
             # processing/pending/submitted → 계속 대기
 
             if poll_iter > 0 and poll_iter % 12 == 0:
-                elapsed = (poll_iter + 1) * 5
-                print(f"  [Kling AI] 컷 {index+1} 렌더링 진행 중... ({elapsed}초 경과, 상태: {status})")
+                print(f"  [Kling AI] 컷 {index+1} 렌더링 진행 중... ({_elapsed}초 경과, 상태: {status})")
 
         except requests.exceptions.HTTPError as e:
             if hasattr(e, 'response') and e.response is not None and e.response.status_code in (401, 403):
@@ -160,8 +163,13 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
         vid_resp.raise_for_status()
         fd, tmp_path = tempfile.mkstemp(dir=output_dir, suffix=".tmp")
         os.close(fd)
+        _MAX_DOWNLOAD_SIZE = 500 * 1024 * 1024  # 500MB
+        downloaded = 0
         with open(tmp_path, "wb") as f:
             for chunk in vid_resp.iter_content(chunk_size=8192):
+                downloaded += len(chunk)
+                if downloaded > _MAX_DOWNLOAD_SIZE:
+                    raise RuntimeError(f"비디오 다운로드 크기 초과 ({downloaded // (1024*1024)}MB > 500MB)")
                 f.write(chunk)
         os.replace(tmp_path, final_video_path)
         return final_video_path

@@ -9,6 +9,7 @@ import hashlib
 _ref_cache: dict[str, tuple[float, dict]] = {}
 _cache_lock = threading.Lock()
 _CACHE_TTL = 3600  # 1시간
+_CACHE_MAX = 50  # 최대 캐시 엔트리 수
 
 
 def _parse_video_id(url: str) -> str | None:
@@ -26,8 +27,41 @@ def _parse_video_id(url: str) -> str | None:
     return None
 
 
+def _fetch_metadata_ytdlp(video_id: str) -> dict:
+    """yt-dlp로 메타데이터를 추출한다 (API 쿼터 소비 0, 무료)."""
+    try:
+        import subprocess, json as _json
+        result = subprocess.run(
+            ["yt-dlp", "--dump-json", "--no-download", "--no-warnings",
+             f"https://www.youtube.com/watch?v={video_id}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            return {}
+        data = _json.loads(result.stdout)
+        return {
+            "title": data.get("title", ""),
+            "description": data.get("description", ""),
+            "channel": data.get("channel", "") or data.get("uploader", ""),
+            "tags": data.get("tags", []) or [],
+            "view_count": int(data.get("view_count", 0) or 0),
+            "like_count": int(data.get("like_count", 0) or 0),
+        }
+    except Exception as e:
+        print(f"[YouTube 분석] yt-dlp 메타데이터 추출 실패: {e}")
+        return {}
+
+
 def _fetch_metadata(video_id: str, api_key: str) -> dict:
-    """YouTube Data API v3로 영상 메타데이터를 가져온다."""
+    """메타데이터 추출: yt-dlp (무료) → YouTube Data API (폴백)."""
+    # 1순위: yt-dlp (API 쿼터 소비 0)
+    result = _fetch_metadata_ytdlp(video_id)
+    if result and result.get("title"):
+        return result
+
+    # 2순위: YouTube Data API v3 (쿼터 1유닛 소비)
+    if not api_key:
+        return {}
     try:
         from googleapiclient.discovery import build
         import httplib2
@@ -53,7 +87,7 @@ def _fetch_metadata(video_id: str, api_key: str) -> dict:
             "like_count": int(stats.get("likeCount", 0)),
         }
     except Exception as e:
-        print(f"[YouTube 분석] 메타데이터 추출 실패: {e}")
+        print(f"[YouTube 분석] YouTube API 메타데이터 추출 실패: {e}")
         return {}
 
 
@@ -175,27 +209,17 @@ def extract_youtube_reference(url: str, api_key: str | None = None) -> dict:
         "structure": structure,
     }
 
-    # LLM 주입용 컨텍스트 문자열 생성
-    ctx_parts = ["\n\n[Reference Video Analysis]"]
-    if result["title"]:
-        ctx_parts.append(f"Title: {result['title']}")
-    if result["channel"]:
-        ctx_parts.append(f"Channel: {result['channel']} ({result['view_count']:,} views)")
-    if structure.get("hook"):
-        ctx_parts.append(f"Hook (first line): {structure['hook']}")
-    if structure.get("ending"):
-        ctx_parts.append(f"Ending (last line): {structure['ending']}")
-    ctx_parts.append(f"Style: {structure.get('style', 'unknown')}, {structure.get('sentence_count', 0)} sentences")
-    if transcript:
-        # 자막 전체는 너무 길 수 있으므로 앞 500자만
-        ctx_parts.append(f"Full transcript (first 500 chars): {transcript[:500]}")
-
-    result["context_string"] = "\n".join(ctx_parts)
-
     print(f"OK [레퍼런스 분석] 완료! 제목: {result['title']}, 자막 {len(transcript)}자 추출")
 
-    # 캐시 저장
+    # 캐시 저장 (만료 정리 + 크기 제한)
     with _cache_lock:
-        _ref_cache[cache_key] = (time.time(), result)
+        now = time.time()
+        expired = [k for k, (ts, _) in _ref_cache.items() if now - ts > _CACHE_TTL]
+        for k in expired:
+            _ref_cache.pop(k, None)
+        if len(_ref_cache) >= _CACHE_MAX:
+            oldest = min(_ref_cache, key=lambda k: _ref_cache[k][0])
+            _ref_cache.pop(oldest, None)
+        _ref_cache[cache_key] = (now, result)
 
     return result

@@ -2,7 +2,6 @@ import os
 import sys
 import io
 import re
-import copy
 import shutil
 import asyncio
 import threading
@@ -31,7 +30,7 @@ from modules.utils.constants import PROVIDER_LABELS
 from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats, get_service_usage_totals
 from modules.utils.models import MODEL_RATE_LIMITS
 from modules.utils.audio import normalize_audio_lufs
-from modules.utils.channel_config import get_channel_preset, get_channel_names
+from modules.utils.channel_config import get_channel_preset, get_channel_names, get_cost_tier, get_cost_tier_names, get_master_style, COST_TIERS
 
 @asynccontextmanager
 async def _lifespan(app):
@@ -48,11 +47,21 @@ _cut_executor = ThreadPoolExecutor(max_workers=4)
 # 이미지 동시 생성 제한 (모듈 레벨 — MAX_CONCURRENT_GENERATE > 1 에서도 전역 제한)
 _image_semaphore = threading.Semaphore(3)
 
+# 에러 메시지 키 마스킹 헬퍼 (API 키 노출 방지)
+_KEY_MASK_RE = re.compile(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}")
+def _mask_error(e: Exception, max_len: int = 200) -> str:
+    return _KEY_MASK_RE.sub(r"\1***", str(e)[:max_len])
+
 # 취소 토큰: 요청별 이벤트 (generation_id → (Event, created_time))
 _cancel_events: dict[str, tuple[threading.Event, float]] = {}
 _active_generation_id: str | None = None
 _generation_lock = threading.Lock()
-_CANCEL_EVENT_TTL = 600  # 10분 후 미정리 이벤트 자동 삭제
+_CANCEL_EVENT_TTL = 120  # 2분 후 미정리 이벤트 자동 삭제 (SSE 끊김 시 빠른 정리)
+
+# ElevenLabs 쿼터 캐시 (매 요청 HTTP 호출 방지)
+_elevenlabs_quota_cache: dict | None = None
+_elevenlabs_quota_ts: float = 0.0
+_ELEVENLABS_QUOTA_TTL = 60  # 60초 캐시
 
 
 @app.get("/")
@@ -144,7 +153,7 @@ class GenerateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     apiKey: str | None = None
     elevenlabsKey: str | None = None
-    videoEngine: str = "veo3"
+    videoEngine: str = "none"
     imageEngine: str = "imagen"
     llmProvider: str = "gemini"
     llmModel: str | None = None    # 세부 모델 버전 (예: "gemini-2.0-flash", "gpt-4o-mini")
@@ -164,6 +173,7 @@ class GenerateRequest(BaseModel):
     captionSize: int = Field(48, ge=32, le=72)  # 자막 폰트 크기 (px)
     captionY: int = Field(28, ge=10, le=50)  # 자막 높이 (%): 하단 기준
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL (분석 후 스타일 반영)
+    costTier: str | None = None  # 비용 프리셋: "free", "standard", "premium" (설정 시 엔진 자동 결정)
 
     @field_validator("language")
     @classmethod
@@ -210,6 +220,39 @@ class GenerateRequest(BaseModel):
         if v not in {"production", "draft"}:
             raise ValueError(f"지원하지 않는 모드: {v}. 허용: production, draft")
         return v
+
+    @field_validator("cameraStyle")
+    @classmethod
+    def valid_camera_style(cls, v: str) -> str:
+        allowed = {"auto", "dynamic", "gentle", "static"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 카메라 스타일: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("platforms")
+    @classmethod
+    def valid_platforms(cls, v: list[str]) -> list[str]:
+        allowed = {"youtube", "tiktok", "reels"}
+        for p in v:
+            if p not in allowed:
+                raise ValueError(f"지원하지 않는 플랫폼: {p}. 허용: {allowed}")
+        return v
+
+    @field_validator("costTier")
+    @classmethod
+    def valid_cost_tier(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        allowed = {"free", "standard", "premium"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 비용 티어: {v}. 허용: {allowed}")
+        return v
+
+
+@app.get("/api/cost-tiers")
+async def list_cost_tiers():
+    """비용 티어 프리셋 목록 반환."""
+    return {name: {"label": t["label"], "estimated_cost": t["estimated_cost"]} for name, t in COST_TIERS.items()}
 
 
 @app.get("/api/engines")
@@ -426,6 +469,22 @@ async def generation_status():
 
 @app.post("/api/generate")
 async def generate_video_endpoint(req: GenerateRequest):
+    # 비용 티어 적용: costTier가 설정되면 엔진/모델 기본값을 프리셋으로 오버라이드
+    if req.costTier:
+        tier = get_cost_tier(req.costTier)
+        if tier:
+            # 사용자가 명시적으로 설정하지 않은 값만 프리셋으로 대체
+            if req.llmProvider == "gemini":  # 기본값인 경우만
+                req.llmProvider = tier.get("llm_provider", req.llmProvider)
+            if not req.llmModel:
+                req.llmModel = tier.get("llm_model")
+            if req.imageEngine == "imagen":
+                req.imageEngine = tier.get("image_engine", req.imageEngine)
+            if not req.imageModel:
+                req.imageModel = tier.get("image_model")
+            if req.videoEngine == "none":
+                req.videoEngine = tier.get("video_engine", req.videoEngine)
+
     topic = req.topic
     api_key_override = req.apiKey
     elevenlabs_key_override = req.elevenlabsKey
@@ -480,9 +539,14 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": "ERROR|.env 파일을 확인하거나, 프론트엔드에서 API Key를 입력해주세요.\n"}
                 return
 
-            # 사전 검증: API 쿼터 체크 (경고만, 차단 안 함)
+            # 사전 검증: API 쿼터 체크 (경고만, 차단 안 함, 60초 캐시)
+            import time as _time_mod
             el_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
-            quota_info = check_elevenlabs_quota(el_key)
+            global _elevenlabs_quota_cache, _elevenlabs_quota_ts
+            if _time_mod.time() - _elevenlabs_quota_ts > _ELEVENLABS_QUOTA_TTL:
+                _elevenlabs_quota_cache = check_elevenlabs_quota(el_key)
+                _elevenlabs_quota_ts = _time_mod.time()
+            quota_info = _elevenlabs_quota_cache
             if quota_info:
                 remaining = quota_info["remaining"]
                 limit = quota_info["limit"]
@@ -606,7 +670,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 with image_semaphore:
                     try:
                         cut_image_key = _get_image_key()
-                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
+                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, channel=req.channel) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"이미지: {exc}")
@@ -865,8 +929,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": "ERROR|[네트워크 오류] API 서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.\n"}
             else:
                 # 원시 예외에 API 키 파편이 포함될 수 있으므로 마스킹
-                safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", err_str[:200])
-                yield {"data": f"ERROR|[시스템 오류] {safe_msg}\n"}
+                yield {"data": f"ERROR|[시스템 오류] {_mask_error(e)}\n"}
           finally:
             # 작업 완료/취소 후 정리
             with _generation_lock:
@@ -992,8 +1055,9 @@ async def prepare_endpoint(req: PrepareRequest):
             for i, cut in enumerate(cuts):
                 try:
                     img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys) if req.imageEngine == "imagen" else req.apiKey
+                    _prep_channel = getattr(req, 'channel', None)
                     img_path = await loop.run_in_executor(
-                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys)
+                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys, channel=_prep_channel)
                     )
                     image_paths.append(img_path)
                 except Exception as exc:
@@ -1044,8 +1108,7 @@ async def prepare_endpoint(req: PrepareRequest):
 
         except Exception as e:
             traceback.print_exc()
-            safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(e)[:200])
-            yield {"data": f"ERROR|[준비 오류] {safe_msg}\n"}
+            yield {"data": f"ERROR|[준비 오류] {_mask_error(e)}\n"}
 
     return EventSourceResponse(sse_generator())
 
@@ -1066,6 +1129,23 @@ class RenderRequest(BaseModel):
     captionY: int = Field(28, ge=10, le=50)
     outputPath: str | None = None
     voiceId: str | None = None  # ElevenLabs 음성 ID ("auto" → 주제 분석 자동 선택)
+
+    @field_validator("cameraStyle")
+    @classmethod
+    def valid_camera_style(cls, v: str) -> str:
+        allowed = {"auto", "dynamic", "gentle", "static"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 카메라 스타일: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("platforms")
+    @classmethod
+    def valid_platforms(cls, v: list[str]) -> list[str]:
+        allowed = {"youtube", "tiktok", "reels"}
+        for p in v:
+            if p not in allowed:
+                raise ValueError(f"지원하지 않는 플랫폼: {p}. 허용: {allowed}")
+        return v
 
 
 @app.post("/api/render")
@@ -1221,13 +1301,13 @@ async def render_endpoint(req: RenderRequest):
                 yield {"data": f"[완료] 영상 렌더링 대성공! 📂 Downloads 폴더에 저장됨\n"}
             yield {"data": f"DONE|{relative_video_path}|\n"}
 
-            # 세션 정리
-            _prepared_sessions.pop(req.sessionId, None)
+            # 세션 정리 (락 보호)
+            with _session_lock:
+                _prepared_sessions.pop(req.sessionId, None)
 
         except Exception as e:
             traceback.print_exc()
-            safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(e)[:200])
-            yield {"data": f"ERROR|[렌더 오류] {safe_msg}\n"}
+            yield {"data": f"ERROR|[렌더 오류] {_mask_error(e)}\n"}
 
     return EventSourceResponse(sse_generator())
 
@@ -1342,11 +1422,11 @@ async def youtube_upload(req: YouTubeUploadRequest):
         )
         return result
     except PermissionError as e:
-        return {"error": str(e), "need_auth": True}
+        return {"error": _mask_error(e), "need_auth": True}
     except (FileNotFoundError, ValueError) as e:
-        return {"error": str(e)}
+        return {"error": _mask_error(e)}
     except Exception as e:
-        return {"error": f"업로드 실패: {e}"}
+        return {"error": f"업로드 실패: {_mask_error(e)}"}
 
 
 @app.post("/api/youtube/disconnect")
@@ -1426,11 +1506,11 @@ async def tiktok_upload(req: TikTokUploadRequest):
         )
         return result
     except PermissionError as e:
-        return {"error": str(e), "need_auth": True}
+        return {"error": _mask_error(e), "need_auth": True}
     except (FileNotFoundError, ValueError) as e:
-        return {"error": str(e)}
+        return {"error": _mask_error(e)}
     except Exception as e:
-        return {"error": f"업로드 실패: {e}"}
+        return {"error": f"업로드 실패: {_mask_error(e)}"}
 
 
 @app.post("/api/tiktok/disconnect")
@@ -1502,13 +1582,11 @@ async def instagram_upload(req: InstagramUploadRequest):
         )
         return result
     except PermissionError as e:
-        return {"error": str(e), "need_auth": True}
-    except FileNotFoundError as e:
-        return {"error": str(e)}
-    except ValueError as e:
-        return {"error": str(e)}
+        return {"error": _mask_error(e), "need_auth": True}
+    except (FileNotFoundError, ValueError) as e:
+        return {"error": _mask_error(e)}
     except Exception as e:
-        return {"error": f"업로드 실패: {e}"}
+        return {"error": f"업로드 실패: {_mask_error(e)}"}
 
 
 @app.post("/api/instagram/disconnect")
@@ -1525,7 +1603,7 @@ class MultiLangRequest(BaseModel):
     languages: list[str] = Field(..., min_length=1, max_length=5, description="생성할 언어 목록 (예: ['ko', 'en', 'es'])")
     apiKey: str | None = None
     elevenlabsKey: str | None = None
-    videoEngine: str = "veo3"
+    videoEngine: str = "none"
     imageEngine: str = "imagen"
     llmProvider: str = "gemini"
     llmModel: str | None = None
@@ -1548,6 +1626,23 @@ class MultiLangRequest(BaseModel):
             if lang not in allowed:
                 raise ValueError(f"지원하지 않는 언어: {lang}")
         return list(dict.fromkeys(v))  # deduplicate preserving order
+
+    @field_validator("cameraStyle")
+    @classmethod
+    def valid_camera_style(cls, v: str) -> str:
+        allowed = {"auto", "dynamic", "gentle", "static"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 카메라 스타일: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("platforms")
+    @classmethod
+    def valid_platforms(cls, v: list[str]) -> list[str]:
+        allowed = {"youtube", "tiktok", "reels"}
+        for p in v:
+            if p not in allowed:
+                raise ValueError(f"지원하지 않는 플랫폼: {p}. 허용: {allowed}")
+        return v
 
 
 @app.post("/api/generate-multilang")
@@ -1602,7 +1697,7 @@ async def generate_multilang(req: MultiLangRequest):
                     cut_image_key = get_google_key(api_key_override, service="imagen", extra_keys=gemini_keys_override) if image_engine == "imagen" else api_key_override
                     with _image_semaphore:
                         if image_engine == "imagen":
-                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key, model_override=req.llmModel, gemini_api_keys=gemini_keys_override))
+                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key, model_override=None, gemini_api_keys=gemini_keys_override, channel=req.channel))
                         else:
                             img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key))
                     visual_paths[i] = img_path
@@ -1682,6 +1777,15 @@ async def generate_multilang(req: MultiLangRequest):
                     lang_title = video_title
                     lang_tags = video_tags
                     lang_seo = video_seo_desc
+
+                # 컷 수를 공유 이미지 수에 맞춤 (2차 언어 LLM이 다른 수를 생성할 수 있음)
+                n_shared = len(visual_paths)
+                if len(lang_cuts) > n_shared:
+                    lang_cuts = lang_cuts[:n_shared]
+                elif len(lang_cuts) < n_shared:
+                    # 부족한 컷은 마지막 컷을 복사 (이미지는 있지만 대본이 없으면 무음)
+                    while len(lang_cuts) < n_shared:
+                        lang_cuts.append(dict(lang_cuts[-1]) if lang_cuts else {"script": "...", "description": "", "prompt": ""})
 
                 # 언어별 TTS 생성
                 yield {"data": f"[{lang_upper}] TTS 음성 생성 중 ({len(lang_cuts)}컷)...\n"}
@@ -1774,7 +1878,7 @@ async def generate_multilang(req: MultiLangRequest):
                     else:
                         yield {"data": f"WARN|[{lang_upper}] 렌더링 실패\n"}
                 except Exception as render_err:
-                    yield {"data": f"WARN|[{lang_upper}] 렌더링 오류: {render_err}\n"}
+                    yield {"data": f"WARN|[{lang_upper}] 렌더링 오류: {_mask_error(render_err)}\n"}
 
             # ── 단계 5: 최종 결과 ──────────────────────────────────
             yield {"data": "PROG|100\n"}
@@ -1795,9 +1899,7 @@ async def generate_multilang(req: MultiLangRequest):
 
           except Exception as e:
             traceback.print_exc()
-            err_str = str(e)[:200]
-            err_str = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", err_str)
-            yield {"data": f"ERROR|[다국어 생성 오류] {err_str}\n"}
+            yield {"data": f"ERROR|[다국어 생성 오류] {_mask_error(e)}\n"}
 
     return EventSourceResponse(multilang_sse())
 
@@ -1810,7 +1912,7 @@ class BatchJobRequest(BaseModel):
     cameraStyle: str = "auto"
     bgmTheme: str = "random"
     llmProvider: str = "gemini"
-    videoEngine: str = "veo3"
+    videoEngine: str = "none"
     imageEngine: str = "imagen"
     channel: str | None = None
 
@@ -1843,10 +1945,19 @@ class BatchJobRequest(BaseModel):
             raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}")
         return v
 
+    @field_validator("cameraStyle")
+    @classmethod
+    def valid_camera_style(cls, v: str) -> str:
+        allowed = {"auto", "dynamic", "gentle", "static"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 카메라 스타일: {v}. 허용: {allowed}")
+        return v
+
 class BatchBulkRequest(BaseModel):
     jobs: list[BatchJobRequest] = Field(..., max_length=50)  # 큐 폭주 방지
 
 _batch_running = False
+_batch_lock = threading.Lock()
 _batch_stop = threading.Event()
 
 @app.post("/api/batch/add")
@@ -1876,10 +1987,11 @@ async def batch_stats():
 async def batch_start():
     """배치 큐의 대기 작업을 순차 실행합니다."""
     global _batch_running
-    if _batch_running:
-        return {"message": "배치가 이미 실행 중입니다", "running": True}
-    _batch_stop.clear()
-    _batch_running = True
+    with _batch_lock:
+        if _batch_running:
+            return {"message": "배치가 이미 실행 중입니다", "running": True}
+        _batch_stop.clear()
+        _batch_running = True
 
     async def _run_batch():
         global _batch_running
@@ -1922,7 +2034,8 @@ async def batch_start():
                     visual_paths, audio_paths, scripts, word_ts_list = [], [], [], []
                     for i, cut in enumerate(cuts):
                         if job["image_engine"] == "imagen":
-                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_imagen(c["prompt"], idx, topic_folder))
+                            _batch_channel = job.get("channel")
+                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_imagen(c["prompt"], idx, topic_folder, channel=_batch_channel))
                         else:
                             img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_dalle(c["prompt"], idx, topic_folder))
                         visual_paths.append(img)
@@ -1956,11 +2069,13 @@ async def batch_start():
 
                 except Exception as e:
                     from datetime import datetime as _dt
-                    update_job(job_id, status="failed", error=str(e)[:500], completed_at=_dt.now().isoformat())
-                    print(f"[배치 오류] 작업 #{job_id}: {e}")
+                    _err_msg = _mask_error(e)
+                    update_job(job_id, status="failed", error=_err_msg, completed_at=_dt.now().isoformat())
+                    print(f"[배치 오류] 작업 #{job_id}: {_err_msg}")
 
         finally:
-            _batch_running = False
+            with _batch_lock:
+                _batch_running = False
             print("[배치] 배치 프로세스 종료")
 
     asyncio.create_task(_run_batch())

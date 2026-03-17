@@ -7,6 +7,7 @@ import threading
 _fact_cache: dict[str, tuple[float, str]] = {}
 _cache_lock = threading.Lock()
 _CACHE_TTL = 3600  # 1시간
+_CACHE_MAX = 100  # 최대 캐시 엔트리 수 (메모리 누수 방지)
 
 
 def get_fact_check_context(topic: str) -> str:
@@ -59,7 +60,15 @@ def get_fact_check_context(topic: str) -> str:
 
         print("OK [팩트체크 엔진] 실시간 정보 검색 완료! (대본 기획에 RAG 주입 대기)")
         with _cache_lock:
-            _fact_cache[topic_hash] = (time.time(), context)
+            # 만료 엔트리 정리 + 크기 제한
+            now = time.time()
+            expired = [k for k, (ts, _) in _fact_cache.items() if now - ts > _CACHE_TTL]
+            for k in expired:
+                _fact_cache.pop(k, None)
+            if len(_fact_cache) >= _CACHE_MAX:
+                oldest = min(_fact_cache, key=lambda k: _fact_cache[k][0])
+                _fact_cache.pop(oldest, None)
+            _fact_cache[topic_hash] = (now, context)
         return context
     except Exception as e:
         print(f"[Tavily 오류] 실시간 검색 중 예외 발생: {e}")

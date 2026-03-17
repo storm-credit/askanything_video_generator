@@ -21,6 +21,9 @@ def _normalize_timestamps(words: list[dict]) -> list[dict]:
     if not words:
         return words
 
+    # 마지막 단어의 원래 end를 상한으로 사용 (오디오 길이 초과 방지)
+    original_last_end = words[-1]["end"]
+
     normalized = []
     for i, w in enumerate(words):
         start = max(0, w["start"] - _PRE_DISPLAY_OFFSET)
@@ -40,6 +43,10 @@ def _normalize_timestamps(words: list[dict]) -> list[dict]:
             start = normalized[-1]["end"]
             if end <= start:
                 end = start + _MIN_WORD_DURATION
+
+        # 마지막 단어는 원래 오디오 끝을 초과하지 않도록 클램핑
+        if i == len(words) - 1 and end > original_last_end + _MIN_WORD_DURATION:
+            end = max(start + _MIN_WORD_DURATION, original_last_end)
 
         normalized.append({"word": w["word"], "start": round(start, 3), "end": round(end, 3)})
 

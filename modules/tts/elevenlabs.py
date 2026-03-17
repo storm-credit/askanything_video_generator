@@ -90,13 +90,14 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         "CALM":    {"style": 0.1, "speed_boost": -0.05, "stability": 0.70, "similarity": 0.80},
     }
 
-    # 감정 스테이지 디렉션 — TTS 텍스트 앞에 감정 힌트 삽입 (ElevenLabs가 문맥에서 감정 추론)
+    # 감정 오디오 태그 — ElevenLabs v3 Audio Tags 기반 (v2에서도 부분 호환)
+    # 참고: https://elevenlabs.io/blog/eleven-v3-audio-tags-expressing-emotional-context-in-speech
     _EMOTION_DIRECTION = {
-        "SHOCK": "(speaking with urgency and intensity) ",
-        "REVEAL": "(speaking with dramatic emphasis) ",
-        "TENSION": "(speaking slowly with suspense) ",
-        "WONDER": "(speaking with awe and amazement) ",
-        "CALM": "(speaking softly and reflectively) ",
+        "SHOCK": "[gasps] [excited] ",
+        "REVEAL": "[dramatic pause] ",
+        "TENSION": "[whispers] ",
+        "WONDER": "[amazed] ",
+        "CALM": "[softly] ",
     }
 
     # speed: 0.7(느리게) ~ 1.0(기본) ~ 1.2(빠르게), 숏폼은 0.85~0.9 권장
@@ -105,7 +106,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
     speed_boost = emotion_cfg.get("speed_boost", 0.0)
     stability_val = emotion_cfg.get("stability", 0.5)
     similarity_val = emotion_cfg.get("similarity", 0.75)
-    tts_speed = (speed if speed is not None else float(os.getenv("ELEVENLABS_SPEED", "0.9"))) + speed_boost
+    tts_speed = max(0.5, min(2.0, (speed if speed is not None else float(os.getenv("ELEVENLABS_SPEED", "0.9"))) + speed_boost))
 
     # 감정 스테이지 디렉션 삽입 (ElevenLabs가 텍스트 문맥에서 감정을 추론)
     tts_text = text
