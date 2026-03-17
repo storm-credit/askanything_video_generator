@@ -151,7 +151,7 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
 
     # Context Caching: 시스템 프롬프트 내용 해시 포함 (채널/언어 변경 시 잘못된 캐시 방지)
     prompt_hash = _hashlib.sha256(system_prompt.encode()).hexdigest()[:16]
-    cache_key = f"{api_key}:{model_name}:{prompt_hash}"
+    cache_key = f"{model_name}:{prompt_hash}"
     with _gemini_cache_lock:
         # 만료 엔트리 전체 정리 (TTL 580초)
         now = time.time()
