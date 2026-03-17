@@ -144,6 +144,7 @@ def _generate_imagen(api_key: str, prompt: str, model_name: str) -> bytes:
     from google.genai import types
 
     safety_level = os.getenv("IMAGEN_SAFETY_FILTER", "BLOCK_LOW_AND_ABOVE")
+    person_gen = os.getenv("IMAGEN_PERSON_GENERATION", "ALLOW_ALL")
     client = genai.Client(api_key=api_key)
     response = client.models.generate_images(
         model=model_name,
@@ -152,7 +153,7 @@ def _generate_imagen(api_key: str, prompt: str, model_name: str) -> bytes:
             number_of_images=1,
             aspect_ratio="9:16",
             safety_filter_level=safety_level,
-            person_generation="ALLOW_ALL",  # 인물 포함 프롬프트 safety 차단 방지
+            person_generation=person_gen,
             http_options=types.HttpOptions(timeout=120_000),
         ),
     )

@@ -251,8 +251,36 @@ class GenerateRequest(BaseModel):
 
 @app.get("/api/cost-tiers")
 async def list_cost_tiers():
-    """비용 티어 프리셋 목록 반환."""
-    return {name: {"label": t["label"], "estimated_cost": t["estimated_cost"]} for name, t in COST_TIERS.items()}
+    """비용 티어 프리셋 목록 반환 (프론트엔드 동기화용 full config 포함)."""
+    return {
+        name: {
+            "label": t["label"],
+            "estimated_cost": t["estimated_cost"],
+            "llm_provider": t.get("llm_provider"),
+            "llm_model": t.get("llm_model", ""),
+            "image_engine": t.get("image_engine"),
+            "image_model": t.get("image_model", ""),
+            "video_engine": t.get("video_engine"),
+        }
+        for name, t in COST_TIERS.items()
+    }
+
+
+@app.get("/api/channel-presets")
+async def list_channel_presets():
+    """채널 프리셋 목록 반환 (프론트엔드 동기화용)."""
+    from modules.utils.channel_config import CHANNEL_PRESETS
+    return {
+        name: {
+            "language": p.get("language"),
+            "voice_id": p.get("voice_id"),
+            "tts_speed": p.get("tts_speed"),
+            "platforms": p.get("platforms"),
+            "caption_size": p.get("caption_size"),
+            "caption_y": p.get("caption_y"),
+        }
+        for name, p in CHANNEL_PRESETS.items()
+    }
 
 
 @app.get("/api/engines")

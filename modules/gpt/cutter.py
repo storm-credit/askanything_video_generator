@@ -299,7 +299,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [대본 스타일 규칙]
 * 반말 + 구어체. 딱딱한 존댓말 금지. 친구한테 신기한 거 알려주듯이 써라.
-* 한 컷 대본은 15~30자. 짧고 강렬하게. 한 문장 이상 넣지 마라.
+* 한 컷 대본은 10~30자 (페이싱 커브에 따라 조절). 짧고 강렬하게. 한 문장 이상 넣지 마라.
 * "~입니다", "~합니다" 금지. "~거든", "~잖아", "~인 거야", "~라는 거지" 같은 구어체 어미 사용.
 * 감탄사/추임새 적극 활용: "미쳤지?", "소름이지?", "진짜야.", "ㄹㅇ."
 * 같은 문장 구조를 연속 사용하지 마라. Q&A, 명령문, 서술문을 섞어라.
@@ -407,7 +407,7 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 
 [Script Style Rules]
 * Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
-* Each cut: 5–10 words MAX. Short. Punchy. One sentence only.
+* Each cut: 3–10 words (adjusted by pacing curve). Short. Punchy. One sentence only.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
 * Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
 * [CRITICAL WARNING] Write 7–10 cuts (~5–7 sec each). Target 50–60 second video for maximum watch time. NEVER less than 7 cuts.
@@ -527,7 +527,9 @@ This is the channel's signature look — every image should feel cohesive with t
 [CHANNEL NARRATIVE STRUCTURE — OVERRIDES base hook/ending rules]
 Hook strategy: {hook_instr}
 Ending strategy: {ending}
-This OVERRIDES the default Cut 1 hook rule above. Follow this channel's unique storytelling pattern.
+IMPORTANT: This OVERRIDES the "[바이럴 숏폼 공식]" / "[Viral Shorts Formula]" Cut 1 rule above.
+If this says "mystery question" or "curiosity-triggering", you MAY use question-style hooks (overriding "질문형 금지" / "No questions" rule).
+If this says "answer_reveal", save the answer for the LAST cut (overriding "결론 먼저" / "conclusion first" rule).
 """
 
     # LLM 프로바이더별 API 키 결정

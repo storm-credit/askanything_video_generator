@@ -230,7 +230,7 @@ def _generate_via_openai_sora(
             model="sora",
             input=[
                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
-                {"type": "text", "text": f"{get_motion_style(prompt, description)}, 4K quality. {prompt}"},
+                {"type": "text", "text": prompt},  # _optimize_prompt_for_engine에서 이미 motion_style + 4K 적용됨
             ],
             tools=[{"type": "video_generation", "resolution": "1080p", "duration": 8}],
         )
