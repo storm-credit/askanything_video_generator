@@ -408,7 +408,7 @@ export const Main: React.FC<{
                         muted
                       />
                   ) : (
-                      <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={cut.emotion} />
+                      <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={extractEmotion(cut)} />
                   )}
                   <Audio src={audioSrc} />
                   <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={extractEmotion(cut)} />

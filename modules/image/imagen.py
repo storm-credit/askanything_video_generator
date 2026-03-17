@@ -111,10 +111,11 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                     mark_key_exhausted(final_api_key, service_tag)
                     print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → 다른 키로 전환...")
                     continue  # 다음 키로
-                if is_safety_error(error_msg):
+                if is_safety_error(error_msg) and safety_retry_count < 3:
                     enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count)
                     safety_retry_count += 1
-                    print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도...")
+                    tried_keys.discard(final_api_key)  # safety 재시도는 같은 키로 (키 카운터 소모 방지)
+                    print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도... ({safety_retry_count}/3)")
                     continue  # 같은 키로 대체 프롬프트 재시도
                 raise RuntimeError(f"[{model_label} 이미지 생성 실패] index={index}: {e}")
 

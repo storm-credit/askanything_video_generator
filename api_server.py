@@ -1239,9 +1239,10 @@ async def youtube_upload(req: YouTubeUploadRequest):
     from modules.upload.youtube import upload_video
     try:
         # 경로 보안 검증
+        from pathlib import Path as _P
         abs_path = os.path.abspath(os.path.realpath(req.video_path))
         assets_dir = os.path.abspath(os.path.realpath("assets"))
-        if not abs_path.startswith(assets_dir):
+        if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
         loop = asyncio.get_running_loop()
@@ -1316,9 +1317,10 @@ async def tiktok_callback(code: str, state: str | None = None):
 async def tiktok_upload(req: TikTokUploadRequest):
     from modules.upload.tiktok import upload_video
     try:
+        from pathlib import Path as _P
         abs_path = os.path.abspath(os.path.realpath(req.video_path))
         assets_dir = os.path.abspath(os.path.realpath("assets"))
-        if not abs_path.startswith(assets_dir):
+        if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
         loop = asyncio.get_running_loop()
@@ -1391,9 +1393,10 @@ async def instagram_callback(code: str, state: str | None = None):
 async def instagram_upload(req: InstagramUploadRequest):
     from modules.upload.instagram import upload_reels
     try:
+        from pathlib import Path as _P
         abs_path = os.path.abspath(os.path.realpath(req.video_path))
         assets_dir = os.path.abspath(os.path.realpath("assets"))
-        if not abs_path.startswith(assets_dir):
+        if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
         loop = asyncio.get_running_loop()

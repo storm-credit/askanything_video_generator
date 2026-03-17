@@ -340,11 +340,13 @@ This is the channel's signature look — every image should feel cohesive with t
     else:
         max_key_attempts = 3  # OpenAI/Claude도 429 시 최대 3회 재시도 (백오프)
 
+    last_error: Exception | None = None
     for attempt in range(max_key_attempts):
         try:
             cuts, title = _request_cuts(llm_provider, current_key, system_prompt, user_content)
             break  # 성공
         except Exception as e:
+            last_error = e
             err_str = str(e)
             is_retryable = (
                 "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
@@ -371,6 +373,10 @@ This is the channel's signature look — every image should feel cohesive with t
                 continue
             else:
                 raise  # 429가 아닌 에러는 그대로 전파
+
+    # 전체 재시도 실패 시 마지막 에러 전파
+    if not cuts and last_error:
+        raise RuntimeError(f"[{provider_label}] 모든 재시도 실패 ({max_key_attempts}회)") from last_error
 
     # 컷 수 검증 — 초과 시 트림, 부족 시 기존 컷 기반 확장 요청 (전체 재생성 방지)
     if len(cuts) > 10:
