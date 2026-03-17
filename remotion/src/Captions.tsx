@@ -27,7 +27,7 @@ const EN_STOPWORDS = new Set([
 
 type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
 
-// 감정별 하이라이트 색상 (활성 단어 + 강조 단어 공용)
+// 감정별 하이라이트 색상
 const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
   SHOCK: '#FF4444',
   WONDER: '#FFB800',
@@ -45,37 +45,97 @@ const getEmotionColor = (emotion?: string): string => {
 
 const isEmphasisWord = (word: string): boolean => {
   const clean = word.replace(/[.,!?;:'"]/g, '').toLowerCase();
-  // 1) Explicit power words — always emphasize
   if (EMPHASIS_PATTERNS.test(clean)) return true;
-  // 2) Numbers — always emphasize (data = impact)
   if (/^\d/.test(clean)) return true;
-  // 3) English content words: 7+ chars, not a stopword (stricter threshold)
   if (clean.length >= 7 && /^[a-z]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
-  // 4) Korean: 4+ Hangul syllables (most 4+ syllable Korean words carry high info density)
   if (clean.length >= 4 && /^[\uAC00-\uD7A3]+$/.test(clean)) return true;
-  // 5) Japanese: katakana words (foreign/technical loanwords are attention-grabbing)
   if (/^[\u30A0-\u30FF]{3,}$/.test(clean)) return true;
-  // 6) Chinese: 4+ character words (longer compounds carry high info density)
   if (clean.length >= 4 && /^[\u4E00-\u9FFF]+$/.test(clean)) return true;
-  // 7) European languages (Spanish, French, German, Portuguese, etc.): 8+ chars
   if (clean.length >= 8 && /^[a-zA-Z\u00C0-\u024F]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
   return false;
 };
 
-export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: number; captionY?: number; emotion?: string }> = ({ wordTimestamps, captionSize = 48, captionY = 28, emotion }) => {
+// ── 구간(phrase) 단위로 단어 그룹핑 ──
+// Hormozi/MrBeast 스타일: 2-4 단어씩 팝업 → 사라짐 → 다음 구간
+// 기준: 시간 갭(0.3s+) 또는 최대 4단어마다 끊기
+type Phrase = {
+  words: (WordProps & { index: number; emphasis: boolean })[];
+  start: number;
+  end: number;
+};
+
+const buildPhrases = (wordTimestamps: WordProps[]): Phrase[] => {
+  const MAX_WORDS_PER_PHRASE = 4;
+  const GAP_THRESHOLD = 0.3; // 0.3초 이상 간격이면 구간 분리
+  const phrases: Phrase[] = [];
+  let current: Phrase['words'] = [];
+
+  for (let i = 0; i < wordTimestamps.length; i++) {
+    const w = { ...wordTimestamps[i], index: i, emphasis: isEmphasisWord(wordTimestamps[i].word) };
+
+    if (current.length === 0) {
+      current.push(w);
+      continue;
+    }
+
+    const prevEnd = current[current.length - 1].end;
+    const gap = w.start - prevEnd;
+    const atMax = current.length >= MAX_WORDS_PER_PHRASE;
+
+    // 구간 끊기: 시간 갭 또는 최대 단어 수 도달
+    if (gap >= GAP_THRESHOLD || atMax) {
+      phrases.push({
+        words: current,
+        start: current[0].start,
+        end: current[current.length - 1].end,
+      });
+      current = [w];
+    } else {
+      current.push(w);
+    }
+  }
+
+  if (current.length > 0) {
+    phrases.push({
+      words: current,
+      start: current[0].start,
+      end: current[current.length - 1].end,
+    });
+  }
+
+  return phrases;
+};
+
+export const Captions: React.FC<{
+  wordTimestamps: WordProps[];
+  captionSize?: number;
+  captionY?: number;
+  emotion?: string;
+}> = ({ wordTimestamps, captionSize = 48, captionY = 28, emotion }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
 
-  const quantizedTime = Math.floor(currentTime * 10) / 10;
+  // 구간 빌드 (메모이제이션)
+  const phrases = useMemo(() => buildPhrases(wordTimestamps), [wordTimestamps]);
 
-  const visibleWords = useMemo(() => {
-    const windowStart = quantizedTime - 1;
-    const windowEnd = quantizedTime + 1;
-    return wordTimestamps
-      .map((w, index) => ({ ...w, index, emphasis: isEmphasisWord(w.word) }))
-      .filter((w) => w.end >= windowStart && w.start <= windowEnd);
-  }, [wordTimestamps, quantizedTime]);
+  // 현재 시간에 해당하는 구간 찾기
+  const activePhrase = useMemo(() => {
+    // 현재 발화 중인 구간 (start <= currentTime <= end + 0.15s 여유)
+    return phrases.find((p) => currentTime >= p.start - 0.1 && currentTime <= p.end + 0.15) || null;
+  }, [phrases, currentTime]);
+
+  if (!activePhrase) return null;
+
+  const highlightColor = getEmotionColor(emotion);
+  const emphasisColor = emotion && EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag]
+    ? EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag]
+    : '#FF4444';
+
+  // 구간 등장 진행도 (0~1): 팝업 애니메이션용
+  const phraseAge = currentTime - activePhrase.start;
+  const popScale = phraseAge < 0.08 ? 0.85 + (phraseAge / 0.08) * 0.15 : 1; // 0.08초 팝업
+  const popOpacity = phraseAge < 0.06 ? phraseAge / 0.06 : 1;
 
   return (
     <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: `${captionY}%` }}>
@@ -85,39 +145,32 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
         justifyContent: 'center',
         alignItems: 'center',
         width: '88%',
-        gap: '8px',
-        textAlign: 'center'
+        gap: '10px',
+        textAlign: 'center',
+        transform: `scale(${popScale})`,
+        opacity: popOpacity,
       }}>
-        {visibleWords.map((w) => {
-          const isActive = quantizedTime >= w.start && quantizedTime <= w.end;
-          const hasPassed = quantizedTime > w.end;
-          const isVisible = quantizedTime >= w.start - 0.5;
-
-          if (!isVisible && !hasPassed && !isActive) return null;
-
+        {activePhrase.words.map((w) => {
+          const isActive = currentTime >= w.start && currentTime <= w.end;
+          const hasPassed = currentTime > w.end;
           const isEmphasized = isActive && w.emphasis;
-          const highlightColor = getEmotionColor(emotion);
 
-          // 중복 제거: 상단 EMOTION_HIGHLIGHT_COLOR 재사용
-          const emphasisColor = emotion && EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag] ? EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag] : '#FF4444';
+          const emphasisR = parseInt(emphasisColor.slice(1, 3), 16);
+          const emphasisG = parseInt(emphasisColor.slice(3, 5), 16);
+          const emphasisB = parseInt(emphasisColor.slice(5, 7), 16);
 
           const color = isEmphasized
             ? emphasisColor
             : isActive
               ? highlightColor
-              : 'rgba(255, 255, 255, 0.6)';
-
-          const highlightGlow = `0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 6px ${highlightColor}4D`;
-
-          // emphasis glow uses emphasisColor for hex → rgba conversion
-          const emphasisR = parseInt(emphasisColor.slice(1, 3), 16);
-          const emphasisG = parseInt(emphasisColor.slice(3, 5), 16);
-          const emphasisB = parseInt(emphasisColor.slice(5, 7), 16);
+              : hasPassed
+                ? 'rgba(255, 255, 255, 0.85)'
+                : 'rgba(255, 255, 255, 0.5)';
 
           const textShadow = isEmphasized
             ? `0px 2px 16px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.6), 0px 0px 8px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.4), 0px 2px 12px rgba(0, 0, 0, 0.9)`
             : isActive
-              ? highlightGlow
+              ? `0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 6px ${highlightColor}4D`
               : '0px 2px 8px rgba(0, 0, 0, 0.8)';
 
           const scale = isEmphasized ? 1.15 : 1;
@@ -129,8 +182,8 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: isEmphasized ? 900 : 800,
                 fontSize: `${captionSize}px`,
-                color: color,
-                textShadow: textShadow,
+                color,
+                textShadow,
                 WebkitTextStroke: '1.5px rgba(0, 0, 0, 0.5)',
                 lineHeight: '1.3',
                 display: 'inline-block',
