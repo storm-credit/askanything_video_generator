@@ -1035,6 +1035,16 @@ class PrepareRequest(BaseModel):
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL
     costTier: str | None = None  # 비용 티어 (free/standard/premium)
 
+    @field_validator("costTier")
+    @classmethod
+    def valid_cost_tier(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        allowed = set(get_cost_tier_names())
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 비용 티어: {v}. 허용: {allowed}")
+        return v
+
     @field_validator("language")
     @classmethod
     def valid_language(cls, v: str) -> str:
@@ -1211,6 +1221,14 @@ class RenderRequest(BaseModel):
     captionY: int = Field(28, ge=10, le=50)
     outputPath: str | None = None
     voiceId: str | None = None  # ElevenLabs 음성 ID ("auto" → 주제 분석 자동 선택)
+
+    @field_validator("videoEngine")
+    @classmethod
+    def valid_video_engine(cls, v: str) -> str:
+        allowed = {"veo3", "kling", "sora2", "none"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
+        return v
 
     @field_validator("cameraStyle")
     @classmethod

@@ -96,7 +96,8 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     
     print(f"-> [Kling AI] 컷 {index+1} 렌더링 클라우드 진행 상태 대기 중 (약 2~3분 소요 예상)...")
     
-    max_polls = 60  # 적응형 폴링으로 실제 최대 ~7분 (thread join 480s 이내)
+    MAX_WAIT = 420  # 절대 타임아웃 7분 (thread join 480s 이내)
+    max_polls = 60
     timed_out = True
     _elapsed = 0
     for poll_iter in range(max_polls):
@@ -104,6 +105,8 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
         _poll_wait = 5 if _elapsed < 60 else (10 if _elapsed < 120 else 15)
         time.sleep(_poll_wait)
         _elapsed += _poll_wait
+        if _elapsed >= MAX_WAIT:
+            break
 
         try:
             poll_resp = requests.get(poll_url, headers=headers, timeout=30)
