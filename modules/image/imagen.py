@@ -91,7 +91,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 fd, tmp_img = _tmpfile.mkstemp(dir=image_dir, suffix=".tmp")
                 os.close(fd)
                 try:
-                    fitted_image.save(tmp_img)
+                    fitted_image.save(tmp_img, format="PNG")
                     os.replace(tmp_img, filename)
                 except Exception:
                     try:
