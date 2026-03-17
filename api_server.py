@@ -2,6 +2,7 @@ import os
 import sys
 import io
 import re
+import copy
 import shutil
 import asyncio
 import threading
@@ -1091,7 +1092,7 @@ async def prepare_endpoint(req: PrepareRequest):
                     img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys) if req.imageEngine == "imagen" else req.apiKey
                     _prep_channel = getattr(req, 'channel', None)
                     img_path = await loop.run_in_executor(
-                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys, channel=_prep_channel)
+                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k, channel=_prep_channel) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys, channel=_prep_channel)
                     )
                     image_paths.append(img_path)
                 except Exception as exc:
