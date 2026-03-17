@@ -10,8 +10,8 @@ BRAND_DIR = "brand"
 INTRO_IMAGE = "intro.png"
 OUTRO_IMAGE = "outro.jpg"
 BGM_FILE = "bgm.mp3"
-INTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
-OUTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
+INTRO_DURATION_FRAMES = 30         # 1초 @ 30fps
+OUTRO_DURATION_FRAMES = 30         # 1초 @ 30fps
 
 # 채널별 브랜드 에셋 지원
 # brand/channels/askanything/intro.png, outro.jpg
@@ -196,7 +196,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     # 컷 데이터 공통 생성 (모든 플랫폼 공유)
     cuts_data = []
     cuts_duration = 0
-    fps = 24
+    fps = 30
 
     desc_list = descriptions or [""] * len(visual_paths)
 

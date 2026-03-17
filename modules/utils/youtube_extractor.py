@@ -30,7 +30,9 @@ def _fetch_metadata(video_id: str, api_key: str) -> dict:
     """YouTube Data API v3로 영상 메타데이터를 가져온다."""
     try:
         from googleapiclient.discovery import build
-        youtube = build("youtube", "v3", developerKey=api_key)
+        import httplib2
+        http = httplib2.Http(timeout=30)
+        youtube = build("youtube", "v3", developerKey=api_key, http=http)
         resp = youtube.videos().list(
             part="snippet,statistics",
             id=video_id,

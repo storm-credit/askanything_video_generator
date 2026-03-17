@@ -2,9 +2,9 @@ import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile, useCurrentFrame,
 import React, { useCallback, useMemo } from 'react';
 import { Captions } from './Captions';
 
-const INTRO_DURATION_FRAMES = 24;  // 1초 @ 24fps
-const TITLE_OVERLAY_FRAMES = 60;  // 2.5초 @ 24fps (첫 컷 위 오버레이)
-const OUTRO_DURATION_FRAMES = 24;  // 1초 @ 24fps
+const INTRO_DURATION_FRAMES = 30;  // 1초 @ 30fps
+const TITLE_OVERLAY_FRAMES = 75;  // 2.5초 @ 30fps (첫 컷 위 오버레이)
+const OUTRO_DURATION_FRAMES = 30;  // 1초 @ 30fps
 
 type WordProps = {
   word: string;
@@ -246,7 +246,7 @@ const BrandOutro: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
-const FADE_IN_FRAMES = 6; // 250ms @ 24fps
+const FADE_IN_FRAMES = 8; // ~250ms @ 30fps
 
 const FadeIn: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const frame = useCurrentFrame();
@@ -254,6 +254,48 @@ const FadeIn: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <AbsoluteFill style={{ opacity }}>
       {children}
+    </AbsoluteFill>
+  );
+};
+
+const AI_DISCLOSURE_FRAMES = 60; // 2초 @ 30fps
+
+const AIDisclosureLabel: React.FC = () => {
+  const frame = useCurrentFrame();
+
+  const fadeIn = interpolate(frame, [0, 10], [0, 1], { extrapolateRight: 'clamp' });
+  const fadeOut = interpolate(
+    frame,
+    [AI_DISCLOSURE_FRAMES - 15, AI_DISCLOSURE_FRAMES],
+    [1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+  );
+  const opacity = fadeIn * fadeOut;
+
+  return (
+    <AbsoluteFill style={{ opacity }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: 40,
+          right: 24,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          borderRadius: 6,
+          padding: '6px 12px',
+        }}
+      >
+        <span
+          style={{
+            color: 'white',
+            fontSize: 12,
+            fontFamily: 'sans-serif',
+            fontWeight: 500,
+            letterSpacing: 0.5,
+          }}
+        >
+          AI Generated
+        </span>
+      </div>
     </AbsoluteFill>
   );
 };
@@ -397,9 +439,7 @@ export const Main: React.FC<{
         const isVideo = isVideoPath(visualSrc);
         const emotion = extractEmotion(cut);
 
-        return (
-          <Sequence key={index} from={startFrame} durationInFrames={cut.duration_in_frames}>
-            <FadeIn>
+        const content = (
               <AbsoluteFill>
                   {isVideo ? (
                       <Video
@@ -414,7 +454,11 @@ export const Main: React.FC<{
                   <Audio src={audioSrc} />
                   <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={emotion} />
               </AbsoluteFill>
-            </FadeIn>
+        );
+
+        return (
+          <Sequence key={index} from={startFrame} durationInFrames={cut.duration_in_frames}>
+            {index === 0 ? content : <FadeIn>{content}</FadeIn>}
           </Sequence>
         );
       })}
@@ -430,6 +474,13 @@ export const Main: React.FC<{
       {title && cuts.length > 0 && (
         <Sequence from={introFrames} durationInFrames={Math.min(TITLE_OVERLAY_FRAMES, cuts[0].duration_in_frames)}>
           <TitleOverlay title={title} />
+        </Sequence>
+      )}
+
+      {/* AI 콘텐츠 공시 라벨 — 첫 컷 시작 후 2초 표시 (EU AI Act / YouTube 공시) */}
+      {cuts.length > 0 && (
+        <Sequence from={introFrames} durationInFrames={Math.min(AI_DISCLOSURE_FRAMES, cuts[0].duration_in_frames)}>
+          <AIDisclosureLabel />
         </Sequence>
       )}
 

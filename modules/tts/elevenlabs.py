@@ -51,7 +51,7 @@ def check_quota(api_key: str = None) -> dict | None:
     return None
 
 
-def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko", speed: float | None = None, voice_id: str | None = None) -> str | None:
+def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko", speed: float | None = None, voice_id: str | None = None, emotion: str | None = None) -> str | None:
     """
     ElevenLabs API를 사용하여 매우 사실적인 다큐멘터리/쇼츠용 음성(.mp3)을 생성합니다.
     빈 텍스트 → 기본 문구로 대체, 타임아웃/네트워크 오류 → 최대 3회 재시도.
@@ -80,16 +80,28 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         "xi-api-key": api_key
     }
 
+    # 감정 태그 → TTS 스타일/속도 매핑 (ElevenLabs v3 연구 기반)
+    _EMOTION_STYLE = {
+        "SHOCK": {"style": 0.7, "speed_boost": 0.05},     # 긴박, 빠르게
+        "REVEAL": {"style": 0.6, "speed_boost": 0.03},     # 반전, 약간 빠르게
+        "TENSION": {"style": 0.4, "speed_boost": -0.05},   # 긴장, 느리게
+        "WONDER": {"style": 0.3, "speed_boost": -0.02},    # 경이, 약간 느리게
+        "CALM": {"style": 0.1, "speed_boost": -0.05},      # 차분, 느리게
+    }
+
     # speed: 0.7(느리게) ~ 1.0(기본) ~ 1.2(빠르게), 숏폼은 0.85~0.9 권장
-    tts_speed = speed if speed is not None else float(os.getenv("ELEVENLABS_SPEED", "0.9"))
+    emotion_cfg = _EMOTION_STYLE.get(emotion, {})
+    style_val = emotion_cfg.get("style", 0.0)
+    speed_boost = emotion_cfg.get("speed_boost", 0.0)
+    tts_speed = (speed if speed is not None else float(os.getenv("ELEVENLABS_SPEED", "0.9"))) + speed_boost
 
     data = {
         "text": text,
-        "model_id": "eleven_multilingual_v2",
+        "model_id": os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2"),
         "voice_settings": {
             "stability": 0.5,
             "similarity_boost": 0.75,
-            "style": 0.0,
+            "style": style_val,
             "use_speaker_boost": True,
         },
         "speed": tts_speed,

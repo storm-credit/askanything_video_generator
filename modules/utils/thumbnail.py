@@ -31,17 +31,36 @@ def _sharpness_score(image_path: str) -> float:
         return 0.0
 
 
-def select_best_thumbnail(image_paths: list[str]) -> str | None:
-    """여러 이미지 중 가장 선명한 것을 썸네일로 선택합니다."""
+def select_best_thumbnail(image_paths: list[str], descriptions: list[str] | None = None) -> str | None:
+    """여러 이미지 중 가장 적합한 것을 썸네일로 선택합니다.
+
+    감정 태그 우선순위: SHOCK > REVEAL > WONDER > TENSION > CALM
+    동일 감정 내에서는 선명도(Laplacian variance)가 높은 이미지 선택.
+    """
     if not image_paths:
         return None
 
-    valid = [(p, _sharpness_score(p)) for p in image_paths if os.path.exists(p)]
+    _EMOTION_PRIORITY = {"SHOCK": 5, "REVEAL": 4, "WONDER": 3, "TENSION": 2, "CALM": 1}
+
+    valid = []
+    for i, p in enumerate(image_paths):
+        if not os.path.exists(p):
+            continue
+        score = _sharpness_score(p)
+        emotion_score = 0
+        if descriptions and i < len(descriptions):
+            import re
+            m = re.search(r'\[(SHOCK|REVEAL|WONDER|TENSION|CALM)\]', descriptions[i])
+            if m:
+                emotion_score = _EMOTION_PRIORITY.get(m.group(1), 0)
+        valid.append((p, emotion_score, score))
+
     if not valid:
         return None
 
-    best_path, best_score = max(valid, key=lambda x: x[1])
-    print(f"   [썸네일] 최적 이미지 선택: {os.path.basename(best_path)} (선명도: {best_score:.0f})")
+    best_path, best_emo, best_sharp = max(valid, key=lambda x: (x[1], x[2]))
+    emo_label = f", 감정: {best_emo}" if best_emo > 0 else ""
+    print(f"   [썸네일] 최적 이미지 선택: {os.path.basename(best_path)} (선명도: {best_sharp:.0f}{emo_label})")
     return best_path
 
 

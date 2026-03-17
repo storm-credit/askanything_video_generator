@@ -305,6 +305,7 @@ export default function Home() {
           captionSize,
           captionY,
           referenceUrl: detectedRefUrl,
+          mode: previewMode ? "draft" : "production",
         }),
       });
 

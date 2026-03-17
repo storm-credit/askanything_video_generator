@@ -20,7 +20,7 @@ export const RemotionRoot: React.FC = () => {
                 id="Main"
                 component={Main}
                 durationInFrames={totalFrames}
-                fps={24}
+                fps={30}
                 width={1080}
                 height={1920}
                 defaultProps={{ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle, captionSize, captionY }}

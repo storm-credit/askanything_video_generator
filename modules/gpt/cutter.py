@@ -30,8 +30,8 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str, list[str]]:
-    """LLM 응답 텍스트에서 cuts 데이터, 제목, 태그를 파싱합니다."""
+def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str, list[str], str]:
+    """LLM 응답 텍스트에서 cuts 데이터, 제목, 태그, SEO 설명문을 파싱합니다."""
     if not content:
         raise ValueError("LLM 응답 content가 비어 있습니다.")
     try:
@@ -43,7 +43,8 @@ def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str, list[str]]:
         raise ValueError("LLM 응답에 유효한 cuts가 없습니다.")
     title = data.get("title", "").strip()
     tags = data.get("tags", ["#Shorts"])
-    return cuts, title, tags
+    seo_desc = data.get("seo_description", "").strip()
+    return cuts, title, tags, seo_desc
 
 
 _CUTS_JSON_SCHEMA = {
@@ -55,6 +56,7 @@ _CUTS_JSON_SCHEMA = {
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
+                "seo_description": {"type": "string"},
                 "tags": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -73,7 +75,7 @@ _CUTS_JSON_SCHEMA = {
                     },
                 },
             },
-            "required": ["title", "tags", "cuts"],
+            "required": ["title", "seo_description", "tags", "cuts"],
             "additionalProperties": False,
         },
     },
@@ -83,6 +85,7 @@ _GEMINI_RESPONSE_SCHEMA = {
     "type": "OBJECT",
     "properties": {
         "title": {"type": "STRING"},
+        "seo_description": {"type": "STRING"},
         "tags": {
             "type": "ARRAY",
             "items": {"type": "STRING"},
@@ -100,7 +103,7 @@ _GEMINI_RESPONSE_SCHEMA = {
             },
         },
     },
-    "required": ["title", "tags", "cuts"],
+    "required": ["title", "seo_description", "tags", "cuts"],
 }
 
 
@@ -209,8 +212,8 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str, model_o
     return (response.content[0].text or "").strip()
 
 
-def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> tuple[list[dict[str, str]], str, list[str]]:
-    """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다. (cuts, title, tags) 반환."""
+def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> tuple[list[dict[str, str]], str, list[str], str]:
+    """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다. (cuts, title, tags, seo_desc) 반환."""
     if provider == "gemini":
         content = _request_gemini(api_key, system_prompt, user_content, model_override)
     elif provider == "claude":
@@ -224,7 +227,7 @@ def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content:
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
                   channel: str | None = None, llm_model: str | None = None,
-                  reference_url: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
+                  reference_url: str | None = None) -> tuple[list[dict[str, Any]], str, str, list[str], str]:
     topic_folder = slugify_topic(topic, lang)
 
     # 저장 폴더 구조 생성
@@ -257,6 +260,12 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
    - 마지막 한 줄에 여운/떡밥을 살짝 얹어라: "다음엔 더 소름돋는 거 알려줄게" 식의 CTA 한 문장.
    좋은 예: Cut1 "블랙홀에 빠지면 스파게티가 돼" → 마지막 "근데 진짜 무서운 건 네가 그걸 느끼면서 죽는다는 거야"
    나쁜 예: "이거 알고 나면 밤하늘이 다르게 보일걸?" (의문만 던지고 답 없음)
+   ★ [루프 최적화] 마지막 컷의 시각/대본이 Cut 1의 충격 포인트를 회수하거나 시각적으로 연결되게 만들어라. 시청자가 자연스럽게 다시 보게 만드는 루프 구조가 알고리즘 부스트의 핵심이다.
+
+[시각적 연속성 규칙]
+* 모든 컷의 image_prompt에서 공통 색감/톤을 유지하라 (예: 전체 영상이 dark + blue-purple 톤이면 모든 컷에 적용).
+* Cut 1에서 등장한 핵심 피사체/배경 요소를 마지막 컷에서 다시 사용하라 (루프 연결).
+* 연속된 컷에서 스케일이 급격히 바뀌지 않도록 하라 (macro → wide → macro는 OK, wide → wide → wide는 NG).
 
 [대본 스타일 규칙]
 * 반말 + 구어체. 딱딱한 존댓말 금지. 친구한테 신기한 거 알려주듯이 써라.
@@ -306,7 +315,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 7~10컷:
 
 {
-  "title": "[자극적이고 클릭을 부르는 한국어 제목 (15자 이내, ~하면 생기는 일, ~의 비밀 등)]",
+  "title": "[자극적이고 클릭을 부르는 한국어 제목 (15~25자, ~하면 생기는 일, ~의 비밀 등)]",
   "tags": ["#Shorts", "#주제관련태그1", "#주제관련태그2", "#주제관련태그3"],
   "cuts": [
     {
@@ -317,6 +326,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   ]
 }
 [태그 규칙] tags 배열에 #Shorts 필수 + 주제 관련 해시태그 3~4개 (총 4~5개). 한국어 주제면 한국어 태그.
+[SEO 설명문] "seo_description" 필드에 업로드용 설명문을 150자 이내로 작성. 핵심 키워드 2~3개 포함, 호기심 유발 문장.
 """
 
     _SYSTEM_PROMPT_EN = """
@@ -341,6 +351,12 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
    - Optionally add a one-line CTA teaser: "Next time I'll show you something even crazier."
    GOOD: Cut1 "Your body stretches like spaghetti" → Final "But the terrifying part is you'd feel every second of it."
    BAD: "You'll never look at the sky the same, right?" (just a question, no resolution)
+   ★ [LOOP OPTIMIZATION] The last cut's visual/script should reconnect to Cut 1's shock point. Create a seamless loop that makes viewers rewatch — this is the #1 algorithm boost signal (AVD > 100%).
+
+[VISUAL CONTINUITY RULES]
+* Maintain a consistent color palette/tone across ALL image_prompts (e.g., if Cut 1 is dark + blue-purple, keep that tone throughout).
+* Reuse the key subject/background element from Cut 1 in the last cut (loop connection).
+* Avoid repeating the same scale in consecutive cuts (macro → wide → macro is OK, wide → wide → wide is NG).
 
 [Script Style Rules]
 * Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
@@ -389,7 +405,7 @@ Example: "A massive black hole swallowing light [SHOCK]"
 7–10 cuts:
 
 {
-  "title": "[Click-bait English title (max 8 words)]",
+  "title": "[Click-bait English title (4-8 words, 20-40 chars)]",
   "tags": ["#Shorts", "#TopicTag1", "#TopicTag2", "#TopicTag3"],
   "cuts": [
     {
@@ -400,6 +416,7 @@ Example: "A massive black hole swallowing light [SHOCK]"
   ]
 }
 [Tag Rules] tags array MUST include #Shorts + 3-4 topic-specific hashtags (total 4-5).
+[SEO Description] Write "seo_description" field: upload description under 150 chars with 2-3 core keywords. Curiosity-inducing sentence.
 """
 
     # 언어별 프롬프트 매핑
@@ -518,10 +535,11 @@ This is the channel's signature look — every image should feel cohesive with t
 
     cuts: list[dict[str, Any]] = []
     title: str = ""
+    seo_desc: str = ""
     last_error: Exception | None = None
     for attempt in range(max_key_attempts):
         try:
-            cuts, title, tags = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
+            cuts, title, tags, seo_desc = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
             break  # 성공
         except Exception as e:
             last_error = e
@@ -574,7 +592,7 @@ This is the channel's signature look — every image should feel cohesive with t
             + f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
         )
         try:
-            cuts, title, tags = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
+            cuts, title, tags, seo_desc = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
         except Exception as retry_err:
             err_str = str(retry_err)
             if llm_provider == "gemini" and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str):
@@ -596,5 +614,9 @@ This is the channel's signature look — every image should feel cohesive with t
     if not tags or not isinstance(tags, list):
         tags = ["#Shorts"]
 
+    # seo_description 기본값 보장
+    if not seo_desc:
+        seo_desc = title
+
     print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
-    return cuts, topic_folder, title, tags
+    return cuts, topic_folder, title, tags, seo_desc

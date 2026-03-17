@@ -160,6 +160,7 @@ class GenerateRequest(BaseModel):
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
     ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
     voiceId: str | None = None  # ElevenLabs 음성 ID
+    mode: str = "production"  # "draft" = 비디오 생성 스킵 (Ken Burns만), "production" = 풀 파이프라인
     captionSize: int = Field(48, ge=32, le=72)  # 자막 폰트 크기 (px)
     captionY: int = Field(28, ge=10, le=50)  # 자막 높이 (%): 하단 기준
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL (분석 후 스타일 반영)
@@ -496,8 +497,13 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
 
+            # 드래프트 모드: 비디오 생성 스킵 (Ken Burns만 사용, 빠른 미리보기)
+            is_draft = getattr(req, 'mode', 'production') == 'draft'
+            if is_draft:
+                yield {"data": "[드래프트 모드] 비디오 생성 스킵 — Ken Burns 이미지만 사용합니다.\n"}
+
             # 비디오 엔진 변수 초기화 (아래에서 키 선택·사전 검증에 사용)
-            active_video_engine = video_engine
+            active_video_engine = "none" if is_draft else video_engine
 
             # Google 키 로테이션 (비디오 엔진용 — 서비스별 차단 고려)
             video_svc = active_video_engine if active_video_engine in ("veo3",) else None
@@ -524,7 +530,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             # Gemini 프로바이더일 때 키 로테이션 적용
             llm_key_for_request = get_google_key(llm_key_override, extra_keys=gemini_keys_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
-            cuts, topic_folder, video_title, video_tags = await loop.run_in_executor(
+            cuts, topic_folder, video_title, video_tags, video_seo_desc = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
                     topic,
@@ -617,10 +623,15 @@ async def generate_video_endpoint(req: GenerateRequest):
                             errors.append(f"비디오: {exc}")
                         print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
 
+                # 감정 태그 추출 (TTS 감정 매핑용)
+                import re as _re
+                _emotion_match = _re.search(r'\[(SHOCK|WONDER|TENSION|REVEAL|CALM)\]', cut.get("description", ""))
+                _cut_emotion = _emotion_match.group(1) if _emotion_match else None
+
                 def _run_tts_and_whisper():
                     """TTS 생성 후 바로 Whisper 타임스탬프 추출 (순차 but 동일 스레드)"""
                     try:
-                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=channel_voice_id)
+                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=channel_voice_id, emotion=_cut_emotion)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"TTS: {exc}")
@@ -763,7 +774,8 @@ async def generate_video_endpoint(req: GenerateRequest):
             thumbnail_path = None
             try:
                 from modules.utils.thumbnail import select_best_thumbnail, create_thumbnail
-                best_img = select_best_thumbnail(visual_paths)
+                _descs = [c.get("description", "") for c in cuts]
+                best_img = select_best_thumbnail(visual_paths, descriptions=_descs)
                 if best_img:
                     thumb_dir = os.path.join("assets", topic_folder, "video")
                     thumb_output = os.path.join(thumb_dir, "thumbnail.jpg")
@@ -952,7 +964,7 @@ async def prepare_endpoint(req: PrepareRequest):
 
             yield {"data": f"[기획] '{req.topic}' 스크립트 생성 중...\n"}
 
-            cuts, topic_folder, video_title, video_tags = await loop.run_in_executor(
+            cuts, topic_folder, video_title, video_tags, _seo_desc = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
                     req.topic, api_key_override=req.apiKey, lang=req.language,
@@ -1554,7 +1566,7 @@ async def batch_start():
                     for _attempt in range(max(count_google_keys(), 1)):
                         llm_key = get_google_key(None, service="gemini", exclude=_excluded) if job["llm_provider"] == "gemini" else None
                         try:
-                            cuts, topic_folder, title, _tags = await loop.run_in_executor(
+                            cuts, topic_folder, title, _tags, _seo = await loop.run_in_executor(
                                 None, lambda k=llm_key: generate_cuts(job["topic"], lang=job["language"], llm_provider=job["llm_provider"], llm_key_override=k)
                             )
                             break

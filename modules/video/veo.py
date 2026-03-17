@@ -174,11 +174,16 @@ def generate_video_veo(
                         print(f"-> [{model_label}] 컷 {index+1} 비디오 다운로드 중...")
                         resp = requests.get(vid.uri, stream=True, timeout=60)
                         resp.raise_for_status()
+                        _MAX_DOWNLOAD_SIZE = 500 * 1024 * 1024  # 500MB 제한
                         fd, tmp_dl = _tmpfile.mkstemp(dir=output_dir, suffix=".tmp")
                         os.close(fd)
                         try:
+                            downloaded = 0
                             with open(tmp_dl, "wb") as f:
                                 for chunk in resp.iter_content(chunk_size=8192):
+                                    downloaded += len(chunk)
+                                    if downloaded > _MAX_DOWNLOAD_SIZE:
+                                        raise RuntimeError(f"비디오 다운로드 크기 제한 초과 ({_MAX_DOWNLOAD_SIZE // (1024*1024)}MB)")
                                     f.write(chunk)
                             os.replace(tmp_dl, final_path)
                         except Exception:
