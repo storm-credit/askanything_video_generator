@@ -437,7 +437,7 @@ export const Main: React.FC<{
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
         const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
         const isVideo = isVideoPath(visualSrc);
-        const emotion = extractEmotion(cut);
+        const emotion = extractEmotion(cut) as EmotionTag | undefined;
 
         const content = (
               <AbsoluteFill>
