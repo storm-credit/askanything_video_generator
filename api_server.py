@@ -82,13 +82,19 @@ os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # CORS 설정 (프론트엔드 연동)
-_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000").split(",")
+_cors_env = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000")
+_cors_origins = [o.strip() for o in _cors_env.split(",")]
 # 개발 환경: 와일드카드 포함 시 모든 origin 허용
+_allow_origin_regex = None
 if "*" in _cors_origins:
     _cors_origins = ["*"]
+else:
+    # localhost 임의 포트 허용 (개발 서버 포트 자동 할당 대응)
+    _allow_origin_regex = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in _cors_origins],
+    allow_origins=_cors_origins,
+    allow_origin_regex=_allow_origin_regex,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
