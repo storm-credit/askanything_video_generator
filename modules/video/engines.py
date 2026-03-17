@@ -240,7 +240,11 @@ def _generate_via_openai_sora(
             if hasattr(output, "type") and output.type == "video_generation_call":
                 poll_interval = SORA_POLL_INTERVAL
                 poll_start = time.time()
+                SORA_MAX_WAIT = 300  # 5분 절대 타임아웃 (Veo와 동일)
                 for poll_count in range(SORA_MAX_POLLS):
+                    if time.time() - poll_start > SORA_MAX_WAIT:
+                        print(f"[Sora 2] 컷 {index+1} {SORA_MAX_WAIT}초 타임아웃 — 중단합니다.")
+                        break
                     time.sleep(poll_interval)
                     try:
                         status = client.responses.retrieve(response.id)

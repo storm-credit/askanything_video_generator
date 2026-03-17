@@ -1218,6 +1218,7 @@ async def render_endpoint(req: RenderRequest):
         return JSONResponse(status_code=404, content={"error": "세션이 만료되었습니다. 다시 준비해주세요."})
 
     async def sse_generator():
+      async with _generate_semaphore:
         try:
             cuts = copy.deepcopy(session["cuts"])
             topic_folder = session["topic_folder"]
