@@ -41,7 +41,7 @@ Review and optimize API cost usage across the AskAnything pipeline.
 
 ### 4. Image Generation
 - [ ] Safety fallback doesn't trigger excessive retries
-- [ ] MASTER_STYLE not double-applied (check `safety.py`)
+- [ ] Channel style (get_master_style) not double-applied (check `safety.py`)
 - [ ] Imagen preferred over DALL-E (2x cheaper)
 
 ### 5. Audio Pipeline

@@ -28,7 +28,7 @@ Topic Input → LLM Planning → Image Generation → Video Generation → TTS �
 - `modules/utils/batch.py` — SQLite batch job queue
 - `modules/utils/cache.py` — Image prompt hash cache (MD5, 7-day expiry)
 - `modules/utils/safety.py` — Unified safety fallback for image prompts
-- `modules/utils/constants.py` — MASTER_STYLE, get_motion_style()
+- `modules/utils/constants.py` — get_motion_style(), PROVIDER_LABELS
 - `modules/utils/audio.py` — LUFS normalization (-14 dB target)
 
 ## Frontend (Next.js 16, React 19, TypeScript)
@@ -51,7 +51,7 @@ Topic Input → LLM Planning → Image Generation → Video Generation → TTS �
 
 ## Conventions
 - Camera style default: `auto` (emotion-based Ken Burns)
-- All image prompts prefixed with `MASTER_STYLE` from constants.py
+- All image prompts prefixed with channel-aware style via `channel_config.get_master_style()`
 - Video prompts use `get_motion_style()` for emotion-based camera motion
 - Atomic file writes for all downloads (tempfile + os.replace)
 - API key rotation: 3-state (active → warning → blocked/24h)

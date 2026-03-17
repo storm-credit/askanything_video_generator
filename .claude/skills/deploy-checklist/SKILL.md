@@ -33,7 +33,7 @@ Run all critical checks before deploying or merging to main.
 
 3. **Pipeline Integrity** — Verify data flow:
    - [ ] Cuts: 7-10 enforced (cutter.py validation)
-   - [ ] Images: 1024x1792 vertical, MASTER_STYLE prefix
+   - [ ] Images: 1024x1792 vertical, channel-aware style prefix (get_master_style)
    - [ ] Video: engine fallback chain works (veo3 → kling → sora2)
    - [ ] TTS: language parameter flows through
    - [ ] Whisper: word timestamps return [{word, start, end}]
