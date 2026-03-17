@@ -537,7 +537,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 이미지/TTS 동시성 제한 (API 레이트 리밋 방지)
             # NOTE: MAX_CONCURRENT_GENERATE > 1 시 이 세마포어를 모듈 레벨로 이동 필요
-            image_semaphore = threading.Semaphore(2)  # 이미지 최대 2개 동시
+            image_semaphore = threading.Semaphore(3)  # 이미지 최대 3개 동시
 
             # 이미지 엔진에 따라 생성 함수 선택
             gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle

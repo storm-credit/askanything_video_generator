@@ -150,7 +150,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [이미지 프롬프트 규칙]
 * 반드시 영어로 작성. 한국어 금지.
-* "vertical 9:16, cinematic, no text" 필수 포함.
+* (MASTER_STYLE이 자동 적용됨 — vertical/no-text는 별도 기재 불필요)
 * 매 컷마다 카메라 앵글/조명을 다르게 설정 (단조로움 방지).
 * 사람 얼굴 정면 클로즈업 금지 (AI 생성 얼굴은 언캐니밸리).
 * 구체적 시각 디테일 포함: 색온도, 재질감, 스케일 비교 (예: "car-sized asteroid").
@@ -217,7 +217,7 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 
 [Image Prompt Rules]
 * ALL image prompts must be in English.
-* MUST include "vertical 9:16, cinematic, no text" in every prompt.
+* (MASTER_STYLE is auto-prepended — no need to write vertical/no-text yourself)
 * Vary camera angle and lighting per cut (avoid visual monotony).
 * NO frontal close-ups of human faces (AI-generated faces trigger uncanny valley).
 * Include specific visual details: color temperature, material textures, scale comparisons (e.g. "car-sized asteroid").

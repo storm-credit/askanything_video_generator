@@ -96,9 +96,13 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
     abs_video_path = os.path.abspath(video_path)
     abs_props_path = os.path.abspath(props_json_path)
 
+    # CPU 코어 수에 맞춰 병렬 렌더링 (최소 2, 최대 os.cpu_count)
+    concurrency = max(2, min(os.cpu_count() or 4, 8))
+
     cmd = [
         "npx", "remotion", "render", "src/index.ts", "Main",
         abs_video_path, "--props", abs_props_path, "--public-dir", assets_dir,
+        "--concurrency", str(concurrency),
     ]
 
     total_frames = props_data.get("totalDurationInFrames", 0)
