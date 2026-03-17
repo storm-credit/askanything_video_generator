@@ -772,9 +772,15 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 threads = []
                 # Hero cut 선택: SHOCK/REVEAL 태그만 비디오 생성, 나머지는 Ken Burns (비용 50-70% 절감)
+                # 감정 태그가 하나도 없으면 컷 0(후크)을 히어로로 폴백
                 _hero_emotions = {"SHOCK", "REVEAL"}
                 _cut_desc = cut.get("description", "")
                 _is_hero = any(f"[{e}]" in _cut_desc for e in _hero_emotions)
+                _any_hero_exists = any(
+                    any(f"[{e}]" in c.get("description", "") for e in _hero_emotions) for c in cuts
+                )
+                if not _any_hero_exists and i == 0:
+                    _is_hero = True  # 감정 태그 없으면 후크 컷에 비디오 생성
                 if img_path and active_video_engine != "none" and _is_hero:
                     t = threading.Thread(target=_run_video, name=f"video-cut{i}", daemon=True)
                     t.start()
