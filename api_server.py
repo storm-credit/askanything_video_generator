@@ -1545,11 +1545,254 @@ class MultiLangRequest(BaseModel):
 
 @app.post("/api/generate-multilang")
 async def generate_multilang(req: MultiLangRequest):
-    """다국어 영상 생성: 이미지/비디오 공유, TTS+자막만 언어별 생성.
-    첫 번째 언어로 풀 파이프라인 실행 후, 나머지 언어는 TTS+자막+렌더만."""
-    return {"message": f"다국어 생성 요청 접수: {req.languages}", "languages": req.languages, "topic": req.topic,
-            "note": "첫 언어로 이미지/비디오 생성 후, 나머지 언어는 TTS+자막+렌더만 실행합니다.",
-            "estimated_savings": f"이미지/비디오 비용 {len(req.languages)-1}/{len(req.languages)} 절감 (~{int((len(req.languages)-1)/len(req.languages)*100)}%)"}
+    """다국어 영상 생성 (SSE): 이미지/비디오 1회 공유, 언어별 TTS+자막+렌더.
+    3언어 × 3플랫폼 = 9개 업로드 가능한 3개 영상을 생성합니다."""
+
+    api_key_override = req.apiKey
+    elevenlabs_key_override = req.elevenlabsKey
+    llm_provider = req.llmProvider
+    llm_key_override = None
+    gemini_keys_override = req.geminiKeys
+    languages = req.languages
+    primary_lang = languages[0]
+
+    async def multilang_sse():
+        async with _generate_semaphore:
+          try:
+            loop = asyncio.get_running_loop()
+            total_langs = len(languages)
+            yield {"data": f"[다국어 생성] {total_langs}개 언어 영상 생성 시작: {', '.join(languages)}\n"}
+            yield {"data": f"[비용 최적화] 이미지/비디오 1회 생성 → TTS+자막만 {total_langs}회 = ~{int((total_langs-1)/total_langs*100)}% 절감\n"}
+
+            # ── 단계 1: 첫 번째 언어로 LLM 기획 ────────────────────
+            yield {"data": f"PROG|5\n"}
+            yield {"data": f"[기획] '{req.topic}' 기획 시작 ({primary_lang.upper()})...\n"}
+
+            llm_key_for_request = get_google_key(llm_key_override, extra_keys=gemini_keys_override) if llm_provider == "gemini" else llm_key_override
+            cuts, topic_folder, video_title, video_tags, video_seo_desc = await loop.run_in_executor(
+                None,
+                lambda: generate_cuts(
+                    req.topic, api_key_override=api_key_override,
+                    lang=primary_lang, llm_provider=llm_provider,
+                    llm_key_override=llm_key_for_request,
+                    channel=req.channel, llm_model=req.llmModel,
+                ),
+            )
+            yield {"data": f"PROG|15\n"}
+            yield {"data": f"[기획 완료] 총 {len(cuts)}컷 기획 완료!\n"}
+
+            # ── 단계 2: 이미지 생성 (1회, 전 언어 공유) ──────────
+            yield {"data": f"[이미지 생성] {len(cuts)}컷 이미지 생성 시작 (전 언어 공유)...\n"}
+
+            image_engine = req.imageEngine
+            visual_paths = [None] * len(cuts)
+            descriptions = [cut.get("description", "") for cut in cuts]
+
+            # 이미지 생성 (기존 파이프라인 로직 활용)
+            gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
+            for i, cut in enumerate(cuts):
+                try:
+                    cut_image_key = get_google_key(api_key_override, service="imagen", extra_keys=gemini_keys_override) if image_engine == "imagen" else api_key_override
+                    with _image_semaphore:
+                        if image_engine == "imagen":
+                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key, model_override=req.llmModel, gemini_api_keys=gemini_keys_override))
+                        else:
+                            img_path = await loop.run_in_executor(_cut_executor, lambda idx=i, c=cut: gen_image_fn(c["prompt"], idx, topic_folder, cut_image_key))
+                    visual_paths[i] = img_path
+                except Exception as img_err:
+                    print(f"[다국어 이미지 오류] 컷 {i+1}: {img_err}")
+
+                prog = 15 + int(25 * ((i + 1) / len(cuts)))
+                yield {"data": f"PROG|{prog}\n"}
+
+            yield {"data": f"[이미지 완료] {sum(1 for p in visual_paths if p)}개 이미지 생성 성공\n"}
+
+            # ── 단계 3: 히어로 컷 비디오 생성 (1회, 전 언어 공유) ──
+            active_video_engine = req.videoEngine
+            is_draft = req.mode == "draft"
+            if is_draft:
+                active_video_engine = "none"
+
+            _hero_emotions = {"SHOCK", "REVEAL"}
+            hero_video_paths = {}  # index → video_path
+
+            if active_video_engine != "none":
+                hero_cuts = [(i, cut) for i, cut in enumerate(cuts) if any(f"[{e}]" in cut.get("description", "") for e in _hero_emotions)]
+                yield {"data": f"[비디오 생성] 히어로 컷 {len(hero_cuts)}개 비디오 렌더링 시작...\n"}
+
+                for i, cut in hero_cuts:
+                    if visual_paths[i]:
+                        try:
+                            vid_key = get_google_key(api_key_override, service="veo3", extra_keys=gemini_keys_override) if active_video_engine == "veo3" else api_key_override
+                            vid_path = await loop.run_in_executor(
+                                _cut_executor,
+                                lambda idx=i, c=cut, img=visual_paths[i]: generate_video_from_image(
+                                    img, c["prompt"], idx, topic_folder,
+                                    engine=active_video_engine,
+                                    google_api_key=vid_key,
+                                    description=c.get("description", ""),
+                                    gemini_api_keys=gemini_keys_override,
+                                ),
+                            )
+                            if vid_path:
+                                hero_video_paths[i] = vid_path
+                                visual_paths[i] = vid_path
+                        except Exception as vid_err:
+                            print(f"[다국어 비디오 오류] 컷 {i+1}: {vid_err}")
+
+                yield {"data": f"[비디오 완료] {len(hero_video_paths)}개 히어로 비디오 생성 성공\n"}
+
+            yield {"data": f"PROG|45\n"}
+
+            # ── 단계 4: 언어별 TTS + 자막 + 렌더 ─────────────────
+            all_results = {}  # lang → {"video_path": ..., "title": ..., "tags": [...]}
+
+            for lang_idx, lang in enumerate(languages):
+                lang_upper = lang.upper()
+                base_prog = 45 + int(50 * (lang_idx / total_langs))
+                yield {"data": f"PROG|{base_prog}\n"}
+                yield {"data": f"[{lang_upper}] === 언어 {lang_idx+1}/{total_langs}: {lang_upper} 생성 시작 ===\n"}
+
+                # 첫 언어가 아니면 해당 언어로 대본 재생성
+                if lang_idx > 0:
+                    yield {"data": f"[{lang_upper}] LLM 대본 재생성 중...\n"}
+                    try:
+                        llm_key_for_lang = get_google_key(llm_key_override, extra_keys=gemini_keys_override) if llm_provider == "gemini" else llm_key_override
+                        lang_cuts, _, lang_title, lang_tags, lang_seo = await loop.run_in_executor(
+                            None,
+                            lambda l=lang: generate_cuts(
+                                req.topic, api_key_override=api_key_override,
+                                lang=l, llm_provider=llm_provider,
+                                llm_key_override=llm_key_for_lang,
+                                channel=req.channel, llm_model=req.llmModel,
+                            ),
+                        )
+                    except Exception as llm_err:
+                        yield {"data": f"WARN|[{lang_upper}] 대본 생성 실패: {llm_err}\n"}
+                        continue
+                else:
+                    lang_cuts = cuts
+                    lang_title = video_title
+                    lang_tags = video_tags
+                    lang_seo = video_seo_desc
+
+                # 언어별 TTS 생성
+                yield {"data": f"[{lang_upper}] TTS 음성 생성 중 ({len(lang_cuts)}컷)...\n"}
+                lang_audio_paths = [None] * len(lang_cuts)
+                lang_word_timestamps = [[] for _ in lang_cuts]
+                lang_scripts = [c.get("script", "") for c in lang_cuts]
+
+                # 언어별 topic_folder 생성 (같은 이미지, 다른 오디오)
+                lang_topic_folder = f"{topic_folder}_{lang}"
+                lang_audio_dir = os.path.join("assets", lang_topic_folder, "audio")
+                os.makedirs(lang_audio_dir, exist_ok=True)
+
+                for i, cut in enumerate(lang_cuts):
+                    try:
+                        _emotion_match = re.search(r'\[(SHOCK|WONDER|TENSION|REVEAL|CALM)\]', cut.get("description", ""))
+                        _cut_emotion = _emotion_match.group(1) if _emotion_match else None
+
+                        aud_path = await loop.run_in_executor(
+                            _cut_executor,
+                            lambda idx=i, c=cut: generate_tts(
+                                c.get("script", ""), idx, lang_topic_folder,
+                                elevenlabs_key_override, language=lang,
+                                speed=req.ttsSpeed, voice_id=req.voiceId,
+                                emotion=_cut_emotion,
+                            ),
+                        )
+                        if aud_path:
+                            try:
+                                aud_path = normalize_audio_lufs(aud_path)
+                            except Exception:
+                                pass
+                            lang_audio_paths[i] = aud_path
+
+                            # Whisper 타임스탬프
+                            try:
+                                words = await loop.run_in_executor(
+                                    _cut_executor,
+                                    lambda ap=aud_path: generate_word_timestamps(ap, api_key_override, language=lang),
+                                )
+                                lang_word_timestamps[i] = words or []
+                            except Exception:
+                                pass
+                    except Exception as tts_err:
+                        print(f"[{lang_upper} TTS 오류] 컷 {i+1}: {tts_err}")
+
+                tts_prog = base_prog + int(30 / total_langs)
+                yield {"data": f"PROG|{tts_prog}\n"}
+                yield {"data": f"[{lang_upper}] TTS 완료: {sum(1 for p in lang_audio_paths if p)}/{len(lang_cuts)}컷\n"}
+
+                # 언어별 Remotion 렌더링 (공유 이미지 + 언어별 오디오)
+                yield {"data": f"[{lang_upper}] Remotion 렌더링 시작...\n"}
+                try:
+                    render_result = await loop.run_in_executor(
+                        None,
+                        lambda: create_remotion_video(
+                            visual_paths[:len(lang_cuts)], lang_audio_paths, lang_scripts,
+                            lang_word_timestamps, lang_topic_folder,
+                            title=lang_title,
+                            camera_style=req.cameraStyle,
+                            bgm_theme=req.bgmTheme,
+                            channel=req.channel,
+                            platforms=None,  # 통합 렌더 (인트로 없음, 아웃트로만)
+                            caption_size=req.captionSize,
+                            caption_y=req.captionY,
+                            descriptions=descriptions[:len(lang_cuts)],
+                        ),
+                    )
+                    if render_result:
+                        vid_path = render_result if isinstance(render_result, str) else list(render_result.values())[0]
+                        all_results[lang] = {
+                            "video_path": f"/assets/{lang_topic_folder}/video/{os.path.basename(vid_path)}",
+                            "abs_path": os.path.abspath(vid_path),
+                            "title": lang_title,
+                            "tags": lang_tags,
+                            "seo_description": lang_seo,
+                        }
+
+                        # Downloads 폴더에 복사
+                        downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+                        if os.path.isdir(downloads_dir):
+                            try:
+                                dl_name = f"{lang_topic_folder}_{lang_upper}.mp4"
+                                dl_path = os.path.join(downloads_dir, dl_name)
+                                await asyncio.to_thread(shutil.copy2, os.path.abspath(vid_path), dl_path)
+                                yield {"data": f"[{lang_upper}] 📂 Downloads/{dl_name} 저장 완료\n"}
+                            except Exception:
+                                pass
+
+                        yield {"data": f"[{lang_upper}] ✅ 렌더링 완료!\n"}
+                    else:
+                        yield {"data": f"WARN|[{lang_upper}] 렌더링 실패\n"}
+                except Exception as render_err:
+                    yield {"data": f"WARN|[{lang_upper}] 렌더링 오류: {render_err}\n"}
+
+            # ── 단계 5: 최종 결과 ──────────────────────────────────
+            yield {"data": "PROG|100\n"}
+            completed = list(all_results.keys())
+            yield {"data": f"[완료] 다국어 생성 완료: {', '.join(l.upper() for l in completed)} ({len(completed)}/{total_langs}개)\n"}
+
+            # 결과 JSON 전송
+            import json
+            result_data = {
+                "type": "multilang_complete",
+                "languages": completed,
+                "videos": {lang: info["video_path"] for lang, info in all_results.items()},
+                "titles": {lang: info["title"] for lang, info in all_results.items()},
+                "tags": {lang: info["tags"] for lang, info in all_results.items()},
+            }
+            yield {"data": f"RESULT|{json.dumps(result_data, ensure_ascii=False)}\n"}
+            yield {"data": f"DONE|{all_results[completed[0]]['video_path'] if completed else ''}\n"}
+
+          except Exception as e:
+            traceback.print_exc()
+            err_str = str(e)[:200]
+            err_str = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", err_str)
+            yield {"data": f"ERROR|[다국어 생성 오류] {err_str}\n"}
+
+    return EventSourceResponse(multilang_sse())
 
 
 # ── 배치 생성 큐 API ──────────────────────────────────────────────
