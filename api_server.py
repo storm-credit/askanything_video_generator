@@ -846,6 +846,8 @@ class PrepareRequest(BaseModel):
     apiKey: str | None = None
     llmProvider: str = "gemini"
     llmKey: str | None = None
+    llmModel: str | None = None      # LLM 모델 오버라이드
+    imageModel: str | None = None    # 이미지 모델 오버라이드
     geminiKeys: str | None = None  # 프론트엔드 멀티키 (쉼표 구분)
     imageEngine: str = "imagen"
     language: str = "ko"
@@ -905,7 +907,7 @@ async def prepare_endpoint(req: PrepareRequest):
                 lambda: generate_cuts(
                     req.topic, api_key_override=req.apiKey, lang=req.language,
                     llm_provider=req.llmProvider, llm_key_override=llm_key_for_request,
-                    channel=req.channel,
+                    channel=req.channel, llm_model=req.llmModel,
                 ),
             )
 
@@ -922,7 +924,7 @@ async def prepare_endpoint(req: PrepareRequest):
                 try:
                     img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys) if req.imageEngine == "imagen" else req.apiKey
                     img_path = await loop.run_in_executor(
-                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, gemini_api_keys=_gemini_keys)
+                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys)
                     )
                     image_paths.append(img_path)
                 except Exception as exc:
@@ -973,8 +975,6 @@ async def prepare_endpoint(req: PrepareRequest):
         except Exception as e:
             traceback.print_exc()
             yield {"data": f"ERROR|[준비 오류] {str(e)}\n"}
-        finally:
-            pass  # env 변수 미사용 — 정리 불필요
 
     return EventSourceResponse(sse_generator())
 
