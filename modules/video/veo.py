@@ -142,8 +142,19 @@ def generate_video_veo(
                 if hasattr(video_obj, "video") and video_obj.video:
                     vid = video_obj.video
                     if hasattr(vid, "video_bytes") and vid.video_bytes:
-                        with open(final_path, "wb") as f:
-                            f.write(vid.video_bytes)
+                        import tempfile as _tmpfile2
+                        fd, tmp_vb = _tmpfile2.mkstemp(dir=output_dir, suffix=".tmp")
+                        os.close(fd)
+                        try:
+                            with open(tmp_vb, "wb") as f:
+                                f.write(vid.video_bytes)
+                            os.replace(tmp_vb, final_path)
+                        except Exception:
+                            try:
+                                os.remove(tmp_vb)
+                            except OSError:
+                                pass
+                            raise
                         record_key_usage(final_key, service_tag)
                         elapsed = time.time() - start
                         print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")

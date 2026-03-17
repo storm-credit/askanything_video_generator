@@ -155,8 +155,8 @@ class GenerateRequest(BaseModel):
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
     ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
     voiceId: str | None = None  # ElevenLabs 음성 ID
-    captionSize: int = 48  # 자막 폰트 크기 (px): 32~72
-    captionY: int = 28  # 자막 높이 (%): 10~50, 하단 기준
+    captionSize: int = Field(48, ge=32, le=72)  # 자막 폰트 크기 (px)
+    captionY: int = Field(28, ge=10, le=50)  # 자막 높이 (%): 하단 기준
 
     @field_validator("language")
     @classmethod
@@ -999,8 +999,8 @@ class RenderRequest(BaseModel):
     bgmTheme: str = "random"
     channel: str | None = None
     platforms: list[str] = ["youtube"]
-    captionSize: int = 48
-    captionY: int = 28
+    captionSize: int = Field(48, ge=32, le=72)
+    captionY: int = Field(28, ge=10, le=50)
     outputPath: str | None = None
     voiceId: str | None = None  # ElevenLabs 음성 ID ("auto" → 주제 분석 자동 선택)
 
@@ -1230,7 +1230,8 @@ async def youtube_callback(code: str, state: str | None = None):
             "<script>window.close()</script></body></html>"
         )
     except Exception as e:
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{e}</p></body></html>", status_code=400)
+        import html as _html
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
 
 
 @app.post("/api/youtube/upload")
@@ -1307,7 +1308,8 @@ async def tiktok_callback(code: str, state: str | None = None):
             "<script>window.close()</script></body></html>"
         )
     except Exception as e:
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{e}</p></body></html>", status_code=400)
+        import html as _html
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
 
 
 @app.post("/api/tiktok/upload")
@@ -1381,7 +1383,8 @@ async def instagram_callback(code: str, state: str | None = None):
             "<script>window.close()</script></body></html>"
         )
     except Exception as e:
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{e}</p></body></html>", status_code=400)
+        import html as _html
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
 
 
 @app.post("/api/instagram/upload")

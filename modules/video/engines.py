@@ -92,8 +92,8 @@ def _get_available_engines(preferred_engine: str) -> list[str]:
             try:
                 if check():
                     available.append(eng)
-            except Exception:
-                pass
+            except Exception as _chk_err:
+                print(f"[엔진 체크 경고] {eng} 가용성 확인 실패: {_chk_err}")
 
     return available
 

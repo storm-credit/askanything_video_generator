@@ -17,7 +17,7 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
     if not final_api_key:
         raise EnvironmentError("OpenAI API 키가 제공되지 않았습니다.")
     
-    client = OpenAI(api_key=final_api_key)
+    client = OpenAI(api_key=final_api_key, timeout=120)
 
     if not prompt or not prompt.strip():
         raise ValueError(f"[DALL·E 이미지 오류] 프롬프트가 비어 있습니다 (index={index})")
@@ -61,7 +61,18 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
             image_dir = f"assets/{topic_folder}/images"
             os.makedirs(image_dir, exist_ok=True)
             filename = os.path.join(image_dir, f"cut_{index:02}.png")
-            fitted_image.save(filename)
+            import tempfile as _tmpfile
+            fd, tmp_img = _tmpfile.mkstemp(dir=image_dir, suffix=".tmp")
+            os.close(fd)
+            try:
+                fitted_image.save(tmp_img)
+                os.replace(tmp_img, filename)
+            except Exception:
+                try:
+                    os.remove(tmp_img)
+                except OSError:
+                    pass
+                raise
 
             save_to_cache(enhanced_prompt, filename)
             return filename

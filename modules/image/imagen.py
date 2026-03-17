@@ -86,7 +86,18 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 image_dir = f"assets/{topic_folder}/images"
                 os.makedirs(image_dir, exist_ok=True)
                 filename = os.path.join(image_dir, f"cut_{index:02}.png")
-                fitted_image.save(filename)
+                import tempfile as _tmpfile
+                fd, tmp_img = _tmpfile.mkstemp(dir=image_dir, suffix=".tmp")
+                os.close(fd)
+                try:
+                    fitted_image.save(tmp_img)
+                    os.replace(tmp_img, filename)
+                except Exception:
+                    try:
+                        os.remove(tmp_img)
+                    except OSError:
+                        pass
+                    raise
 
                 record_key_usage(final_api_key, service_tag)
                 save_to_cache(cache_key_prompt, filename)
@@ -114,7 +125,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
     raise RuntimeError(f"[Imagen] 컷 {index+1}: 모든 모델 체인 및 키 소진")
 
 
-def _generate_imagen(api_key, prompt, model_name):
+def _generate_imagen(api_key: str, prompt: str, model_name: str) -> bytes:
     """google-genai SDK로 Imagen 이미지를 생성합니다."""
     from google import genai
     from google.genai import types

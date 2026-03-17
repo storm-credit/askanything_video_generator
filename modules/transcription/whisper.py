@@ -16,7 +16,7 @@ def generate_word_timestamps(audio_path: str, api_key: str | None = None, langua
     if not final_api_key:
         raise EnvironmentError("OpenAI API 키가 제공되지 않았습니다.")
 
-    client = OpenAI(api_key=final_api_key)
+    client = OpenAI(api_key=final_api_key, timeout=120)
 
     if not audio_path:
         print("[Whisper 오류] 오디오 경로가 비어 있습니다.")

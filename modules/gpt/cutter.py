@@ -57,6 +57,7 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str) -> str 
             {"role": "user", "content": user_content},
         ],
         response_format={"type": "json_object"},
+        temperature=0.75,
     )
     if not response.choices:
         raise ValueError("OpenAI 응답에 choices가 비어 있습니다.")
@@ -75,6 +76,7 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str) -> str:
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
             response_mime_type="application/json",
+            temperature=0.75,
             http_options=types.HttpOptions(timeout=120_000),
         ),
     )
@@ -90,6 +92,7 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str) -> str:
     response = client.messages.create(
         model=model_name,
         max_tokens=4096,
+        temperature=0.75,
         system=system_prompt + json_instruction,
         messages=[{"role": "user", "content": user_content}],
     )
