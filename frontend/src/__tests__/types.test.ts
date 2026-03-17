@@ -9,14 +9,13 @@ describe("API_BASE", () => {
 
 describe("KEY_CONFIGS", () => {
   it("has correct number of configs", () => {
-    expect(KEY_CONFIGS.length).toBe(6);
+    expect(KEY_CONFIGS.length).toBe(7);
   });
 
-  it("required keys are openai and elevenlabs", () => {
+  it("required keys are elevenlabs only", () => {
     const required = KEY_CONFIGS.filter((c) => c.required).map((c) => c.id);
-    expect(required).toContain("openai");
     expect(required).toContain("elevenlabs");
-    expect(required.length).toBe(2);
+    expect(required.length).toBe(1);
   });
 
   it("all configs have required fields", () => {
@@ -31,10 +30,12 @@ describe("KEY_CONFIGS", () => {
     }
   });
 
-  it("multiKey configs are openai and elevenlabs", () => {
+  it("multiKey configs are gemini, openai and elevenlabs", () => {
     const multiKey = KEY_CONFIGS.filter((c) => c.multiKey).map((c) => c.id);
+    expect(multiKey).toContain("gemini");
     expect(multiKey).toContain("openai");
     expect(multiKey).toContain("elevenlabs");
+    expect(multiKey.length).toBe(3);
   });
 
   it("gemini config exists with correct envName", () => {

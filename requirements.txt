@@ -1,11 +1,8 @@
-streamlit
 python-dotenv
 openai
 requests
 Pillow
-gTTS
 konlpy
-moviepy
 fastapi
 uvicorn
 sse-starlette
@@ -14,3 +11,8 @@ tavily-python
 httpx
 google-genai
 anthropic
+pyloudnorm
+soundfile
+google-auth-oauthlib
+google-api-python-client
+google-auth
