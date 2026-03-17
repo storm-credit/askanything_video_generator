@@ -204,6 +204,13 @@ class GenerateRequest(BaseModel):
             raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}. 허용: {allowed}")
         return v
 
+    @field_validator("mode")
+    @classmethod
+    def valid_mode(cls, v: str) -> str:
+        if v not in {"production", "draft"}:
+            raise ValueError(f"지원하지 않는 모드: {v}. 허용: production, draft")
+        return v
+
 
 @app.get("/api/engines")
 async def list_engines():
@@ -1837,7 +1844,7 @@ class BatchJobRequest(BaseModel):
         return v
 
 class BatchBulkRequest(BaseModel):
-    jobs: list[BatchJobRequest]
+    jobs: list[BatchJobRequest] = Field(..., max_length=50)  # 큐 폭주 방지
 
 _batch_running = False
 _batch_stop = threading.Event()
