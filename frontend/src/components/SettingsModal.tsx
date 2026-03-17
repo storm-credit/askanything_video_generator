@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle, Tv, Globe, ChevronDown, ChevronUp, Save, Youtube, Music, Instagram } from "lucide-react";
+import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle, Tv, Globe, ChevronDown, ChevronUp, Youtube, Music, Instagram } from "lucide-react";
 import { API_BASE, KeyConfig, KeyStatus, KeyUsageStats, KEY_CONFIGS } from "./types";
 
 // ── 언어 목록 ──
@@ -221,6 +221,7 @@ export function SettingsModal({
                   isVisible={visibleKeys[config.id] || false}
                   serverKeyCount={config.id === "gemini" ? googleKeyCount : undefined}
                   envMaskedKeys={serverMaskedKeys[config.statusKey] || []}
+                  keyUsageStats={config.id === "gemini" ? keyUsageStats : undefined}
                   onInputChange={(v) => onInputChange(config.id, v)}
                   onAdd={() => onAddKey(config.id)}
                   onRemove={(idx) => onRemoveKey(config.id, idx)}
@@ -247,54 +248,6 @@ export function SettingsModal({
                   />
                 </div>
               </div>
-
-              {/* Google API 키 사용량 */}
-              {keyUsageStats && keyUsageStats.total_keys > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                    <BarChart3 className="w-3.5 h-3.5" />
-                    Google API 키 사용량 (세션)
-                  </h3>
-                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-2">
-                    <p className="text-[10px] text-gray-500 mb-2">
-                      총 {keyUsageStats.total_keys}개 키 등록 · 서버 재시작 시 초기화
-                    </p>
-                    {keyUsageStats.keys.map((k) => {
-                      const stateStyle = k.state === "blocked"
-                        ? "bg-red-500/5 border border-red-500/20"
-                        : k.state === "warning"
-                          ? "bg-amber-500/5 border border-amber-500/20"
-                          : "bg-white/[0.02]";
-                      const keyColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-gray-400";
-                      const totalColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-white";
-                      return (
-                        <div key={k.key} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${stateStyle}`}>
-                          <div className="flex items-center gap-1.5 w-32 shrink-0">
-                            <div className={`w-2 h-2 rounded-full shrink-0 ${k.state === "blocked" ? "bg-red-500" : k.state === "warning" ? "bg-amber-500" : "bg-green-500"}`} />
-                            <span className={`text-xs font-mono ${keyColor}`}>{k.key}</span>
-                          </div>
-                          <div className="flex-1 flex items-center gap-1.5 flex-wrap">
-                            {Object.entries(k.blocked_services || {}).map(([svc, hours]) => (
-                              <span key={svc} className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">
-                                {svc} {hours}h
-                              </span>
-                            ))}
-                            {Object.entries(k.usage).map(([service, count]) => (
-                              <span key={service} className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                (k.blocked_services || {})[service] ? "bg-red-500/10 text-red-400/60 line-through" : "bg-cyan-500/15 text-cyan-400"
-                              }`}>
-                                {service}: {count}
-                              </span>
-                            ))}
-                            {k.total === 0 && k.state === "active" && <span className="text-[10px] text-gray-600">미사용</span>}
-                          </div>
-                          <span className={`text-xs font-bold shrink-0 ${totalColor}`}>{k.total}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </>
           )}
 
@@ -509,11 +462,11 @@ export function SettingsModal({
                 </div>
               )}
 
-              {/* YouTube / TikTok / Instagram 연동 상태 */}
-              <div className="mt-4">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">플랫폼 연동 상태</h3>
-                <PlatformStatusPanel />
-              </div>
+              {/* 채널 추가 */}
+              <AddChannelForm onAdded={(name, ch) => {
+                setChannels((prev) => ({ ...prev, [name]: ch }));
+                setExpandedChannel(name);
+              }} existingNames={Object.keys(channels)} />
             </>
           )}
         </div>
@@ -538,47 +491,93 @@ export function SettingsModal({
 }
 
 
-/* ─── 플랫폼 연동 상태 패널 ─── */
-function PlatformStatusPanel() {
-  const [ytStatus, setYtStatus] = useState<{ connected: boolean; channels?: { id: string; title: string }[] } | null>(null);
-  const [ttStatus, setTtStatus] = useState<{ connected: boolean } | null>(null);
-  const [igStatus, setIgStatus] = useState<{ connected: boolean } | null>(null);
+/* ─── 채널 추가 폼 ─── */
+function AddChannelForm({ onAdded, existingNames }: {
+  onAdded: (name: string, ch: ChannelConfig) => void;
+  existingNames: string[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newLang, setNewLang] = useState("ko");
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [yt, tt, ig] = await Promise.all([
-          fetch(`${API_BASE}/api/youtube/status`).then((r) => r.ok ? r.json() : null).catch(() => null),
-          fetch(`${API_BASE}/api/tiktok/status`).then((r) => r.ok ? r.json() : null).catch(() => null),
-          fetch(`${API_BASE}/api/instagram/status`).then((r) => r.ok ? r.json() : null).catch(() => null),
-        ]);
-        if (yt) setYtStatus(yt);
-        if (tt) setTtStatus(tt);
-        if (ig) setIgStatus(ig);
-      } catch { /* ignore */ }
-    })();
-  }, []);
+  const handleAdd = () => {
+    const name = newName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    if (!name) { setError("채널 이름을 입력하세요 (영문 소문자, 숫자, _-)"); return; }
+    if (existingNames.includes(name)) { setError("이미 존재하는 채널 이름입니다"); return; }
+    setError("");
+    const newChannel: ChannelConfig = {
+      language: newLang,
+      platforms: ["youtube"],
+      tts_speed: 0.9,
+      caption_size: 48,
+      caption_y: 28,
+      visual_style: "",
+      tone: "",
+      upload_accounts: {},
+    };
+    onAdded(name, newChannel);
+    setNewName("");
+    setNewLang("ko");
+    setIsOpen(false);
+  };
 
-  const platforms = [
-    { id: "youtube", label: "YouTube Shorts", icon: Youtube, status: ytStatus, color: "red" },
-    { id: "tiktok", label: "TikTok", icon: Music, status: ttStatus, color: "pink" },
-    { id: "instagram", label: "Instagram Reels", icon: Instagram, status: igStatus, color: "orange" },
-  ];
+  if (!isOpen) {
+    return (
+      <button
+        onClick={() => setIsOpen(true)}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed border-white/10 text-gray-500 hover:text-teal-400 hover:border-teal-500/30 transition-colors"
+      >
+        <Plus className="w-4 h-4" />
+        <span className="text-xs font-medium">새 채널 추가</span>
+      </button>
+    );
+  }
 
   return (
-    <div className="space-y-1.5">
-      {platforms.map(({ id, label, icon: Icon, status, color }) => (
-        <div key={id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
-          <Icon className={`w-4 h-4 text-${color}-400`} />
-          <span className="text-xs text-gray-300 flex-1">{label}</span>
-          <div className={`w-2 h-2 rounded-full ${status?.connected ? "bg-green-500" : "bg-gray-600"}`} />
-          <span className="text-[10px] text-gray-500">
-            {status === null ? "확인 중..." : status?.connected ? "연결됨" : "미연결"}
-          </span>
-        </div>
-      ))}
-      <p className="text-[10px] text-gray-600 mt-2">
-        OAuth 연동은 <code className="text-gray-400">/api/youtube/auth</code>, <code className="text-gray-400">/api/tiktok/auth</code> 엔드포인트를 통해 진행합니다.
+    <div className="rounded-2xl bg-teal-500/5 border border-teal-500/20 p-4 space-y-3">
+      <h4 className="text-xs font-semibold text-teal-400">새 채널 추가</h4>
+      <div>
+        <label className="text-[10px] text-gray-500 block mb-1">채널 이름 (영문 소문자)</label>
+        <input
+          type="text"
+          value={newName}
+          onChange={(e) => { setNewName(e.target.value); setError(""); }}
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          placeholder="예: mychannelname"
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500/50 font-mono"
+        />
+        {error && <p className="text-[10px] text-red-400 mt-1">{error}</p>}
+      </div>
+      <div>
+        <label className="text-[10px] text-gray-500 block mb-1">기본 언어</label>
+        <select
+          value={newLang}
+          onChange={(e) => setNewLang(e.target.value)}
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-teal-500/50 appearance-none cursor-pointer"
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code} className="bg-gray-900">{l.label} ({l.code})</option>
+          ))}
+        </select>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={!newName.trim()}
+          className="flex-1 py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-30 text-white text-xs font-medium rounded-lg transition-colors"
+        >
+          추가
+        </button>
+        <button
+          onClick={() => { setIsOpen(false); setError(""); }}
+          className="px-4 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 text-xs rounded-lg transition-colors"
+        >
+          취소
+        </button>
+      </div>
+      <p className="text-[10px] text-gray-600 italic">
+        추가된 채널은 현재 세션에서만 사용됩니다. 영구 등록은 서버 <code className="text-gray-400">channel_config.py</code>에 추가하세요.
       </p>
     </div>
   );
@@ -594,6 +593,7 @@ function KeySection({
   isVisible,
   serverKeyCount,
   envMaskedKeys = [],
+  keyUsageStats,
   onInputChange,
   onAdd,
   onRemove,
@@ -606,6 +606,7 @@ function KeySection({
   isVisible: boolean;
   serverKeyCount?: number;
   envMaskedKeys?: string[];
+  keyUsageStats?: KeyUsageStats | null;
   onInputChange: (v: string) => void;
   onAdd: () => void;
   onRemove: (idx: number) => void;
@@ -702,6 +703,45 @@ function KeySection({
         <p className="text-[10px] text-gray-600 mt-1.5">
           등록된 {savedKeys.length}개의 키 중 랜덤으로 선택되어 사용됩니다 (무료 티어 로테이션)
         </p>
+      )}
+
+      {/* 키별 사용량 (Google API 키 전용 — 인라인 표시) */}
+      {keyUsageStats && keyUsageStats.total_keys > 0 && (
+        <div className="mt-3 pt-3 border-t border-white/5 space-y-1.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <BarChart3 className="w-3 h-3 text-cyan-400" />
+            <span className="text-[10px] font-medium text-cyan-400">세션 사용량</span>
+          </div>
+          {keyUsageStats.keys.map((k) => {
+            const stateStyle = k.state === "blocked"
+              ? "bg-red-500/5 border border-red-500/20"
+              : k.state === "warning"
+                ? "bg-amber-500/5 border border-amber-500/20"
+                : "bg-white/[0.02]";
+            const keyColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-gray-400";
+            const totalColor = k.state === "blocked" ? "text-red-400" : k.state === "warning" ? "text-amber-400" : "text-white";
+            return (
+              <div key={k.key} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${stateStyle}`}>
+                <div className="flex items-center gap-1 w-24 shrink-0">
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${k.state === "blocked" ? "bg-red-500" : k.state === "warning" ? "bg-amber-500" : "bg-green-500"}`} />
+                  <span className={`text-[10px] font-mono ${keyColor}`}>{k.key}</span>
+                </div>
+                <div className="flex-1 flex items-center gap-1 flex-wrap">
+                  {Object.entries(k.blocked_services || {}).map(([svc, hours]) => (
+                    <span key={svc} className="text-[9px] px-1 py-0.5 rounded bg-red-500/20 text-red-400">{svc} {hours}h</span>
+                  ))}
+                  {Object.entries(k.usage).map(([service, count]) => (
+                    <span key={service} className={`text-[9px] px-1 py-0.5 rounded ${
+                      (k.blocked_services || {})[service] ? "bg-red-500/10 text-red-400/60 line-through" : "bg-cyan-500/15 text-cyan-400"
+                    }`}>{service}:{count}</span>
+                  ))}
+                  {k.total === 0 && k.state === "active" && <span className="text-[9px] text-gray-600">미사용</span>}
+                </div>
+                <span className={`text-[10px] font-bold shrink-0 ${totalColor}`}>{k.total}</span>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

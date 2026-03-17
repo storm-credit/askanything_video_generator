@@ -1879,7 +1879,7 @@ async def generate_multilang(req: MultiLangRequest):
                             ),
                         )
                     except Exception as llm_err:
-                        yield {"data": f"WARN|[{lang_upper}] 대본 생성 실패: {llm_err}\n"}
+                        yield {"data": f"WARN|[{lang_upper}] 대본 생성 실패: {_mask_error(llm_err)}\n"}
                         continue
                 else:
                     lang_cuts = cuts
@@ -2144,10 +2144,10 @@ async def batch_start():
                     for i, cut in enumerate(cuts):
                         if job["image_engine"] == "imagen":
                             _batch_channel = job.get("channel")
-                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_imagen(c["prompt"], idx, topic_folder, channel=_batch_channel))
+                            img = await loop.run_in_executor(None, lambda idx=i, c=cut, ch=_batch_channel: generate_image_imagen(c["prompt"], idx, topic_folder, channel=ch))
                         else:
                             _batch_ch = job.get("channel")
-                            img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_dalle(c["prompt"], idx, topic_folder, channel=_batch_ch))
+                            img = await loop.run_in_executor(None, lambda idx=i, c=cut, ch=_batch_ch: generate_image_dalle(c["prompt"], idx, topic_folder, channel=ch))
                         visual_paths.append(img)
 
                         aud = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_tts(c["script"], idx, topic_folder, language=job["language"]))
