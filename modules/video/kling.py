@@ -99,8 +99,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     max_polls = 90  # 90 * 5초 = 450초 (7.5분)
     timed_out = True
     for poll_iter in range(max_polls):
-        if poll_iter > 0:
-            time.sleep(5)
+        time.sleep(5)  # 매 반복 대기 (첫 폴링도 제출 직후 낭비 방지)
 
         try:
             poll_resp = requests.get(poll_url, headers=headers, timeout=30)

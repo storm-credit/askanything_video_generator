@@ -116,8 +116,11 @@ def generate_video_veo(
                     operation = client.operations.get(operation)
                     elapsed = time.time() - start
                     if elapsed > MAX_WAIT:
-                        print(f"[{model_label} 타임아웃] 컷 {index+1}: {MAX_WAIT}초 초과")
-                        return None
+                        print(f"[{model_label} 타임아웃] 컷 {index+1}: {MAX_WAIT}초 초과, 다른 키로 재시도...")
+                        break  # return None → break: 다음 키/모델로 폴백
+
+                if not operation.done:
+                    continue  # 타임아웃으로 break됨 → 다음 키 시도
 
                 result = operation.result
                 if not hasattr(result, "generated_videos") or not result.generated_videos:

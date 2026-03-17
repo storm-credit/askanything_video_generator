@@ -27,12 +27,13 @@ const EN_STOPWORDS = new Set([
 
 type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
 
+// 감정별 하이라이트 색상 (활성 단어 + 강조 단어 공용)
 const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
   SHOCK: '#FF4444',
-  WONDER: '#FFD700',
-  TENSION: '#FF8C00',
-  REVEAL: '#00FF88',
-  CALM: '#87CEEB',
+  WONDER: '#FFB800',
+  TENSION: '#FF6600',
+  REVEAL: '#00CC66',
+  CALM: '#5BB8E8',
 };
 
 const getEmotionColor = (emotion?: string): string => {
@@ -97,14 +98,8 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
           const isEmphasized = isActive && w.emphasis;
           const highlightColor = getEmotionColor(emotion);
 
-          const EMOTION_EMPHASIS: Record<string, string> = {
-            SHOCK: '#FF4444',
-            WONDER: '#FFB800',
-            TENSION: '#FF6600',
-            REVEAL: '#00CC66',
-            CALM: '#5BB8E8',
-          };
-          const emphasisColor = emotion && EMOTION_EMPHASIS[emotion] ? EMOTION_EMPHASIS[emotion] : '#FF4444';
+          // 중복 제거: 상단 EMOTION_HIGHLIGHT_COLOR 재사용
+          const emphasisColor = emotion && EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag] ? EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag] : '#FF4444';
 
           const color = isEmphasized
             ? emphasisColor

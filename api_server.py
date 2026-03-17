@@ -40,12 +40,13 @@ async def _lifespan(app):
 app = FastAPI(lifespan=_lifespan)
 
 # 동시 생성 요청 제한 (GPU/API 과부하 방지)
+# ⚠️ MAX_CONCURRENT_GENERATE > 1 금지: os.environ 직접 변경 때문에 동시 요청 간 env 충돌 발생
 _generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "1")))
 # 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
 _cut_executor = ThreadPoolExecutor(max_workers=4)
 
-# 취소 토큰: 현재 진행 중인 생성 작업을 중단할 수 있는 이벤트
-_cancel_event = threading.Event()
+# 취소 토큰: 요청별 이벤트 (generation_id → Event)
+_cancel_events: dict[str, threading.Event] = {}
 _active_generation_id: str | None = None
 _generation_lock = threading.Lock()
 
@@ -419,16 +420,17 @@ async def generate_video_endpoint(req: GenerateRequest):
     async def sse_generator():
         global _active_generation_id
 
-        # 이전 작업 취소 + 새 작업 등록
+        # 이전 작업 취소 + 새 작업 등록 (요청별 이벤트로 격리)
+        cancel_event = threading.Event()
         with _generation_lock:
-            if _active_generation_id:
-                _cancel_event.set()
+            if _active_generation_id and _active_generation_id in _cancel_events:
+                _cancel_events[_active_generation_id].set()
                 print(f"[취소] 새 요청으로 이전 작업({_active_generation_id}) 자동 취소")
-            _cancel_event.clear()
+            _cancel_events[generation_id] = cancel_event
             _active_generation_id = generation_id
 
         def _is_cancelled() -> bool:
-            return _cancel_event.is_set()
+            return cancel_event.is_set()
 
         # 동시 요청 제한: 슬롯 부족 시 대기 안내
         if _generate_semaphore.locked():
@@ -819,6 +821,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             with _generation_lock:
                 if _active_generation_id == generation_id:
                     _active_generation_id = None
+                _cancel_events.pop(generation_id, None)
 
     return EventSourceResponse(sse_generator())
 
@@ -827,6 +830,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
 # 준비된 세션 저장소 (메모리 — 단일 사용자 기준)
 _prepared_sessions: dict[str, dict] = {}
+_session_lock = threading.Lock()
 _SESSION_MAX_AGE = 3600  # 1시간 후 자동 만료
 _SESSION_MAX_COUNT = 10  # 최대 세션 수
 
@@ -835,14 +839,15 @@ def _cleanup_sessions():
     """오래된 세션 자동 정리 (메모리 누수 방지)."""
     import time
     now = time.time()
-    expired = [sid for sid, s in _prepared_sessions.items() if now - s.get("_created", 0) > _SESSION_MAX_AGE]
-    for sid in expired:
-        _prepared_sessions.pop(sid, None)
-    # 최대 개수 초과 시 가장 오래된 것부터 삭제
-    if len(_prepared_sessions) > _SESSION_MAX_COUNT:
-        sorted_sessions = sorted(_prepared_sessions.items(), key=lambda x: x[1].get("_created", 0))
-        for sid, _ in sorted_sessions[:len(_prepared_sessions) - _SESSION_MAX_COUNT]:
+    with _session_lock:
+        expired = [sid for sid, s in _prepared_sessions.items() if now - s.get("_created", 0) > _SESSION_MAX_AGE]
+        for sid in expired:
             _prepared_sessions.pop(sid, None)
+        # 최대 개수 초과 시 가장 오래된 것부터 삭제
+        if len(_prepared_sessions) > _SESSION_MAX_COUNT:
+            sorted_sessions = sorted(_prepared_sessions.items(), key=lambda x: x[1].get("_created", 0))
+            for sid, _ in sorted_sessions[:len(_prepared_sessions) - _SESSION_MAX_COUNT]:
+                _prepared_sessions.pop(sid, None)
 
 
 class PrepareRequest(BaseModel):
@@ -951,8 +956,7 @@ async def prepare_endpoint(req: PrepareRequest):
                 "image_paths": image_paths,
                 "topic": req.topic,
                 "language": req.language,
-                "apiKey": req.apiKey,
-                "llmKey": req.llmKey,
+                # API 키는 세션에 저장하지 않음 (보안) — 렌더 요청 시 재전달 필요
                 "_created": _time.time(),
             }
 
@@ -992,6 +996,8 @@ async def prepare_endpoint(req: PrepareRequest):
 class RenderRequest(BaseModel):
     sessionId: str
     cuts: list[dict]  # 수정된 스크립트 포함: [{index, script}, ...]
+    apiKey: str | None = None       # 렌더 단계에서 재전달 (세션에 저장하지 않음)
+    llmKey: str | None = None       # 렌더 단계에서 재전달
     elevenlabsKey: str | None = None
     ttsSpeed: float = 0.9
     videoEngine: str = "none"
@@ -1021,7 +1027,7 @@ async def render_endpoint(req: RenderRequest):
             video_title = session["title"]
             image_paths = session["image_paths"]
             language = session["language"]
-            api_key_override = session["apiKey"]
+            api_key_override = req.apiKey or os.getenv("OPENAI_API_KEY", "")
             elevenlabs_key_override = req.elevenlabsKey or os.getenv("ELEVENLABS_API_KEY", "")
 
             # 수정된 스크립트 반영
