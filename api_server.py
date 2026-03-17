@@ -67,7 +67,7 @@ os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # CORS 설정 (프론트엔드 연동)
-_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:*").split(",")
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000").split(",")
 # 개발 환경: 와일드카드 포함 시 모든 origin 허용
 if any("*" in o for o in _cors_origins):
     _cors_origins = ["*"]
@@ -856,6 +856,38 @@ class PrepareRequest(BaseModel):
     videoEngine: str = "none"  # prepare 단계에서는 비디오 미생성이 기본
     channel: str | None = None
 
+    @field_validator("language")
+    @classmethod
+    def valid_language(cls, v: str) -> str:
+        allowed = {"ko", "en", "ja", "zh", "de", "es", "fr", "pt"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 언어: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("imageEngine")
+    @classmethod
+    def valid_image_engine(cls, v: str) -> str:
+        allowed = {"imagen", "dalle"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 이미지 엔진: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("videoEngine")
+    @classmethod
+    def valid_video_engine(cls, v: str) -> str:
+        allowed = {"veo3", "kling", "sora2", "none"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("llmProvider")
+    @classmethod
+    def valid_llm_provider(cls, v: str) -> str:
+        allowed = {"gemini", "openai", "claude"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}. 허용: {allowed}")
+        return v
+
 
 @app.post("/api/prepare")
 async def prepare_endpoint(req: PrepareRequest):
@@ -976,6 +1008,7 @@ class RenderRequest(BaseModel):
 @app.post("/api/render")
 async def render_endpoint(req: RenderRequest):
     """2단계: 수정된 스크립트로 TTS → Whisper → Remotion 렌더링."""
+    _cleanup_sessions()
     session = _prepared_sessions.get(req.sessionId)
     if not session:
         from fastapi.responses import JSONResponse
