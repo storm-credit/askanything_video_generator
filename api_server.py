@@ -634,7 +634,16 @@ async def generate_video_endpoint(req: GenerateRequest):
             ref_url = req.referenceUrl
             if not ref_url and _yt_pattern.search(topic):
                 ref_url = topic
-                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 분석 후 스타일을 참고합니다\n"}
+                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 분석 후 주제를 추출합니다\n"}
+                # URL이 토픽이면 영상 제목을 토픽으로 대체 (LLM이 URL을 주제로 오해 방지)
+                try:
+                    from modules.utils.youtube_extractor import extract_youtube_reference
+                    _ref_pre = extract_youtube_reference(ref_url)
+                    if _ref_pre.get("title"):
+                        topic = _ref_pre["title"]
+                        yield {"data": f"[레퍼런스 분석] 영상 제목으로 주제 대체: '{topic}'\n"}
+                except Exception:
+                    pass  # 추출 실패 시 원본 URL 유지 → cutter에서 재시도
 
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
 
@@ -1068,16 +1077,25 @@ async def prepare_endpoint(req: PrepareRequest):
             # YouTube URL 자동 감지
             _yt_pat = re.compile(r"(?:youtube\.com/(?:shorts/|watch\?v=)|youtu\.be/)")
             prep_ref_url = req.referenceUrl
+            _prep_topic = req.topic
             if not prep_ref_url and _yt_pat.search(req.topic):
                 prep_ref_url = req.topic
-                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 분석 후 스타일을 참고합니다\n"}
+                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 분석 후 주제를 추출합니다\n"}
+                try:
+                    from modules.utils.youtube_extractor import extract_youtube_reference
+                    _ref_pre = extract_youtube_reference(prep_ref_url)
+                    if _ref_pre.get("title"):
+                        _prep_topic = _ref_pre["title"]
+                        yield {"data": f"[레퍼런스 분석] 영상 제목으로 주제 대체: '{_prep_topic}'\n"}
+                except Exception:
+                    pass
 
-            yield {"data": f"[기획] '{req.topic}' 스크립트 생성 중...\n"}
+            yield {"data": f"[기획] '{_prep_topic}' 스크립트 생성 중...\n"}
 
             cuts, topic_folder, video_title, video_tags, _seo_desc = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
-                    req.topic, api_key_override=req.apiKey, lang=req.language,
+                    _prep_topic, api_key_override=req.apiKey, lang=req.language,
                     llm_provider=req.llmProvider, llm_key_override=llm_key_for_request,
                     channel=req.channel, llm_model=req.llmModel,
                     reference_url=prep_ref_url,
