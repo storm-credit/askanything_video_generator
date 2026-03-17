@@ -45,10 +45,11 @@ _generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE",
 # 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
 _cut_executor = ThreadPoolExecutor(max_workers=4)
 
-# 취소 토큰: 요청별 이벤트 (generation_id → Event)
-_cancel_events: dict[str, threading.Event] = {}
+# 취소 토큰: 요청별 이벤트 (generation_id → (Event, created_time))
+_cancel_events: dict[str, tuple[threading.Event, float]] = {}
 _active_generation_id: str | None = None
 _generation_lock = threading.Lock()
+_CANCEL_EVENT_TTL = 600  # 10분 후 미정리 이벤트 자동 삭제
 
 
 @app.get("/")
@@ -372,7 +373,7 @@ async def cancel_generation():
     """현재 진행 중인 생성 작업을 취소합니다."""
     with _generation_lock:
         if _active_generation_id and _active_generation_id in _cancel_events:
-            _cancel_events[_active_generation_id].set()
+            _cancel_events[_active_generation_id][0].set()
             print(f"[취소] 생성 작업 취소 요청: {_active_generation_id}")
             return {"status": "cancelled", "generation_id": _active_generation_id}
         return {"status": "idle", "message": "진행 중인 생성 작업이 없습니다."}
@@ -421,12 +422,18 @@ async def generate_video_endpoint(req: GenerateRequest):
         global _active_generation_id
 
         # 이전 작업 취소 + 새 작업 등록 (요청별 이벤트로 격리)
+        import time as _t
         cancel_event = threading.Event()
         with _generation_lock:
+            # 오래된 이벤트 정리 (메모리 누수 방지)
+            now = _t.time()
+            stale = [gid for gid, (_, ts) in _cancel_events.items() if now - ts > _CANCEL_EVENT_TTL]
+            for gid in stale:
+                _cancel_events.pop(gid, None)
             if _active_generation_id and _active_generation_id in _cancel_events:
-                _cancel_events[_active_generation_id].set()
+                _cancel_events[_active_generation_id][0].set()
                 print(f"[취소] 새 요청으로 이전 작업({_active_generation_id}) 자동 취소")
-            _cancel_events[generation_id] = cancel_event
+            _cancel_events[generation_id] = (cancel_event, now)
             _active_generation_id = generation_id
 
         def _is_cancelled() -> bool:
@@ -988,8 +995,8 @@ async def prepare_endpoint(req: PrepareRequest):
             # 프론트엔드 멀티키 환경변수 복원
             if _prev_gemini_keys is not None:
                 os.environ["GEMINI_API_KEYS"] = _prev_gemini_keys
-            elif "GEMINI_API_KEYS" in os.environ and req.geminiKeys:
-                del os.environ["GEMINI_API_KEYS"]
+            elif req.geminiKeys:
+                os.environ.pop("GEMINI_API_KEYS", None)
 
     return EventSourceResponse(sse_generator())
 
