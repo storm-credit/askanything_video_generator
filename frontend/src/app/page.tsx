@@ -470,10 +470,14 @@ export default function Home() {
     setPreviewData(null);
     setEditedScripts({});
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       const response = await fetch(`${API_BASE}/api/prepare`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           topic,
           apiKey: pickKey("openai") || undefined,
@@ -518,10 +522,14 @@ export default function Home() {
       script: editedScripts[cut.index] ?? cut.script,
     }));
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       const response = await fetch(`${API_BASE}/api/render`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           sessionId: previewData.sessionId,
           cuts: updatedCuts,
@@ -591,10 +599,12 @@ export default function Home() {
               else if (platform === "tiktok") setTtConnected(true);
               else if (platform === "instagram") setIgConnected(true);
               clearInterval(poll);
+              clearTimeout(timeout);
             }
           } catch {
             // 연결 실패 시 폴링 중단
             clearInterval(poll);
+            clearTimeout(timeout);
           }
         }, 2000);
         const timeout = setTimeout(() => clearInterval(poll), 120000);

@@ -859,7 +859,7 @@ class PrepareRequest(BaseModel):
     @field_validator("language")
     @classmethod
     def valid_language(cls, v: str) -> str:
-        allowed = {"ko", "en", "ja", "zh", "de", "es", "fr", "pt"}
+        allowed = {"ko", "en", "de", "da", "no", "es", "fr", "pt", "it", "nl", "sv", "pl", "ru", "ja", "zh", "ar", "tr", "hi"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 언어: {v}. 허용: {allowed}")
         return v
