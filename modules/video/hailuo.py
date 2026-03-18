@@ -89,7 +89,9 @@ def generate_video_from_image(
                 print(f"[HailuoAI 오류] 최대 재시도 초과: {e}")
                 return None
 
-    # 2. 결과 폴링 대기
+    # 2. 결과 폴링 대기 (task_id는 retry loop에서 보장되지만 방어적 체크)
+    if not task_id:
+        return None
     poll_url = f"https://api.minimax.chat/v1/query/video_generation?task_id={task_id}"
     file_id = None
 
