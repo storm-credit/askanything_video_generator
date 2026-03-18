@@ -90,7 +90,7 @@ def _normalize_ffmpeg(audio_path: str, target_lufs: float) -> str:
             print(f"   [LUFS] ffmpeg loudnorm → {target_lufs} LUFS")
             return audio_path
         else:
-            raise RuntimeError(f"ffmpeg 실패: {result.stderr[:200]}")
+            raise RuntimeError(f"ffmpeg 실패: {result.stderr.decode(errors='replace')[:200]}")
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
@@ -107,4 +107,4 @@ def _convert_wav_to_mp3(wav_path: str, mp3_path: str) -> None:
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"WAV→MP3 변환 실패: {result.stderr[:200] if result.stderr else 'unknown error'}")
+        raise RuntimeError(f"WAV→MP3 변환 실패: {result.stderr.decode(errors='replace')[:200] if result.stderr else 'unknown error'}")
