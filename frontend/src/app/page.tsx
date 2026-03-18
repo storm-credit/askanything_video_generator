@@ -76,9 +76,10 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // 예약 모드
+  // 예약 모드 + 공개 설정
   const [scheduleMode, setScheduleMode] = useState<"realtime" | "scheduled">("realtime");
   const [scheduledTime, setScheduledTime] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "unlisted" | "private">("public");
 
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -406,6 +407,7 @@ export default function Home() {
           captionY,
           referenceUrl: detectedRefUrl,
           mode: previewMode ? "draft" : "production",
+          visibility,
         }),
       });
 
@@ -948,8 +950,8 @@ export default function Home() {
             )}
           </AnimatePresence>
 
-          {/* 실시간 / 예약 모드 토글 */}
-          <div className="w-full max-w-2xl mx-auto flex items-center justify-center gap-2">
+          {/* 실시간 / 예약 + 공개 설정 */}
+          <div className="w-full max-w-2xl mx-auto flex items-center justify-center gap-2 flex-wrap">
             <div className="flex bg-white/5 border border-white/10 rounded-full p-0.5">
               <button type="button" onClick={() => setScheduleMode("realtime")}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${scheduleMode === "realtime" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
@@ -969,6 +971,20 @@ export default function Home() {
                 className="bg-white/5 border border-amber-500/30 rounded-lg px-2.5 py-1 text-xs text-amber-200 focus:outline-none focus:border-amber-500/60"
               />
             )}
+            <div className="flex bg-white/5 border border-white/10 rounded-full p-0.5">
+              <button type="button" onClick={() => setVisibility("public")}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all ${visibility === "public" ? "bg-green-500/20 text-green-300" : "text-gray-500 hover:text-gray-300"}`}>
+                🌐 공개
+              </button>
+              <button type="button" onClick={() => setVisibility("unlisted")}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all ${visibility === "unlisted" ? "bg-yellow-500/20 text-yellow-300" : "text-gray-500 hover:text-gray-300"}`}>
+                🔗 미등록
+              </button>
+              <button type="button" onClick={() => setVisibility("private")}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all ${visibility === "private" ? "bg-red-500/20 text-red-300" : "text-gray-500 hover:text-gray-300"}`}>
+                🔒 비공개
+              </button>
+            </div>
           </div>
 
           {/* 컨트롤 패널 */}

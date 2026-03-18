@@ -184,6 +184,14 @@ class GenerateRequest(BaseModel):
     captionY: int = Field(28, ge=10, le=50)  # 자막 높이 (%): 하단 기준
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL (분석 후 스타일 반영)
     costTier: str | None = None  # 비용 프리셋: "free", "standard", "premium" (설정 시 엔진 자동 결정)
+    visibility: str = "public"  # 업로드 공개 설정: "public", "unlisted", "private"
+
+    @field_validator("visibility")
+    @classmethod
+    def valid_visibility(cls, v: str) -> str:
+        if v not in {"public", "unlisted", "private"}:
+            raise ValueError(f"지원하지 않는 공개 설정: {v}. 허용: public, unlisted, private")
+        return v
 
     @field_validator("language")
     @classmethod
