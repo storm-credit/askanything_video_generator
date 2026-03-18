@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle, Tv, Globe, ChevronDown, ChevronUp, Save, Youtube, Music, Instagram } from "lucide-react";
+import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle, Tv, Globe, ChevronDown, ChevronUp, Youtube, Music, Instagram } from "lucide-react";
 import { API_BASE, KeyConfig, KeyStatus, KeyUsageStats, KEY_CONFIGS } from "./types";
 
 // ── 언어 목록 ──
@@ -428,7 +428,7 @@ export function SettingsModal({
                                       onClick={() => togglePlatform(name, id)}
                                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                                         active
-                                          ? `bg-${color}-500/20 text-${color}-400 border border-${color}-500/30`
+                                          ? ({ red: "bg-red-500/20 text-red-400 border border-red-500/30", pink: "bg-pink-500/20 text-pink-400 border border-pink-500/30", orange: "bg-orange-500/20 text-orange-400 border border-orange-500/30" }[color] || "bg-white/15 text-white border border-white/20")
                                           : "bg-white/5 text-gray-500 border border-white/5 hover:bg-white/10"
                                       }`}
                                     >
@@ -598,7 +598,7 @@ function PlatformStatusPanel({ filterPlatforms }: { filterPlatforms?: string[] }
     <div className="space-y-1.5">
       {platforms.map(({ id, label, icon: Icon, status, color }) => (
         <div key={id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
-          <Icon className={`w-4 h-4 text-${color}-400`} />
+          <Icon className={`w-4 h-4 ${{ red: "text-red-400", pink: "text-pink-400", orange: "text-orange-400" }[color] || "text-gray-400"}`} />
           <span className="text-xs text-gray-300 flex-1">{label}</span>
           <div className={`w-2 h-2 rounded-full ${status?.connected ? "bg-green-500" : "bg-gray-600"}`} />
           <span className="text-[10px] text-gray-500">
