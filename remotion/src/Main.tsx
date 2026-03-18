@@ -433,10 +433,12 @@ export const Main: React.FC<{
       {cuts.map((cut, index) => {
         const startFrame = startFrames[index];
 
-        // staticFile()로 public dir (assets/) 기준 상대 경로 로드
+        // 경로 로드: 절대 경로(file://) 또는 staticFile() 사용
         if (!cut.visual_path || !cut.audio_path) return null;
-        const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
-        const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
+        const visualSrc = cut.visual_path.startsWith('http') || cut.visual_path.startsWith('file:') || cut.visual_path.includes(':')
+          ? cut.visual_path : staticFile(cut.visual_path);
+        const audioSrc = cut.audio_path.startsWith('http') || cut.audio_path.startsWith('file:') || cut.audio_path.includes(':')
+          ? cut.audio_path : staticFile(cut.audio_path);
         const isVideo = isVideoPath(visualSrc);
         const emotion = extractEmotion(cut) as EmotionTag | undefined;
 

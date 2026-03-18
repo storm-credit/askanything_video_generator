@@ -19,13 +19,22 @@ OUTRO_DURATION_FRAMES = 30         # 1초 @ 30fps
 CHANNELS_DIR = os.path.join(BRAND_DIR, "channels")
 
 
+_REMOTION_PUBLIC_ALIAS = "_r"  # remotion/public/ 내 짧은 폴더명
+
 def _to_relative(p: str | None) -> str:
-    """assets/ 기준 상대 경로 변환 (staticFile()용 - publicDir=assets/)"""
+    """assets/{topic}/ 경로를 _r/{subpath}로 변환 (Remotion public/ 기준)"""
     if not p:
         return ""
     normed = p.replace("\\", "/")
     idx = normed.find("assets/")
-    return normed[idx + len("assets/"):] if idx >= 0 else normed
+    if idx < 0:
+        return normed
+    after_assets = normed[idx + len("assets/"):]
+    # assets/topic_folder/... → _r/...  (첫 번째 폴더를 _r로 치환)
+    parts = after_assets.split("/", 1)
+    if len(parts) == 2:
+        return f"{_REMOTION_PUBLIC_ALIAS}/{parts[1]}"
+    return after_assets
 
 
 def _resolve_brand_asset(asset_name: str, channel: str | None = None) -> str | None:
@@ -264,14 +273,17 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
 
     assets_dir = os.path.abspath("assets")
 
-    # Remotion staticFile()은 remotion/public/ 기준 — 해당 topic 에셋만 복사
+    # Remotion staticFile()은 remotion/public/ 기준 — 짧은 이름으로 복사 (webpack 호환)
     public_dir = os.path.join(remotion_dir, "public")
-    public_topic_dir = os.path.join(public_dir, topic_folder)
-    if not os.path.exists(public_topic_dir):
-        src_topic_dir = os.path.join(assets_dir, topic_folder)
-        if os.path.exists(src_topic_dir):
-            shutil.copytree(src_topic_dir, public_topic_dir, dirs_exist_ok=True)
-            print(f"[Remotion] assets/{topic_folder} → public/{topic_folder} 복사 완료")
+    _short_name = "_r"  # webpack이 긴 폴더명 처리 못 함 → 짧은 고정 이름 사용
+    public_topic_dir = os.path.join(public_dir, _short_name)
+    src_topic_dir = os.path.join(assets_dir, topic_folder)
+    if os.path.exists(src_topic_dir):
+        if os.path.exists(public_topic_dir):
+            shutil.rmtree(public_topic_dir, ignore_errors=True)
+        shutil.copytree(src_topic_dir, public_topic_dir, dirs_exist_ok=True)
+        print(f"[Remotion] assets/{topic_folder} → public/{_short_name} 복사 완료")
+    _path_remap = {topic_folder: _short_name}  # props 경로 치환용
 
     camera = camera_style if camera_style in ("auto", "dynamic", "gentle", "static") else "dynamic"
 
