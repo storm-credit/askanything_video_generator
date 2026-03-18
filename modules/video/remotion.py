@@ -302,9 +302,11 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             frames = max(int(duration_sec * fps), fps)
             cuts_duration += frames
 
+            abs_visual = os.path.abspath(visual_path)
+            abs_audio = os.path.abspath(audio_path)
             cut_entry: dict = {
-                "visual_path": path_map[os.path.abspath(visual_path)],
-                "audio_path": path_map[os.path.abspath(audio_path)],
+                "visual_path": path_map.get(abs_visual, visual_path),
+                "audio_path": path_map.get(abs_audio, audio_path),
                 "word_timestamps": word_timestamps or [],
                 "duration_in_frames": frames,
             }
