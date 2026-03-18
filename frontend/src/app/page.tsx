@@ -327,6 +327,8 @@ export default function Home() {
           captionSize,
           captionY,
           referenceUrl: detectedRefUrl,
+          publishMode,
+          scheduledTime: publishMode === "scheduled" ? scheduledTime : undefined,
         }),
       });
 
@@ -472,6 +474,8 @@ export default function Home() {
           captionSize: preset.captionSize,
           captionY: preset.captionY,
           referenceUrl: detectedRefUrl,
+          publishMode,
+          scheduledTime: publishMode === "scheduled" ? scheduledTime : undefined,
         }),
       });
 

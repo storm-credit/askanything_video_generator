@@ -163,6 +163,8 @@ class GenerateRequest(BaseModel):
     captionSize: int = Field(48, ge=32, le=72)  # 자막 폰트 크기 (px)
     captionY: int = Field(28, ge=10, le=50)  # 자막 높이 (%): 하단 기준
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL (분석 후 스타일 반영)
+    publishMode: str = "realtime"  # realtime(공개) / private(비공개) / scheduled(예약)
+    scheduledTime: str | None = None  # ISO datetime (예약 모드 전용)
 
     @field_validator("language")
     @classmethod
@@ -1248,9 +1250,25 @@ async def list_channels():
     for name in get_channel_names():
         preset = get_channel_preset(name)
         if preset:
-            # voice_id는 내부용이므로 프론트엔드에 노출하지 않음
             channels[name] = {k: v for k, v in preset.items() if k != "voice_id"}
     return {"channels": channels}
+
+
+@app.put("/api/channels/{name}")
+async def upsert_channel(name: str, body: dict):
+    """채널 프리셋 추가/수정 (런타임 전용, 재시작 시 channel_config.py 기준 초기화)."""
+    from modules.utils.channel_config import CHANNEL_PRESETS
+    allowed = {"language", "platforms", "tts_speed", "caption_size", "caption_y", "visual_style", "tone", "upload_accounts"}
+    filtered = {k: v for k, v in body.items() if k in allowed}
+    if name in CHANNEL_PRESETS:
+        CHANNEL_PRESETS[name].update(filtered)
+    else:
+        CHANNEL_PRESETS[name] = {
+            "voice_id": "pNInz6obpgDQGcFmaJgB",
+            "bgm_theme": "random",
+            **filtered,
+        }
+    return {"status": "ok", "channel": name}
 
 
 # ── YouTube 업로드 API ─────────────────────────────────────────────
