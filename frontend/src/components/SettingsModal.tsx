@@ -326,6 +326,25 @@ export function SettingsModal({
                 채널별 언어 · 플랫폼 · 업로드 설정 관리. 채널 프리셋은 서버 <code className="text-gray-400">channel_config.py</code>에서 정의됩니다.
               </p>
 
+              {/* 채널 추가 버튼 */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="새 채널 이름 (영문, 예: fushigi)"
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500/50"
+                  onKeyDown={async (e) => {
+                    if (e.key !== "Enter") return;
+                    const name = (e.target as HTMLInputElement).value.trim().toLowerCase();
+                    if (!name || channels[name]) return;
+                    try {
+                      const res = await fetch(`${API_BASE}/api/channels/${name}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: "en", platforms: ["youtube"], tts_speed: 0.9, caption_size: 44, caption_y: 28, visual_style: "", tone: "" }) });
+                      if (res.ok) { fetchChannels(); (e.target as HTMLInputElement).value = ""; }
+                    } catch {}
+                  }}
+                />
+                <span className="text-[10px] text-gray-600">Enter로 추가</span>
+              </div>
+
               {channelsLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="w-5 h-5 border-2 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
@@ -357,9 +376,15 @@ export function SettingsModal({
                             <span className="text-sm font-medium text-white">{name}</span>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">{langLabel}</span>
-                              {(ch.platforms || []).map((p) => (
-                                <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">{p}</span>
-                              ))}
+                              {(ch.platforms || []).map((p) => {
+                                const connected = !!ch.upload_accounts?.[p];
+                                return (
+                                  <span key={p} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 ${connected ? "bg-green-500/15 text-green-400" : "bg-purple-500/15 text-purple-400"}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-green-500" : "bg-gray-500"}`} />
+                                    {p}
+                                  </span>
+                                );
+                              })}
                               {saveStatus === "saved" && <span className="text-[10px] text-green-400">저장됨</span>}
                               {saveStatus === "error" && <span className="text-[10px] text-red-400">오류</span>}
                             </div>
