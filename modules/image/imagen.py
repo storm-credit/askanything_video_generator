@@ -144,7 +144,7 @@ def _generate_imagen(api_key: str, prompt: str, model_name: str) -> bytes:
     from google.genai import types
 
     safety_level = os.getenv("IMAGEN_SAFETY_FILTER", "BLOCK_LOW_AND_ABOVE")
-    person_gen = os.getenv("IMAGEN_PERSON_GENERATION", "ALLOW_ALL")
+    person_gen = os.getenv("IMAGEN_PERSON_GENERATION", "ALLOW_ADULT")
     client = genai.Client(api_key=api_key)
     response = client.models.generate_images(
         model=model_name,
