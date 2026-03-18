@@ -2097,7 +2097,7 @@ async def _generate_multichannel(base_req: GenerateRequest, channels: list[str])
                     from modules.image.dalle import generate_image as generate_image_dalle
                     from modules.tts.elevenlabs import generate_tts
                     from modules.transcription.whisper import generate_word_timestamps
-                    from modules.video.remotion import render_video
+                    from modules.video.remotion import create_remotion_video
                     from modules.video.engines import generate_video_from_image
 
                     # 1) 컷 기획
@@ -2105,11 +2105,12 @@ async def _generate_multichannel(base_req: GenerateRequest, channels: list[str])
                     llm_key = ch_req.llmKey or ch_req.apiKey or os.getenv("GEMINI_API_KEY")
                     cuts, topic_folder, title, tags, seo_desc = await asyncio.get_running_loop().run_in_executor(
                         None, lambda: generate_cuts(
-                            ch_req.topic, llm_provider=ch_req.llmProvider, api_key=llm_key,
-                            language=ch_lang, channel=ch_name,
-                            gemini_api_keys=ch_req.geminiKeys,
+                            ch_req.topic, llm_provider=ch_req.llmProvider,
+                            api_key_override=llm_key, lang=ch_lang,
+                            llm_key_override=ch_req.llmKey,
+                            channel=ch_name,
                             reference_url=ch_req.referenceUrl,
-                            model_override=ch_req.llmModel,
+                            llm_model=ch_req.llmModel,
                         )
                     )
 
@@ -2150,7 +2151,7 @@ async def _generate_multichannel(base_req: GenerateRequest, channels: list[str])
                             tts_path = await asyncio.get_running_loop().run_in_executor(
                                 None, lambda _ci=ci, _c=cut: generate_tts(
                                     _c["script"], _ci, topic_folder,
-                                    api_key=el_key, voice_id=voice_id,
+                                    api_key_override=el_key, voice_id=voice_id,
                                     speed=ch_req.ttsSpeed, language=ch_lang,
                                     emotion=_c.get("emotion"),
                                 )
@@ -2170,13 +2171,21 @@ async def _generate_multichannel(base_req: GenerateRequest, channels: list[str])
 
                     # 4) Remotion 렌더
                     yield {"data": f"[{ch_label}] 영상 렌더링 중...\n"}
+                    _visual_paths = [cut.get("video_path") or cut.get("image_path", "") for cut in cuts]
+                    _audio_paths = [cut.get("tts_path", "") for cut in cuts]
+                    _scripts = [cut.get("script", "") for cut in cuts]
+                    _wt_list = [cut.get("word_timestamps", []) for cut in cuts]
+                    _descriptions = [cut.get("description", "") for cut in cuts]
                     video_path = await asyncio.get_running_loop().run_in_executor(
-                        None, lambda: render_video(
-                            cuts, topic_folder, title,
+                        None, lambda: create_remotion_video(
+                            _visual_paths, _audio_paths, _scripts, _wt_list,
+                            topic_folder, title=title,
                             camera_style=ch_req.cameraStyle,
+                            channel=ch_name,
                             platforms=ch_req.platforms,
                             caption_size=ch_req.captionSize,
                             caption_y=ch_req.captionY,
+                            descriptions=_descriptions,
                         )
                     )
 
