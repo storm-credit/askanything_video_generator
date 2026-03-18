@@ -66,13 +66,15 @@ def _is_key_blocked(key: str, service: str = None) -> bool:
 
 def _is_key_warned(key: str, service: str = None) -> bool:
     """키가 경고 상태인지 확인 (임계값 초과)."""
+    key_data = _key_usage.get(key)
+    if not key_data:
+        return False
     if service:
-        used = _key_usage[key].get(service, 0)
+        used = key_data.get(service, 0)
         threshold = _WARN_THRESHOLD.get(service, _DEFAULT_WARN_THRESHOLD)
         return used >= threshold
     else:
-        # 서비스별 경고 여부 개별 확인: 하나라도 경고면 True
-        for svc, cnt in _key_usage[key].items():
+        for svc, cnt in key_data.items():
             threshold = _WARN_THRESHOLD.get(svc, _DEFAULT_WARN_THRESHOLD)
             if cnt >= threshold:
                 return True
@@ -158,7 +160,8 @@ def get_google_key(override: str = None, service: str = None, exclude: set = Non
 
                 for k in candidates:
                     state = _get_key_state_unlocked(k, service)
-                    svc_usage = _key_usage[k].get(service, 0) if service else sum(_key_usage[k].values())
+                    kd = _key_usage.get(k, {})
+                    svc_usage = kd.get(service, 0) if service else sum(kd.values())
                     if state == "active":
                         active_keys.append((svc_usage, k))
                     elif state == "warning":
@@ -195,7 +198,7 @@ def get_key_usage_stats() -> list[dict]:
     with _usage_lock:
         for key in all_keys:
             masked = mask_key(key)
-            raw_usage = dict(_key_usage[key]) if key in _key_usage else {}
+            raw_usage = dict(_key_usage.get(key, {}))
             # 모델 변형 태그 집계: "imagen:standard" + "imagen:fast" → "imagen"
             usage: dict[str, int] = {}
             for svc, cnt in raw_usage.items():

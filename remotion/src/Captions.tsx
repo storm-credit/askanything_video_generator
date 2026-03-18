@@ -119,11 +119,8 @@ export const Captions: React.FC<{
   // 구간 빌드 (메모이제이션)
   const phrases = useMemo(() => buildPhrases(wordTimestamps), [wordTimestamps]);
 
-  // 현재 시간에 해당하는 구간 찾기
-  const activePhrase = useMemo(() => {
-    // 현재 발화 중인 구간 (start <= currentTime <= end + 0.15s 여유)
-    return phrases.find((p) => currentTime >= p.start - 0.1 && currentTime <= p.end + 0.15) || null;
-  }, [phrases, currentTime]);
+  // 현재 시간에 해당하는 구간 찾기 (매 프레임 변경되므로 memo 불필요)
+  const activePhrase = phrases.find((p) => currentTime >= p.start - 0.1 && currentTime <= p.end + 0.15) || null;
 
   if (!activePhrase) return null;
 
@@ -131,6 +128,9 @@ export const Captions: React.FC<{
   const emphasisColor = emotion && EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag]
     ? EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag]
     : '#FF4444';
+  const emphasisR = parseInt(emphasisColor.slice(1, 3), 16);
+  const emphasisG = parseInt(emphasisColor.slice(3, 5), 16);
+  const emphasisB = parseInt(emphasisColor.slice(5, 7), 16);
 
   // 구간 등장 진행도 (0~1): 팝업 애니메이션용
   const phraseAge = currentTime - activePhrase.start;
@@ -154,10 +154,6 @@ export const Captions: React.FC<{
           const isActive = currentTime >= w.start && currentTime <= w.end;
           const hasPassed = currentTime > w.end;
           const isEmphasized = isActive && w.emphasis;
-
-          const emphasisR = parseInt(emphasisColor.slice(1, 3), 16);
-          const emphasisG = parseInt(emphasisColor.slice(3, 5), 16);
-          const emphasisB = parseInt(emphasisColor.slice(5, 7), 16);
 
           const color = isEmphasized
             ? emphasisColor

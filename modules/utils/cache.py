@@ -12,6 +12,14 @@ CACHE_MAX_FILES = 200  # 최대 캐시 파일 수 (디스크 고갈 방지, ~1GB
 _cache_lock = threading.Lock()
 
 
+def _safe_getmtime(path: str) -> float:
+    """os.path.getmtime wrapper — 파일 삭제 시 0 반환 (evict 정렬 안정성)."""
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0
+
+
 def get_cached_image(prompt: str) -> str | None:
     """Return cached image path if exists and not expired, else None."""
     h = hashlib.sha256(prompt.encode()).hexdigest()
@@ -38,8 +46,8 @@ def _evict_oldest_files(max_files: int = CACHE_MAX_FILES) -> None:
         ]
         if len(files) <= max_files:
             return
-        # 수정 시각 기준 정렬, 오래된 것부터 삭제
-        files.sort(key=lambda p: os.path.getmtime(p))
+        # 수정 시각 기준 정렬, 오래된 것부터 삭제 (파일이 삭제되었을 수 있으므로 안전하게)
+        files.sort(key=lambda p: _safe_getmtime(p))
         to_remove = len(files) - max_files
         for f in files[:to_remove]:
             try:
