@@ -2010,19 +2010,22 @@ async def generate_multilang(req: MultiLangRequest):
             # ── 단계 5: 최종 결과 ──────────────────────────────────
             yield {"data": "PROG|100\n"}
             completed = list(all_results.keys())
-            yield {"data": f"[완료] 다국어 생성 완료: {', '.join(l.upper() for l in completed)} ({len(completed)}/{total_langs}개)\n"}
+            if not completed:
+                yield {"data": "ERROR|[다국어 생성 오류] 모든 언어 생성에 실패했습니다.\n"}
+            else:
+                yield {"data": f"[완료] 다국어 생성 완료: {', '.join(l.upper() for l in completed)} ({len(completed)}/{total_langs}개)\n"}
 
-            # 결과 JSON 전송
-            import json
-            result_data = {
-                "type": "multilang_complete",
-                "languages": completed,
-                "videos": {lang: info["video_path"] for lang, info in all_results.items()},
-                "titles": {lang: info["title"] for lang, info in all_results.items()},
-                "tags": {lang: info["tags"] for lang, info in all_results.items()},
-            }
-            yield {"data": f"RESULT|{json.dumps(result_data, ensure_ascii=False)}\n"}
-            yield {"data": f"DONE|{all_results[completed[0]]['video_path'] if completed else ''}\n"}
+                # 결과 JSON 전송
+                import json
+                result_data = {
+                    "type": "multilang_complete",
+                    "languages": completed,
+                    "videos": {lang: info["video_path"] for lang, info in all_results.items()},
+                    "titles": {lang: info["title"] for lang, info in all_results.items()},
+                    "tags": {lang: info["tags"] for lang, info in all_results.items()},
+                }
+                yield {"data": f"RESULT|{json.dumps(result_data, ensure_ascii=False)}\n"}
+                yield {"data": f"DONE|{all_results[completed[0]]['video_path']}\n"}
 
           except Exception as e:
             traceback.print_exc()
