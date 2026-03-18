@@ -33,8 +33,9 @@ def _fetch_metadata_ytdlp(video_id: str) -> dict:
         return {}
     try:
         import subprocess, json as _json
+        import sys
         result = subprocess.run(
-            ["yt-dlp", "--dump-json", "--no-download", "--no-warnings",
+            [sys.executable, "-m", "yt_dlp", "--dump-json", "--no-download", "--no-warnings",
              f"https://www.youtube.com/watch?v={video_id}"],
             capture_output=True, text=True, timeout=30,
         )
