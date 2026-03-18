@@ -1164,7 +1164,11 @@ async def prepare_endpoint(req: PrepareRequest):
                     from modules.utils.youtube_extractor import extract_youtube_reference
                     _ref_pre = extract_youtube_reference(prep_ref_url)
                     if _ref_pre.get("title"):
-                        _prep_topic = _ref_pre["title"]
+                        # 해시태그/이모지 제거하여 깨끗한 주제 추출
+                        import re as _re_yt
+                        _clean_title = _re_yt.sub(r'#\S+', '', _ref_pre["title"]).strip()
+                        _clean_title = _re_yt.sub(r'[💀🤫🌍🔥⚡️🎯👀😱🤯]+', '', _clean_title).strip()
+                        _prep_topic = _clean_title or _ref_pre["title"]
                         yield {"data": f"[레퍼런스 분석] 영상 제목으로 주제 대체: '{_prep_topic}'\n"}
                 except Exception:
                     pass
