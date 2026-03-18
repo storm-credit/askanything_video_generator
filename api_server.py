@@ -1406,21 +1406,26 @@ async def render_endpoint(req: RenderRequest):
             yield {"data": "[렌더링] Remotion 렌더링 시작...\n"}
 
             # Remotion 렌더
-            render_result = await loop.run_in_executor(
-                None,
-                lambda: create_remotion_video(
-                    visual_paths, audio_paths, scripts,
-                    word_timestamps_list, topic_folder, title=video_title,
-                    camera_style=req.cameraStyle, bgm_theme=req.bgmTheme,
-                    channel=req.channel, platforms=req.platforms,
-                    caption_size=req.captionSize,
-                    caption_y=req.captionY,
-                    descriptions=[cut.get("description", "") for cut in cuts],
-                ),
-            )
+            try:
+                render_result = await loop.run_in_executor(
+                    None,
+                    lambda: create_remotion_video(
+                        visual_paths, audio_paths, scripts,
+                        word_timestamps_list, topic_folder, title=video_title,
+                        camera_style=req.cameraStyle, bgm_theme=req.bgmTheme,
+                        channel=req.channel, platforms=req.platforms,
+                        caption_size=req.captionSize,
+                        caption_y=req.captionY,
+                        descriptions=[cut.get("description", "") for cut in cuts],
+                    ),
+                )
+            except Exception as _render_exc:
+                traceback.print_exc()
+                yield {"data": f"ERROR|[Remotion 오류] {_mask_error(_render_exc)}\n"}
+                return
 
             if not render_result:
-                yield {"data": "ERROR|[Remotion 오류] 렌더링 실패\n"}
+                yield {"data": "ERROR|[Remotion 오류] 렌더링 실패 (결과 없음). 서버 로그를 확인하세요.\n"}
                 return
 
             # 결과 처리
