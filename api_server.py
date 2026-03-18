@@ -248,6 +248,16 @@ class GenerateRequest(BaseModel):
                 raise ValueError(f"지원하지 않는 플랫폼: {p}. 허용: {allowed}")
         return v
 
+    @field_validator("outputPath")
+    @classmethod
+    def valid_output_path(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        import re as _re
+        if not _re.match(r'^[\w\-./\\: ]+$', v):
+            raise ValueError("outputPath에 허용되지 않는 문자가 포함되어 있습니다.")
+        return v
+
     @field_validator("costTier")
     @classmethod
     def valid_cost_tier(cls, v: str | None) -> str | None:
