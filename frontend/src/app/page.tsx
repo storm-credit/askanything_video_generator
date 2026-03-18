@@ -958,40 +958,42 @@ export default function Home() {
           <div className="w-full max-w-2xl mx-auto space-y-3">
 
             {/* 글로벌 설정 — 품질 · 언어 */}
-            <div className="flex items-center justify-center gap-1.5">
-              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
-                <select value={qualityPreset} onChange={(e) => applyPreset(e.target.value)} disabled={isGenerating} aria-label="품질 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
-                  <option value="best" className="bg-gray-900">최고 품질</option>
-                  <option value="balanced" className="bg-gray-900">합리적</option>
-                  <option value="fast" className="bg-gray-900">빠른 생성</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
-                <Globe className="w-3.5 h-3.5 text-blue-400" />
-                <select value={language} onChange={(e) => setLanguage(e.target.value)} disabled={isGenerating} aria-label="언어 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
-                  <option value="ko" className="bg-gray-900">한국어</option>
-                  <option value="en" className="bg-gray-900">English</option>
-                  <option value="ja" className="bg-gray-900">日本語</option>
-                  <option value="zh" className="bg-gray-900">中文</option>
-                  <option value="es" className="bg-gray-900">Español</option>
-                  <option value="fr" className="bg-gray-900">Français</option>
-                  <option value="de" className="bg-gray-900">Deutsch</option>
-                  <option value="pt" className="bg-gray-900">Português</option>
-                  <option value="ar" className="bg-gray-900">العربية</option>
-                  <option value="ru" className="bg-gray-900">Русский</option>
-                  <option value="hi" className="bg-gray-900">हिन्दी</option>
-                  <option value="it" className="bg-gray-900">Italiano</option>
-                  <option value="sv" className="bg-gray-900">Svenska</option>
-                  <option value="da" className="bg-gray-900">Dansk</option>
-                  <option value="no" className="bg-gray-900">Norsk</option>
-                  <option value="nl" className="bg-gray-900">Nederlands</option>
-                  <option value="tr" className="bg-gray-900">Türkçe</option>
-                </select>
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+              <div className="flex items-center justify-center gap-1.5">
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <select value={qualityPreset} onChange={(e) => applyPreset(e.target.value)} disabled={isGenerating} aria-label="품질 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
+                    <option value="best" className="bg-gray-900">최고 품질</option>
+                    <option value="balanced" className="bg-gray-900">합리적</option>
+                    <option value="fast" className="bg-gray-900">빠른 생성</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
+                  <Globe className="w-3.5 h-3.5 text-blue-400" />
+                  <select value={language} onChange={(e) => setLanguage(e.target.value)} disabled={isGenerating} aria-label="언어 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
+                    <option value="ko" className="bg-gray-900">한국어</option>
+                    <option value="en" className="bg-gray-900">English</option>
+                    <option value="ja" className="bg-gray-900">日本語</option>
+                    <option value="zh" className="bg-gray-900">中文</option>
+                    <option value="es" className="bg-gray-900">Español</option>
+                    <option value="fr" className="bg-gray-900">Français</option>
+                    <option value="de" className="bg-gray-900">Deutsch</option>
+                    <option value="pt" className="bg-gray-900">Português</option>
+                    <option value="ar" className="bg-gray-900">العربية</option>
+                    <option value="ru" className="bg-gray-900">Русский</option>
+                    <option value="hi" className="bg-gray-900">हिन्दी</option>
+                    <option value="it" className="bg-gray-900">Italiano</option>
+                    <option value="sv" className="bg-gray-900">Svenska</option>
+                    <option value="da" className="bg-gray-900">Dansk</option>
+                    <option value="no" className="bg-gray-900">Norsk</option>
+                    <option value="nl" className="bg-gray-900">Nederlands</option>
+                    <option value="tr" className="bg-gray-900">Türkçe</option>
+                  </select>
+                </div>
               </div>
             </div>
 
-            {/* 실시간(공개) · 비공개 · 예약 토글 */}
+            {/* 실시간 · 비공개 · 예약 + 시간 */}
             <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
               <div className="flex items-center justify-center gap-2">
                 <div className="flex items-center bg-white/5 border border-white/10 rounded-full overflow-hidden">
@@ -1008,16 +1010,14 @@ export default function Home() {
                     예약
                   </button>
                 </div>
-                {publishMode === "scheduled" && (
-                  <input
-                    type="datetime-local"
-                    value={scheduledTime}
-                    onChange={(e) => setScheduledTime(e.target.value)}
-                    disabled={isGenerating}
-                    min={new Date(Date.now() + 600000).toISOString().slice(0, 16)}
-                    className="bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-amber-500/50"
-                  />
-                )}
+                <input
+                  type="datetime-local"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  disabled={isGenerating || publishMode !== "scheduled"}
+                  min={new Date(Date.now() + 600000).toISOString().slice(0, 16)}
+                  className={`bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-xs focus:outline-none transition-opacity ${publishMode === "scheduled" ? "text-gray-200 opacity-100 focus:border-amber-500/50" : "text-gray-600 opacity-40 cursor-not-allowed"}`}
+                />
               </div>
             </div>
 
