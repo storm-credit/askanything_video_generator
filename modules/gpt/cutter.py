@@ -311,7 +311,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   "cuts": [
     {
       "description": "[컷 묘사 (한국어)] [감정태그]",
-      "image_prompt": "[DALL-E 3 영어 프롬프트 (MASTER_STYLE 자동 적용됨)]",
+      "image_prompt": "[영어 이미지 프롬프트 (MASTER_STYLE 자동 적용됨)]",
       "script": "[성우 대본: 구어체 반말, 15~30자]"
     }
   ]
@@ -394,7 +394,7 @@ Example: "A massive black hole swallowing light [SHOCK]"
   "cuts": [
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
-      "image_prompt": "[DALL-E 3 English prompt (MASTER_STYLE auto-applied)]",
+      "image_prompt": "[English image prompt (MASTER_STYLE auto-applied)]",
       "script": "[Voice-over: casual, 5-10 words]"
     }
   ]

@@ -102,9 +102,12 @@ def _prepare_public_dir(
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         abs_src = os.path.abspath(src)
         try:
-            os.link(abs_src, dst)  # 하드링크 (같은 파일시스템이면 즉시)
+            os.link(abs_src, dst)
         except OSError:
-            shutil.copy2(abs_src, dst)  # 다른 파일시스템이면 복사
+            try:
+                shutil.copy2(abs_src, dst)
+            except Exception as e:
+                raise FileNotFoundError(f"Remotion public dir 준비 실패: {abs_src} → {dst}: {e}")
         path_map[abs_src] = rel_name
         return rel_name
 

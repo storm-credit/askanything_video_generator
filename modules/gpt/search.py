@@ -52,10 +52,10 @@ def get_fact_check_context(topic: str) -> str:
 
         context += "Sources:\n"
         for i, result in enumerate(response.get("results", [])):
-            context += f"{i+1}. 제목: {result.get('title')}\n"
-            context += f"   출처: {result.get('url')}\n"
+            context += f"{i+1}. Title: {result.get('title')}\n"
+            context += f"   Source: {result.get('url')}\n"
             content_snippet = (result.get('content') or "")[:200]
-            context += f"   내용: {content_snippet}\n\n"
+            context += f"   Content: {content_snippet}\n\n"
 
         print("OK [팩트체크 엔진] 실시간 정보 검색 완료! (대본 기획에 RAG 주입 대기)")
         with _cache_lock:

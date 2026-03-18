@@ -9,7 +9,7 @@ import threading
 import traceback
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -396,7 +396,7 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
 
 
 @app.post("/api/cancel")
-async def cancel_generation(generation_id: str | None = None):
+async def cancel_generation(generation_id: str | None = Query(None)):
     """진행 중인 생성 작업을 취소합니다. generation_id 지정 시 해당 작업만, 미지정 시 모든 작업 취소."""
     with _generation_lock:
         if generation_id:

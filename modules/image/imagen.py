@@ -119,7 +119,8 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                     tried_keys.discard(final_api_key)  # safety 재시도는 같은 키로
                     print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도... ({safety_retry_count}/3)")
                     continue  # key_attempt 증가 안 함 — 키 로테이션 예산 소모 방지
-                raise RuntimeError(f"[{model_label} 이미지 생성 실패] index={index}: {e}")
+                print(f"  [{model_label} 실패] 컷 {index+1}: {e}")
+                break  # 이 모델 포기 → 다음 모델로 폴백
 
         # 이 모델의 키 전부 소진 → 다음 모델로 폴백
         if model_idx < len(model_chain) - 1:
