@@ -175,6 +175,7 @@ class GenerateRequest(BaseModel):
     cameraStyle: str = "auto"
     bgmTheme: str = "random"
     channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
+    channels: list[str] | None = None  # 멀티채널 생성: ["askanything", "wonderdrop", "exploratodo"]
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
     ttsSpeed: float = Field(0.9, ge=0.5, le=2.0)  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
     voiceId: str | None = None  # ElevenLabs 음성 ID
@@ -538,6 +539,15 @@ async def generate_video_endpoint(req: GenerateRequest):
                 req.imageModel = tier.get("image_model")
             if "videoEngine" not in _user_set:
                 req.videoEngine = tier.get("video_engine", req.videoEngine)
+
+    # ── 멀티채널 분기: channels가 2개 이상이면 채널별 순차 생성 ──
+    _multi_channels = req.channels or []
+    if len(_multi_channels) >= 2:
+        return await _generate_multichannel(req, _multi_channels)
+
+    # 단일 채널 (기존 동작): channels가 1개면 channel로 적용
+    if len(_multi_channels) == 1:
+        req.channel = _multi_channels[0]
 
     topic = req.topic
     api_key_override = req.apiKey
@@ -2033,6 +2043,185 @@ async def generate_multilang(req: MultiLangRequest):
             yield {"data": f"ERROR|[다국어 생성 오류] {_mask_error(e)}\n"}
 
     return EventSourceResponse(multilang_sse())
+
+
+# ── 멀티채널 생성 (채널별 순차 영상 생성) ──────────────────────────
+async def _generate_multichannel(base_req: GenerateRequest, channels: list[str]):
+    """채널 목록을 받아 각 채널별로 순차 영상 생성. SSE로 진행상황 전송."""
+    from modules.utils.channel_config import get_channel_preset, get_channel_names
+
+    valid_channel_names = get_channel_names()
+    valid_channels = [ch for ch in channels if ch in valid_channel_names]
+    if not valid_channels:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=400, content={"error": f"유효한 채널이 없습니다. 가능: {valid_channel_names}"})
+
+    total = len(valid_channels)
+
+    async def multichannel_sse():
+      async with _generate_semaphore:
+        try:
+            all_results: dict[str, dict] = {}
+
+            for ch_idx, ch_name in enumerate(valid_channels):
+                preset = get_channel_preset(ch_name)
+                if not preset:
+                    yield {"data": f"[경고] 채널 '{ch_name}' 프리셋 없음, 건너뜀\n"}
+                    continue
+
+                ch_lang = preset.get("language", "ko")
+                ch_label = f"{ch_name.upper()} ({ch_lang})"
+                base_pct = int(ch_idx / total * 100)
+
+                yield {"data": f"[채널 {ch_idx+1}/{total}] {ch_label} 생성 시작...\n"}
+                yield {"data": f"PROG|{base_pct}\n"}
+
+                # 채널별 요청 복제 + 프리셋 적용
+                import copy as _cp
+                ch_req = _cp.deepcopy(base_req)
+                ch_req.channel = ch_name
+                ch_req.channels = None  # 재귀 방지
+                ch_req.language = ch_lang
+                ch_req.ttsSpeed = preset.get("tts_speed", ch_req.ttsSpeed)
+                ch_req.captionSize = preset.get("caption_size", ch_req.captionSize)
+                ch_req.captionY = preset.get("caption_y", ch_req.captionY)
+                if preset.get("voice_id"):
+                    ch_req.voiceId = preset["voice_id"]
+                if preset.get("platforms"):
+                    ch_req.platforms = preset["platforms"]
+
+                # 이 채널의 전체 파이프라인 실행
+                try:
+                    from modules.gpt.cutter import generate_cuts
+                    from modules.image.imagen import generate_image_imagen
+                    from modules.image.dalle import generate_image as generate_image_dalle
+                    from modules.tts.elevenlabs import generate_tts
+                    from modules.transcription.whisper import generate_word_timestamps
+                    from modules.video.remotion import render_video
+                    from modules.video.engines import generate_video_from_image
+
+                    # 1) 컷 기획
+                    yield {"data": f"[{ch_label}] 컷 기획 중...\n"}
+                    llm_key = ch_req.llmKey or ch_req.apiKey or os.getenv("GEMINI_API_KEY")
+                    cuts, topic_folder, title, tags, seo_desc = await asyncio.get_running_loop().run_in_executor(
+                        None, lambda: generate_cuts(
+                            ch_req.topic, llm_provider=ch_req.llmProvider, api_key=llm_key,
+                            language=ch_lang, channel=ch_name,
+                            gemini_api_keys=ch_req.geminiKeys,
+                            reference_url=ch_req.referenceUrl,
+                            model_override=ch_req.llmModel,
+                        )
+                    )
+
+                    if not cuts:
+                        yield {"data": f"[{ch_label}] 컷 기획 실패, 건너뜀\n"}
+                        continue
+
+                    yield {"data": f"[{ch_label}] {len(cuts)}컷 기획 완료: {title}\n"}
+                    yield {"data": f"PROG|{base_pct + int(15 / total)}\n"}
+
+                    # 2) 이미지 생성
+                    yield {"data": f"[{ch_label}] 이미지 생성 중...\n"}
+                    image_engine = ch_req.imageEngine
+                    gen_img = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
+
+                    for ci, cut in enumerate(cuts):
+                        try:
+                            img_key = ch_req.geminiKeys if image_engine == "imagen" else ch_req.apiKey
+                            img_path = await asyncio.get_running_loop().run_in_executor(
+                                _cut_executor, lambda _ci=ci, _c=cut, _k=img_key: gen_img(
+                                    _c["prompt"], _ci, topic_folder, _k, channel=ch_name
+                                )
+                            )
+                            if img_path:
+                                cut["image_path"] = img_path
+                        except Exception as img_err:
+                            yield {"data": f"[{ch_label}] 이미지 {ci+1} 오류: {_mask_error(img_err)}\n"}
+
+                    yield {"data": f"PROG|{base_pct + int(40 / total)}\n"}
+
+                    # 3) TTS + Whisper (순차)
+                    yield {"data": f"[{ch_label}] TTS + 자막 생성 중...\n"}
+                    el_key = ch_req.elevenlabsKey or os.getenv("ELEVENLABS_API_KEY", "")
+                    voice_id = ch_req.voiceId or preset.get("voice_id", "cjVigY5qzO86Huf0OWal")
+
+                    for ci, cut in enumerate(cuts):
+                        try:
+                            tts_path = await asyncio.get_running_loop().run_in_executor(
+                                None, lambda _ci=ci, _c=cut: generate_tts(
+                                    _c["script"], _ci, topic_folder,
+                                    api_key=el_key, voice_id=voice_id,
+                                    speed=ch_req.ttsSpeed, language=ch_lang,
+                                    emotion=_c.get("emotion"),
+                                )
+                            )
+                            if tts_path:
+                                cut["tts_path"] = tts_path
+                                # Whisper
+                                oai_key = ch_req.apiKey or os.getenv("OPENAI_API_KEY", "")
+                                wt = await asyncio.get_running_loop().run_in_executor(
+                                    None, lambda _tp=tts_path: generate_word_timestamps(_tp, api_key=oai_key, language=ch_lang)
+                                )
+                                cut["word_timestamps"] = wt or []
+                        except Exception as tts_err:
+                            yield {"data": f"[{ch_label}] TTS {ci+1} 오류: {_mask_error(tts_err)}\n"}
+
+                    yield {"data": f"PROG|{base_pct + int(70 / total)}\n"}
+
+                    # 4) Remotion 렌더
+                    yield {"data": f"[{ch_label}] 영상 렌더링 중...\n"}
+                    video_path = await asyncio.get_running_loop().run_in_executor(
+                        None, lambda: render_video(
+                            cuts, topic_folder, title,
+                            camera_style=ch_req.cameraStyle,
+                            platforms=ch_req.platforms,
+                            caption_size=ch_req.captionSize,
+                            caption_y=ch_req.captionY,
+                        )
+                    )
+
+                    if video_path:
+                        all_results[ch_name] = {
+                            "video_path": video_path,
+                            "title": title,
+                            "tags": tags,
+                            "language": ch_lang,
+                        }
+                        yield {"data": f"[{ch_label}] ✅ 완료! {video_path}\n"}
+                    else:
+                        yield {"data": f"[{ch_label}] ❌ 렌더링 실패\n"}
+
+                    yield {"data": f"PROG|{int((ch_idx + 1) / total * 100)}\n"}
+
+                except Exception as ch_err:
+                    import traceback
+                    traceback.print_exc()
+                    yield {"data": f"[{ch_label}] 오류: {_mask_error(ch_err)}\n"}
+                    continue
+
+            # 전체 결과
+            completed = list(all_results.keys())
+            if not completed:
+                yield {"data": "ERROR|[멀티채널 생성 오류] 모든 채널 생성에 실패했습니다.\n"}
+            else:
+                yield {"data": f"[완료] 멀티채널 생성 완료: {', '.join(ch.upper() for ch in completed)} ({len(completed)}/{total}개)\n"}
+                import json
+                result_data = {
+                    "type": "multichannel_complete",
+                    "channels": completed,
+                    "videos": {ch: info["video_path"] for ch, info in all_results.items()},
+                    "titles": {ch: info["title"] for ch, info in all_results.items()},
+                    "languages": {ch: info["language"] for ch, info in all_results.items()},
+                }
+                yield {"data": f"RESULT|{json.dumps(result_data, ensure_ascii=False)}\n"}
+                yield {"data": f"DONE|{all_results[completed[0]]['video_path']}\n"}
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield {"data": f"ERROR|[멀티채널 생성 오류] {_mask_error(e)}\n"}
+
+    return EventSourceResponse(multichannel_sse())
 
 
 # ── 배치 생성 큐 API ──────────────────────────────────────────────

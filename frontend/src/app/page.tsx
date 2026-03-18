@@ -43,6 +43,7 @@ export default function Home() {
   const isYouTubeUrl = (text: string) => /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)/.test(text.trim());
   const detectedRefUrl = isYouTubeUrl(topic) ? topic.trim() : undefined;
   const [channel, setChannel] = useState("");
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
   const [ttsSpeed, setTtsSpeed] = useState(0.9);
   const [voiceId, setVoiceId] = useState("auto"); // 자동 선택 (기본)
@@ -370,7 +371,8 @@ export default function Home() {
           outputPath: outputPath.trim() || undefined,
           cameraStyle,
           bgmTheme,
-          channel: channel || undefined,
+          channel: selectedChannels.length === 1 ? selectedChannels[0] : (channel || undefined),
+          channels: selectedChannels.length >= 2 ? selectedChannels : undefined,
           costTier: costTier || undefined,
           platforms,
           ttsSpeed,
@@ -930,14 +932,30 @@ export default function Home() {
                   <option value="tr" className="bg-gray-900">Türkçe</option>
                 </select>
               </div>
-              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
-                <Tv className="w-3.5 h-3.5 text-purple-400" />
-                <select value={channel} onChange={(e) => applyChannelPreset(e.target.value)} disabled={isGenerating} aria-label="채널 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
-                  <option value="" className="bg-gray-900">채널 없음</option>
-                  {Object.keys(channelPresets).map((key) => (
-                    <option key={key} value={key} className="bg-gray-900">{key}</option>
-                  ))}
-                </select>
+              {/* 멀티채널 선택 (체크박스) */}
+              <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full px-2.5 py-1.5">
+                <Tv className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                {Object.entries(channelPresets).map(([key, _p]) => {
+                  const isSelected = selectedChannels.includes(key);
+                  const display = { askanything: "🇰🇷", wonderdrop: "🇺🇸", exploratodo: "🇪🇸" }[key] || "📺";
+                  return (
+                    <button key={key} type="button" disabled={isGenerating}
+                      onClick={() => {
+                        const next = isSelected ? selectedChannels.filter(c => c !== key) : [...selectedChannels, key];
+                        setSelectedChannels(next);
+                        if (next.length === 1) { applyChannelPreset(next[0]); }
+                        else if (next.length === 0) { setChannel(""); }
+                      }}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all ${isSelected ? "bg-purple-500/30 text-purple-200 border border-purple-500/50" : "bg-white/5 text-gray-500 border border-transparent hover:bg-white/10"}`}
+                      title={key}
+                    >
+                      {display} {key.slice(0, 3).toUpperCase()}
+                    </button>
+                  );
+                })}
+                {selectedChannels.length >= 2 && (
+                  <span className="text-[9px] text-purple-400 ml-1">{selectedChannels.length}채널</span>
+                )}
               </div>
             </div>
 

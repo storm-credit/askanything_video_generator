@@ -38,6 +38,23 @@ export interface KeyUsageStats {
   keys: KeyUsageEntry[];
 }
 
+export interface ChannelInfo {
+  language: string;
+  tts_speed: number;
+  platforms: string[];
+  caption_size: number;
+  caption_y: number;
+  visual_style?: string;
+  tone?: string;
+}
+
+// 채널 이름 → 표시 라벨 + 국기
+export const CHANNEL_DISPLAY: Record<string, { label: string; flag: string }> = {
+  askanything: { label: "AskAnything", flag: "🇰🇷" },
+  wonderdrop: { label: "WonderDrop", flag: "🇺🇸" },
+  exploratodo: { label: "ExploraTodo", flag: "🇪🇸" },
+};
+
 export const KEY_CONFIGS: KeyConfig[] = [
   // ── 핵심 키 (Google 또는 OpenAI 중 하나 + ElevenLabs = 최소 구성) ──
   {
