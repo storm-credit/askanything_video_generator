@@ -122,18 +122,18 @@ def check_engine_available(engine: str, google_key: str = None) -> tuple[bool, s
 
 
 def _get_available_engines(preferred_engine: str) -> list[str]:
-    """Return engine list ordered by availability. Preferred engine first if available."""
-    from modules.utils.keys import get_google_key
-
+    """Return engine list ordered by availability. Preferred engine first if available.
+    check_engine_available()를 사용하여 키 라운드로빈 부작용 없이 가용성만 확인.
+    """
     available = []
 
-    # Check each engine's key availability
+    # Check each engine's key availability (side-effect-free)
     engine_checks = {
-        "veo3": lambda: get_google_key(service="veo3") is not None,
-        "hailuo": lambda: bool(os.getenv("HAILUO_API_KEY")),
-        "kling": lambda: bool(os.getenv("KLING_ACCESS_KEY")),
-        "sora2": lambda: bool(os.getenv("OPENAI_API_KEY")),
-        "runway": lambda: bool(os.getenv("RUNWAY_API_KEY")),
+        "veo3": lambda: check_engine_available("veo3")[0],
+        "hailuo": lambda: check_engine_available("hailuo")[0],
+        "kling": lambda: check_engine_available("kling")[0],
+        "sora2": lambda: check_engine_available("sora2")[0],
+        "runway": lambda: check_engine_available("runway")[0],
     }
 
     # Preferred engine first
