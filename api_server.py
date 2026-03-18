@@ -1703,7 +1703,8 @@ async def batch_start():
 
                         words = []
                         if aud:
-                            words = await loop.run_in_executor(None, lambda a=aud: generate_word_timestamps(a, language=job["language"]))
+                            _aud, _lang = aud, job["language"]
+                            words = await loop.run_in_executor(None, lambda a=_aud, l=_lang: generate_word_timestamps(a, language=l))
                         word_ts_list.append(words)
                         scripts.append(cut["script"])
 
