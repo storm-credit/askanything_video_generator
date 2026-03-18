@@ -113,10 +113,8 @@ def check_engine_available(engine: str, google_key: str = None) -> tuple[bool, s
         return False, "HAILUO_API_KEY 필요"
 
     if engine == "runway":
-        key = os.getenv("RUNWAY_API_KEY")
-        if key:
-            return True, "Runway Gen-4 직접 연동"
-        return False, "RUNWAY_API_KEY 필요"
+        # Runway Gen-4 API 미구현 (stub) — 키가 있어도 사용 불가로 표시
+        return False, "Runway Gen-4 미구현 (준비 중)"
 
     return False, f"알 수 없는 엔진: {engine}"
 
