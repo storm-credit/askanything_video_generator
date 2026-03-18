@@ -90,7 +90,7 @@ def _normalize_ffmpeg(audio_path: str, target_lufs: float) -> str:
             print(f"   [LUFS] ffmpeg loudnorm → {target_lufs} LUFS")
             return audio_path
         else:
-            raise RuntimeError(f"ffmpeg 실패: {result.stderr.decode(errors='replace')[:200]}")
+            raise RuntimeError(f"ffmpeg 실패: {result.stderr[:200]}")
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)

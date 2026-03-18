@@ -26,7 +26,7 @@ def get_cached_image(prompt: str) -> str | None:
     cached = os.path.join(IMAGE_CACHE_DIR, f"{h}.png")
     with _cache_lock:
         if os.path.exists(cached) and os.path.getsize(cached) > 0:
-            if time.time() - os.path.getmtime(cached) > CACHE_MAX_AGE:
+            if time.time() - _safe_getmtime(cached) > CACHE_MAX_AGE:
                 try:
                     os.remove(cached)
                 except OSError:

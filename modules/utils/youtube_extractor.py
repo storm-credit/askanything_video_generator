@@ -189,7 +189,7 @@ def extract_youtube_reference(url: str, api_key: str | None = None) -> dict:
             return cached[1]
 
     # API 키 결정
-    key = api_key or os.getenv("GEMINI_API_KEY")
+    key = api_key or os.getenv("YOUTUBE_API_KEY_ASKANYTHING") or os.getenv("GEMINI_API_KEY")
 
     print(f"-> [레퍼런스 분석] YouTube 영상 '{video_id}' 분석 중...")
 
