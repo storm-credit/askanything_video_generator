@@ -484,7 +484,7 @@ export default function Home() {
       console.error(error);
       const message = error instanceof Error ? error.message : "Unknown error";
       const userMsg = message === "Failed to fetch"
-        ? "[연결 실패] 백엔드 서버(localhost:8003)에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
+        ? "[연결 실패] 백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
         : `[네트워크 오류] ${message}`;
       setLogs(prev => [...prev.slice(-99), `ERROR:${userMsg}`]);
       setErrorMessage(userMsg);
