@@ -990,7 +990,7 @@ export default function Home() {
           {/* 컨트롤 패널 */}
           <div className="w-full max-w-2xl mx-auto space-y-3">
 
-            {/* 글로벌 설정 — 품질 · 언어 · 채널 */}
+            {/* 글로벌 설정 — 품질 · 언어 */}
             <div className="flex items-center justify-center gap-1.5">
               <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
                 <DollarSign className={`w-3.5 h-3.5 ${costTier ? costTierPresets[costTier]?.color || "text-gray-400" : "text-gray-400"}`} />
@@ -1023,29 +1023,35 @@ export default function Home() {
                   <option value="tr" className="bg-gray-900">Türkçe</option>
                 </select>
               </div>
-              {/* 멀티채널 선택 */}
-              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
-                <Tv className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                {Object.entries(channelPresets).map(([key, _p]) => {
-                  const isSelected = selectedChannels.includes(key);
-                  const flag = LANG_FLAGS[_p.language] || "📺";
-                  return (
-                    <button key={key} type="button" disabled={isGenerating}
-                      onClick={() => {
-                        const next = isSelected ? selectedChannels.filter(c => c !== key) : [...selectedChannels, key];
-                        setSelectedChannels(next);
-                        if (next.length === 1) { applyChannelPreset(next[0]); }
-                        else if (next.length === 0) { setChannel(""); }
-                      }}
-                      className={`px-2 py-0.5 rounded-full text-xs font-medium transition-all ${isSelected ? "bg-purple-500/30 text-purple-200 border border-purple-500/50" : "bg-white/5 text-gray-500 border border-transparent hover:bg-white/10"}`}
-                      title={key}
-                    >
-                      {flag} {key.slice(0, 3).toUpperCase()}
-                    </button>
-                  );
-                })}
+            </div>
+
+            {/* 멀티채널 선택 */}
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+              <div className="flex items-center gap-2">
+                <Tv className="w-4 h-4 text-purple-400 shrink-0" />
+                <span className="text-xs text-gray-400 font-medium shrink-0">채널</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {Object.entries(channelPresets).map(([key, _p]) => {
+                    const isSelected = selectedChannels.includes(key);
+                    const flag = LANG_FLAGS[_p.language] || "📺";
+                    return (
+                      <button key={key} type="button" disabled={isGenerating}
+                        onClick={() => {
+                          const next = isSelected ? selectedChannels.filter(c => c !== key) : [...selectedChannels, key];
+                          setSelectedChannels(next);
+                          if (next.length === 1) { applyChannelPreset(next[0]); }
+                          else if (next.length === 0) { setChannel(""); }
+                        }}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${isSelected ? "bg-purple-500/25 text-purple-200 border border-purple-500/50" : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"}`}
+                        title={key}
+                      >
+                        {flag} {key}
+                      </button>
+                    );
+                  })}
+                </div>
                 {selectedChannels.length >= 1 && (
-                  <span className="text-[10px] text-purple-400 font-medium">{selectedChannels.length}개</span>
+                  <span className="text-[10px] text-purple-400 font-medium ml-auto">{selectedChannels.length}개 선택</span>
                 )}
               </div>
             </div>
