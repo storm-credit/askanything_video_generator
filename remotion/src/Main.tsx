@@ -404,7 +404,7 @@ export const Main: React.FC<{
   cameraStyle?: CameraStyle;
   captionSize?: number;
   captionY?: number;
-}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle = 'dynamic', captionSize = 48, captionY = 28 }) => {
+}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle = 'auto', captionSize = 48, captionY = 28 }) => {
 
   const introFrames = introImagePath ? INTRO_DURATION_FRAMES : 0;
   const outroFrames = outroImagePath ? OUTRO_DURATION_FRAMES : 0;
