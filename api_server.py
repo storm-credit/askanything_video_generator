@@ -73,6 +73,9 @@ app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # CORS 설정 (프론트엔드 연동)
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000").split(",")
+# 개발 환경: localhost 모든 포트 허용 (Next.js autoPort 대응)
+if not os.getenv("CORS_ORIGINS"):
+    _cors_origins = ["*"]
 # 개발 환경: 와일드카드 포함 시 모든 origin 허용
 if any("*" in o for o in _cors_origins):
     _cors_origins = ["*"]
