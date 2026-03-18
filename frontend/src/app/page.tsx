@@ -26,7 +26,21 @@ const DEFAULT_CHANNEL_PRESETS: Record<string, ChannelPreset> = {
 
 export default function Home() {
   const [costTierPresets, setCostTierPresets] = useState<Record<string, CostTierPreset>>(DEFAULT_COST_TIER_PRESETS);
-  const [channelPresets, setChannelPresets] = useState<Record<string, ChannelPreset>>(DEFAULT_CHANNEL_PRESETS);
+  const [channelPresets, setChannelPresets] = useState<Record<string, ChannelPreset>>(() => {
+    const base = { ...DEFAULT_CHANNEL_PRESETS };
+    if (typeof window !== "undefined") {
+      try {
+        const custom = localStorage.getItem("askanything_custom_channels");
+        if (custom) {
+          const parsed = JSON.parse(custom);
+          for (const [k, v] of Object.entries(parsed)) {
+            if (!base[k]) base[k] = v as ChannelPreset;
+          }
+        }
+      } catch {}
+    }
+    return base;
+  });
   const [topic, setTopic] = useState("");
   const [costTier, setCostTier] = useState("");  // "" = 수동, "free", "standard", "premium"
   const [llmProvider, setLlmProvider] = useState("gemini");
@@ -54,6 +68,10 @@ export default function Home() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // 예약 모드
+  const [scheduleMode, setScheduleMode] = useState<"realtime" | "scheduled">("realtime");
+  const [scheduledTime, setScheduledTime] = useState("");
 
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -868,13 +886,40 @@ export default function Home() {
                 >
                   미리보기
                 </button>
-                <button
-                  type="submit"
-                  disabled={!topic.trim()}
-                  className="bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
-                >
-                  바로생성
-                </button>
+                {scheduleMode === "realtime" ? (
+                  <button
+                    type="submit"
+                    disabled={!topic.trim()}
+                    className="bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
+                  >
+                    바로생성
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!topic.trim() || !scheduledTime}
+                    onClick={async () => {
+                      if (!scheduledTime) return;
+                      try {
+                        const body = {
+                          topic, language, videoEngine, imageEngine, llmProvider,
+                          channel: selectedChannels.length === 1 ? selectedChannels[0] : undefined,
+                          channels: selectedChannels.length >= 2 ? selectedChannels : undefined,
+                          scheduledAt: scheduledTime,
+                        };
+                        const res = await fetch(`${API_BASE}/api/batch/add`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                        if (res.ok) {
+                          setSuccessMessage(`예약 완료: ${new Date(scheduledTime).toLocaleString()}`);
+                          setScheduleMode("realtime");
+                          setScheduledTime("");
+                        }
+                      } catch (err) { setErrorMessage(`예약 실패: ${err}`); }
+                    }}
+                    className="bg-amber-500 text-black hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
+                  >
+                    예약
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -895,6 +940,29 @@ export default function Home() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* 실시간 / 예약 모드 토글 */}
+          <div className="w-full max-w-2xl mx-auto flex items-center justify-center gap-2">
+            <div className="flex bg-white/5 border border-white/10 rounded-full p-0.5">
+              <button type="button" onClick={() => setScheduleMode("realtime")}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${scheduleMode === "realtime" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+                ⚡ 실시간
+              </button>
+              <button type="button" onClick={() => setScheduleMode("scheduled")}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${scheduleMode === "scheduled" ? "bg-amber-500/20 text-amber-300" : "text-gray-500 hover:text-gray-300"}`}>
+                🕐 예약
+              </button>
+            </div>
+            {scheduleMode === "scheduled" && (
+              <input
+                type="datetime-local"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+                className="bg-white/5 border border-amber-500/30 rounded-lg px-2.5 py-1 text-xs text-amber-200 focus:outline-none focus:border-amber-500/60"
+              />
+            )}
+          </div>
 
           {/* 컨트롤 패널 */}
           <div className="w-full max-w-2xl mx-auto space-y-3">

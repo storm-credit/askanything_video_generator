@@ -464,7 +464,11 @@ export function SettingsModal({
 
               {/* 채널 추가 */}
               <AddChannelForm onAdded={(name, ch) => {
-                setChannels((prev) => ({ ...prev, [name]: ch }));
+                setChannels((prev) => {
+                  const updated = { ...prev, [name]: ch };
+                  try { localStorage.setItem("askanything_custom_channels", JSON.stringify(updated)); } catch {}
+                  return updated;
+                });
                 setExpandedChannel(name);
               }} existingNames={Object.keys(channels)} />
             </>
