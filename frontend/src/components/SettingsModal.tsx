@@ -1,9 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle } from "lucide-react";
-import { KeyConfig, KeyStatus, KeyUsageStats, KEY_CONFIGS } from "./types";
+import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle, Tv, Globe, ChevronDown, ChevronUp, Save, Youtube, Music, Instagram } from "lucide-react";
+import { API_BASE, KeyConfig, KeyStatus, KeyUsageStats, KEY_CONFIGS } from "./types";
+
+// ── 언어 목록 ──
+const LANGUAGES: { code: string; label: string }[] = [
+  { code: "ko", label: "한국어" },
+  { code: "en", label: "English" },
+  { code: "ja", label: "日本語" },
+  { code: "zh", label: "中文" },
+  { code: "es", label: "Español" },
+  { code: "fr", label: "Français" },
+  { code: "de", label: "Deutsch" },
+  { code: "pt", label: "Português" },
+  { code: "ar", label: "العربية" },
+  { code: "ru", label: "Русский" },
+  { code: "hi", label: "हिन्दी" },
+  { code: "it", label: "Italiano" },
+  { code: "sv", label: "Svenska" },
+  { code: "da", label: "Dansk" },
+  { code: "no", label: "Norsk" },
+  { code: "nl", label: "Nederlands" },
+  { code: "tr", label: "Türkçe" },
+  { code: "pl", label: "Polski" },
+];
+
+// ── 채널 데이터 타입 ──
+interface ChannelConfig {
+  language: string;
+  platforms: string[];
+  tts_speed: number;
+  caption_size: number;
+  caption_y: number;
+  visual_style: string;
+  tone: string;
+  upload_accounts: Record<string, string | null>;
+}
 
 interface SettingsModalProps {
   serverKeyStatus: KeyStatus | null;
@@ -42,7 +76,26 @@ export function SettingsModal({
   onToggleVisible,
   onOutputPathChange,
 }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<"core" | "extra">("core");
+  const [activeTab, setActiveTab] = useState<"core" | "extra" | "channels">("core");
+
+  // ── 채널 관리 상태 ──
+  const [channels, setChannels] = useState<Record<string, ChannelConfig>>({});
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
+  const [channelSaveStatus, setChannelSaveStatus] = useState<Record<string, "saved" | "saving" | "error" | null>>({});
+
+  // ── 채널 데이터 로드 ──
+  const fetchChannels = useCallback(async () => {
+    setChannelsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/channels`);
+      if (res.ok) {
+        const data = await res.json();
+        setChannels(data.channels || {});
+      }
+    } catch { /* server offline */ }
+    setChannelsLoading(false);
+  }, []);
 
   // Escape 키로 모달 닫기
   useEffect(() => {
@@ -53,8 +106,31 @@ export function SettingsModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  // 채널 탭 진입 시 로드
+  useEffect(() => {
+    if (activeTab === "channels") fetchChannels();
+  }, [activeTab, fetchChannels]);
+
   const coreConfigs = KEY_CONFIGS.filter((c) => c.group === "core");
   const extraConfigs = KEY_CONFIGS.filter((c) => c.group === "extra");
+
+  // ── 채널 필드 수정 (로컬 상태 업데이트) ──
+  const updateChannelField = (name: string, field: string, value: unknown) => {
+    setChannels((prev) => ({
+      ...prev,
+      [name]: { ...prev[name], [field]: value },
+    }));
+    setChannelSaveStatus((prev) => ({ ...prev, [name]: null })); // 변경됨 표시
+  };
+
+  // ── 플랫폼 토글 ──
+  const togglePlatform = (name: string, platform: string) => {
+    const current = channels[name]?.platforms || [];
+    const updated = current.includes(platform)
+      ? current.filter((p) => p !== platform)
+      : [...current, platform];
+    updateChannelField(name, "platforms", updated);
+  };
 
   return (
     <>
@@ -70,19 +146,19 @@ export function SettingsModal({
       <motion.div
         role="dialog"
         aria-modal="true"
-        aria-label="API 키 설정"
+        aria-label="설정"
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[560px] sm:max-h-[85vh] z-[70] bg-gray-900/95 border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[600px] sm:max-h-[85vh] z-[70] bg-gray-900/95 border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
       >
         {/* 모달 헤더 + 탭 */}
         <div className="px-6 pt-5 pb-0 border-b border-white/10">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-bold text-white">API 키 설정</h2>
-              <p className="text-xs text-gray-500 mt-1">.env에 설정된 키는 자동 사용됩니다. 브라우저에서 추가 키를 등록하면 로테이션됩니다.</p>
+              <h2 className="text-lg font-bold text-white">설정</h2>
+              <p className="text-xs text-gray-500 mt-1">API 키, 엔진, 채널 관리</p>
             </div>
             <button
               onClick={onClose}
@@ -115,6 +191,17 @@ export function SettingsModal({
             >
               <Puzzle className="w-3.5 h-3.5" />
               추가 엔진
+            </button>
+            <button
+              onClick={() => setActiveTab("channels")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-xl transition-colors ${
+                activeTab === "channels"
+                  ? "bg-white/[0.06] text-teal-400 border-b-2 border-teal-400"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <Tv className="w-3.5 h-3.5" />
+              채널 관리
             </button>
           </div>
         </div>
@@ -231,12 +318,212 @@ export function SettingsModal({
               ))}
             </>
           )}
+
+          {/* ════════ 채널 관리 탭 ════════ */}
+          {activeTab === "channels" && (
+            <>
+              <p className="text-[10px] text-gray-500">
+                채널별 언어 · 플랫폼 · 업로드 설정 관리. 채널 프리셋은 서버 <code className="text-gray-400">channel_config.py</code>에서 정의됩니다.
+              </p>
+
+              {channelsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-5 h-5 border-2 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
+                  <span className="ml-2 text-xs text-gray-500">채널 로딩 중...</span>
+                </div>
+              ) : Object.keys(channels).length === 0 ? (
+                <div className="text-center py-8">
+                  <Tv className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">등록된 채널이 없습니다</p>
+                  <p className="text-[10px] text-gray-600 mt-1">서버가 실행 중인지 확인하세요</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(channels).map(([name, ch]) => {
+                    const isExpanded = expandedChannel === name;
+                    const saveStatus = channelSaveStatus[name];
+                    const langLabel = LANGUAGES.find((l) => l.code === ch.language)?.label || ch.language;
+                    return (
+                      <div key={name} className="rounded-2xl bg-white/[0.03] border border-white/5 overflow-hidden">
+                        {/* 채널 헤더 (접기/펼치기) */}
+                        <button
+                          onClick={() => setExpandedChannel(isExpanded ? null : name)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center shrink-0">
+                            <Tv className="w-4 h-4 text-teal-400" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <span className="text-sm font-medium text-white">{name}</span>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">{langLabel}</span>
+                              {(ch.platforms || []).map((p) => (
+                                <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">{p}</span>
+                              ))}
+                              {saveStatus === "saved" && <span className="text-[10px] text-green-400">저장됨</span>}
+                              {saveStatus === "error" && <span className="text-[10px] text-red-400">오류</span>}
+                            </div>
+                          </div>
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                        </button>
+
+                        {/* 채널 상세 설정 (펼쳐진 상태) */}
+                        {isExpanded && (
+                          <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
+                            {/* 언어 선택 */}
+                            <div className="flex items-center gap-3">
+                              <Globe className="w-4 h-4 text-blue-400 shrink-0" />
+                              <div className="flex-1">
+                                <label className="text-[10px] text-gray-500 block mb-1">기본 언어</label>
+                                <select
+                                  value={ch.language || "ko"}
+                                  onChange={(e) => updateChannelField(name, "language", e.target.value)}
+                                  className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-teal-500/50 appearance-none cursor-pointer"
+                                >
+                                  {LANGUAGES.map((l) => (
+                                    <option key={l.code} value={l.code} className="bg-gray-900">{l.label} ({l.code})</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* 플랫폼 선택 (멀티 토글) */}
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-1.5">업로드 플랫폼</label>
+                              <div className="flex gap-2">
+                                {[
+                                  { id: "youtube", label: "YouTube Shorts", icon: Youtube, color: "red" },
+                                  { id: "tiktok", label: "TikTok", icon: Music, color: "pink" },
+                                  { id: "instagram", label: "Instagram Reels", icon: Instagram, color: "orange" },
+                                ].map(({ id, label, icon: Icon, color }) => {
+                                  const active = (ch.platforms || []).includes(id);
+                                  return (
+                                    <button
+                                      key={id}
+                                      onClick={() => togglePlatform(name, id)}
+                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                        active
+                                          ? `bg-${color}-500/20 text-${color}-400 border border-${color}-500/30`
+                                          : "bg-white/5 text-gray-500 border border-white/5 hover:bg-white/10"
+                                      }`}
+                                    >
+                                      <Icon className="w-3.5 h-3.5" />
+                                      {label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* 업로드 계정 연결 */}
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-1.5">플랫폼 계정 연결</label>
+                              <div className="space-y-1.5">
+                                {(ch.platforms || []).map((platform) => {
+                                  const accountId = ch.upload_accounts?.[platform];
+                                  return (
+                                    <div key={platform} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
+                                      <span className="text-xs text-gray-400 w-20 shrink-0 capitalize">{platform}</span>
+                                      <input
+                                        type="text"
+                                        value={accountId || ""}
+                                        onChange={(e) => {
+                                          const accounts = { ...(ch.upload_accounts || {}) };
+                                          accounts[platform] = e.target.value || null;
+                                          updateChannelField(name, "upload_accounts", accounts);
+                                        }}
+                                        placeholder={platform === "youtube" ? "채널 ID (UC...)" : platform === "tiktok" ? "Open ID" : "IG User ID"}
+                                        className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-[10px] text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500/50 font-mono"
+                                      />
+                                      <div className={`w-2 h-2 rounded-full ${accountId ? "bg-green-500" : "bg-gray-600"}`} />
+                                    </div>
+                                  );
+                                })}
+                                {(ch.platforms || []).length === 0 && (
+                                  <p className="text-[10px] text-gray-600 italic">플랫폼을 먼저 선택하세요</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* TTS / 자막 설정 */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] text-gray-500 block mb-1">TTS 속도</label>
+                                <input
+                                  type="range"
+                                  min={0.5}
+                                  max={1.5}
+                                  step={0.05}
+                                  value={ch.tts_speed || 0.9}
+                                  onChange={(e) => updateChannelField(name, "tts_speed", parseFloat(e.target.value))}
+                                  className="w-full accent-teal-500"
+                                />
+                                <span className="text-[10px] text-gray-500">{(ch.tts_speed || 0.9).toFixed(2)}x</span>
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 block mb-1">자막 크기</label>
+                                <input
+                                  type="range"
+                                  min={32}
+                                  max={64}
+                                  step={2}
+                                  value={ch.caption_size || 48}
+                                  onChange={(e) => updateChannelField(name, "caption_size", parseInt(e.target.value))}
+                                  className="w-full accent-teal-500"
+                                />
+                                <span className="text-[10px] text-gray-500">{ch.caption_size || 48}px</span>
+                              </div>
+                            </div>
+
+                            {/* 비주얼 스타일 / 톤 */}
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-1">비주얼 스타일</label>
+                              <input
+                                type="text"
+                                value={ch.visual_style || ""}
+                                onChange={(e) => updateChannelField(name, "visual_style", e.target.value)}
+                                placeholder="cinematic dark, dramatic lighting..."
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-teal-500/50"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-1">톤 / 분위기</label>
+                              <input
+                                type="text"
+                                value={ch.tone || ""}
+                                onChange={(e) => updateChannelField(name, "tone", e.target.value)}
+                                placeholder="궁금증 자극, 충격적 팩트..."
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-teal-500/50"
+                              />
+                            </div>
+
+                            {/* 저장 안내 */}
+                            <p className="text-[10px] text-gray-600 italic">
+                              채널 설정 변경은 다음 생성 시 자동 적용됩니다. 영구 변경은 서버의 <code className="text-gray-400">channel_config.py</code>를 수정하세요.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* YouTube / TikTok / Instagram 연동 상태 */}
+              <div className="mt-4">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">플랫폼 연동 상태</h3>
+                <PlatformStatusPanel />
+              </div>
+            </>
+          )}
         </div>
 
         {/* 모달 푸터 */}
         <div className="px-6 py-4 border-t border-white/10 flex items-center justify-between">
           <p className="text-xs text-gray-600">
-            서버 키 {totalServerKeys}개 | 브라우저 키 {totalSavedKeys}개
+            {activeTab === "channels"
+              ? `${Object.keys(channels).length}개 채널 등록됨`
+              : `서버 키 ${totalServerKeys}개 | 브라우저 키 ${totalSavedKeys}개`}
           </p>
           <button
             onClick={onClose}
@@ -247,6 +534,53 @@ export function SettingsModal({
         </div>
       </motion.div>
     </>
+  );
+}
+
+
+/* ─── 플랫폼 연동 상태 패널 ─── */
+function PlatformStatusPanel() {
+  const [ytStatus, setYtStatus] = useState<{ connected: boolean; channels?: { id: string; title: string }[] } | null>(null);
+  const [ttStatus, setTtStatus] = useState<{ connected: boolean } | null>(null);
+  const [igStatus, setIgStatus] = useState<{ connected: boolean } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [yt, tt, ig] = await Promise.all([
+          fetch(`${API_BASE}/api/youtube/status`).then((r) => r.ok ? r.json() : null).catch(() => null),
+          fetch(`${API_BASE}/api/tiktok/status`).then((r) => r.ok ? r.json() : null).catch(() => null),
+          fetch(`${API_BASE}/api/instagram/status`).then((r) => r.ok ? r.json() : null).catch(() => null),
+        ]);
+        if (yt) setYtStatus(yt);
+        if (tt) setTtStatus(tt);
+        if (ig) setIgStatus(ig);
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  const platforms = [
+    { id: "youtube", label: "YouTube Shorts", icon: Youtube, status: ytStatus, color: "red" },
+    { id: "tiktok", label: "TikTok", icon: Music, status: ttStatus, color: "pink" },
+    { id: "instagram", label: "Instagram Reels", icon: Instagram, status: igStatus, color: "orange" },
+  ];
+
+  return (
+    <div className="space-y-1.5">
+      {platforms.map(({ id, label, icon: Icon, status, color }) => (
+        <div key={id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
+          <Icon className={`w-4 h-4 text-${color}-400`} />
+          <span className="text-xs text-gray-300 flex-1">{label}</span>
+          <div className={`w-2 h-2 rounded-full ${status?.connected ? "bg-green-500" : "bg-gray-600"}`} />
+          <span className="text-[10px] text-gray-500">
+            {status === null ? "확인 중..." : status?.connected ? "연결됨" : "미연결"}
+          </span>
+        </div>
+      ))}
+      <p className="text-[10px] text-gray-600 mt-2">
+        OAuth 연동은 <code className="text-gray-400">/api/youtube/auth</code>, <code className="text-gray-400">/api/tiktok/auth</code> 엔드포인트를 통해 진행합니다.
+      </p>
+    </div>
   );
 }
 
