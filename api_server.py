@@ -1271,7 +1271,8 @@ async def render_endpoint(req: RenderRequest):
     """2단계: 수정된 스크립트로 TTS → Whisper → Remotion 렌더링."""
     _cleanup_sessions()
     with _session_lock:
-        session = _prepared_sessions.get(req.sessionId)
+        session_raw = _prepared_sessions.get(req.sessionId)
+        session = copy.deepcopy(session_raw) if session_raw else None
     if not session:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"error": "세션이 만료되었습니다. 다시 준비해주세요."})
@@ -1279,7 +1280,7 @@ async def render_endpoint(req: RenderRequest):
     async def sse_generator():
       async with _generate_semaphore:
         try:
-            cuts = copy.deepcopy(session["cuts"])
+            cuts = session["cuts"]
             topic_folder = session["topic_folder"]
             video_title = session["title"]
             image_paths = session["image_paths"]
