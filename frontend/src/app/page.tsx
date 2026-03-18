@@ -22,6 +22,13 @@ const DEFAULT_CHANNEL_PRESETS: Record<string, ChannelPreset> = {
   askanything: { language: "ko", voiceId: "cjVigY5qzO86Huf0OWal", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 },
   wonderdrop: { language: "en", voiceId: "pNInz6obpgDQGcFmaJgB", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
   exploratodo: { language: "es", voiceId: "onwK4e9ZLuTAKqWW03F9", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
+  fushigi: { language: "ja", voiceId: "pNInz6obpgDQGcFmaJgB", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 44, captionY: 28 },
+};
+// 언어코드 → 국기 매핑
+const LANG_FLAGS: Record<string, string> = {
+  ko: "🇰🇷", en: "🇺🇸", es: "🇪🇸", ja: "🇯🇵", zh: "🇨🇳", fr: "🇫🇷", de: "🇩🇪",
+  pt: "🇧🇷", it: "🇮🇹", ru: "🇷🇺", ar: "🇸🇦", hi: "🇮🇳", tr: "🇹🇷", sv: "🇸🇪",
+  da: "🇩🇰", no: "🇳🇴", nl: "🇳🇱", pl: "🇵🇱",
 };
 
 export default function Home() {
@@ -1005,7 +1012,7 @@ export default function Home() {
                 <Tv className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                 {Object.entries(channelPresets).map(([key, _p]) => {
                   const isSelected = selectedChannels.includes(key);
-                  const display = { askanything: "🇰🇷", wonderdrop: "🇺🇸", exploratodo: "🇪🇸" }[key] || "📺";
+                  const display = LANG_FLAGS[_p.language] || "📺";
                   return (
                     <button key={key} type="button" disabled={isGenerating}
                       onClick={() => {

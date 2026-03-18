@@ -79,6 +79,12 @@ CHANNEL_MASTER_STYLES: dict[str, str] = {
         "vertical 9:16 composition, "
         "family-friendly. NO TEXT, NO WATERMARKS. "
     ),
+    "fushigi": (
+        "Clean photograph, anime-inspired documentary style, "
+        "soft pastel lighting, minimalist Japanese composition, "
+        "vertical 9:16 composition, "
+        "family-friendly. NO TEXT, NO WATERMARKS. "
+    ),
 }
 
 # 기본 MASTER_STYLE (채널 미지정 시)
@@ -117,6 +123,13 @@ CHANNEL_NARRATIVE_STYLES: dict[str, dict] = {
         "hook_instruction_en": "Start with a bold, unbelievable claim. 'Did you know that...?'",
         "hook_instruction_es": "Empieza con una afirmación audaz e increíble. '¿Sabías que...?'",
         "ending_style": "call_to_action",  # 구독/좋아요 유도
+    },
+    "fushigi": {
+        "hook_type": "mystery_question",  # 미스터리 질문
+        "hook_instruction_ko": "가장 궁금증을 자극하는 미스터리를 제시하라.",
+        "hook_instruction_en": "Present a fascinating mystery that triggers curiosity.",
+        "hook_instruction_ja": "最も好奇心をそそる謎を提示せよ。答えは最後に。",
+        "ending_style": "answer_reveal",  # 마지막에 답 공개
     },
 }
 
@@ -184,6 +197,24 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tone": "energético, apasionado, como un amigo que te cuenta algo increíble",
         "caption_font_color": "#FFF8E1",
         "caption_stroke_color": "#BF360C",
+        "upload_accounts": {
+            "youtube": None,
+            "tiktok": None,
+            "instagram": None,
+        },
+    },
+    "fushigi": {
+        "language": "ja",
+        "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (일본어 대응 — multilingual_v2)
+        "tts_speed": 0.9,
+        "bgm_theme": "random",
+        "platforms": ["youtube"],
+        "caption_size": 44,
+        "caption_y": 28,
+        "visual_style": "clean anime-inspired, soft pastel lighting, minimalist Japanese aesthetic",
+        "tone": "知的好奇心を刺激する、驚きの事実を友達に話すように",
+        "caption_font_color": "#FFFFFF",
+        "caption_stroke_color": "#1A237E",
         "upload_accounts": {
             "youtube": None,
             "tiktok": None,
