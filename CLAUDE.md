@@ -11,7 +11,7 @@ Pipeline: Gemini/GPT planning → Imagen/DALL-E images → Veo3/Kling video → 
 - **Language**: Korean (UI/prompts), English (code/comments)
 
 ## Key Paths
-- `api_server.py` - FastAPI main server (port 8003)
+- `api_server.py` - FastAPI main server (port 8004)
 - `modules/` - Core pipeline (gpt/, image/, video/, tts/, transcription/, utils/)
 - `frontend/` - Next.js web UI (port 3000)
 - `remotion/` - React video renderer

@@ -2146,7 +2146,10 @@ async def _generate_multichannel(base_req: GenerateRequest, channels: list[str])
 
                     for ci, cut in enumerate(cuts):
                         try:
-                            img_key = ch_req.geminiKeys if image_engine == "imagen" else ch_req.apiKey
+                            if image_engine == "imagen":
+                                img_key = get_google_key(ch_req.apiKey, service="imagen", extra_keys=ch_req.geminiKeys)
+                            else:
+                                img_key = ch_req.apiKey
                             img_path = await asyncio.get_running_loop().run_in_executor(
                                 _cut_executor, lambda _ci=ci, _c=cut, _k=img_key: gen_img(
                                     _c["prompt"], _ci, topic_folder, _k, channel=ch_name
