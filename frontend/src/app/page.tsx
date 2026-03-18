@@ -474,7 +474,7 @@ export default function Home() {
           channel: ch,
           platforms: preset.platforms,
           ttsSpeed: preset.ttsSpeed,
-          voiceId,
+          voiceId: "auto",
           captionSize: preset.captionSize,
           captionY: preset.captionY,
           referenceUrl: detectedRefUrl,
@@ -983,7 +983,8 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
                   <Globe className="w-3.5 h-3.5 text-blue-400" />
-                  <select value={language} onChange={(e) => setLanguage(e.target.value)} disabled={isGenerating} aria-label="언어 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
+                  <select value={selectedChannels.length >= 2 ? "auto" : language} onChange={(e) => setLanguage(e.target.value)} disabled={isGenerating || selectedChannels.length >= 2} aria-label="언어 선택" className={`bg-transparent text-xs focus:outline-none appearance-none pr-3 ${selectedChannels.length >= 2 ? "text-gray-500 cursor-not-allowed" : "text-gray-200 cursor-pointer"}`}>
+                    {selectedChannels.length >= 2 && <option value="auto" className="bg-gray-900">Auto (채널별)</option>}
                     <option value="ko" className="bg-gray-900">한국어</option>
                     <option value="en" className="bg-gray-900">English</option>
                     <option value="ja" className="bg-gray-900">日本語</option>
@@ -1046,16 +1047,25 @@ export default function Home() {
                       type="button"
                       disabled={isGenerating}
                       onClick={() => {
-                        setSelectedChannels(prev =>
-                          prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-                        );
-                        if (!isSelected) {
-                          setChannel(key);
-                          setLanguage(preset.language);
-                          setTtsSpeed(preset.ttsSpeed);
-                          setPlatforms(preset.platforms);
-                          setCaptionSize(preset.captionSize);
-                          setCaptionY(preset.captionY);
+                        const newSelected = isSelected
+                          ? selectedChannels.filter(k => k !== key)
+                          : [...selectedChannels, key];
+                        setSelectedChannels(newSelected);
+                        // 1개 선택: 채널 설정으로 UI 값 변경 (사용자가 오버라이드 가능)
+                        // 2개+: 잠금되므로 UI 값 변경 불필요 (각 채널 설정 자동 적용)
+                        if (newSelected.length === 1) {
+                          const ch = CHANNEL_PRESETS[newSelected[0]];
+                          if (ch) {
+                            setChannel(newSelected[0]);
+                            setLanguage(ch.language);
+                            setTtsSpeed(ch.ttsSpeed);
+                            setPlatforms(ch.platforms);
+                            setCaptionSize(ch.captionSize);
+                            setCaptionY(ch.captionY);
+                            setVoiceId("auto");
+                          }
+                        } else if (newSelected.length === 0) {
+                          setChannel("");
                         }
                       }}
                       className={`flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs transition-colors ${
@@ -1156,7 +1166,7 @@ export default function Home() {
                     <Mic className="w-3.5 h-3.5 text-pink-400" />
                     <span className="text-[10px] font-medium text-gray-400">음성</span>
                   </div>
-                  <select value={voiceId} onChange={(e) => setVoiceId(e.target.value)} disabled={isGenerating} aria-label="음성 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-pink-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                  <select value={selectedChannels.length >= 2 ? "auto" : voiceId} onChange={(e) => setVoiceId(e.target.value)} disabled={isGenerating || selectedChannels.length >= 2} aria-label="음성 선택" className={`w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none appearance-none transition-colors ${selectedChannels.length >= 2 ? "text-gray-500 cursor-not-allowed opacity-50" : "text-gray-200 cursor-pointer hover:bg-white/10 focus:border-pink-500/50"}`}>
                     <option value="auto" className="bg-gray-900">자동</option>
                     <option value="cjVigY5qzO86Huf0OWal" className="bg-gray-900">Eric (차분)</option>
                     <option value="pNInz6obpgDQGcFmaJgB" className="bg-gray-900">Adam (권위)</option>
@@ -1185,7 +1195,7 @@ export default function Home() {
                     </div>
                     <span className="text-[10px] text-indigo-400/70 tabular-nums">{ttsSpeed}x</span>
                   </div>
-                  <input type="range" min="0.7" max="1.2" step="0.05" value={ttsSpeed} onChange={(e) => setTtsSpeed(parseFloat(e.target.value))} disabled={isGenerating} className="w-full h-1 accent-indigo-500 cursor-pointer" />
+                  <input type="range" min="0.7" max="1.2" step="0.05" value={ttsSpeed} onChange={(e) => setTtsSpeed(parseFloat(e.target.value))} disabled={isGenerating || selectedChannels.length >= 2} className={`w-full h-1 accent-indigo-500 ${selectedChannels.length >= 2 ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`} />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
@@ -1195,7 +1205,7 @@ export default function Home() {
                     </div>
                     <span className="text-[10px] text-indigo-400/70 tabular-nums">{captionSize}px</span>
                   </div>
-                  <input type="range" min="32" max="72" step="4" value={captionSize} onChange={(e) => setCaptionSize(parseInt(e.target.value))} disabled={isGenerating} className="w-full h-1 accent-indigo-500 cursor-pointer" />
+                  <input type="range" min="32" max="72" step="4" value={captionSize} onChange={(e) => setCaptionSize(parseInt(e.target.value))} disabled={isGenerating || selectedChannels.length >= 2} className={`w-full h-1 accent-indigo-500 ${selectedChannels.length >= 2 ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`} />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
@@ -1205,7 +1215,7 @@ export default function Home() {
                     </div>
                     <span className="text-[10px] text-indigo-400/70 tabular-nums">{captionY}%</span>
                   </div>
-                  <input type="range" min="10" max="50" step="2" value={captionY} onChange={(e) => setCaptionY(parseInt(e.target.value))} disabled={isGenerating} className="w-full h-1 accent-indigo-500 cursor-pointer" />
+                  <input type="range" min="10" max="50" step="2" value={captionY} onChange={(e) => setCaptionY(parseInt(e.target.value))} disabled={isGenerating || selectedChannels.length >= 2} className={`w-full h-1 accent-indigo-500 ${selectedChannels.length >= 2 ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`} />
                 </div>
               </div>
             </div>
