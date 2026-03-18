@@ -522,6 +522,14 @@ export function SettingsModal({
                               />
                             </div>
 
+                            {/* 이 채널의 플랫폼 연동 상태 */}
+                            {(ch.platforms || []).length > 0 && (
+                              <div className="mt-1">
+                                <label className="text-[10px] text-gray-500 block mb-1.5">연동 상태</label>
+                                <PlatformStatusPanel filterPlatforms={ch.platforms} />
+                              </div>
+                            )}
+
                             {/* 저장 안내 */}
                             <p className="text-[10px] text-gray-600 italic">
                               채널 설정 변경은 다음 생성 시 자동 적용됩니다. 영구 변경은 서버의 <code className="text-gray-400">channel_config.py</code>를 수정하세요.
@@ -533,12 +541,6 @@ export function SettingsModal({
                   })}
                 </div>
               )}
-
-              {/* YouTube / TikTok / Instagram 연동 상태 */}
-              <div className="mt-4">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">플랫폼 연동 상태</h3>
-                <PlatformStatusPanel />
-              </div>
             </>
           )}
         </div>
@@ -564,7 +566,7 @@ export function SettingsModal({
 
 
 /* ─── 플랫폼 연동 상태 패널 ─── */
-function PlatformStatusPanel() {
+function PlatformStatusPanel({ filterPlatforms }: { filterPlatforms?: string[] }) {
   const [ytStatus, setYtStatus] = useState<{ connected: boolean; channels?: { id: string; title: string }[] } | null>(null);
   const [ttStatus, setTtStatus] = useState<{ connected: boolean } | null>(null);
   const [igStatus, setIgStatus] = useState<{ connected: boolean } | null>(null);
@@ -584,11 +586,13 @@ function PlatformStatusPanel() {
     })();
   }, []);
 
-  const platforms = [
+  const allPlatforms = [
     { id: "youtube", label: "YouTube Shorts", icon: Youtube, status: ytStatus, color: "red" },
     { id: "tiktok", label: "TikTok", icon: Music, status: ttStatus, color: "pink" },
     { id: "instagram", label: "Instagram Reels", icon: Instagram, status: igStatus, color: "orange" },
   ];
+
+  const platforms = filterPlatforms ? allPlatforms.filter(p => filterPlatforms.includes(p.id)) : allPlatforms;
 
   return (
     <div className="space-y-1.5">
@@ -602,9 +606,6 @@ function PlatformStatusPanel() {
           </span>
         </div>
       ))}
-      <p className="text-[10px] text-gray-600 mt-2">
-        OAuth 연동은 <code className="text-gray-400">/api/youtube/auth</code>, <code className="text-gray-400">/api/tiktok/auth</code> 엔드포인트를 통해 진행합니다.
-      </p>
     </div>
   );
 }
