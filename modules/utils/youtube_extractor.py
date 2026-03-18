@@ -177,7 +177,7 @@ def extract_youtube_reference(url: str, api_key: str | None = None) -> dict:
         }
     """
     video_id = _parse_video_id(url)
-    if not video_id:
+    if not video_id or not re.fullmatch(r'[a-zA-Z0-9_-]{11}', video_id):
         print(f"[YouTube 분석] 유효한 YouTube URL이 아닙니다: {url}")
         return {}
 
