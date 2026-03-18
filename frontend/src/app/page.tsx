@@ -1023,31 +1023,29 @@ export default function Home() {
                   <option value="tr" className="bg-gray-900">Türkçe</option>
                 </select>
               </div>
-              {/* 멀티채널 선택 (스크롤 가능 칩) */}
-              <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full px-2.5 py-1.5 overflow-x-auto scrollbar-hide">
+              {/* 멀티채널 선택 */}
+              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
                 <Tv className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                <div className="flex items-center gap-1 shrink-0">
-                  {Object.entries(channelPresets).map(([key, _p]) => {
-                    const isSelected = selectedChannels.includes(key);
-                    const flag = LANG_FLAGS[_p.language] || "📺";
-                    return (
-                      <button key={key} type="button" disabled={isGenerating}
-                        onClick={() => {
-                          const next = isSelected ? selectedChannels.filter(c => c !== key) : [...selectedChannels, key];
-                          setSelectedChannels(next);
-                          if (next.length === 1) { applyChannelPreset(next[0]); }
-                          else if (next.length === 0) { setChannel(""); }
-                        }}
-                        className={`shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium transition-all ${isSelected ? "bg-purple-500/30 text-purple-200 border border-purple-500/50" : "bg-white/5 text-gray-500 border border-transparent hover:bg-white/10"}`}
-                        title={key}
-                      >
-                        {flag}{key.slice(0, 2).toUpperCase()}
-                      </button>
-                    );
-                  })}
-                </div>
+                {Object.entries(channelPresets).map(([key, _p]) => {
+                  const isSelected = selectedChannels.includes(key);
+                  const flag = LANG_FLAGS[_p.language] || "📺";
+                  return (
+                    <button key={key} type="button" disabled={isGenerating}
+                      onClick={() => {
+                        const next = isSelected ? selectedChannels.filter(c => c !== key) : [...selectedChannels, key];
+                        setSelectedChannels(next);
+                        if (next.length === 1) { applyChannelPreset(next[0]); }
+                        else if (next.length === 0) { setChannel(""); }
+                      }}
+                      className={`px-2 py-0.5 rounded-full text-xs font-medium transition-all ${isSelected ? "bg-purple-500/30 text-purple-200 border border-purple-500/50" : "bg-white/5 text-gray-500 border border-transparent hover:bg-white/10"}`}
+                      title={key}
+                    >
+                      {flag} {key.slice(0, 3).toUpperCase()}
+                    </button>
+                  );
+                })}
                 {selectedChannels.length >= 1 && (
-                  <span className="shrink-0 text-[9px] text-purple-400 ml-0.5">{selectedChannels.length}</span>
+                  <span className="text-[10px] text-purple-400 font-medium">{selectedChannels.length}개</span>
                 )}
               </div>
             </div>
