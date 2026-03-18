@@ -160,7 +160,7 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
             model=model_name,
             config=types.CreateCachedContentConfig(
                 system_instruction=system_prompt,
-                ttl="600s",
+                ttl="3600s",
             ),
         )
         _gemini_cache[cache_key] = cached.name
@@ -196,7 +196,7 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str, model_o
     import anthropic
     model_name = model_override or os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
     client = anthropic.Anthropic(api_key=api_key, timeout=120)
-    json_instruction = "\n\n[CRITICAL] 반드시 순수 JSON만 출력하세요. 마크다운 코드블록이나 설명 텍스트 없이 JSON 객체만 반환하십시오."
+    json_instruction = "\n\n[CRITICAL JSON OUTPUT] You MUST output ONLY valid JSON. No markdown code blocks, no explanation text. Return a raw JSON object only."
     response = client.messages.create(
         model=model_name,
         max_tokens=4096,
@@ -439,9 +439,8 @@ The narrator will speak in {lang_name}, so the script must be natural {lang_name
 All "image_prompt" fields MUST follow this visual style: {visual_style}
 This is the channel's signature look — every image should feel cohesive with this aesthetic.
 """
-            if tone and lang != "ko" and lang != "en":
-                # 기타 언어용: 톤도 주입
-                system_prompt += f"\nNarrator tone: {tone}\n"
+            if tone:
+                system_prompt += f"\n[NARRATOR TONE] {tone}\n"
 
     # LLM 프로바이더별 API 키 결정
     provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")

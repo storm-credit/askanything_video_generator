@@ -20,11 +20,11 @@ def get_motion_style(prompt: str, description: str = "") -> str:
     감정 태그([SHOCK] 등)는 description에 포함됨. prompt도 폴백으로 검색.
     """
     tag_styles = {
-        "[SHOCK]": "fast dynamic camera movement, sudden dramatic angles",
-        "[WONDER]": "slow graceful panning, gentle reveal shots",
-        "[TENSION]": "slow creeping approach, tightening frame",
-        "[CALM]": "very slow or static camera, peaceful ambient motion",
-        "[REVEAL]": "sudden camera shift, dramatic angle change",
+        "[SHOCK]": "fast aggressive zoom-in, sudden dramatic camera angles, high-energy dynamic movement",
+        "[WONDER]": "slow graceful 360-degree panning, gentle reveal through deep focus, dreamlike smooth tracking",
+        "[TENSION]": "slow creeping approach, tightening frame, close focus on details, building pressure",
+        "[CALM]": "very slow static wide shot, minimal subtle motion, peaceful ambient lighting",
+        "[REVEAL]": "sudden camera shift to new perspective, dramatic 90-degree angle change, dynamic reframing",
     }
     search_text = f"{description} {prompt}"
     for tag, style in tag_styles.items():

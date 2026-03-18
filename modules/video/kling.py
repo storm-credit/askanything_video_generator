@@ -59,7 +59,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     payload = {
         "model": "kling-v1",
         "image": img_b64,
-        "prompt": f"{get_motion_style(prompt, description)}, 4K quality. {prompt}",
+        "prompt": f"{get_motion_style(prompt, description)}, 4K cinematic quality. {prompt}",
         "duration": "5"
     }
     

@@ -93,7 +93,7 @@ def generate_video_veo(
             try:
                 operation = client.models.generate_videos(
                     model=model_id,
-                    prompt=f"{get_motion_style(prompt, description)}, 4K quality. {prompt}",
+                    prompt=f"{get_motion_style(prompt, description)}, 4K cinematic quality. {prompt}",
                     image=types.Image(image_bytes=img_bytes, mime_type=mime_type),
                     config=types.GenerateVideosConfig(
                         numberOfVideos=1,

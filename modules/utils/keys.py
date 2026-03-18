@@ -26,7 +26,16 @@ _key_usage: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
 # ── 서비스별 429 차단: { api_key: { service: blocked_timestamp } } ──
 _blocked_keys: dict[str, dict[str, float]] = defaultdict(dict)
-_BLOCK_DURATION = 24 * 60 * 60  # 24시간
+_BLOCK_DURATION_DEFAULT = 2 * 60 * 60  # 2시간 (기본)
+_BLOCK_DURATION_BY_SERVICE = {
+    "veo3": 2 * 60 * 60,        # Veo3: 2시간
+    "veo3:standard": 2 * 60 * 60,
+    "veo3:fast": 2 * 60 * 60,
+    "imagen": 60 * 60,           # Imagen: 1시간
+    "imagen:standard": 60 * 60,
+    "imagen:fast": 60 * 60,
+    "gemini": 30 * 60,           # Gemini: 30분
+}
 
 # ── 경고 임계값 (하루 기준) ──
 _WARN_THRESHOLD = {
@@ -53,7 +62,8 @@ def _is_key_blocked(key: str, service: str = None) -> bool:
         blocked_at = _blocked_keys[key].get(service)
         if blocked_at is None:
             return False
-        if time.time() - blocked_at >= _BLOCK_DURATION:
+        block_dur = _BLOCK_DURATION_BY_SERVICE.get(service, _BLOCK_DURATION_DEFAULT)
+        if time.time() - blocked_at >= block_dur:
             del _blocked_keys[key][service]
             if not _blocked_keys[key]:
                 del _blocked_keys[key]
@@ -207,7 +217,7 @@ def get_key_usage_stats() -> list[dict]:
             blocked_services = {}
             if key in _blocked_keys:
                 for svc, blocked_at in list(_blocked_keys[key].items()):
-                    remaining = _BLOCK_DURATION - (time.time() - blocked_at)
+                    remaining = _BLOCK_DURATION_BY_SERVICE.get(svc, _BLOCK_DURATION_DEFAULT) - (time.time() - blocked_at)
                     if remaining > 0:
                         blocked_services[svc] = round(remaining / 3600, 1)
                     else:
