@@ -8,6 +8,24 @@ import requests
 
 MAX_RETRIES = 3
 
+# 감정 태그 → TTS 스타일/속도/안정성 매핑 (EmoSteer-TTS arXiv 2025 + ElevenLabs 베스트 프랙티스 기반)
+_EMOTION_STYLE = {
+    "SHOCK":   {"style": 0.7, "speed_boost": 0.05, "stability": 0.3, "similarity": 0.70},
+    "REVEAL":  {"style": 0.6, "speed_boost": 0.03, "stability": 0.35, "similarity": 0.72},
+    "TENSION": {"style": 0.4, "speed_boost": -0.05, "stability": 0.40, "similarity": 0.75},
+    "WONDER":  {"style": 0.3, "speed_boost": -0.02, "stability": 0.45, "similarity": 0.78},
+    "CALM":    {"style": 0.1, "speed_boost": -0.05, "stability": 0.70, "similarity": 0.80},
+}
+
+# 감정 오디오 태그 — ElevenLabs v3 Audio Tags 기반
+_EMOTION_DIRECTION = {
+    "SHOCK": "[gasps] [excited] ",
+    "REVEAL": "[dramatic pause] ",
+    "TENSION": "[whispers] ",
+    "WONDER": "[amazed] ",
+    "CALM": "[softly] ",
+}
+
 
 def _backoff_delay(attempt: int) -> float:
     """지수 백오프 + 지터 (AWS Architecture Blog: Exponential Backoff And Jitter)"""
@@ -78,26 +96,6 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         "Accept": "audio/mpeg",
         "Content-Type": "application/json",
         "xi-api-key": api_key
-    }
-
-    # 감정 태그 → TTS 스타일/속도/안정성 매핑 (EmoSteer-TTS arXiv 2025 + ElevenLabs 베스트 프랙티스 기반)
-    # stability: 낮을수록 감정 폭 넓음, 높을수록 안정적 (ElevenLabs docs)
-    _EMOTION_STYLE = {
-        "SHOCK":   {"style": 0.7, "speed_boost": 0.05, "stability": 0.3, "similarity": 0.70},
-        "REVEAL":  {"style": 0.6, "speed_boost": 0.03, "stability": 0.35, "similarity": 0.72},
-        "TENSION": {"style": 0.4, "speed_boost": -0.05, "stability": 0.40, "similarity": 0.75},
-        "WONDER":  {"style": 0.3, "speed_boost": -0.02, "stability": 0.45, "similarity": 0.78},
-        "CALM":    {"style": 0.1, "speed_boost": -0.05, "stability": 0.70, "similarity": 0.80},
-    }
-
-    # 감정 오디오 태그 — ElevenLabs v3 Audio Tags 기반 (v2에서도 부분 호환)
-    # 참고: https://elevenlabs.io/blog/eleven-v3-audio-tags-expressing-emotional-context-in-speech
-    _EMOTION_DIRECTION = {
-        "SHOCK": "[gasps] [excited] ",
-        "REVEAL": "[dramatic pause] ",
-        "TENSION": "[whispers] ",
-        "WONDER": "[amazed] ",
-        "CALM": "[softly] ",
     }
 
     # speed: 0.7(느리게) ~ 1.0(기본) ~ 1.2(빠르게), 숏폼은 0.85~0.9 권장
