@@ -2057,8 +2057,9 @@ class BatchJobRequest(BaseModel):
     @field_validator("videoEngine")
     @classmethod
     def valid_engine(cls, v: str) -> str:
-        if v not in {"kling", "sora2", "veo3", "none"}:
-            raise ValueError(f"지원하지 않는 비디오 엔진: {v}")
+        allowed = {"veo3", "hailuo", "kling", "sora2", "runway", "none"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
         return v
 
     @field_validator("imageEngine")
