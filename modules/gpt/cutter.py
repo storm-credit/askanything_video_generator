@@ -224,7 +224,7 @@ def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content:
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
                   channel: str | None = None, llm_model: str | None = None,
-                  reference_url: str | None = None) -> tuple[list[dict[str, Any]], str, str]:
+                  reference_url: str | None = None) -> tuple[list[dict[str, Any]], str, str, list[str]]:
     topic_folder = slugify_topic(topic, lang)
 
     # 저장 폴더 구조 생성
@@ -506,19 +506,16 @@ This is the channel's signature look — every image should feel cohesive with t
     # 429 자동 키 전환: 실패한 키를 차단하고 다른 키로 재시도
     exhausted_keys: set[str] = set()
     current_key = final_api_key
-    cuts: list[dict[str, str]] = []
+    cuts: list[dict[str, Any]] = []
     title: str = ""
     tags: list[str] = ["#Shorts"]
+    last_error: Exception | None = None
 
     if llm_provider == "gemini":
         from modules.utils.keys import get_google_key, mark_key_exhausted, mask_key
-        max_key_attempts = 10  # 최대 키 전환 횟수
+        max_key_attempts = 10
     else:
-        max_key_attempts = 3  # OpenAI/Claude도 429 시 최대 3회 재시도 (백오프)
-
-    cuts: list[dict[str, Any]] = []
-    title: str = ""
-    last_error: Exception | None = None
+        max_key_attempts = 3
     for attempt in range(max_key_attempts):
         try:
             cuts, title, tags = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
