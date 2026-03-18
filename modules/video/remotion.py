@@ -19,8 +19,10 @@ OUTRO_DURATION_FRAMES = 30         # 1초 @ 30fps
 CHANNELS_DIR = os.path.join(BRAND_DIR, "channels")
 
 
-def _to_relative(p: str) -> str:
+def _to_relative(p: str | None) -> str:
     """assets/ 기준 상대 경로 변환 (staticFile()용 - publicDir=assets/)"""
+    if not p:
+        return ""
     normed = p.replace("\\", "/")
     idx = normed.find("assets/")
     return normed[idx + len("assets/"):] if idx >= 0 else normed
