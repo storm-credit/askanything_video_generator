@@ -354,10 +354,14 @@ export default function Home() {
           setGeneratedVideoPath(videoPath);
           setGeneratedVideoUrl(downloadUrl);
 
-          setSuccessMessage("비디오 생성 성공!");
+          setSuccessMessage(channel ? "비디오 생성 + 업로드 완료!" : "비디오 생성 성공!");
           setIsGenerating(false);
-          // YouTube 상태 확인
           checkPlatformStatus();
+        } else if (rawData.startsWith("UPLOAD_DONE|")) {
+          const uploadParts = rawData.slice(12).split("|");
+          const platform = uploadParts[0];
+          const info = uploadParts.slice(1).join("|");
+          setLogs(prev => [...prev.slice(-99), `✅ ${platform.toUpperCase()} 업로드 완료 ${info}`]);
         } else if (rawData.startsWith("ERROR|")) {
           const errMsg = rawData.slice(6);
           setLogs(prev => [...prev.slice(-99), `ERROR:${errMsg}`]);
@@ -510,6 +514,11 @@ export default function Home() {
       const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
       const downloadUrl = `${API_BASE}${normalizedPath}`;
       setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'done', progress: 100, videoUrl: downloadUrl } }));
+    } else if (rawData.startsWith("UPLOAD_DONE|")) {
+      const uploadParts = rawData.slice(12).split("|");
+      const platform = uploadParts[0];
+      const info = uploadParts.slice(1).join("|");
+      setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], logs: [...(prev[ch]?.logs || []).slice(-49), `✅ ${platform.toUpperCase()} 업로드 완료 ${info}`] } }));
     } else if (rawData.startsWith("ERROR|")) {
       setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: rawData.slice(6), logs: [...(prev[ch]?.logs || []).slice(-49), rawData.slice(6)] } }));
     } else if (rawData.startsWith("PROG|")) {

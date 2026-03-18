@@ -845,6 +845,93 @@ async def generate_video_endpoint(req: GenerateRequest):
             thumb_relative = ""
             if thumbnail_path and os.path.exists(thumbnail_path):
                 thumb_relative = f"/assets/{topic_folder}/video/thumbnail.jpg"
+
+            # ── 자동 업로드: 채널 선택 시 publishMode에 따라 플랫폼 업로드 ──
+            if req.channel and req.publishMode != "local":
+                from modules.utils.channel_config import get_channel_preset, get_upload_account
+                upload_preset = get_channel_preset(req.channel)
+                upload_platforms = upload_preset.get("platforms", []) if upload_preset else []
+                abs_video_path = os.path.abspath(video_path)
+
+                # publishMode → privacy 매핑
+                if req.publishMode == "realtime":
+                    yt_privacy = "public"
+                    tt_privacy = "PUBLIC_TO_EVERYONE"
+                elif req.publishMode == "private":
+                    yt_privacy = "private"
+                    tt_privacy = "SELF_ONLY"
+                elif req.publishMode == "scheduled":
+                    yt_privacy = "private"  # 예약은 private + publishAt
+                    tt_privacy = "SELF_ONLY"
+                else:
+                    yt_privacy = "private"
+                    tt_privacy = "SELF_ONLY"
+
+                # 예약 시간 파싱
+                yt_publish_at = None
+                tt_schedule_time = None
+                if req.publishMode == "scheduled" and req.scheduledTime:
+                    from datetime import datetime, timezone
+                    try:
+                        sched_dt = datetime.fromisoformat(req.scheduledTime)
+                        if sched_dt.tzinfo is None:
+                            sched_dt = sched_dt.replace(tzinfo=timezone.utc)
+                        yt_publish_at = sched_dt.isoformat()
+                        tt_schedule_time = int(sched_dt.timestamp())
+                    except ValueError:
+                        yield {"data": f"WARN|예약 시간 형식 오류: {req.scheduledTime}\n"}
+
+                upload_results = []
+                for plat in upload_platforms:
+                    account_id = get_upload_account(req.channel, plat)
+                    try:
+                        if plat == "youtube":
+                            from modules.upload.youtube import upload_video as yt_upload
+                            yield {"data": f"[업로드] YouTube 자동 업로드 시작... ({yt_privacy})\n"}
+                            yt_result = await asyncio.get_running_loop().run_in_executor(
+                                _cut_executor,
+                                lambda: yt_upload(
+                                    video_path=abs_video_path,
+                                    title=title,
+                                    description=f"#{req.channel}",
+                                    tags=[req.channel, language],
+                                    privacy=yt_privacy,
+                                    channel_id=account_id,
+                                    publish_at=yt_publish_at,
+                                )
+                            )
+                            if yt_result.get("success"):
+                                url = yt_result.get("url", "")
+                                sched_info = f" (예약: {yt_publish_at})" if yt_publish_at else ""
+                                yield {"data": f"UPLOAD_DONE|youtube|{url}{sched_info}\n"}
+                                upload_results.append({"platform": "youtube", "url": url})
+                            else:
+                                yield {"data": f"WARN|YouTube 업로드 실패: {yt_result.get('error', 'unknown')}\n"}
+                        elif plat == "tiktok":
+                            from modules.upload.tiktok import upload_video as tt_upload
+                            yield {"data": f"[업로드] TikTok 자동 업로드 시작... ({tt_privacy})\n"}
+                            tt_result = await asyncio.get_running_loop().run_in_executor(
+                                _cut_executor,
+                                lambda: tt_upload(
+                                    video_path=abs_video_path,
+                                    title=title[:150],
+                                    privacy_level=tt_privacy,
+                                    user_id=account_id,
+                                    schedule_time=tt_schedule_time,
+                                )
+                            )
+                            if tt_result.get("success"):
+                                sched_info = f" (예약: {tt_schedule_time})" if tt_schedule_time else ""
+                                yield {"data": f"UPLOAD_DONE|tiktok|{sched_info}\n"}
+                                upload_results.append({"platform": "tiktok"})
+                            else:
+                                yield {"data": f"WARN|TikTok 업로드 실패\n"}
+                    except PermissionError:
+                        yield {"data": f"WARN|{plat.upper()} 인증 필요 — 설정에서 계정을 연동해주세요\n"}
+                    except Exception as upload_err:
+                        safe_err = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(upload_err)[:150])
+                        yield {"data": f"WARN|{plat.upper()} 업로드 실패: {safe_err}\n"}
+
             yield {"data": f"DONE|{relative_video_path}|{thumb_relative}\n"}
 
           except Exception as e:
