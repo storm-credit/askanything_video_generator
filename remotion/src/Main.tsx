@@ -434,6 +434,7 @@ export const Main: React.FC<{
         const startFrame = startFrames[index];
 
         // staticFile()로 public dir (assets/) 기준 상대 경로 로드
+        if (!cut.visual_path || !cut.audio_path) return null;
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
         const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
         const isVideo = isVideoPath(visualSrc);
