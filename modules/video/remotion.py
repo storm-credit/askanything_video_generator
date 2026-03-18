@@ -103,7 +103,7 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
 
     cmd = [
         "npx", "remotion", "render", "src/index.ts", "Main",
-        abs_video_path, "--props", abs_props_path, "--public-dir", assets_dir,
+        abs_video_path, "--props", abs_props_path,
         "--concurrency", str(concurrency),
     ]
 
@@ -263,6 +263,16 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         return None
 
     assets_dir = os.path.abspath("assets")
+
+    # Remotion staticFile()은 remotion/public/ 기준 — 해당 topic 에셋만 복사
+    public_dir = os.path.join(remotion_dir, "public")
+    public_topic_dir = os.path.join(public_dir, topic_folder)
+    if not os.path.exists(public_topic_dir):
+        src_topic_dir = os.path.join(assets_dir, topic_folder)
+        if os.path.exists(src_topic_dir):
+            shutil.copytree(src_topic_dir, public_topic_dir, dirs_exist_ok=True)
+            print(f"[Remotion] assets/{topic_folder} → public/{topic_folder} 복사 완료")
+
     camera = camera_style if camera_style in ("auto", "dynamic", "gentle", "static") else "dynamic"
 
     # 플랫폼 결정: 기본 youtube만
