@@ -950,7 +950,8 @@ export default function Home() {
             )}
           </AnimatePresence>
 
-          {/* 실시간 / 예약 + 공개 설정 */}
+          {/* 실시간 / 예약 + 공개 설정 — OAuth 연동 시에만 표시 */}
+          {(ytConnected || ttConnected || igConnected) && (
           <div className="w-full max-w-2xl mx-auto flex items-center justify-center gap-2 flex-wrap">
             <div className="flex bg-white/5 border border-white/10 rounded-full p-0.5">
               <button type="button" onClick={() => setScheduleMode("realtime")}
@@ -986,6 +987,7 @@ export default function Home() {
               </button>
             </div>
           </div>
+          )}
 
           {/* 컨트롤 패널 */}
           <div className="w-full max-w-2xl mx-auto space-y-3">
@@ -1024,7 +1026,7 @@ export default function Home() {
                 </select>
               </div>
               {/* 멀티채널 선택 (스크롤 가능 칩) */}
-              <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full px-2.5 py-1.5 max-w-[260px] overflow-x-auto scrollbar-hide">
+              <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full px-2.5 py-1.5 overflow-x-auto scrollbar-hide">
                 <Tv className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                 <div className="flex items-center gap-1 shrink-0">
                   {Object.entries(channelPresets).map(([key, _p]) => {
