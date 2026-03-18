@@ -16,35 +16,41 @@ _lock = threading.Lock()
 _db_initialized = False
 
 
+_init_lock = threading.Lock()
+
+
 def _init_db():
     global _db_initialized
     if _db_initialized:
         return
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS batch_jobs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            topic TEXT NOT NULL,
-            language TEXT DEFAULT 'ko',
-            camera_style TEXT DEFAULT 'auto',
-            bgm_theme TEXT DEFAULT 'random',
-            llm_provider TEXT DEFAULT 'gemini',
-            video_engine TEXT DEFAULT 'veo3',
-            image_engine TEXT DEFAULT 'imagen',
-            channel TEXT,
-            status TEXT DEFAULT 'pending',
-            video_path TEXT,
-            error TEXT,
-            created_at TEXT NOT NULL,
-            started_at TEXT,
-            completed_at TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-    _db_initialized = True
+    with _init_lock:
+        if _db_initialized:  # double-checked locking
+            return
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS batch_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic TEXT NOT NULL,
+                language TEXT DEFAULT 'ko',
+                camera_style TEXT DEFAULT 'auto',
+                bgm_theme TEXT DEFAULT 'random',
+                llm_provider TEXT DEFAULT 'gemini',
+                video_engine TEXT DEFAULT 'veo3',
+                image_engine TEXT DEFAULT 'imagen',
+                channel TEXT,
+                status TEXT DEFAULT 'pending',
+                video_path TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+        _db_initialized = True
 
 
 def _get_conn() -> sqlite3.Connection:
