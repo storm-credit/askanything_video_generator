@@ -3,6 +3,7 @@ import re
 import json
 import shutil
 import subprocess
+import tempfile
 from datetime import datetime
 
 # 브랜드 이미지 (brand/ → assets/로 자동 복사하여 Remotion에서 접근)
@@ -17,13 +18,6 @@ OUTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
 # brand/channels/askanything/intro.png, outro.jpg
 # brand/channels/wonderdrop/intro.png, outro.jpg
 CHANNELS_DIR = os.path.join(BRAND_DIR, "channels")
-
-
-def _to_relative(p: str) -> str:
-    """assets/ 기준 상대 경로 변환 (staticFile()용 - publicDir=assets/)"""
-    normed = p.replace("\\", "/")
-    idx = normed.find("assets/")
-    return normed[idx + len("assets/"):] if idx >= 0 else normed
 
 
 def _resolve_brand_asset(asset_name: str, channel: str | None = None) -> str | None:
@@ -88,7 +82,51 @@ def _select_bgm(bgm_theme: str = "random") -> str | None:
     return single_bgm if os.path.exists(single_bgm) else None
 
 
-def _render_single(props_data: dict, props_json_path: str, video_path: str, remotion_dir: str, assets_dir: str, label: str = "") -> str | None:
+def _prepare_public_dir(
+    visual_paths: list[str],
+    audio_paths: list[str],
+    intro_src: str | None,
+    outro_src: str | None,
+    bgm_src: str | None,
+) -> tuple[str, dict[str, str]]:
+    """렌더에 필요한 파일만 ASCII 이름으로 복사한 최소 public dir 생성.
+
+    Returns:
+        (pub_dir, path_map) — path_map: 원본 절대경로 → pub_dir 내 상대 경로
+    """
+    pub_dir = tempfile.mkdtemp(prefix="remotion_pub_")
+    path_map: dict[str, str] = {}
+
+    def _link(src: str, rel_name: str) -> str:
+        dst = os.path.join(pub_dir, rel_name)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        abs_src = os.path.abspath(src)
+        try:
+            os.link(abs_src, dst)  # 하드링크 (같은 파일시스템이면 즉시)
+        except OSError:
+            shutil.copy2(abs_src, dst)  # 다른 파일시스템이면 복사
+        path_map[abs_src] = rel_name
+        return rel_name
+
+    for i, (v, a) in enumerate(zip(visual_paths, audio_paths)):
+        ext_v = os.path.splitext(v)[1]
+        ext_a = os.path.splitext(a)[1]
+        _link(v, f"v{i:02d}{ext_v}")
+        _link(a, f"a{i:02d}{ext_a}")
+
+    if intro_src:
+        _link(intro_src, "intro" + os.path.splitext(intro_src)[1])
+
+    if outro_src:
+        _link(outro_src, "outro" + os.path.splitext(outro_src)[1])
+
+    if bgm_src:
+        _link(bgm_src, "bgm" + os.path.splitext(bgm_src)[1])
+
+    return pub_dir, path_map
+
+
+def _render_single(props_data: dict, props_json_path: str, video_path: str, remotion_dir: str, pub_dir: str, label: str = "") -> str | None:
     """단일 Remotion 렌더 실행. 성공 시 video_path 반환."""
     with open(props_json_path, "w", encoding="utf-8") as f:
         json.dump(props_data, f, ensure_ascii=False, indent=2)
@@ -101,7 +139,7 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
 
     cmd = [
         "npx", "remotion", "render", "src/index.ts", "Main",
-        abs_video_path, "--props", abs_props_path, "--public-dir", assets_dir,
+        abs_video_path, "--props", abs_props_path, "--public-dir", pub_dir,
         "--concurrency", str(concurrency),
     ]
 
@@ -194,41 +232,10 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # 컷 데이터 공통 생성 (모든 플랫폼 공유)
-    cuts_data = []
-    cuts_duration = 0
     fps = 24
-
     desc_list = descriptions or [""] * len(visual_paths)
 
-    for idx, (visual_path, audio_path, _script, word_timestamps) in enumerate(zip(
-        visual_paths, audio_paths, scripts, word_timestamps_list
-    )):
-        DEFAULT_CUT_SEC = 5.0
-        MIN_CUT_SEC = 2.0
-        TAIL_PADDING = 0.4
-        if word_timestamps:
-            audio_end = word_timestamps[-1].get("end", 0)
-            duration_sec = max(MIN_CUT_SEC, audio_end + TAIL_PADDING)
-        else:
-            duration_sec = DEFAULT_CUT_SEC
-
-        frames = max(int(duration_sec * fps), fps)
-        cuts_duration += frames
-
-        cut_entry: dict = {
-            "visual_path": _to_relative(visual_path),
-            "audio_path": _to_relative(audio_path),
-            "word_timestamps": word_timestamps or [],
-            "duration_in_frames": frames,
-        }
-
-        emotion = _extract_emotion(desc_list[idx] if idx < len(desc_list) else "")
-        if emotion:
-            cut_entry["emotion"] = emotion
-
-        cuts_data.append(cut_entry)
-
-    # 브랜드 에셋 준비 (한 번만)
+    # 브랜드 에셋 준비
     channel_label = f" ({channel})" if channel else ""
     for asset_name in [INTRO_IMAGE, OUTRO_IMAGE]:
         brand_src = _resolve_brand_asset(asset_name, channel)
@@ -237,17 +244,19 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             if not os.path.exists(assets_dst) or os.path.getmtime(brand_src) > os.path.getmtime(assets_dst):
                 shutil.copy2(brand_src, assets_dst)
 
-    intro_available = os.path.exists(os.path.join("assets", INTRO_IMAGE))
-    outro_available = os.path.exists(os.path.join("assets", OUTRO_IMAGE))
+    intro_src = os.path.join("assets", INTRO_IMAGE)
+    outro_src = os.path.join("assets", OUTRO_IMAGE)
+    intro_available = os.path.exists(intro_src)
+    outro_available = os.path.exists(outro_src)
 
-    # BGM 준비 (한 번만)
-    bgm_path = None
+    # BGM 준비
     bgm_source = _select_bgm(bgm_theme)
+    bgm_src_path = None
     if bgm_source and os.path.exists(bgm_source):
         bgm_dest = os.path.join("assets", BGM_FILE)
         if not os.path.exists(bgm_dest) or os.path.getmtime(bgm_source) > os.path.getmtime(bgm_dest):
             shutil.copy2(bgm_source, bgm_dest)
-        bgm_path = BGM_FILE
+        bgm_src_path = bgm_dest
         print(f"-> [BGM] 배경음악 '{os.path.basename(bgm_source)}' 전체 영상에 적용")
 
     # Remotion 환경 검증
@@ -260,62 +269,110 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         print(f"[Remotion 보안 오류] topic_folder에 허용되지 않는 문자가 포함됨: {topic_folder}")
         return None
 
-    assets_dir = os.path.abspath("assets")
     camera = camera_style if camera_style in ("auto", "dynamic", "gentle", "static") else "dynamic"
 
-    # 플랫폼 결정: 기본 youtube만
-    if not platforms:
-        platforms = ["youtube"]
+    # 최소 public dir 생성 (필요한 파일만 ASCII 이름으로)
+    pub_dir, path_map = _prepare_public_dir(
+        visual_paths, audio_paths,
+        intro_src if intro_available else None,
+        outro_src if outro_available else None,
+        bgm_src_path,
+    )
 
-    valid_platforms = [p for p in platforms if p in PLATFORM_CONFIGS]
-    if not valid_platforms:
-        valid_platforms = ["youtube"]
+    try:
+        # path_map을 역방향으로 사용하여 props에 pub_dir 상대 경로 설정
+        cuts_data = []
+        cuts_duration = 0
 
-    multi = len(valid_platforms) > 1
-    if multi:
-        print(f"-> [멀티 플랫폼] {', '.join(p.upper() for p in valid_platforms)} 버전 생성 (API 토큰 추가 비용 없음)")
+        for idx, (visual_path, audio_path, _script, word_timestamps) in enumerate(zip(
+            visual_paths, audio_paths, scripts, word_timestamps_list
+        )):
+            DEFAULT_CUT_SEC = 5.0
+            MIN_CUT_SEC = 2.0
+            TAIL_PADDING = 0.4
+            if word_timestamps:
+                audio_end = word_timestamps[-1].get("end", 0)
+                duration_sec = max(MIN_CUT_SEC, audio_end + TAIL_PADDING)
+            else:
+                duration_sec = DEFAULT_CUT_SEC
 
-    results: dict[str, str] = {}
+            frames = max(int(duration_sec * fps), fps)
+            cuts_duration += frames
 
-    for platform in valid_platforms:
-        cfg = PLATFORM_CONFIGS[platform]
-        label = f" {platform.upper()}" if multi else ""
+            cut_entry: dict = {
+                "visual_path": path_map[os.path.abspath(visual_path)],
+                "audio_path": path_map[os.path.abspath(audio_path)],
+                "word_timestamps": word_timestamps or [],
+                "duration_in_frames": frames,
+            }
 
-        # 플랫폼별 인트로/아웃트로/제목 설정
-        intro_path = INTRO_IMAGE if (cfg["intro"] and intro_available) else None
-        outro_path = OUTRO_IMAGE if (cfg["outro"] and outro_available) else None
-        use_title = title if cfg["title"] else None
+            emotion = _extract_emotion(desc_list[idx] if idx < len(desc_list) else "")
+            if emotion:
+                cut_entry["emotion"] = emotion
 
-        total_frames = cuts_duration
-        if intro_path:
-            total_frames += INTRO_DURATION_FRAMES
-            print(f"-> [인트로{label}] 브랜드 인트로{channel_label} 추가")
-        if outro_path:
-            total_frames += OUTRO_DURATION_FRAMES
-            print(f"-> [아웃트로{label}] 브랜드 아웃트로{channel_label} 추가")
-        if use_title:
-            print(f"-> [제목{label}] '{use_title}' — 첫 컷 위 오버레이")
+            cuts_data.append(cut_entry)
 
-        props_data = {
-            "cuts": cuts_data,
-            "totalDurationInFrames": total_frames,
-            "introImagePath": intro_path,
-            "outroImagePath": outro_path,
-            "bgmPath": bgm_path,
-            "title": use_title,
-            "cameraStyle": camera,
-            "captionSize": caption_size,
-            "captionY": caption_y,
-        }
+        # 플랫폼 결정
+        if not platforms:
+            platforms = ["youtube"]
 
-        suffix = f"_{platform}" if multi else ""
-        video_path = os.path.join(output_dir, f"{topic_folder}_{timestamp}{suffix}.mp4")
-        props_path = os.path.join(output_dir, f"remotion_props{suffix}.json")
+        valid_platforms = [p for p in platforms if p in PLATFORM_CONFIGS]
+        if not valid_platforms:
+            valid_platforms = ["youtube"]
 
-        result = _render_single(props_data, props_path, video_path, remotion_dir, assets_dir, label)
-        if result:
-            results[platform] = result
-            print(f"-> [완료{label}] {result}")
+        multi = len(valid_platforms) > 1
+        if multi:
+            print(f"-> [멀티 플랫폼] {', '.join(p.upper() for p in valid_platforms)} 버전 생성 (API 토큰 추가 비용 없음)")
+
+        results: dict[str, str] = {}
+
+        for platform in valid_platforms:
+            cfg = PLATFORM_CONFIGS[platform]
+            label = f" {platform.upper()}" if multi else ""
+
+            # pub_dir 내 상대 경로 참조
+            intro_rel = path_map.get(os.path.abspath(intro_src)) if (cfg["intro"] and intro_available) else None
+            outro_rel = path_map.get(os.path.abspath(outro_src)) if (cfg["outro"] and outro_available) else None
+            bgm_rel = path_map.get(os.path.abspath(bgm_src_path)) if bgm_src_path else None
+            use_title = title if cfg["title"] else None
+
+            total_frames = cuts_duration
+            if intro_rel:
+                total_frames += INTRO_DURATION_FRAMES
+                print(f"-> [인트로{label}] 브랜드 인트로{channel_label} 추가")
+            if outro_rel:
+                total_frames += OUTRO_DURATION_FRAMES
+                print(f"-> [아웃트로{label}] 브랜드 아웃트로{channel_label} 추가")
+            if use_title:
+                print(f"-> [제목{label}] '{use_title}' — 첫 컷 위 오버레이")
+
+            props_data = {
+                "cuts": cuts_data,
+                "totalDurationInFrames": total_frames,
+                "introImagePath": intro_rel,
+                "outroImagePath": outro_rel,
+                "bgmPath": bgm_rel,
+                "title": use_title,
+                "cameraStyle": camera,
+                "captionSize": caption_size,
+                "captionY": caption_y,
+            }
+
+            suffix = f"_{platform}" if multi else ""
+            video_path = os.path.join(output_dir, f"{topic_folder}_{timestamp}{suffix}.mp4")
+            props_path = os.path.join(output_dir, f"remotion_props{suffix}.json")
+
+            result = _render_single(props_data, props_path, video_path, remotion_dir, pub_dir, label)
+            if result:
+                results[platform] = result
+                print(f"-> [완료{label}] {result}")
+
+    finally:
+        # 임시 public dir 정리
+        try:
+            shutil.rmtree(pub_dir, ignore_errors=True)
+        except Exception:
+            pass
 
     if not results:
         return None

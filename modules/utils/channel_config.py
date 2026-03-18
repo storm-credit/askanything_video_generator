@@ -39,7 +39,23 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "visual_style": "bright, colorful, wonder-inspiring, nature-focused",
         "tone": "curious, wonder-filled, educational storytelling",
         "upload_accounts": {
-            "youtube": None,   # sillious0714@gmail.com → OAuth 연동 후 자동 매핑
+            "youtube": None,
+            "tiktok": None,
+            "instagram": None,
+        },
+    },
+    "exploratodo": {
+        "language": "es",
+        "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
+        "tts_speed": 0.9,
+        "bgm_theme": "random",
+        "platforms": ["youtube", "tiktok"],
+        "caption_size": 44,
+        "caption_y": 28,
+        "visual_style": "adventurous, vibrant, curiosity-driven, Latin-inspired",
+        "tone": "curious, adventurous, engaging storytelling in Spanish",
+        "upload_accounts": {
+            "youtube": None,
             "tiktok": None,
             "instagram": None,
         },

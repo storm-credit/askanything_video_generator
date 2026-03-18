@@ -42,7 +42,7 @@ app = FastAPI(lifespan=_lifespan)
 
 # 동시 생성 요청 제한 (GPU/API 과부하 방지)
 # 모델/키 오버라이드는 함수 파라미터로 전달 — os.environ 미사용으로 동시 요청 안전
-_generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "1")))
+_generate_semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_GENERATE", "3")))
 # 컷 병렬 처리용 공유 스레드풀 (요청마다 생성/삭제 방지)
 _cut_executor = ThreadPoolExecutor(max_workers=4)
 # 이미지 동시 생성 제한 (모듈 레벨 — MAX_CONCURRENT_GENERATE > 1 에서도 전역 제한)
@@ -50,7 +50,7 @@ _image_semaphore = threading.Semaphore(3)
 
 # 취소 토큰: 요청별 이벤트 (generation_id → (Event, created_time))
 _cancel_events: dict[str, tuple[threading.Event, float]] = {}
-_active_generation_id: str | None = None
+_active_generation_ids: set[str] = set()
 _generation_lock = threading.Lock()
 _CANCEL_EVENT_TTL = 600  # 10분 후 미정리 이벤트 자동 삭제
 
@@ -396,13 +396,24 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
 
 
 @app.post("/api/cancel")
-async def cancel_generation():
-    """현재 진행 중인 생성 작업을 취소합니다."""
+async def cancel_generation(generation_id: str | None = None):
+    """진행 중인 생성 작업을 취소합니다. generation_id 지정 시 해당 작업만, 미지정 시 모든 작업 취소."""
     with _generation_lock:
-        if _active_generation_id and _active_generation_id in _cancel_events:
-            _cancel_events[_active_generation_id][0].set()
-            print(f"[취소] 생성 작업 취소 요청: {_active_generation_id}")
-            return {"status": "cancelled", "generation_id": _active_generation_id}
+        if generation_id:
+            if generation_id in _cancel_events:
+                _cancel_events[generation_id][0].set()
+                print(f"[취소] 생성 작업 취소 요청: {generation_id}")
+                return {"status": "cancelled", "generation_id": generation_id}
+            return {"status": "not_found", "message": f"작업 {generation_id}을 찾을 수 없습니다."}
+        # generation_id 미지정: 모든 활성 작업 취소
+        cancelled = []
+        for gid in list(_active_generation_ids):
+            if gid in _cancel_events:
+                _cancel_events[gid][0].set()
+                cancelled.append(gid)
+        if cancelled:
+            print(f"[취소] 모든 작업 취소: {cancelled}")
+            return {"status": "cancelled", "generation_ids": cancelled}
         return {"status": "idle", "message": "진행 중인 생성 작업이 없습니다."}
 
 
@@ -411,8 +422,9 @@ async def generation_status():
     """현재 생성 상태 확인."""
     with _generation_lock:
         return {
-            "active": _active_generation_id is not None,
-            "generation_id": _active_generation_id,
+            "active": len(_active_generation_ids) > 0,
+            "generation_ids": list(_active_generation_ids),
+            "count": len(_active_generation_ids),
         }
 
 
@@ -438,9 +450,7 @@ async def generate_video_endpoint(req: GenerateRequest):
     gemini_keys_override = req.geminiKeys or None
 
     async def sse_generator():
-        global _active_generation_id
-
-        # 이전 작업 취소 + 새 작업 등록 (요청별 이벤트로 격리)
+        # 새 작업 등록 (요청별 이벤트로 격리, 자동 취소 없음)
         import time as _t
         cancel_event = threading.Event()
         with _generation_lock:
@@ -449,16 +459,17 @@ async def generate_video_endpoint(req: GenerateRequest):
             stale = [gid for gid, (_, ts) in _cancel_events.items() if now - ts > _CANCEL_EVENT_TTL]
             for gid in stale:
                 _cancel_events.pop(gid, None)
-            if _active_generation_id and _active_generation_id in _cancel_events:
-                _cancel_events[_active_generation_id][0].set()
-                print(f"[취소] 새 요청으로 이전 작업({_active_generation_id}) 자동 취소")
+                _active_generation_ids.discard(gid)
             _cancel_events[generation_id] = (cancel_event, now)
-            _active_generation_id = generation_id
+            _active_generation_ids.add(generation_id)
 
         def _is_cancelled() -> bool:
             return cancel_event.is_set()
 
         # 동시 요청 제한: 슬롯 부족 시 대기 안내
+        # 프론트엔드에 generation_id 전달 (멀티채널 취소용)
+        yield {"data": f"GEN_ID|{generation_id}\n"}
+
         if _generate_semaphore.locked():
             yield {"data": "WARN|[대기열] 다른 비디오가 생성 중입니다. 순서를 기다리는 중...\n"}
         async with _generate_semaphore:
@@ -852,8 +863,7 @@ async def generate_video_endpoint(req: GenerateRequest):
           finally:
             # 작업 완료/취소 후 정리
             with _generation_lock:
-                if _active_generation_id == generation_id:
-                    _active_generation_id = None
+                _active_generation_ids.discard(generation_id)
                 _cancel_events.pop(generation_id, None)
 
     return EventSourceResponse(sse_generator())

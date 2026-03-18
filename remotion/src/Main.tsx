@@ -391,7 +391,7 @@ export const Main: React.FC<{
       {cuts.map((cut, index) => {
         const startFrame = startFrames[index];
 
-        // staticFile()로 public dir (assets/) 기준 상대 경로 로드
+        // staticFile()로 public dir 기준 상대 경로 로드
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
         const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
         const isVideo = isVideoPath(visualSrc);

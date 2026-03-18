@@ -7,6 +7,13 @@ import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
 
+// 채널 프리셋 정의
+const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = {
+  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 },
+  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
+  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
+};
+
 export default function Home() {
   const [topic, setTopic] = useState("");
   const [qualityPreset, setQualityPreset] = useState("best");
@@ -24,7 +31,13 @@ export default function Home() {
   const isYouTubeUrl = (text: string) => /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)/.test(text.trim());
   const detectedRefUrl = isYouTubeUrl(topic) ? topic.trim() : undefined;
   const [channel, setChannel] = useState("");
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
+
+  // 멀티채널 진행 상태
+  type ChannelStatus = { progress: number; logs: string[]; status: 'idle' | 'generating' | 'done' | 'error'; videoUrl?: string; errorMsg?: string; genId?: string };
+  const [channelResults, setChannelResults] = useState<Record<string, ChannelStatus>>({});
+  const multiAbortRefs = useRef<Record<string, AbortController>>({});
   const [ttsSpeed, setTtsSpeed] = useState(0.9);
   const [voiceId, setVoiceId] = useState("auto"); // 자동 선택 (기본)
   const [captionSize, setCaptionSize] = useState(48);
@@ -251,6 +264,11 @@ export default function Home() {
     e.preventDefault();
     if (!topic.trim()) return;
 
+    // 멀티채널 모드: selectedChannels가 2개 이상이면 병렬 생성
+    if (selectedChannels.length >= 2) {
+      return handleMultiGenerate(e);
+    }
+
     setIsGenerating(true);
     setProgress(0);
     setSuccessMessage(null);
@@ -394,14 +412,129 @@ export default function Home() {
   const handleCancel = () => {
     cancelledRef.current = true;
     abortControllerRef.current?.abort();
+    // 멀티채널 모드: 각 채널별 abort
+    for (const ac of Object.values(multiAbortRefs.current)) ac.abort();
+    multiAbortRefs.current = {};
     setIsGenerating(false);
-    // 백엔드에도 취소 요청 (fire-and-forget)
+    // 백엔드에도 전체 취소 요청 (fire-and-forget)
     fetch(`${API_BASE}/api/cancel`, { method: "POST" }).catch(() => {});
   };
 
   const handleClearError = () => {
     setErrorMessage(null);
     setLogs([]);
+  };
+
+  // ── 멀티채널 병렬 생성 ──
+  const generateForChannel = async (ch: string) => {
+    const preset = CHANNEL_PRESETS[ch];
+    if (!preset) return;
+
+    const ac = new AbortController();
+    multiAbortRefs.current[ch] = ac;
+
+    setChannelResults(prev => ({ ...prev, [ch]: { progress: 0, logs: [], status: 'generating' } }));
+
+    const selectedOpenaiKey = pickKey("openai");
+    const selectedElevenlabsKey = pickKey("elevenlabs");
+    let llmKeyOverride: string | undefined;
+    if (llmProvider === "gemini") llmKeyOverride = pickKey("gemini");
+    else if (llmProvider === "claude") llmKeyOverride = pickKey("claude_key");
+    const geminiKeys = savedKeys["gemini"] || [];
+    const geminiKeysStr = geminiKeys.length > 0 ? geminiKeys.join(",") : undefined;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
+        body: JSON.stringify({
+          topic,
+          apiKey: selectedOpenaiKey || undefined,
+          elevenlabsKey: selectedElevenlabsKey || undefined,
+          videoEngine, imageEngine, llmProvider,
+          llmModel: llmModel || undefined,
+          imageModel: imageModel || undefined,
+          videoModel: videoModel || undefined,
+          language: preset.language,
+          llmKey: llmKeyOverride || undefined,
+          geminiKeys: geminiKeysStr,
+          outputPath: outputPath.trim() || undefined,
+          cameraStyle, bgmTheme,
+          channel: ch,
+          platforms: preset.platforms,
+          ttsSpeed: preset.ttsSpeed,
+          voiceId,
+          captionSize: preset.captionSize,
+          captionY: preset.captionY,
+          referenceUrl: detectedRefUrl,
+        }),
+      });
+
+      if (!response.body) throw new Error("No response body");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) { if (buffer.trim()) processMultiLine(ch, buffer); break; }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) processMultiLine(ch, line);
+      }
+    } catch (error) {
+      if (ac.signal.aborted) return;
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: msg } }));
+    }
+  };
+
+  const processMultiLine = (ch: string, line: string) => {
+    if (!line.startsWith("data:")) return;
+    const rawData = line.slice(5).trim();
+    if (!rawData) return;
+
+    if (rawData.startsWith("DONE|")) {
+      const videoPath = rawData.slice(5).split("|")[0].trim().replace(/\\/g, '/');
+      const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
+      const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
+      const downloadUrl = `${API_BASE}${normalizedPath}`;
+      setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'done', progress: 100, videoUrl: downloadUrl } }));
+    } else if (rawData.startsWith("ERROR|")) {
+      setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: rawData.slice(6), logs: [...(prev[ch]?.logs || []).slice(-49), rawData.slice(6)] } }));
+    } else if (rawData.startsWith("PROG|")) {
+      const p = parseInt(rawData.slice(5), 10);
+      if (!isNaN(p)) setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], progress: p } }));
+    } else if (rawData.startsWith("GEN_ID|")) {
+      setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], genId: rawData.slice(7) } }));
+    } else {
+      setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], logs: [...(prev[ch]?.logs || []).slice(-49), rawData] } }));
+    }
+  };
+
+  const handleMultiGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!topic.trim() || selectedChannels.length === 0) return;
+
+    setIsGenerating(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    setChannelResults({});
+
+    const promises = selectedChannels.map(ch => generateForChannel(ch));
+    await Promise.allSettled(promises);
+
+    // 모든 채널 완료 — 최신 state는 setState callback으로 읽기
+    setIsGenerating(false);
+    setChannelResults(prev => {
+      const doneCount = Object.values(prev).filter(r => r.status === 'done').length;
+      if (doneCount > 0) {
+        setSuccessMessage(`${doneCount}/${selectedChannels.length} 채널 영상 생성 완료!`);
+      }
+      return prev;
+    });
   };
 
   // ── 미리보기 모드: prepare → preview → render ──
@@ -852,14 +985,38 @@ export default function Home() {
                   <option value="tr" className="bg-gray-900">Türkçe</option>
                 </select>
               </div>
-              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
-                <Tv className="w-3.5 h-3.5 text-purple-400" />
-                <select value={channel} onChange={(e) => { const ch = e.target.value; setChannel(ch); const presets: Record<string, { language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = { askanything: { language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 }, wonderdrop: { language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 } }; if (ch && presets[ch]) { const p = presets[ch]; setLanguage(p.language); setTtsSpeed(p.ttsSpeed); setPlatforms(p.platforms); setCaptionSize(p.captionSize); setCaptionY(p.captionY); } }} disabled={isGenerating} aria-label="채널 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
-                  <option value="" className="bg-gray-900">채널 없음</option>
-                  <option value="askanything" className="bg-gray-900">AskAnything</option>
-                  <option value="wonderdrop" className="bg-gray-900">WonderDrop</option>
-                </select>
-              </div>
+              {Object.entries(CHANNEL_PRESETS).map(([key, preset]) => {
+                const isSelected = selectedChannels.includes(key);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={isGenerating}
+                    onClick={() => {
+                      setSelectedChannels(prev =>
+                        prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+                      );
+                      // 단일 선택 시 프리셋 적용
+                      if (!isSelected) {
+                        setChannel(key);
+                        setLanguage(preset.language);
+                        setTtsSpeed(preset.ttsSpeed);
+                        setPlatforms(preset.platforms);
+                        setCaptionSize(preset.captionSize);
+                        setCaptionY(preset.captionY);
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs transition-colors ${
+                      isSelected
+                        ? "bg-purple-500/20 border-purple-500/50 text-purple-300"
+                        : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                    }`}
+                  >
+                    <span>{preset.flag}</span>
+                    <span>{preset.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* AI 엔진 — 기획 · 이미지 · 비디오 */}
@@ -1018,10 +1175,66 @@ export default function Home() {
         </form>
       </motion.div>
 
-      {/* 진행률 + 로그 패널 (에러 전용 패널과 중복 방지) */}
+      {/* 진행률 + 로그 패널 (단일 채널) */}
       <AnimatePresence>
-        {isGenerating && (
+        {isGenerating && selectedChannels.length < 2 && (
           <ProgressPanel progress={progress} logs={logs} />
+        )}
+      </AnimatePresence>
+
+      {/* 멀티채널 진행 패널 */}
+      <AnimatePresence>
+        {(isGenerating && selectedChannels.length >= 2 || Object.values(channelResults).some(r => r.status === 'done')) && Object.keys(channelResults).length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="mt-8 w-full max-w-xl glass-panel p-5 rounded-3xl relative z-10 border border-white/[0.08]"
+          >
+            <h3 className="text-sm font-semibold text-white mb-3">채널별 생성 현황</h3>
+            <div className="space-y-3">
+              {Object.entries(channelResults).map(([ch, result]) => {
+                const preset = CHANNEL_PRESETS[ch];
+                return (
+                  <div key={ch} className="bg-white/5 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-gray-200">
+                        {preset?.flag} {preset?.label || ch}
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                        result.status === 'done' ? 'bg-green-500/20 text-green-400' :
+                        result.status === 'error' ? 'bg-red-500/20 text-red-400' :
+                        result.status === 'generating' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {result.status === 'done' ? 'complete' : result.status === 'error' ? 'error' : `${result.progress}%`}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          result.status === 'done' ? 'bg-green-500' :
+                          result.status === 'error' ? 'bg-red-500' : 'bg-indigo-500'
+                        }`}
+                        style={{ width: `${result.progress}%` }}
+                      />
+                    </div>
+                    {result.status === 'done' && result.videoUrl && (
+                      <a href={result.videoUrl} download className="mt-2 inline-flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300">
+                        <ExternalLink className="w-3 h-3" /> 다운로드
+                      </a>
+                    )}
+                    {result.status === 'error' && result.errorMsg && (
+                      <p className="mt-1 text-[10px] text-red-400 truncate">{result.errorMsg}</p>
+                    )}
+                    {result.logs.length > 0 && (
+                      <p className="mt-1 text-[10px] text-gray-500 truncate">{result.logs[result.logs.length - 1]}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
