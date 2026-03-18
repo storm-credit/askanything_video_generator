@@ -48,6 +48,10 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // 배포 모드: 실시간(공개) / 비공개 / 예약
+  const [publishMode, setPublishMode] = useState<"realtime" | "private" | "scheduled">("realtime");
+  const [scheduledTime, setScheduledTime] = useState("");
+
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [serverKeyStatus, setServerKeyStatus] = useState<KeyStatus | null>(null);
@@ -953,7 +957,7 @@ export default function Home() {
           {/* 컨트롤 패널 */}
           <div className="w-full max-w-2xl mx-auto space-y-3">
 
-            {/* 글로벌 설정 — 품질 · 언어 · 채널 */}
+            {/* 글로벌 설정 — 품질 · 언어 */}
             <div className="flex items-center justify-center gap-1.5">
               <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
                 <Crown className="w-3.5 h-3.5 text-amber-400" />
@@ -985,38 +989,74 @@ export default function Home() {
                   <option value="tr" className="bg-gray-900">Türkçe</option>
                 </select>
               </div>
-              {Object.entries(CHANNEL_PRESETS).map(([key, preset]) => {
-                const isSelected = selectedChannels.includes(key);
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    disabled={isGenerating}
-                    onClick={() => {
-                      setSelectedChannels(prev =>
-                        prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-                      );
-                      // 단일 선택 시 프리셋 적용
-                      if (!isSelected) {
-                        setChannel(key);
-                        setLanguage(preset.language);
-                        setTtsSpeed(preset.ttsSpeed);
-                        setPlatforms(preset.platforms);
-                        setCaptionSize(preset.captionSize);
-                        setCaptionY(preset.captionY);
-                      }
-                    }}
-                    className={`flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs transition-colors ${
-                      isSelected
-                        ? "bg-purple-500/20 border-purple-500/50 text-purple-300"
-                        : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
-                    }`}
-                  >
-                    <span>{preset.flag}</span>
-                    <span>{preset.label}</span>
+            </div>
+
+            {/* 실시간(공개) · 비공개 · 예약 토글 */}
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+              <div className="flex items-center justify-center gap-2">
+                <div className="flex items-center bg-white/5 border border-white/10 rounded-full overflow-hidden">
+                  <button type="button" onClick={() => setPublishMode("realtime")} disabled={isGenerating}
+                    className={`px-4 py-1.5 text-xs font-medium transition-all ${publishMode === "realtime" ? "bg-green-500/20 text-green-300" : "text-gray-500 hover:text-gray-300"}`}>
+                    실시간
                   </button>
-                );
-              })}
+                  <button type="button" onClick={() => setPublishMode("private")} disabled={isGenerating}
+                    className={`px-4 py-1.5 text-xs font-medium transition-all ${publishMode === "private" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+                    비공개
+                  </button>
+                  <button type="button" onClick={() => setPublishMode("scheduled")} disabled={isGenerating}
+                    className={`px-4 py-1.5 text-xs font-medium transition-all ${publishMode === "scheduled" ? "bg-amber-500/20 text-amber-300" : "text-gray-500 hover:text-gray-300"}`}>
+                    예약
+                  </button>
+                </div>
+                {publishMode === "scheduled" && (
+                  <input
+                    type="datetime-local"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    disabled={isGenerating}
+                    min={new Date(Date.now() + 600000).toISOString().slice(0, 16)}
+                    className="bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-amber-500/50"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* 채널 선택 (별도 행) */}
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                <Tv className="w-3.5 h-3.5 text-purple-400" />
+                {Object.entries(CHANNEL_PRESETS).map(([key, preset]) => {
+                  const isSelected = selectedChannels.includes(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={isGenerating}
+                      onClick={() => {
+                        setSelectedChannels(prev =>
+                          prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+                        );
+                        if (!isSelected) {
+                          setChannel(key);
+                          setLanguage(preset.language);
+                          setTtsSpeed(preset.ttsSpeed);
+                          setPlatforms(preset.platforms);
+                          setCaptionSize(preset.captionSize);
+                          setCaptionY(preset.captionY);
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs transition-colors ${
+                        isSelected
+                          ? "bg-purple-500/20 border-purple-500/50 text-purple-300"
+                          : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                      }`}
+                    >
+                      <span>{preset.flag}</span>
+                      <span>{preset.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* AI 엔진 — 기획 · 이미지 · 비디오 */}
