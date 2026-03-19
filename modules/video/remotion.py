@@ -372,6 +372,11 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
                 results[platform] = result
                 print(f"-> [완료{label}] {result}")
 
+    except Exception as e:
+        import traceback
+        print(f"[Remotion 치명적 오류] {e}")
+        traceback.print_exc()
+        return None
     finally:
         # 임시 public dir 정리
         try:
@@ -380,6 +385,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             pass
 
     if not results:
+        print(f"[Remotion] 모든 플랫폼 렌더 실패. valid_platforms={valid_platforms}")
         return None
 
     # 단일 플랫폼이면 기존 호환성 유지 (str 반환)

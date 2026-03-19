@@ -1272,7 +1272,9 @@ async def render_endpoint(req: RenderRequest):
             )
 
             if not render_result:
-                yield {"data": "ERROR|[Remotion 오류] 렌더링 실패\n"}
+                import traceback as _tb
+                print("[Remotion 오류] render_result가 None — 상세 로그는 위 터미널 출력을 확인하세요.")
+                yield {"data": "ERROR|[Remotion 오류] 렌더링 실패 — 터미널에서 상세 로그를 확인하세요.\n"}
                 return
 
             # 결과 처리
