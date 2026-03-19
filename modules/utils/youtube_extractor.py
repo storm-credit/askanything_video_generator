@@ -87,17 +87,24 @@ def _fetch_metadata_ytdlp(video_id: str) -> dict:
 
 
 def _fetch_transcript(video_id: str) -> str:
-    """자막 추출: youtube-transcript-api → Whisper fallback."""
+    """자막 추출: youtube-transcript-api → Whisper → Gemini 영상 분석."""
     # 1단계: youtube-transcript-api로 자막 시도
     text = _fetch_transcript_api(video_id)
     if text:
         return text
 
-    # 2단계: 자막 없으면 Whisper로 오디오 직접 전사
+    # 2단계: Whisper 오디오 전사
     print(f"  [YouTube 분석] 자막 없음 → Whisper 오디오 전사 시도...")
     text = _fetch_transcript_whisper(video_id)
-    if text:
+    if text and len(text) > 20:  # "MÚSICA" 같은 짧은 결과 제외
         print(f"  [YouTube 분석] Whisper 전사 완료! ({len(text)}자)")
+        return text
+
+    # 3단계: 음성 없는 영상 → Gemini 멀티모달로 영상 내용 분석
+    print(f"  [YouTube 분석] 음성 없음 → Gemini 영상 분석 시도...")
+    text = _analyze_video_gemini(video_id)
+    if text:
+        print(f"  [YouTube 분석] Gemini 영상 분석 완료! ({len(text)}자)")
     return text
 
 
@@ -188,6 +195,80 @@ def _fetch_transcript_whisper(video_id: str) -> str:
             return (transcript or "").strip()
     except Exception as e:
         print(f"  [YouTube 분석] Whisper 전사 실패: {e}")
+        return ""
+
+
+def _analyze_video_gemini(video_id: str) -> str:
+    """yt-dlp로 영상 다운로드 → Gemini 멀티모달로 내용 분석."""
+    import subprocess
+    import tempfile
+    try:
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_key:
+            return ""
+
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_path = os.path.join(tmpdir, "video.mp4")
+            # 최저 품질 영상 다운로드 (분석용)
+            result = subprocess.run(
+                ["python", "-m", "yt_dlp",
+                 "-f", "worst[ext=mp4]/worst",
+                 "--match-filter", "duration<120",
+                 "-o", video_path,
+                 url],
+                capture_output=True, text=True, timeout=60, encoding="utf-8",
+            )
+            if result.returncode != 0:
+                return ""
+            # 파일 확인
+            import glob
+            files = glob.glob(os.path.join(tmpdir, "video.*"))
+            if not files:
+                return ""
+            video_path = files[0]
+
+            # Gemini에 영상 업로드 + 분석
+            import google.genai as genai
+            from modules.utils.keys import get_google_key
+            key = get_google_key(None, service="gemini") or gemini_key
+            client = genai.Client(api_key=key)
+
+            # 파일 업로드 + 처리 대기
+            uploaded = client.files.upload(file=video_path)
+            # Gemini 파일 처리 대기 (ACTIVE 상태까지)
+            for _ in range(30):  # 최대 60초
+                status = client.files.get(name=uploaded.name)
+                if status.state.name == "ACTIVE":
+                    break
+                time.sleep(2)
+            else:
+                print(f"  [YouTube 분석] Gemini 파일 처리 타임아웃")
+                return ""
+
+            # 영상 분석 요청
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    uploaded,
+                    "이 YouTube 쇼츠 영상의 내용을 상세히 분석해주세요. "
+                    "1) 영상에서 보이는 장면, 텍스트, 효과를 순서대로 설명 "
+                    "2) 영상의 핵심 주제/메시지 "
+                    "3) 사용된 시각적 기법 (텍스트 오버레이, 트랜지션, 이미지 등) "
+                    "한국어로 답변. 300자 이내."
+                ],
+            )
+            text = (response.text or "").strip()
+
+            # 업로드 파일 삭제
+            try:
+                client.files.delete(name=uploaded.name)
+            except Exception:
+                pass
+
+            return text
+    except Exception as e:
+        print(f"  [YouTube 분석] Gemini 영상 분석 실패: {e}")
         return ""
 
 
