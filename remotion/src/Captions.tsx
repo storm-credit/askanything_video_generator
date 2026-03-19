@@ -69,13 +69,36 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
 
   const quantizedTime = Math.floor(currentTime * 10) / 10;
 
+  // 구(phrase) 단위 그룹핑: 최대 4단어씩 묶어서 고정 표시
+  const phrases = useMemo(() => {
+    const groups: { words: (WordProps & { index: number; emphasis: boolean })[]; start: number; end: number }[] = [];
+    const MAX_WORDS_PER_PHRASE = 4;
+    let current: (WordProps & { index: number; emphasis: boolean })[] = [];
+
+    wordTimestamps.forEach((w, index) => {
+      const entry = { ...w, index, emphasis: isEmphasisWord(w.word) };
+      if (current.length === 0) {
+        current.push(entry);
+      } else {
+        const gap = w.start - current[current.length - 1].end;
+        if (current.length >= MAX_WORDS_PER_PHRASE || gap > 0.3) {
+          groups.push({ words: current, start: current[0].start, end: current[current.length - 1].end });
+          current = [entry];
+        } else {
+          current.push(entry);
+        }
+      }
+    });
+    if (current.length > 0) {
+      groups.push({ words: current, start: current[0].start, end: current[current.length - 1].end });
+    }
+    return groups;
+  }, [wordTimestamps]);
+
   const visibleWords = useMemo(() => {
-    const windowStart = quantizedTime - 1;
-    const windowEnd = quantizedTime + 1;
-    return wordTimestamps
-      .map((w, index) => ({ ...w, index, emphasis: isEmphasisWord(w.word) }))
-      .filter((w) => w.end >= windowStart && w.start <= windowEnd);
-  }, [wordTimestamps, quantizedTime]);
+    const activePhrase = phrases.find(p => quantizedTime >= p.start - 0.1 && quantizedTime <= p.end + 0.2);
+    return activePhrase ? activePhrase.words : [];
+  }, [phrases, quantizedTime]);
 
   return (
     <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: `${captionY}%` }}>
