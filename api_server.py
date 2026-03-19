@@ -1124,7 +1124,7 @@ async def prepare_endpoint(req: PrepareRequest):
             import uuid as _uuid
             import time as _time
             _cleanup_sessions()
-            session_id = _uuid.uuid4().hex[:12]
+            session_id = _uuid.uuid4().hex
             with _session_lock:
                 _prepared_sessions[session_id] = {
                     "cuts": cuts,

@@ -50,7 +50,31 @@ def _fetch_metadata(video_id: str, api_key: str) -> dict:
             "like_count": int(stats.get("likeCount", 0)),
         }
     except Exception as e:
-        print(f"[YouTube 분석] 메타데이터 추출 실패: {e}")
+        print(f"[YouTube 분석] Data API 실패, yt-dlp fallback 시도: {e}")
+        return _fetch_metadata_ytdlp(video_id)
+
+
+def _fetch_metadata_ytdlp(video_id: str) -> dict:
+    """yt-dlp로 메타데이터를 가져온다 (API 키 불필요)."""
+    try:
+        import subprocess, json as _json
+        result = subprocess.run(
+            ["python", "-m", "yt_dlp", "--dump-json", "--no-download", f"https://www.youtube.com/watch?v={video_id}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            return {}
+        data = _json.loads(result.stdout)
+        return {
+            "title": data.get("title", ""),
+            "description": data.get("description", ""),
+            "channel": data.get("uploader", ""),
+            "tags": data.get("tags", []) or [],
+            "view_count": int(data.get("view_count", 0) or 0),
+            "like_count": int(data.get("like_count", 0) or 0),
+        }
+    except Exception as e:
+        print(f"[YouTube 분석] yt-dlp fallback도 실패: {e}")
         return {}
 
 

@@ -201,7 +201,7 @@ def upload_video(
         video_path,
         mimetype="video/mp4",
         resumable=True,
-        chunksize=256 * 1024,
+        chunksize=5 * 1024 * 1024,  # 5MB chunks (256KB → 5MB, 업로드 속도 개선)
     )
 
     request = youtube.videos().insert(

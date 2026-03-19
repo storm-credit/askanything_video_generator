@@ -317,23 +317,18 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   [CALM] = 여운/마무리 → 정적
 예시: "거대한 블랙홀이 빛을 삼키는 장면 [SHOCK]"
 
-[골든 예시 — 주제: "태양이 사라지면 생기는 일" (대표 3컷만 표시, 실제로는 7~10컷 작성)]
+[골든 예시 — 주제: "심해에 들어가면 생기는 일" (7컷 완전한 감정 아크)]
 {
-  "title": "태양이 사라지면 생기는 일",
+  "title": "심해에 들어가면 생기는 일",
+  "tags": ["#Shorts", "#심해", "#바다", "#과학"],
   "cuts": [
-    {"description": "완전한 어둠 속 지구 전경, 태양 자리에 검은 void [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only", "script": "태양이 갑자기 사라지면 8분 동안 아무도 모른다고."},
-    {"description": "얼어붙는 바다 위로 거대한 빙하가 솟구치는 장면 [TENSION]", "image_prompt": "Frozen ocean surface cracking and massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot", "script": "근데 진짜 소름돋는 건 일주일 만에 바다가 얼어붙어."},
-    {"description": "시청자를 향한 클로즈업 느낌의 우주 배경 [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos filled with distant galaxies, sense of insignificance and wonder, immersive composition", "script": "근데 진짜 소름돋는 건 8분 동안 아무도 모른 채 웃고 있었다는 거야."}
-  ]
-}
-
-[골든 예시 2 — 주제: "잠을 안 자면 생기는 일" (일상/과학 주제)]
-{
-  "title": "잠을 안 자면 생기는 일",
-  "cuts": [
-    {"description": "핏발 선 눈동자 극단적 클로즈업 [SHOCK]", "image_prompt": "Extreme macro close-up of a bloodshot human eye with dilated pupil, dark red veins spreading across sclera, dramatic side lighting, shallow depth of field", "script": "3일만 안 자도 뇌가 스스로를 먹기 시작해."},
-    {"description": "뇌 속 독소가 쌓이는 시각화 장면 [TENSION]", "image_prompt": "Cross-section of human brain with glowing toxic particles accumulating between neurons, dark purple and neon green, microscopic medical visualization", "script": "근데 진짜 무서운 건 그걸 본인이 모른다는 거야."},
-    {"description": "깊은 수면 중 뇌 청소 시스템 시각화 [CALM]", "image_prompt": "Serene visualization of glymphatic system cleaning the brain during sleep, flowing blue-white fluid washing through neural pathways, peaceful bioluminescent glow", "script": "결국 잠이 뇌를 청소하는 유일한 방법인 거지."}
+    {"description": "칠흑같은 심해에서 거대한 압력이 잠수정을 짓누르는 장면 [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "심해 만 미터에선 손톱 위에 코끼리 50마리가 올라탄 압력이야."},
+    {"description": "심해의 발광 해파리가 어둠 속에서 빛나는 환상적 장면 [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "근데 거기엔 빛 없이도 스스로 빛나는 생물이 살아."},
+    {"description": "심해 열수구에서 끓는 물이 분출되는 장면 [TENSION]", "image_prompt": "Hydrothermal vent erupting superheated black water at ocean floor, extreme temperature shimmer, orange mineral deposits, dramatic side lighting from magma glow below", "script": "그리고 바닥에선 400도짜리 물이 끓고 있거든."},
+    {"description": "열수구 주변에서 번성하는 괴생물체 군집 클로즈업 [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "근데 반전은 그 끓는 물 옆에서 생물이 번성하고 있다는 거야."},
+    {"description": "심해저에 가라앉은 고래 뼈 위로 생태계가 형성된 장면 [WONDER]", "image_prompt": "Whale fall skeleton on ocean floor with entire ecosystem growing on bones, ghostly white ribcage covered in colorful organisms, soft diffused light from above, wide establishing shot", "script": "고래가 죽으면 바닥에 가라앉아서 50년간 생태계가 돼."},
+    {"description": "심해 해구의 끝없는 깊이를 수직으로 내려다보는 장면 [TENSION]", "image_prompt": "Vertigo-inducing top-down view into Mariana Trench, layers of ocean getting progressively darker, depth markers showing 11000m, sense of infinite depth, cold blue-black gradient", "script": "마리아나 해구는 에베레스트를 통째로 집어넣어도 남아."},
+    {"description": "심해에서 올려다본 수면의 희미한 빛 한 줄기 [CALM]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "우주보다 덜 탐사된 곳이 바로 발밑 바다라는 거지."}
   ]
 }
 
@@ -403,23 +398,18 @@ Add an emotion tag at the END of each description:
   [CALM] = reflection/outro → static
 Example: "A massive black hole swallowing light [SHOCK]"
 
-[Golden Example — Topic: "What happens if the sun disappears" (3 representative cuts shown, write 7–10 in practice)]
+[Golden Example — Topic: "What happens in the deep ocean" (full 7-cut emotional arc)]
 {
-  "title": "The Sun Vanishes Tomorrow",
+  "title": "The Deep Sea Will Blow Your Mind",
+  "tags": ["#Shorts", "#DeepSea", "#Ocean", "#Science"],
   "cuts": [
-    {"description": "Earth in complete darkness, empty void where sun was [SHOCK]", "image_prompt": "Earth floating in complete darkness, where the sun used to be is now an empty black void, deep space, dramatic volumetric lighting from distant stars only", "script": "The sun vanishes and nobody knows for 8 minutes."},
-    {"description": "Frozen ocean with massive glaciers rising in eerie glow [TENSION]", "image_prompt": "Frozen ocean surface cracking with massive glaciers rising, dark sky without sunlight, eerie blue-green ice glow, low angle dramatic shot", "script": "Within a week the entire ocean freezes solid."},
-    {"description": "Vast cosmos perspective looking up [CALM]", "image_prompt": "Dramatic close perspective looking up at vast dark cosmos, distant galaxies, sense of wonder, immersive composition", "script": "But here's the terrifying part — for 8 minutes, everyone was smiling, not knowing it was already over."}
-  ]
-}
-
-[Golden Example 2 — Topic: "What happens if you never sleep"]
-{
-  "title": "Never Sleeping Destroys Your Brain",
-  "cuts": [
-    {"description": "Extreme close-up of bloodshot eye [SHOCK]", "image_prompt": "Extreme macro close-up of a bloodshot human eye with dilated pupil, dark red veins spreading across sclera, dramatic side lighting, shallow depth of field", "script": "After 3 days without sleep your brain starts eating itself."},
-    {"description": "Toxic buildup in brain cross-section [TENSION]", "image_prompt": "Cross-section of human brain with glowing toxic particles accumulating between neurons, dark purple and neon green, microscopic medical visualization", "script": "The scariest part? You won't even realize it's happening."},
-    {"description": "Glymphatic brain cleaning system visualization [CALM]", "image_prompt": "Serene visualization of glymphatic system cleaning the brain during sleep, flowing blue-white fluid washing through neural pathways, peaceful bioluminescent glow", "script": "Sleep is literally the only way your brain takes out the trash."}
+    {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "At the bottom of the ocean the pressure is like 50 elephants standing on your fingernail."},
+    {"description": "Massive bioluminescent jellyfish glowing in total darkness [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "But down there creatures make their own light with zero sunlight."},
+    {"description": "Hydrothermal vent erupting superheated water on the ocean floor [TENSION]", "image_prompt": "Hydrothermal vent erupting superheated black water at ocean floor, extreme temperature shimmer, orange mineral deposits, dramatic side lighting from magma glow below", "script": "And at the very bottom water is boiling at 400 degrees."},
+    {"description": "Alien-like colony of tube worms thriving next to the boiling vent [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "Here's the twist — life is actually thriving right next to that boiling water."},
+    {"description": "Whale fall skeleton supporting an entire ecosystem on the ocean floor [WONDER]", "image_prompt": "Whale fall skeleton on ocean floor with entire ecosystem growing on bones, ghostly white ribcage covered in colorful organisms, soft diffused light from above, wide establishing shot", "script": "When a whale dies it sinks and becomes an ecosystem for 50 years."},
+    {"description": "Vertigo-inducing view straight down into the Mariana Trench [TENSION]", "image_prompt": "Vertigo-inducing top-down view into Mariana Trench, layers of ocean getting progressively darker, depth markers showing 11000m, sense of infinite depth, cold blue-black gradient", "script": "The Mariana Trench is so deep you could drop Everest in and still have room."},
+    {"description": "Looking up from the ocean floor at a faint beam of distant sunlight [CALM]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "We've explored more of space than the ocean right beneath our feet."}
   ]
 }
 
