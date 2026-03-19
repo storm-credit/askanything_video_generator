@@ -57,6 +57,26 @@ _generation_lock = threading.Lock()
 _CANCEL_EVENT_TTL = 600  # 10분 후 미정리 이벤트 자동 삭제
 
 
+def _resolve_youtube_topic(topic: str, reference_url: str | None = None) -> tuple[str, str | None]:
+    """YouTube URL을 topic에서 감지하면 제목+자막으로 교체. (topic, ref_url) 반환."""
+    ref_url = reference_url
+    if not ref_url and _YT_URL_PATTERN.search(topic):
+        ref_url = topic
+        try:
+            from modules.utils.youtube_extractor import extract_youtube_reference
+            _yt_ref = extract_youtube_reference(ref_url)
+            if _yt_ref and _yt_ref.get("title"):
+                _yt_title = re.sub(r"#\S+", "", _yt_ref["title"]).strip()
+                _transcript = _yt_ref.get("transcript", "")
+                if _transcript:
+                    topic = f"{_yt_title}\n\n[원본 영상 내용]\n{_transcript[:800].strip()}"
+                else:
+                    topic = _yt_title
+        except Exception:
+            pass  # 실패 시 원본 topic 유지
+    return topic, ref_url
+
+
 @app.get("/")
 async def root():
     return {
@@ -527,31 +547,12 @@ async def generate_video_endpoint(req: GenerateRequest):
                     active_video_engine = "none"
 
             yield {"data": "PROG|10\n"}
-            # YouTube URL 자동 감지: referenceUrl이 없으면 topic에서 URL 추출
+            # YouTube URL 자동 감지 + topic 교체
             ref_url = req.referenceUrl
-            if not ref_url and _YT_URL_PATTERN.search(topic):
-                ref_url = topic
-                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 내용을 분석합니다...\n"}
-                # YouTube 영상 제목 + 자막 핵심 내용을 추출해서 topic 교체
-                try:
-                    from modules.utils.youtube_extractor import extract_youtube_reference
-                    _yt_ref = extract_youtube_reference(ref_url)
-                    if _yt_ref and _yt_ref.get("title"):
-                        _yt_title = re.sub(r"#\S+", "", _yt_ref["title"]).strip()
-                        # 자막에서 핵심 팩트 추출 → topic에 포함
-                        _transcript = _yt_ref.get("transcript", "")
-                        if _transcript:
-                            # 자막 앞 800자를 요약 컨텍스트로 포함
-                            _snippet = _transcript[:800].strip()
-                            topic = f"{_yt_title}\n\n[원본 영상 내용]\n{_snippet}"
-                            yield {"data": f"[레퍼런스 분석] 주제 + 자막 추출 완료: '{_yt_title}' (자막 {len(_transcript)}자)\n"}
-                        else:
-                            topic = _yt_title
-                            yield {"data": f"[레퍼런스 분석] 주제 추출 완료: '{_yt_title}' (자막 없음)\n"}
-                    else:
-                        yield {"data": "WARN|[레퍼런스 분석] 영상 제목을 가져올 수 없습니다. URL을 주제로 사용합니다.\n"}
-                except Exception as e:
-                    yield {"data": f"WARN|[레퍼런스 분석] 영상 분석 실패: {e}\n"}
+            old_topic = topic
+            topic, ref_url = _resolve_youtube_topic(topic, ref_url)
+            if topic != old_topic:
+                yield {"data": f"[레퍼런스 분석] YouTube 주제 추출 완료: '{topic.split(chr(10))[0]}'\n"}
 
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
 
@@ -1073,25 +1074,10 @@ async def prepare_endpoint(req: PrepareRequest):
             # YouTube URL 자동 감지 + topic 교체
             prep_ref_url = req.referenceUrl
             prep_topic = req.topic
-            if not prep_ref_url and _YT_URL_PATTERN.search(prep_topic):
-                prep_ref_url = prep_topic
-                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 내용을 분석합니다...\n"}
-                try:
-                    from modules.utils.youtube_extractor import extract_youtube_reference
-                    _yt_ref = extract_youtube_reference(prep_ref_url)
-                    if _yt_ref and _yt_ref.get("title"):
-                        _yt_title = re.sub(r"#\S+", "", _yt_ref["title"]).strip()
-                        _transcript = _yt_ref.get("transcript", "")
-                        if _transcript:
-                            prep_topic = f"{_yt_title}\n\n[원본 영상 내용]\n{_transcript[:800].strip()}"
-                            yield {"data": f"[레퍼런스 분석] 주제 + 자막 추출 완료: '{_yt_title}' (자막 {len(_transcript)}자)\n"}
-                        else:
-                            prep_topic = _yt_title
-                            yield {"data": f"[레퍼런스 분석] 주제 추출 완료: '{_yt_title}' (자막 없음)\n"}
-                    else:
-                        yield {"data": "WARN|[레퍼런스 분석] 영상 제목을 가져올 수 없습니다.\n"}
-                except Exception as e:
-                    yield {"data": f"WARN|[레퍼런스 분석] 영상 분석 실패: {e}\n"}
+            old_prep_topic = prep_topic
+            prep_topic, prep_ref_url = _resolve_youtube_topic(prep_topic, prep_ref_url)
+            if prep_topic != old_prep_topic:
+                yield {"data": f"[레퍼런스 분석] YouTube 주제 추출 완료: '{prep_topic.split(chr(10))[0]}'\n"}
 
             yield {"data": f"[기획] '{prep_topic.split(chr(10))[0]}' 스크립트 생성 중...\n"}
 
@@ -1122,7 +1108,7 @@ async def prepare_endpoint(req: PrepareRequest):
             for i, cut in enumerate(cuts):
                 try:
                     img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys) if req.imageEngine == "imagen" else req.apiKey
-                    _topic = topic
+                    _topic = prep_topic
                     img_path = await loop.run_in_executor(
                         None, lambda idx=i, c=cut, k=img_key, t=_topic: gen_image_fn(c["prompt"], idx, topic_folder, k, topic=t) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys, topic=t)
                     )

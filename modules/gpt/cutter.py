@@ -140,6 +140,25 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str, model_o
     return (response.choices[0].message.content or "").strip()
 
 
+def _request_openai_freeform(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
+    """OpenAI API — schema 제약 없이 자유 형식 JSON 응답 (analyzer 등 용도)."""
+    from openai import OpenAI
+    model = model_override or os.getenv("OPENAI_MODEL", "gpt-4o")
+    client = OpenAI(api_key=api_key, timeout=120)
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt + "\n\nRespond with valid JSON only."},
+            {"role": "user", "content": user_content},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.7,
+    )
+    if not response.choices:
+        raise ValueError("OpenAI 응답에 choices가 비어 있습니다.")
+    return (response.choices[0].message.content or "").strip()
+
+
 _gemini_cache: dict[str, object] = {}  # key → cached_content (최대 20개, 초과 시 가장 오래된 것 제거)
 _gemini_cache_lock = threading.Lock()
 _GEMINI_CACHE_MAX = 20
