@@ -1240,7 +1240,7 @@ export default function Home() {
 
       {/* 진행률 + 로그 패널 (단일 채널) */}
       <AnimatePresence>
-        {isGenerating && selectedChannels.length < 2 && (
+        {isGenerating && (selectedChannels.length < 2 || previewMode || !channelResults || Object.keys(channelResults).length === 0) && (
           <ProgressPanel progress={progress} logs={logs} />
         )}
       </AnimatePresence>
