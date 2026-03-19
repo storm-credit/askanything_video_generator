@@ -23,6 +23,7 @@ export default function Home() {
   const [imageModel, setImageModel] = useState("imagen-4.0-fast-generate-001");
   const [videoEngine, setVideoEngine] = useState("none");
   const [videoModel, setVideoModel] = useState("");
+  const [testMode, setTestMode] = useState(false);
   const [language, setLanguage] = useState("ko");
   const [cameraStyle, setCameraStyle] = useState("auto");
   const [bgmTheme, setBgmTheme] = useState("random");
@@ -329,6 +330,7 @@ export default function Home() {
           referenceUrl: detectedRefUrl,
           publishMode,
           scheduledTime: publishMode === "scheduled" ? scheduledTime : undefined,
+          maxCuts: testMode ? 3 : undefined,
         }),
       });
 
@@ -480,6 +482,7 @@ export default function Home() {
           referenceUrl: detectedRefUrl,
           publishMode,
           scheduledTime: publishMode === "scheduled" ? scheduledTime : undefined,
+          maxCuts: testMode ? 3 : undefined,
         }),
       });
 
@@ -640,6 +643,7 @@ export default function Home() {
           language,
           channel: channel || undefined,
           referenceUrl: detectedRefUrl,
+          maxCuts: testMode ? 3 : undefined,
         }),
       });
 
@@ -973,6 +977,10 @@ export default function Home() {
             {/* 글로벌 설정 — 품질 · 언어 */}
             <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
               <div className="flex items-center justify-center gap-1.5">
+                <label className={`flex items-center gap-1 border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-colors ${testMode ? "bg-red-500/20 border-red-500/50 text-red-300" : "bg-white/5 border-white/10 text-gray-500 hover:bg-white/10"}`}>
+                  <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} className="sr-only" />
+                  <span>{testMode ? "TEST 3컷" : "TEST"}</span>
+                </label>
                 <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
                   <Crown className="w-3.5 h-3.5 text-amber-400" />
                   <select value={qualityPreset} onChange={(e) => applyPreset(e.target.value)} disabled={isGenerating} aria-label="품질 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">

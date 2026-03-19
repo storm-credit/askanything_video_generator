@@ -168,6 +168,7 @@ class GenerateRequest(BaseModel):
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL (분석 후 스타일 반영)
     publishMode: str = "realtime"  # realtime(공개) / private(비공개) / scheduled(예약)
     scheduledTime: str | None = None  # ISO datetime (예약 모드 전용)
+    maxCuts: int | None = None  # 테스트 모드: 컷 수 제한 (예: 3)
 
     @field_validator("language")
     @classmethod
@@ -553,6 +554,11 @@ async def generate_video_endpoint(req: GenerateRequest):
                     reference_url=ref_url,
                 ),
             )
+
+            # 테스트 모드: 컷 수 제한
+            if req.maxCuts and len(cuts) > req.maxCuts:
+                cuts = cuts[:req.maxCuts]
+                yield {"data": f"[테스트 모드] {req.maxCuts}컷으로 제한\n"}
 
             yield {"data": "PROG|30\n"}
             yield {"data": f"[기획 완료] 총 {len(cuts)}컷 기획 완료!\n"}
@@ -998,6 +1004,7 @@ class PrepareRequest(BaseModel):
     videoEngine: str = "none"  # prepare 단계에서는 비디오 미생성이 기본
     channel: str | None = None
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL
+    maxCuts: int | None = None  # 테스트 모드: 컷 수 제한
 
     @field_validator("language")
     @classmethod
@@ -1063,6 +1070,11 @@ async def prepare_endpoint(req: PrepareRequest):
                     reference_url=prep_ref_url,
                 ),
             )
+
+            # 테스트 모드: 컷 수 제한
+            if req.maxCuts and len(cuts) > req.maxCuts:
+                cuts = cuts[:req.maxCuts]
+                yield {"data": f"[테스트 모드] {req.maxCuts}컷으로 제한\n"}
 
             yield {"data": "PROG|30\n"}
             yield {"data": f"[기획 완료] {len(cuts)}컷 스크립트 생성!\n"}
