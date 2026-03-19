@@ -7,6 +7,7 @@ __pycache__/
 
 # OAuth / credential files
 client_secret*.json
+client_secrets/
 token*.json
 *.credentials
 

@@ -1414,10 +1414,11 @@ async def youtube_status():
 
 
 @app.post("/api/youtube/auth")
-async def youtube_auth():
+async def youtube_auth(req: dict = None):
     from modules.upload.youtube import create_auth_url
     try:
-        url = create_auth_url()
+        channel = (req or {}).get("channel")
+        url = create_auth_url(channel=channel)
         return {"auth_url": url}
     except FileNotFoundError as e:
         return {"error": str(e)}

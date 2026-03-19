@@ -10,8 +10,32 @@ from google.auth.transport.requests import Request
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"]
 TOKENS_DIR = Path("youtube_tokens")
-CLIENT_SECRET_PATH = Path(os.getenv("YOUTUBE_CLIENT_SECRET", "client_secret.json"))
+CLIENT_SECRETS_DIR = Path("client_secrets")
+CLIENT_SECRET_PATH = Path(os.getenv("YOUTUBE_CLIENT_SECRET", "client_secret.json"))  # 기본 fallback
 REDIRECT_URI = os.getenv("YOUTUBE_REDIRECT_URI", f"http://localhost:{os.getenv('API_PORT', '8003')}/api/youtube/callback")
+
+# 채널별 client_secret 매핑 (채널 프리셋 이름 → client_secret 파일명)
+_CHANNEL_CLIENT_MAP: dict[str, str] = {}
+
+
+def register_channel_client(channel_name: str, client_secret_filename: str):
+    """채널에 특정 OAuth 클라이언트를 매핑합니다."""
+    _CHANNEL_CLIENT_MAP[channel_name] = client_secret_filename
+
+
+def _get_client_secret_path(channel_name: str | None = None) -> Path:
+    """채널에 매핑된 client_secret 경로를 반환. 없으면 기본 fallback."""
+    if channel_name and channel_name in _CHANNEL_CLIENT_MAP:
+        p = CLIENT_SECRETS_DIR / _CHANNEL_CLIENT_MAP[channel_name]
+        if p.exists():
+            return p
+    # client_secrets 폴더에 채널명과 같은 파일이 있으면 사용
+    if channel_name:
+        p = CLIENT_SECRETS_DIR / f"{channel_name}.json"
+        if p.exists():
+            return p
+    # 기본 fallback
+    return CLIENT_SECRET_PATH
 
 # CSRF state 저장 (state → 만료 시간)
 _pending_states: dict[str, float] = {}
@@ -96,22 +120,24 @@ def get_auth_status() -> dict:
     return {"connected": connected, "channels": channels}
 
 
-def create_auth_url() -> str:
+def create_auth_url(channel: str | None = None) -> str:
     """OAuth 인증 URL을 생성합니다 (CSRF 보호용 state 포함)."""
-    if not CLIENT_SECRET_PATH.exists():
-        raise FileNotFoundError("client_secret.json 파일이 필요합니다. Google Cloud Console에서 다운로드하세요.")
+    secret_path = _get_client_secret_path(channel)
+    if not secret_path.exists():
+        raise FileNotFoundError(f"client_secret 파일이 필요합니다: {secret_path}")
 
     state = secrets.token_urlsafe(16)
-    _pending_states[state] = time.time() + 300  # 5분 유효
+    # state에 채널 + 시크릿 경로 정보 저장 (콜백에서 같은 시크릿으로 토큰 교환)
+    _pending_states[state] = (time.time() + 300, str(secret_path))
 
     # 만료된 state 정리
     now = time.time()
-    expired = [s for s, exp in _pending_states.items() if exp < now]
+    expired = [s for s, (exp, _) in _pending_states.items() if exp < now]
     for s in expired:
         _pending_states.pop(s, None)
 
     flow = Flow.from_client_secrets_file(
-        str(CLIENT_SECRET_PATH),
+        str(secret_path),
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI,
     )
@@ -128,11 +154,14 @@ def handle_auth_callback(auth_code: str, state: str | None = None) -> dict:
     """OAuth 콜백에서 토큰을 교환하고 채널별로 저장합니다."""
     if not state:
         raise ValueError("CSRF state가 누락되었습니다. 다시 시도해주세요.")
-    expires_at = _pending_states.pop(state, None)
-    if expires_at is None or time.time() > expires_at:
+    state_data = _pending_states.pop(state, None)
+    if state_data is None:
         raise ValueError("인증 state가 유효하지 않습니다. 다시 시도해주세요.")
+    expires_at, secret_path_str = state_data
+    if time.time() > expires_at:
+        raise ValueError("인증 state가 만료되었습니다. 다시 시도해주세요.")
     flow = Flow.from_client_secrets_file(
-        str(CLIENT_SECRET_PATH),
+        secret_path_str,
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI,
     )

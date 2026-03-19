@@ -103,17 +103,30 @@ def _fetch_transcript(video_id: str) -> str:
             except Exception:
                 continue
 
-        # 사용 가능한 자막 중 아무거나
+        # 사용 가능한 자막 중 주요 언어만 시도 (쓸모없는 자동생성 자막 방지)
+        _USEFUL_LANGS = {"ko", "en", "ja", "zh", "es", "fr", "de", "pt", "hi", "id", "vi", "th", "ru", "ar"}
         try:
             transcript_list = api.list(video_id)
             for t in transcript_list:
-                try:
-                    entries = t.fetch()
-                    lines = [s.text for s in entries if s.text]
-                    if lines:
-                        return " ".join(lines)
-                except Exception:
-                    continue
+                # 자동생성이 아닌 수동 자막 우선
+                if not t.is_generated:
+                    try:
+                        entries = t.fetch()
+                        lines = [s.text for s in entries if s.text]
+                        if lines:
+                            return " ".join(lines)
+                    except Exception:
+                        continue
+            # 수동 자막 없으면 주요 언어 자동생성만 허용
+            for t in transcript_list:
+                if t.is_generated and hasattr(t, 'language_code') and t.language_code in _USEFUL_LANGS:
+                    try:
+                        entries = t.fetch()
+                        lines = [s.text for s in entries if s.text]
+                        if lines:
+                            return " ".join(lines)
+                    except Exception:
+                        continue
         except Exception:
             pass
 
