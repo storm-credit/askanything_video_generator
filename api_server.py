@@ -60,8 +60,8 @@ _CANCEL_EVENT_TTL = 600  # 10분 후 미정리 이벤트 자동 삭제
 def _resolve_youtube_topic(topic: str, reference_url: str | None = None) -> tuple[str, str | None]:
     """YouTube URL을 topic에서 감지하면 제목+자막으로 교체. (topic, ref_url) 반환."""
     ref_url = reference_url
-    if not ref_url and _YT_URL_PATTERN.search(topic):
-        ref_url = topic
+    if _YT_URL_PATTERN.search(topic):
+        ref_url = ref_url or topic
         try:
             from modules.utils.youtube_extractor import extract_youtube_reference
             _yt_ref = extract_youtube_reference(ref_url)
@@ -554,7 +554,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             if topic != old_topic:
                 yield {"data": f"[레퍼런스 분석] YouTube 주제 추출 완료: '{topic.split(chr(10))[0]}'\n"}
 
-            yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
+            yield {"data": f"[기획 전문가] '{topic.split(chr(10))[0]}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
 
             # 단계 1: LLM 기획 (Gemini / ChatGPT / Claude 선택)
             # Gemini 프로바이더일 때 키 로테이션 적용

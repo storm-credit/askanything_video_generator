@@ -12,6 +12,14 @@ from modules.gpt.search import get_fact_check_context
 
 _YT_CONTENT_SEP = "\n\n[원본 영상 내용]\n"
 
+def _sanitize_llm_input(text: str, max_len: int = 2000) -> str:
+    """LLM 프롬프트에 주입되는 외부 텍스트에서 인젝션 패턴을 제거."""
+    # 대괄호/중괄호 지시문 패턴 제거
+    text = re.sub(r'\[(?:SYSTEM|INST|INSTRUCTION|system|inst)\]', '', text)
+    text = re.sub(r'(?i)ignore\s+(all\s+)?previous\s+instructions?', '', text)
+    text = re.sub(r'(?i)you\s+are\s+now\s+', '', text)
+    return text[:max_len].strip()
+
 def _split_yt_topic(topic: str) -> tuple[str, str]:
     """YouTube 자막이 포함된 topic을 (제목, 자막내용)으로 분리. 자막 없으면 ('', '')."""
     if _YT_CONTENT_SEP in topic:
@@ -362,7 +370,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     {
       "description": "[컷 묘사 (한국어)] [감정태그]",
       "image_prompt": "[영어 이미지 프롬프트 (MASTER_STYLE 자동 적용됨)]",
-      "script": "[성우 대본: 구어체 반말, 15~30자]"
+      "script": "[성우 대본: 구어체 반말, 20~35자]"
     }
   ]
 }
@@ -510,16 +518,19 @@ This is the channel's signature look — every image should feel cohesive with t
 
     # RAG 기법: 실시간 검색 팩트체크 주입 (제목만 사용)
     fact_context = get_fact_check_context(_topic_title)
+    # 외부 입력 새니타이징 (프롬프트 인젝션 방어)
+    _safe_title = _sanitize_llm_input(_topic_title, max_len=200)
+    _safe_content = _sanitize_llm_input(_topic_content, max_len=1500) if _topic_content else ""
     if lang == "en":
-        user_content = f"Topic: Create a short-form video plan about '{_topic_title}'."
+        user_content = f"Topic: Create a short-form video plan about '{_safe_title}'."
     else:
-        user_content = f"주제: '{_topic_title}'에 대한 숏폼 기획안을 작성해주세요."
+        user_content = f"주제: '{_safe_title}'에 대한 숏폼 기획안을 작성해주세요."
     # YouTube 원본 자막이 있으면 LLM 컨텍스트로 주입
-    if _topic_content:
+    if _safe_content:
         if lang == "en":
-            user_content += f"\n\n[Original Video Transcript — Reflect the key facts and themes from this content in your new plan]\n{_topic_content}"
+            user_content += f"\n\n<transcript>\n{_safe_content}\n</transcript>\nReflect the key facts and themes from the transcript above in your new plan."
         else:
-            user_content += f"\n\n[원본 영상 자막 — 이 내용의 핵심 팩트와 주제를 반영하여 새로운 기획안을 작성하세요]\n{_topic_content}"
+            user_content += f"\n\n<transcript>\n{_safe_content}\n</transcript>\n위 자막의 핵심 팩트와 주제를 반영하여 새로운 기획안을 작성하세요."
     if fact_context:
         if lang == "en":
             user_content += f"\n\n{fact_context}\n[Fact-Check Instruction] Prioritize facts from the reference above over your training data. Do NOT invent statistics — use only verified numbers."
@@ -632,18 +643,27 @@ This is the channel's signature look — every image should feel cohesive with t
         else:
             retry_key = current_key
         # 기존 컷 데이터를 포함하여 확장만 요청 (전체 재생성 대신)
-        existing_cuts_json = json.dumps([{"script": c["script"], "description": c.get("text", "")} for c in cuts], ensure_ascii=False)
+        existing_cuts_json = json.dumps(
+            [{"script": c["script"], "description": c.get("text", ""), "image_prompt": c.get("prompt", "")} for c in cuts],
+            ensure_ascii=False
+        )
         if lang == "en":
             retry_expansion = (
-                f"\n\n{len(cuts)} cuts were generated. Add intermediate cuts between existing ones to reach 7-10 total. "
-                f"Maintain the flow and style while reinforcing buildup/climax sections.\nExisting cuts: {existing_cuts_json}"
+                f"\n\nOnly {len(cuts)} cuts were generated. Expand to 7-10 total cuts. "
+                f"You MUST keep ALL existing cuts verbatim and add 2-4 NEW cuts between them to reinforce buildup/climax. "
+                f"Return the complete expanded array.\nExisting cuts: {existing_cuts_json}"
             )
         else:
             retry_expansion = (
-                f"\n\n기존에 {len(cuts)}컷이 생성되었습니다. 아래 기존 컷 사이에 중간 컷을 추가하여 총 7~10컷으로 확장하세요. "
-                f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
+                f"\n\n기존에 {len(cuts)}컷만 생성되었습니다. 총 7~10컷으로 확장하세요. "
+                f"기존 컷은 반드시 그대로 유지하고, 사이에 2~4개의 새 컷을 추가하여 빌드업/클라이맥스를 보강하세요. "
+                f"확장된 전체 배열을 반환하세요.\n기존 컷: {existing_cuts_json}"
             )
-        retry_user = user_content + retry_expansion
+        # 확장 재시도: 자막/팩트체크 컨텍스트 제외하고 토픽+기존 컷만 전달 (토큰 절약)
+        if lang == "en":
+            retry_user = f"Topic: '{_safe_title}'." + retry_expansion
+        else:
+            retry_user = f"주제: '{_safe_title}'." + retry_expansion
         try:
             cuts, title, tags = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
         except Exception as retry_err:

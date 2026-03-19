@@ -60,15 +60,17 @@ def _fetch_metadata_ytdlp(video_id: str) -> dict:
         import subprocess
         url = f"https://www.youtube.com/watch?v={video_id}"
         # --print 방식: --dump-json과 달리 JS 런타임 불필요
+        # Unit Separator(\x1f)로 구분 — 제목에 탭 문자가 포함될 수 있으므로
+        _SEP = "\x1f"
         result = subprocess.run(
             ["python", "-m", "yt_dlp", "--no-download",
-             "--print", "%(title)s\t%(uploader)s\t%(view_count)s\t%(like_count)s\t%(description).200s",
+             "--print", f"%(title)s{_SEP}%(uploader)s{_SEP}%(view_count)s{_SEP}%(like_count)s{_SEP}%(description).200s",
              url],
             capture_output=True, text=True, timeout=30, encoding="utf-8",
         )
         if result.returncode != 0 or not result.stdout.strip():
             return {}
-        parts = result.stdout.strip().split("\t")
+        parts = result.stdout.strip().split(_SEP)
         if len(parts) < 2:
             return {}
         return {

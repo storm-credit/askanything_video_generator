@@ -193,10 +193,10 @@ def generate_video_veo(
                         return final_path
 
                 print(f"[{model_label} 오류] 컷 {index+1}: 비디오 데이터를 찾을 수 없습니다.")
-                return None
+                break  # 다음 모델로 폴백
             except Exception as e:
                 print(f"[{model_label} 다운로드 오류] 컷 {index+1}: {e}")
-                return None
+                break  # 다운로드 실패 → 다음 모델로 폴백
 
         # 이 모델의 키 전부 소진 → 다음 모델로 폴백
         if model_idx < len(model_chain) - 1:
