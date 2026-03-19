@@ -151,9 +151,15 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
 
     try:
         if os.name == "nt":
-            # shell=False: list 형태로 전달하여 injection 방지
-            cmd[0] = shutil.which("npx") or "npx.cmd"
-            # CREATE_NO_WINDOW: 콘솔 창 표시 방지
+            # .cmd 파일 우회: node로 직접 remotion-cli.js 실행 (콘솔 창 방지)
+            node_exe = shutil.which("node") or "node"
+            remotion_cli_js = os.path.join(
+                remotion_dir, "node_modules", "@remotion", "cli", "remotion-cli.js"
+            )
+            if os.path.exists(remotion_cli_js):
+                cmd = [node_exe, remotion_cli_js] + cmd[1:]  # npx → node + cli.js
+            else:
+                cmd[0] = shutil.which("npx") or "npx.cmd"
             import subprocess as _sp
             result = subprocess.run(
                 cmd, cwd=remotion_dir, check=True, shell=False,
