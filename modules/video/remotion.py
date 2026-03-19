@@ -157,7 +157,7 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
                 remotion_dir, "node_modules", "@remotion", "cli", "remotion-cli.js"
             )
             if os.path.exists(remotion_cli_js):
-                cmd = [node_exe, remotion_cli_js] + cmd[1:]  # npx → node + cli.js
+                cmd = [node_exe, remotion_cli_js] + cmd[2:]  # npx remotion → node + cli.js
             else:
                 cmd[0] = shutil.which("npx") or "npx.cmd"
             import subprocess as _sp
