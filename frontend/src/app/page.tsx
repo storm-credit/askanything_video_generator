@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film, FolderOpen, Download, Loader2 } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film, FolderOpen, Download, Loader2, FlaskConical } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -1024,7 +1024,8 @@ export default function Home() {
                 </div>
                 <label className={`flex items-center gap-1 border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-colors ${testMode ? "bg-red-500/20 border-red-500/50 text-red-300" : "bg-white/5 border-white/10 text-gray-500 hover:bg-white/10"}`}>
                   <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} className="sr-only" />
-                  <span>{testMode ? "TEST 3컷" : "TEST"}</span>
+                  <FlaskConical className="w-3.5 h-3.5" />
+                  <span>{testMode ? "3컷" : "TEST"}</span>
                 </label>
               </div>
             </div>
