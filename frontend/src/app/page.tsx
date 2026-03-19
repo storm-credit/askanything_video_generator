@@ -1461,15 +1461,30 @@ export default function Home() {
             <h3 className="text-xl text-white font-bold">생성 성공!</h3>
             {generatedVideoPath && (
               <div className="flex flex-col gap-2 w-full">
-                {/* 다운로드 버튼 */}
-                <a
-                  href={generatedVideoUrl || "#"}
-                  download={generatedVideoPath.split('/').pop() || "AskAnything_Shorts.mp4"}
+                {/* 다운로드 버튼 — cross-origin이므로 fetch blob 방식 */}
+                <button
+                  onClick={async () => {
+                    if (!generatedVideoUrl) return;
+                    try {
+                      const res = await fetch(generatedVideoUrl);
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = generatedVideoPath.split('/').pop() || "AskAnything_Shorts.mp4";
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      URL.revokeObjectURL(url);
+                    } catch {
+                      window.open(generatedVideoUrl, "_blank");
+                    }
+                  }}
                   className="flex items-center justify-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-xl transition-colors"
                 >
                   <ExternalLink className="w-4 h-4" />
                   다운로드
-                </a>
+                </button>
                 {/* 업로드 버튼들 */}
                 <button
                   onClick={() => {

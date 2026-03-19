@@ -225,7 +225,9 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
                   channel: str | None = None, llm_model: str | None = None,
                   reference_url: str | None = None) -> tuple[list[dict[str, Any]], str, str, list[str]]:
-    topic_folder = slugify_topic(topic, lang)
+    # YouTube 자막 포함된 topic에서 제목만 추출하여 폴더명 생성
+    _folder_topic = topic.split("\n\n[원본 영상 내용]")[0].strip() if "\n\n[원본 영상 내용]" in topic else topic
+    topic_folder = slugify_topic(_folder_topic, lang)
 
     # 저장 폴더 구조 생성
     base_path = os.path.join("assets", topic_folder)
@@ -466,12 +468,19 @@ This is the channel's signature look — every image should feel cohesive with t
 
     print(f"-> [기획 전문가] {provider_label} 기반 스크립트 및 기획안 작성 중...")
 
-    # RAG 기법: 실시간 검색 팩트체크 주입
-    fact_context = get_fact_check_context(topic)
+    # YouTube 자막 포함된 topic 분리: 제목 vs 원본 내용
+    _topic_title = topic.split("\n\n[원본 영상 내용]")[0].strip() if "\n\n[원본 영상 내용]" in topic else topic
+    _topic_content = topic.split("\n\n[원본 영상 내용]\n", 1)[1].strip() if "\n\n[원본 영상 내용]\n" in topic else ""
+
+    # RAG 기법: 실시간 검색 팩트체크 주입 (제목만 사용)
+    fact_context = get_fact_check_context(_topic_title)
     if lang == "en":
-        user_content = f"Topic: Create a short-form video plan about '{topic}'."
+        user_content = f"Topic: Create a short-form video plan about '{_topic_title}'."
     else:
-        user_content = f"주제: '{topic}'에 대한 숏폼 기획안을 작성해주세요."
+        user_content = f"주제: '{_topic_title}'에 대한 숏폼 기획안을 작성해주세요."
+    # YouTube 원본 자막이 있으면 LLM 컨텍스트로 주입
+    if _topic_content:
+        user_content += f"\n\n[원본 영상 자막 — 이 내용의 핵심 팩트와 주제를 반영하여 새로운 기획안을 작성하세요]\n{_topic_content}"
     if fact_context:
         user_content += f"\n\n{fact_context}"
 

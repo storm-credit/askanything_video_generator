@@ -533,7 +533,27 @@ async def generate_video_endpoint(req: GenerateRequest):
             ref_url = req.referenceUrl
             if not ref_url and _yt_pattern.search(topic):
                 ref_url = topic
-                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 분석 후 스타일을 참고합니다\n"}
+                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 내용을 분석합니다...\n"}
+                # YouTube 영상 제목 + 자막 핵심 내용을 추출해서 topic 교체
+                try:
+                    from modules.utils.youtube_extractor import extract_youtube_reference
+                    _yt_ref = extract_youtube_reference(ref_url)
+                    if _yt_ref and _yt_ref.get("title"):
+                        _yt_title = re.sub(r"#\S+", "", _yt_ref["title"]).strip()
+                        # 자막에서 핵심 팩트 추출 → topic에 포함
+                        _transcript = _yt_ref.get("transcript", "")
+                        if _transcript:
+                            # 자막 앞 800자를 요약 컨텍스트로 포함
+                            _snippet = _transcript[:800].strip()
+                            topic = f"{_yt_title}\n\n[원본 영상 내용]\n{_snippet}"
+                            yield {"data": f"[레퍼런스 분석] 주제 + 자막 추출 완료: '{_yt_title}' (자막 {len(_transcript)}자)\n"}
+                        else:
+                            topic = _yt_title
+                            yield {"data": f"[레퍼런스 분석] 주제 추출 완료: '{_yt_title}' (자막 없음)\n"}
+                    else:
+                        yield {"data": "WARN|[레퍼런스 분석] 영상 제목을 가져올 수 없습니다. URL을 주제로 사용합니다.\n"}
+                except Exception as e:
+                    yield {"data": f"WARN|[레퍼런스 분석] 영상 분석 실패: {e}\n"}
 
             yield {"data": f"[기획 전문가] '{topic}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
 
