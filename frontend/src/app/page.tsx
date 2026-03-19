@@ -106,12 +106,21 @@ export default function Home() {
 
   // 미리보기 모드
   const [previewMode, setPreviewMode] = useState(false);
-  const [previewData, setPreviewData] = useState<{
+  type PreviewData = {
     sessionId: string;
     title: string;
+    channel?: string;
     cuts: { index: number; script: string; prompt: string; description?: string; image_url: string | null }[];
-  } | null>(null);
+  };
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [editedScripts, setEditedScripts] = useState<Record<number, string>>({});
+  // 멀티채널 미리보기
+  const [channelPreviews, setChannelPreviews] = useState<Record<string, PreviewData>>({});
+  const [activePreviewTab, setActivePreviewTab] = useState<string>("");
+  const [editedScriptsMap, setEditedScriptsMap] = useState<Record<string, Record<number, string>>>({});
+  // 멀티채널 렌더 진행률
+  const [renderResults, setRenderResults] = useState<Record<string, { progress: number; logs: string[]; status: 'rendering' | 'done' | 'error'; videoUrl?: string; errorMsg?: string }>>({});
+  const [activeRenderTab, setActiveRenderTab] = useState<string>("");
 
   // AbortController (생성 취소용)
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -627,6 +636,41 @@ export default function Home() {
     }
   };
 
+  const prepareForChannel = async (ch: string, abortSignal: AbortSignal): Promise<PreviewData | null> => {
+    const preset = CHANNEL_PRESETS[ch];
+    if (!preset) return null;
+    return new Promise<PreviewData | null>((resolve) => {
+      fetch(`${API_BASE}/api/prepare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abortSignal,
+        body: JSON.stringify({
+          topic,
+          apiKey: pickKey("openai") || undefined,
+          llmProvider,
+          llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
+          geminiKeys: (savedKeys["gemini"] || []).length > 0 ? savedKeys["gemini"].join(",") : undefined,
+          imageEngine,
+          language: preset.language,
+          channel: ch,
+          referenceUrl: detectedRefUrl,
+          maxCuts: testMode ? 3 : undefined,
+        }),
+      }).then(async (response) => {
+        await readSSE(response, (previewJson) => {
+          try {
+            const data: PreviewData = { ...JSON.parse(previewJson), channel: ch };
+            resolve(data);
+          } catch (err) {
+            console.error("Preview parse error:", err);
+            resolve(null);
+          }
+        });
+        resolve(null); // SSE ended without PREVIEW
+      }).catch(() => resolve(null));
+    });
+  };
+
   const handlePrepare = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic.trim()) return;
@@ -638,39 +682,62 @@ export default function Home() {
     setLogs([]);
     setPreviewData(null);
     setEditedScripts({});
+    setChannelPreviews({});
+    setEditedScriptsMap({});
+    setRenderResults({});
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    try {
-      const response = await fetch(`${API_BASE}/api/prepare`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: abortController.signal,
-        body: JSON.stringify({
-          topic,
-          apiKey: pickKey("openai") || undefined,
-          llmProvider,
-          llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
-          geminiKeys: (savedKeys["gemini"] || []).length > 0 ? savedKeys["gemini"].join(",") : undefined,
-          imageEngine,
-          language,
-          channel: channel || undefined,
-          referenceUrl: detectedRefUrl,
-          maxCuts: testMode ? 3 : undefined,
-        }),
-      });
+    const channels = selectedChannels.length >= 2 ? selectedChannels : (channel ? [channel] : ["default"]);
+    const isMulti = channels.length >= 2;
 
-      await readSSE(response, (previewJson) => {
-        try {
-          const data = JSON.parse(previewJson);
-          setPreviewData(data);
-          setPreviewMode(true);
-          setIsGenerating(false);
-        } catch (err) {
-          console.error("Preview parse error:", err);
+    try {
+      if (isMulti) {
+        // 멀티채널: 순차 prepare (이미지 API 쿼터 보호)
+        const previews: Record<string, PreviewData> = {};
+        for (const ch of channels) {
+          setLogs(prev => [...prev.slice(-99), `[${CHANNEL_PRESETS[ch]?.flag || ""} ${CHANNEL_PRESETS[ch]?.label || ch}] 미리보기 준비 중...`]);
+          const result = await prepareForChannel(ch, abortController.signal);
+          if (result) {
+            previews[ch] = result;
+            setChannelPreviews(prev => ({ ...prev, [ch]: result }));
+          }
         }
-      });
+        if (Object.keys(previews).length > 0) {
+          setActivePreviewTab(channels[0]);
+          setPreviewMode(true);
+        }
+      } else {
+        // 싱글 채널: 기존 로직
+        const response = await fetch(`${API_BASE}/api/prepare`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: abortController.signal,
+          body: JSON.stringify({
+            topic,
+            apiKey: pickKey("openai") || undefined,
+            llmProvider,
+            llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
+            geminiKeys: (savedKeys["gemini"] || []).length > 0 ? savedKeys["gemini"].join(",") : undefined,
+            imageEngine,
+            language,
+            channel: channel || undefined,
+            referenceUrl: detectedRefUrl,
+            maxCuts: testMode ? 3 : undefined,
+          }),
+        });
+        await readSSE(response, (previewJson) => {
+          try {
+            const data = JSON.parse(previewJson);
+            setPreviewData(data);
+            setPreviewMode(true);
+            setIsGenerating(false);
+          } catch (err) {
+            console.error("Preview parse error:", err);
+          }
+        });
+      }
     } catch (error) {
       console.error(error);
       setErrorMessage("[연결 실패] 백엔드 서버에 연결할 수 없습니다.");
@@ -679,8 +746,75 @@ export default function Home() {
     }
   };
 
+  const renderForChannel = async (ch: string, preview: PreviewData, scripts: Record<number, string>, abortSignal: AbortSignal) => {
+    const preset = CHANNEL_PRESETS[ch];
+    const updatedCuts = preview.cuts.map((cut) => ({
+      index: cut.index,
+      script: scripts[cut.index] ?? cut.script,
+    }));
+    setRenderResults(prev => ({ ...prev, [ch]: { progress: 0, logs: [], status: 'rendering' } }));
+    try {
+      const response = await fetch(`${API_BASE}/api/render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abortSignal,
+        body: JSON.stringify({
+          sessionId: preview.sessionId,
+          cuts: updatedCuts,
+          elevenlabsKey: pickKey("elevenlabs") || undefined,
+          ttsSpeed: preset?.ttsSpeed ?? ttsSpeed,
+          videoEngine,
+          cameraStyle,
+          bgmTheme,
+          channel: ch,
+          platforms: preset?.platforms ?? platforms,
+          captionSize: preset?.captionSize ?? captionSize,
+          captionY: preset?.captionY ?? captionY,
+          outputPath: outputPath.trim() || undefined,
+        }),
+      });
+      if (!response.body) return;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) { if (buffer.trim()) processRenderLine(ch, buffer); break; }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) processRenderLine(ch, line);
+      }
+    } catch (error) {
+      if (!abortSignal.aborted) {
+        setRenderResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: '렌더 연결 실패' } }));
+      }
+    }
+  };
+
+  const processRenderLine = (ch: string, line: string) => {
+    if (!line.startsWith("data:")) return;
+    const rawData = line.slice(5).trim();
+    if (!rawData) return;
+    if (rawData.startsWith("DONE|")) {
+      const videoPath = rawData.slice(5).split("|")[0].trim().replace(/\\/g, '/');
+      const encodedPath = videoPath.split('/').map(encodeURIComponent).join('/');
+      const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
+      setRenderResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'done', progress: 100, videoUrl: `${API_BASE}${normalizedPath}` } }));
+    } else if (rawData.startsWith("ERROR|")) {
+      setRenderResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: rawData.slice(6) } }));
+    } else if (rawData.startsWith("PROG|")) {
+      const p = parseInt(rawData.slice(5), 10);
+      if (!isNaN(p)) setRenderResults(prev => ({ ...prev, [ch]: { ...prev[ch], progress: p } }));
+    } else {
+      setRenderResults(prev => ({ ...prev, [ch]: { ...prev[ch], logs: [...(prev[ch]?.logs || []).slice(-49), rawData] } }));
+    }
+  };
+
   const handleRender = async () => {
-    if (!previewData) return;
+    const isMultiPreview = Object.keys(channelPreviews).length >= 2;
+
+    if (!isMultiPreview && !previewData) return;
 
     setIsGenerating(true);
     setProgress(0);
@@ -689,36 +823,50 @@ export default function Home() {
     setSuccessMessage(null);
     setGeneratedVideoUrl(null);
 
-    const updatedCuts = previewData.cuts.map((cut) => ({
-      index: cut.index,
-      script: editedScripts[cut.index] ?? cut.script,
-    }));
-
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     try {
-      const response = await fetch(`${API_BASE}/api/render`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: abortController.signal,
-        body: JSON.stringify({
-          sessionId: previewData.sessionId,
-          cuts: updatedCuts,
-          elevenlabsKey: pickKey("elevenlabs") || undefined,
-          ttsSpeed,
-          videoEngine,
-          cameraStyle,
-          bgmTheme,
-          channel: channel || undefined,
-          platforms,
-          captionSize,
-          captionY,
-          outputPath: outputPath.trim() || undefined,
-        }),
-      });
-
-      await readSSE(response);
+      if (isMultiPreview) {
+        // 멀티채널 렌더: 순차 렌더 (동시 Remotion 실행 방지)
+        setRenderResults({});
+        const channels = Object.keys(channelPreviews);
+        setActiveRenderTab(channels[0]);
+        for (const ch of channels) {
+          await renderForChannel(ch, channelPreviews[ch], editedScriptsMap[ch] || {}, abortController.signal);
+        }
+        const results = Object.values(renderResults);
+        const doneCount = results.filter(r => r.status === 'done').length;
+        if (doneCount > 0) setSuccessMessage(`${doneCount}/${channels.length} 채널 렌더링 완료!`);
+        setPreviewMode(false);
+        setChannelPreviews({});
+      } else {
+        // 싱글 채널 렌더: 기존 로직
+        const updatedCuts = previewData!.cuts.map((cut) => ({
+          index: cut.index,
+          script: editedScripts[cut.index] ?? cut.script,
+        }));
+        const response = await fetch(`${API_BASE}/api/render`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: abortController.signal,
+          body: JSON.stringify({
+            sessionId: previewData!.sessionId,
+            cuts: updatedCuts,
+            elevenlabsKey: pickKey("elevenlabs") || undefined,
+            ttsSpeed,
+            videoEngine,
+            cameraStyle,
+            bgmTheme,
+            channel: channel || undefined,
+            platforms,
+            captionSize,
+            captionY,
+            outputPath: outputPath.trim() || undefined,
+          }),
+        });
+        await readSSE(response);
+      }
     } catch (error) {
       console.error(error);
       setErrorMessage("[연결 실패] 렌더 서버에 연결할 수 없습니다.");
@@ -1344,26 +1492,114 @@ export default function Home() {
         )}
       </AnimatePresence>
 
+      {/* 멀티채널 렌더 진행 패널 */}
+      <AnimatePresence>
+        {Object.keys(renderResults).length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="mt-8 w-full max-w-xl glass-panel p-5 rounded-3xl relative z-10 border border-white/[0.08]"
+          >
+            <h3 className="text-sm font-semibold text-white mb-3">채널별 렌더링 현황</h3>
+            {/* 탭 */}
+            <div className="flex gap-1.5 mb-3 border-b border-white/[0.06] pb-2">
+              {Object.entries(renderResults).map(([ch, result]) => {
+                const preset = CHANNEL_PRESETS[ch];
+                const isActive = ch === activeRenderTab;
+                return (
+                  <button key={ch} onClick={() => setActiveRenderTab(ch)}
+                    className={`px-3 py-1 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${isActive ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/30" : "text-gray-500 hover:text-gray-300 hover:bg-white/5"}`}>
+                    {preset?.flag} {preset?.label}
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                      result.status === 'done' ? 'bg-green-500/20 text-green-400' :
+                      result.status === 'error' ? 'bg-red-500/20 text-red-400' :
+                      'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {result.status === 'done' ? '완료' : result.status === 'error' ? '오류' : `${result.progress}%`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* 활성 탭 상세 */}
+            {renderResults[activeRenderTab] && (() => {
+              const result = renderResults[activeRenderTab];
+              return (
+                <div>
+                  <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-3">
+                    <div className={`h-full rounded-full transition-all duration-500 ${
+                      result.status === 'done' ? 'bg-green-500' :
+                      result.status === 'error' ? 'bg-red-500' : 'bg-indigo-500'
+                    }`} style={{ width: `${result.progress}%` }} />
+                  </div>
+                  {result.status === 'done' && result.videoUrl && (
+                    <a href={result.videoUrl} download className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 mb-2">
+                      <Download className="w-3.5 h-3.5" /> 다운로드
+                    </a>
+                  )}
+                  {result.status === 'error' && result.errorMsg && (
+                    <p className="text-xs text-red-400 mb-2">{result.errorMsg}</p>
+                  )}
+                  <div className="max-h-32 overflow-y-auto space-y-0.5">
+                    {result.logs.slice(-10).map((log, i) => (
+                      <p key={i} className="text-[10px] text-gray-500 truncate">{log}</p>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 미리보기 패널 */}
       <AnimatePresence>
-        {previewMode && previewData && !isGenerating && (
+        {previewMode && !isGenerating && (() => {
+          const isMultiPreview = Object.keys(channelPreviews).length >= 2;
+          const currentCh = isMultiPreview ? activePreviewTab : null;
+          const currentPreview = isMultiPreview ? channelPreviews[activePreviewTab] : previewData;
+          const currentScripts = isMultiPreview ? (editedScriptsMap[activePreviewTab] || {}) : editedScripts;
+          const setCurrentScripts = isMultiPreview
+            ? (idx: number, val: string) => setEditedScriptsMap(prev => ({ ...prev, [activePreviewTab]: { ...(prev[activePreviewTab] || {}), [idx]: val } }))
+            : (idx: number, val: string) => setEditedScripts(prev => ({ ...prev, [idx]: val }));
+
+          if (!currentPreview) return null;
+
+          return (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             className="mt-8 w-full max-w-3xl glass-panel p-6 rounded-3xl relative z-10 shadow-2xl shadow-indigo-500/20 border border-white/[0.08]"
           >
+            {/* 멀티채널 탭 */}
+            {isMultiPreview && (
+              <div className="flex gap-1.5 mb-4 border-b border-white/[0.06] pb-3">
+                {Object.entries(channelPreviews).map(([ch, preview]) => {
+                  const preset = CHANNEL_PRESETS[ch];
+                  const isActive = ch === activePreviewTab;
+                  return (
+                    <button key={ch} onClick={() => setActivePreviewTab(ch)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${isActive ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/30" : "text-gray-500 hover:text-gray-300 hover:bg-white/5"}`}>
+                      {preset?.flag} {preset?.label} <span className="text-[10px] opacity-60">({preview.cuts.length}컷)</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* 헤더 */}
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <h3 className="text-lg font-bold text-white">{previewData.title}</h3>
+                <h3 className="text-lg font-bold text-white">{currentPreview.title}</h3>
                 <span className="text-[11px] text-gray-400 bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10">
-                  {previewData.cuts.length}컷 · 약 {Math.round(previewData.cuts.length * 4)}초
+                  {currentPreview.cuts.length}컷 · 약 {Math.round(currentPreview.cuts.length * 4)}초
                 </span>
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setPreviewMode(false); setPreviewData(null); }}
+                  onClick={() => { setPreviewMode(false); setPreviewData(null); setChannelPreviews({}); }}
                   className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 text-gray-300 rounded-lg transition-colors"
                 >
                   취소
@@ -1378,7 +1614,7 @@ export default function Home() {
             </div>
 
             <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
-              {previewData.cuts.map((cut, i) => {
+              {currentPreview.cuts.map((cut, i) => {
                 const emotionMatch = (cut.description || "").match(/\[(SHOCK|WONDER|TENSION|REVEAL|CALM)\]/);
                 const emotion = emotionMatch ? emotionMatch[1] : null;
                 const emotionColors: Record<string, { bg: string; text: string; label: string }> = {
@@ -1392,7 +1628,7 @@ export default function Home() {
 
                 return (
                   <motion.div
-                    key={cut.index}
+                    key={`${currentCh || 'single'}-${cut.index}`}
                     initial={{ opacity: 0, x: -12 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.05, duration: 0.3 }}
@@ -1411,11 +1647,9 @@ export default function Home() {
                           이미지 없음
                         </div>
                       )}
-                      {/* 컷 번호 뱃지 */}
                       <div className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-indigo-600/90 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold text-white shadow-md">
                         {cut.index + 1}
                       </div>
-                      {/* 감정 태그 뱃지 */}
                       {eColor && (
                         <div className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium ${eColor.bg} ${eColor.text} backdrop-blur-sm`}>
                           {eColor.label}
@@ -1428,12 +1662,12 @@ export default function Home() {
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] text-gray-500 font-medium">컷 {cut.index + 1}</span>
                         <span className="text-[10px] text-gray-600">
-                          {(editedScripts[cut.index] ?? cut.script)?.length || 0}자
+                          {(currentScripts[cut.index] ?? cut.script)?.length || 0}자
                         </span>
                       </div>
                       <textarea
-                        value={editedScripts[cut.index] ?? cut.script}
-                        onChange={(e) => setEditedScripts(prev => ({ ...prev, [cut.index]: e.target.value }))}
+                        value={currentScripts[cut.index] ?? cut.script}
+                        onChange={(e) => setCurrentScripts(cut.index, e.target.value)}
                         rows={3}
                         className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-gray-200 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/30 transition-colors"
                       />
@@ -1453,7 +1687,8 @@ export default function Home() {
               스크립트를 수정한 뒤 &quot;확인&quot;을 누르면 수정된 내용으로 음성 녹음 + 영상 렌더링이 시작됩니다.
             </p>
           </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* 성공 패널 — 인라인 비디오 플레이어 + 업로드 */}
