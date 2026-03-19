@@ -1011,16 +1011,16 @@ export default function Home() {
             <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
               <div className="flex items-center justify-center gap-2">
                 <div className="flex items-center bg-white/5 border border-white/10 rounded-full overflow-hidden">
-                  <button type="button" onClick={() => setPublishMode("realtime")} disabled={isGenerating}
-                    className={`px-4 py-1.5 text-xs font-medium transition-all ${publishMode === "realtime" ? "bg-green-500/20 text-green-300" : "text-gray-500 hover:text-gray-300"}`}>
+                  <button type="button" onClick={() => setPublishMode("realtime")} disabled={isGenerating || selectedChannels.length === 0}
+                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 cursor-not-allowed" : publishMode === "realtime" ? "bg-green-500/20 text-green-300" : "text-gray-500 hover:text-gray-300"}`}>
                     실시간
                   </button>
-                  <button type="button" onClick={() => setPublishMode("private")} disabled={isGenerating}
-                    className={`px-4 py-1.5 text-xs font-medium transition-all ${publishMode === "private" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+                  <button type="button" onClick={() => setPublishMode("private")} disabled={isGenerating || selectedChannels.length === 0}
+                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 cursor-not-allowed" : publishMode === "private" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
                     비공개
                   </button>
-                  <button type="button" onClick={() => setPublishMode("scheduled")} disabled={isGenerating}
-                    className={`px-4 py-1.5 text-xs font-medium transition-all ${publishMode === "scheduled" ? "bg-amber-500/20 text-amber-300" : "text-gray-500 hover:text-gray-300"}`}>
+                  <button type="button" onClick={() => setPublishMode("scheduled")} disabled={isGenerating || selectedChannels.length === 0}
+                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 cursor-not-allowed" : publishMode === "scheduled" ? "bg-amber-500/20 text-amber-300" : "text-gray-500 hover:text-gray-300"}`}>
                     예약
                   </button>
                 </div>
@@ -1028,7 +1028,7 @@ export default function Home() {
                   type="datetime-local"
                   value={scheduledTime}
                   onChange={(e) => setScheduledTime(e.target.value)}
-                  disabled={isGenerating || publishMode !== "scheduled"}
+                  disabled={isGenerating || publishMode !== "scheduled" || selectedChannels.length === 0}
                   min={new Date(Date.now() + 600000).toISOString().slice(0, 16)}
                   className={`bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-xs focus:outline-none transition-opacity ${publishMode === "scheduled" ? "text-gray-200 opacity-100 focus:border-amber-500/50" : "text-gray-600 opacity-40 cursor-not-allowed"}`}
                 />
