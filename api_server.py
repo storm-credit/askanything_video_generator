@@ -549,12 +549,12 @@ async def generate_video_endpoint(req: GenerateRequest):
             yield {"data": "PROG|10\n"}
             # YouTube URL 자동 감지 + topic 교체
             ref_url = req.referenceUrl
-            old_topic = topic
-            topic, ref_url = _resolve_youtube_topic(topic, ref_url)
-            if topic != old_topic:
-                yield {"data": f"[레퍼런스 분석] YouTube 주제 추출 완료: '{topic.split(chr(10))[0]}'\n"}
+            _topic = topic  # 외부 스코프 변수를 로컬로 복사
+            _topic, ref_url = _resolve_youtube_topic(_topic, ref_url)
+            if _topic != topic:
+                yield {"data": f"[레퍼런스 분석] YouTube 주제 추출 완료: '{_topic.split(chr(10))[0]}'\n"}
 
-            yield {"data": f"[기획 전문가] '{topic.split(chr(10))[0]}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
+            yield {"data": f"[기획 전문가] '{_topic.split(chr(10))[0]}' 쇼츠 기획 시작... ({provider_label} 엔진)\n"}
 
             # 단계 1: LLM 기획 (Gemini / ChatGPT / Claude 선택)
             # Gemini 프로바이더일 때 키 로테이션 적용
@@ -563,7 +563,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             cuts, topic_folder, video_title, video_tags = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
-                    topic,
+                    _topic,
                     api_key_override=api_key_override,
                     lang=language,
                     llm_provider=llm_provider,
@@ -592,7 +592,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             # 음성 선택: 자동(주제 분석) > 프론트엔드 직접 선택 > 채널 설정 > 기본값
             channel_voice_id = None
             if req.voiceId == "auto":
-                channel_voice_id = _auto_select_voice(topic, language)
+                channel_voice_id = _auto_select_voice(_topic, language)
                 yield {"data": f"[음성 자동 선택] 주제 분석 → {_voice_name(channel_voice_id)}\n"}
             elif req.voiceId:
                 channel_voice_id = req.voiceId  # 프론트엔드에서 선택한 음성
