@@ -578,12 +578,22 @@ export default function Home() {
         const normalizedPath = encodedPath.startsWith('/') ? encodedPath : `/${encodedPath}`;
         const downloadUrl = `${API_BASE}${normalizedPath}`;
         setGeneratedVideoPath(videoPath);
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        link.setAttribute("download", videoPath.split('/').pop() || "AskAnything_Shorts.mp4");
-        document.body.appendChild(link);
-        link.click();
-        link.parentNode?.removeChild(link);
+        setGeneratedVideoUrl(downloadUrl);
+        // cross-origin fetch blob 다운로드 (fire-and-forget)
+        fetch(downloadUrl).then(res => {
+          if (!res.ok) return;
+          return res.blob();
+        }).then(blob => {
+          if (!blob) return;
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = videoPath.split(/[\\/]/).pop() || "AskAnything_Shorts.mp4";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(blobUrl);
+        }).catch(() => { /* 인라인 플레이어로 대체 */ });
         setSuccessMessage("비디오 생성 성공!");
         setIsGenerating(false);
         setPreviewData(null);
