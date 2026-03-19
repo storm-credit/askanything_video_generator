@@ -1012,15 +1012,15 @@ export default function Home() {
               <div className="flex items-center justify-center gap-2">
                 <div className="flex items-center bg-white/5 border border-white/10 rounded-full overflow-hidden">
                   <button type="button" onClick={() => setPublishMode("realtime")} disabled={isGenerating || selectedChannels.length === 0}
-                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 cursor-not-allowed" : publishMode === "realtime" ? "bg-green-500/20 text-green-300" : "text-gray-500 hover:text-gray-300"}`}>
+                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 opacity-40 cursor-not-allowed bg-transparent" : publishMode === "realtime" ? "bg-green-500/20 text-green-300" : "text-gray-500 hover:text-gray-300"}`}>
                     실시간
                   </button>
                   <button type="button" onClick={() => setPublishMode("private")} disabled={isGenerating || selectedChannels.length === 0}
-                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 cursor-not-allowed" : publishMode === "private" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 opacity-40 cursor-not-allowed bg-transparent" : publishMode === "private" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
                     비공개
                   </button>
                   <button type="button" onClick={() => setPublishMode("scheduled")} disabled={isGenerating || selectedChannels.length === 0}
-                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 cursor-not-allowed" : publishMode === "scheduled" ? "bg-amber-500/20 text-amber-300" : "text-gray-500 hover:text-gray-300"}`}>
+                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 opacity-40 cursor-not-allowed bg-transparent" : publishMode === "scheduled" ? "bg-amber-500/20 text-amber-300" : "text-gray-500 hover:text-gray-300"}`}>
                     예약
                   </button>
                 </div>
