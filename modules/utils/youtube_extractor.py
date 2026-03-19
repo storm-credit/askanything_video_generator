@@ -87,13 +87,27 @@ def _fetch_metadata_ytdlp(video_id: str) -> dict:
 
 
 def _fetch_transcript(video_id: str) -> str:
-    """youtube-transcript-api v1.0+로 자막을 추출한다. 한국어 → 영어 → 아무 언어 순서."""
+    """자막 추출: youtube-transcript-api → Whisper fallback."""
+    # 1단계: youtube-transcript-api로 자막 시도
+    text = _fetch_transcript_api(video_id)
+    if text:
+        return text
+
+    # 2단계: 자막 없으면 Whisper로 오디오 직접 전사
+    print(f"  [YouTube 분석] 자막 없음 → Whisper 오디오 전사 시도...")
+    text = _fetch_transcript_whisper(video_id)
+    if text:
+        print(f"  [YouTube 분석] Whisper 전사 완료! ({len(text)}자)")
+    return text
+
+
+def _fetch_transcript_api(video_id: str) -> str:
+    """youtube-transcript-api로 자막 추출. 한국어 → 영어 → 주요 언어 순."""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
 
         api = YouTubeTranscriptApi()
 
-        # 한국어 → 영어 순서로 시도
         for lang in ["ko", "en"]:
             try:
                 entries = api.fetch(video_id, languages=[lang])
@@ -103,12 +117,10 @@ def _fetch_transcript(video_id: str) -> str:
             except Exception:
                 continue
 
-        # 사용 가능한 자막 중 주요 언어만 시도 (쓸모없는 자동생성 자막 방지)
         _USEFUL_LANGS = {"ko", "en", "ja", "zh", "es", "fr", "de", "pt", "hi", "id", "vi", "th", "ru", "ar"}
         try:
             transcript_list = api.list(video_id)
             for t in transcript_list:
-                # 자동생성이 아닌 수동 자막 우선
                 if not t.is_generated:
                     try:
                         entries = t.fetch()
@@ -117,7 +129,6 @@ def _fetch_transcript(video_id: str) -> str:
                             return " ".join(lines)
                     except Exception:
                         continue
-            # 수동 자막 없으면 주요 언어 자동생성만 허용
             for t in transcript_list:
                 if t.is_generated and hasattr(t, 'language_code') and t.language_code in _USEFUL_LANGS:
                     try:
@@ -129,10 +140,54 @@ def _fetch_transcript(video_id: str) -> str:
                         continue
         except Exception:
             pass
-
         return ""
+    except Exception:
+        return ""
+
+
+def _fetch_transcript_whisper(video_id: str) -> str:
+    """yt-dlp로 오디오 다운로드 → OpenAI Whisper API로 전사."""
+    import subprocess
+    import tempfile
+    try:
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if not openai_key:
+            return ""
+
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            audio_path = os.path.join(tmpdir, "audio.m4a")
+            # yt-dlp로 오디오만 다운로드 (최소 품질, 60초 제한)
+            result = subprocess.run(
+                ["python", "-m", "yt_dlp",
+                 "-x", "--audio-format", "m4a",
+                 "--audio-quality", "9",  # 최저 품질 (전사에 충분)
+                 "--match-filter", "duration<120",  # 2분 이하만
+                 "-o", audio_path,
+                 url],
+                capture_output=True, text=True, timeout=60, encoding="utf-8",
+            )
+            if result.returncode != 0 or not os.path.exists(audio_path):
+                # m4a 실패 시 다른 확장자 시도
+                import glob
+                files = glob.glob(os.path.join(tmpdir, "audio.*"))
+                if files:
+                    audio_path = files[0]
+                else:
+                    return ""
+
+            # Whisper API로 전사
+            from openai import OpenAI
+            client = OpenAI(api_key=openai_key, timeout=60)
+            with open(audio_path, "rb") as f:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=f,
+                    response_format="text",
+                )
+            return (transcript or "").strip()
     except Exception as e:
-        print(f"[YouTube 분석] 자막 추출 실패 (자막 없는 영상일 수 있음): {e}")
+        print(f"  [YouTube 분석] Whisper 전사 실패: {e}")
         return ""
 
 
