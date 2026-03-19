@@ -11,7 +11,7 @@ from google.auth.transport.requests import Request
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"]
 TOKENS_DIR = Path("youtube_tokens")
 CLIENT_SECRET_PATH = Path(os.getenv("YOUTUBE_CLIENT_SECRET", "client_secret.json"))
-REDIRECT_URI = os.getenv("YOUTUBE_REDIRECT_URI", "http://localhost:8003/api/youtube/callback")
+REDIRECT_URI = os.getenv("YOUTUBE_REDIRECT_URI", f"http://localhost:{os.getenv('API_PORT', '8003')}/api/youtube/callback")
 
 # CSRF state 저장 (state → 만료 시간)
 _pending_states: dict[str, float] = {}

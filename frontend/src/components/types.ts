@@ -1,4 +1,4 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8004";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
 
 export interface KeyStatus {
   openai: boolean;

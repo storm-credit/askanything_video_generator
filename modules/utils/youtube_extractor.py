@@ -55,23 +55,29 @@ def _fetch_metadata(video_id: str, api_key: str) -> dict:
 
 
 def _fetch_metadata_ytdlp(video_id: str) -> dict:
-    """yt-dlp로 메타데이터를 가져온다 (API 키 불필요)."""
+    """yt-dlp로 메타데이터를 가져온다 (API 키 불필요, JS 런타임 불필요)."""
     try:
-        import subprocess, json as _json
+        import subprocess
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        # --print 방식: --dump-json과 달리 JS 런타임 불필요
         result = subprocess.run(
-            ["python", "-m", "yt_dlp", "--dump-json", "--no-download", f"https://www.youtube.com/watch?v={video_id}"],
-            capture_output=True, text=True, timeout=30,
+            ["python", "-m", "yt_dlp", "--no-download",
+             "--print", "%(title)s\t%(uploader)s\t%(view_count)s\t%(like_count)s\t%(description).200s",
+             url],
+            capture_output=True, text=True, timeout=30, encoding="utf-8",
         )
-        if result.returncode != 0:
+        if result.returncode != 0 or not result.stdout.strip():
             return {}
-        data = _json.loads(result.stdout)
+        parts = result.stdout.strip().split("\t")
+        if len(parts) < 2:
+            return {}
         return {
-            "title": data.get("title", ""),
-            "description": data.get("description", ""),
-            "channel": data.get("uploader", ""),
-            "tags": data.get("tags", []) or [],
-            "view_count": int(data.get("view_count", 0) or 0),
-            "like_count": int(data.get("like_count", 0) or 0),
+            "title": parts[0] if parts[0] != "NA" else "",
+            "description": parts[4] if len(parts) > 4 and parts[4] != "NA" else "",
+            "channel": parts[1] if parts[1] != "NA" else "",
+            "tags": [],
+            "view_count": int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0,
+            "like_count": int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0,
         }
     except Exception as e:
         print(f"[YouTube 분석] yt-dlp fallback도 실패: {e}")
@@ -183,7 +189,8 @@ def extract_youtube_reference(url: str, api_key: str | None = None) -> dict:
     print(f"-> [레퍼런스 분석] YouTube 영상 '{video_id}' 분석 중...")
 
     # 메타데이터 + 자막 병렬이면 좋지만, 간단하게 순차
-    metadata = _fetch_metadata(video_id, key) if key else {}
+    # API 키 없어도 yt-dlp fallback이 있으므로 항상 시도
+    metadata = _fetch_metadata(video_id, key)
     transcript = _fetch_transcript(video_id)
     structure = _analyze_structure(transcript)
 
