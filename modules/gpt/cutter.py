@@ -254,8 +254,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
    - 마지막 컷은 훅에서 제기한 의문/주장에 대한 결론적 답변이어야 한다.
    - 의문문("~걸?", "~일까?")으로 끝내지 마라. 답을 주고 끝내라.
    - 단, 딱딱한 서술형("~이다", "~한다") 금지. 대화체("~거든", "~인 거야", "~라는 거지")로 마무리.
-   - 마지막 한 줄에 여운/떡밥을 살짝 얹어라: "다음엔 더 소름돋는 거 알려줄게" 식의 CTA 한 문장.
-   좋은 예: Cut1 "블랙홀에 빠지면 스파게티가 돼" → 마지막 "근데 진짜 무서운 건 네가 그걸 느끼면서 죽는다는 거야"
+   - "다음엔 알려줄게", "구독하면 알려줄게" 같은 빈 약속형 CTA 절대 금지. 시청자 이탈 원인.
+   - 마지막 컷은 강렬한 여운으로 끝내라: 충격 반전, 감정적 울림, 또는 새로운 관점 제시.
+   좋은 예: Cut1 "블랙홀에 빠지면 스파게티가 돼" → 마지막 "근데 진짜 무서운 건, 네가 그걸 느끼면서 죽는다는 거야."
+   좋은 예: "그래서 우주가 무섭냐고? 아니. 우리가 여기 있다는 게 기적인 거야."
+   나쁜 예: "다음엔 더 소름돋는 거 알려줄게" (약속 불이행, 신뢰 하락)
    나쁜 예: "이거 알고 나면 밤하늘이 다르게 보일걸?" (의문만 던지고 답 없음)
 
 [대본 스타일 규칙]
@@ -338,8 +341,11 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
    - The final cut must ANSWER the hook, not leave it as another question.
    - NEVER end with a question ("right?", "isn't it?"). Deliver the answer.
    - Use conversational tone, not dry statements. End with a punchy conclusion.
-   - Optionally add a one-line CTA teaser: "Next time I'll show you something even crazier."
+   - NEVER use empty-promise CTAs like "Next time I'll show you..." or "Subscribe to find out." These kill trust.
+   - End with emotional impact: shocking twist, new perspective, or powerful conclusion.
    GOOD: Cut1 "Your body stretches like spaghetti" → Final "But the terrifying part is you'd feel every second of it."
+   GOOD: "So is space scary? No. The miracle is that we're here at all."
+   BAD: "Next time I'll show you something even crazier." (empty promise, trust killer)
    BAD: "You'll never look at the sky the same, right?" (just a question, no resolution)
 
 [Script Style Rules]
