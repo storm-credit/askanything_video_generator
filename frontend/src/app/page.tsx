@@ -758,7 +758,13 @@ export default function Home() {
   // 플랫폼별 OAuth 인증 시작
   const handlePlatformAuth = async (platform: "youtube" | "tiktok" | "instagram") => {
     try {
-      const res = await fetch(`${API_BASE}/api/${platform}/auth`, { method: "POST" });
+      const body: Record<string, string> = {};
+      if (platform === "youtube" && channel) body.channel = channel;
+      const res = await fetch(`${API_BASE}/api/${platform}/auth`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await res.json();
       if (data.auth_url) {
         window.open(data.auth_url, `${platform}_auth`, "width=600,height=700");
