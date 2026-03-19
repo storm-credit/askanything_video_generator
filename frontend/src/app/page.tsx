@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film, FolderOpen } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -1011,6 +1011,19 @@ export default function Home() {
                     <option value="nl" className="bg-gray-900">Nederlands</option>
                     <option value="tr" className="bg-gray-900">Türkçe</option>
                   </select>
+                </div>
+                <div
+                  className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 cursor-pointer hover:bg-white/10 transition-colors"
+                  onClick={() => {
+                    const path = prompt("영상 저장 경로 (비우면 기본 assets/ 사용):", outputPath);
+                    if (path !== null) setOutputPath(path);
+                  }}
+                  title={outputPath || "기본 경로 (assets/)"}
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-xs text-gray-400 max-w-[80px] truncate">
+                    {outputPath ? outputPath.split(/[\\/]/).pop() : "기본"}
+                  </span>
                 </div>
               </div>
             </div>
