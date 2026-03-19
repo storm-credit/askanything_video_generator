@@ -257,6 +257,9 @@ export default function Home() {
         setImageEngine("imagen"); setImageModel("imagen-4.0-fast-generate-001");
         setVideoEngine("none"); setVideoModel("");
         break;
+      case "manual":
+        // 수동 모드: 현재 설정 유지, 아무것도 변경하지 않음
+        break;
     }
   };
 
@@ -994,6 +997,7 @@ export default function Home() {
                     <option value="best" className="bg-gray-900">최고 품질</option>
                     <option value="balanced" className="bg-gray-900">합리적</option>
                     <option value="fast" className="bg-gray-900">빠른 생성</option>
+                    <option value="manual" className="bg-gray-900">수동</option>
                   </select>
                 </div>
                 <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
