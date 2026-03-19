@@ -143,12 +143,12 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                 return audio_path
 
             elif response.status_code == 401:
-                # 인증 오류는 재시도 무의미
+                response.close()
                 print("[ElevenLabs 인증 오류] API Key가 유효하지 않습니다. .env 파일을 확인하세요.")
                 return None
 
             elif response.status_code == 429:
-                # 할당량 초과: 대기 후 재시도
+                response.close()
                 wait = _backoff_delay(attempt)
                 print(f"[ElevenLabs 할당량 초과] {wait}초 후 재시도... ({attempt+1}/{MAX_RETRIES})")
                 if attempt < MAX_RETRIES - 1:
@@ -158,7 +158,8 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                 return None
 
             else:
-                print(f"[ElevenLabs 오류] 요청 실패 ({response.status_code}): {response.text[:200]}")
+                response.close()
+                print(f"[ElevenLabs 오류] 요청 실패 ({response.status_code})")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(_backoff_delay(attempt))
                     continue

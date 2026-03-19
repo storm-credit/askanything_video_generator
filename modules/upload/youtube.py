@@ -126,10 +126,11 @@ def create_auth_url() -> str:
 
 def handle_auth_callback(auth_code: str, state: str | None = None) -> dict:
     """OAuth 콜백에서 토큰을 교환하고 채널별로 저장합니다."""
-    if state:
-        expires_at = _pending_states.pop(state, None)
-        if expires_at is None or time.time() > expires_at:
-            raise ValueError("인증 state가 유효하지 않습니다. 다시 시도해주세요.")
+    if not state:
+        raise ValueError("CSRF state가 누락되었습니다. 다시 시도해주세요.")
+    expires_at = _pending_states.pop(state, None)
+    if expires_at is None or time.time() > expires_at:
+        raise ValueError("인증 state가 유효하지 않습니다. 다시 시도해주세요.")
     flow = Flow.from_client_secrets_file(
         str(CLIENT_SECRET_PATH),
         scopes=SCOPES,

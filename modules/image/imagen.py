@@ -13,7 +13,7 @@ from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
 
-def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None, model_override: str | None = None, gemini_api_keys: str | None = None) -> str:
+def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None, model_override: str | None = None, gemini_api_keys: str | None = None, topic: str = "") -> str:
     """
     Google Imagen 4 API로 이미지를 생성합니다.
     429 에러 시 다른 키로 자동 전환, 전 키 소진 시 Fast 모델로 자동 폴백.
@@ -114,7 +114,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                     key_attempt += 1  # 키 전환만 카운터 증가
                     continue
                 if is_safety_error(error_msg) and safety_retry_count < 3:
-                    enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count)
+                    enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count, topic=topic)
                     safety_retry_count += 1
                     tried_keys.discard(final_api_key)  # safety 재시도는 같은 키로
                     print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도... ({safety_retry_count}/3)")

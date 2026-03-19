@@ -337,7 +337,7 @@ export function SettingsModal({
                     const name = (e.target as HTMLInputElement).value.trim().toLowerCase();
                     if (!name || channels[name]) return;
                     try {
-                      const res = await fetch(`${API_BASE}/api/channels/${name}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: "en", platforms: ["youtube"], tts_speed: 0.9, caption_size: 44, caption_y: 28, visual_style: "", tone: "" }) });
+                      const res = await fetch(`${API_BASE}/api/channels/${encodeURIComponent(name)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: "en", platforms: ["youtube"], tts_speed: 0.9, caption_size: 44, caption_y: 28, visual_style: "", tone: "" }) });
                       if (res.ok) { fetchChannels(); (e.target as HTMLInputElement).value = ""; }
                     } catch {}
                   }}

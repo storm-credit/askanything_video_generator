@@ -154,7 +154,8 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
     # Context Caching: 시스템 프롬프트를 캐시하여 토큰 비용 절감
     # 캐시 키에 프롬프트 해시 포함 (lang/channel 변경 시 잘못된 캐시 사용 방지)
     prompt_hash = hashlib.sha256(system_prompt.encode()).hexdigest()[:12]
-    cache_key = f"{api_key}:{model_name}:{prompt_hash}"
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:12]
+    cache_key = f"{key_hash}:{model_name}:{prompt_hash}"
     with _gemini_cache_lock:
         cached = _gemini_cache.get(cache_key)
     try:
@@ -295,7 +296,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [대본 스타일 규칙]
 * 반말 + 구어체. 딱딱한 존댓말 금지. 친구한테 신기한 거 알려주듯이 써라.
-* 한 컷 대본은 15~30자. 짧고 강렬하게. 한 문장 이상 넣지 마라.
+* 한 컷 대본은 20~35자. 5~7초 분량. 짧고 강렬하게. 한 문장 이상 넣지 마라.
 * "~입니다", "~합니다" 금지. "~거든", "~잖아", "~인 거야", "~라는 거지" 같은 구어체 어미 사용.
 * 감탄사/추임새 적극 활용: "미쳤지?", "소름이지?", "진짜야.", "ㄹㅇ."
 * 같은 문장 구조를 연속 사용하지 마라. Q&A, 명령문, 서술문을 섞어라.
@@ -303,7 +304,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [이미지 프롬프트 규칙]
 * 반드시 영어로 작성. 한국어 금지.
-* 시스템이 자동으로 "vertical 9:16, cinematic, no text" 스타일을 이미지 프롬프트 앞에 추가하므로 직접 쓰지 마라.
+* 시스템이 자동으로 다음 접두사를 추가하므로 "cinematic", "vertical", "no text" 등을 직접 쓰지 마라: "Cinematic photograph, highly detailed, vertical 9:16 composition, family-friendly. NO TEXT."
 * 매 컷마다 카메라 앵글/조명을 다르게 설정 (단조로움 방지).
 * 사람 얼굴 정면 클로즈업 금지 (AI 생성 얼굴은 언캐니밸리).
 * 구체적 시각 디테일 포함: 색온도, 재질감, 스케일 비교 (예: "car-sized asteroid").
@@ -377,14 +378,14 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 
 [Script Style Rules]
 * Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
-* Each cut: 8–18 words. Short. Punchy. One or two sentences for natural voiceover pacing.
+* Each cut: 12–20 words (~5–7 seconds). Short. Punchy. One or two sentences for natural voiceover pacing.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
 * Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
 * [CRITICAL WARNING] Write 7–10 cuts (~5–7 sec each). Target 50–60 second video for maximum watch time. NEVER less than 7 cuts.
 
 [Image Prompt Rules]
 * ALL image prompts must be in English.
-* The system auto-prepends "vertical 9:16, cinematic, no text" style to your image prompts — do NOT write these yourself.
+* The system auto-prepends this prefix — do NOT write "cinematic", "vertical", or "no text" yourself: "Cinematic photograph, highly detailed, vertical 9:16 composition, family-friendly. NO TEXT."
 * Vary camera angle and lighting per cut (avoid visual monotony).
 * NO frontal close-ups of human faces (AI-generated faces trigger uncanny valley).
 * Include specific visual details: color temperature, material textures, scale comparisons (e.g. "car-sized asteroid").

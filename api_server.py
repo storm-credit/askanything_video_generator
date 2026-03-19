@@ -75,11 +75,8 @@ app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # CORS 설정 (프론트엔드 연동)
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000").split(",")
-# 개발 환경: localhost 모든 포트 허용 (Next.js autoPort 대응)
-if not os.getenv("CORS_ORIGINS"):
-    _cors_origins = ["*"]
-# 개발 환경: 와일드카드 포함 시 모든 origin 허용
-if any("*" in o for o in _cors_origins):
+# 명시적으로 CORS_ORIGINS=* 설정한 경우에만 와일드카드 허용
+if any(o.strip() == "*" for o in _cors_origins):
     _cors_origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -594,7 +591,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             # 음성 선택: 자동(주제 분석) > 프론트엔드 직접 선택 > 채널 설정 > 기본값
             channel_voice_id = None
             if req.voiceId == "auto":
-                channel_voice_id = _auto_select_voice(req.topic, language)
+                channel_voice_id = _auto_select_voice(topic, language)
                 yield {"data": f"[음성 자동 선택] 주제 분석 → {_voice_name(channel_voice_id)}\n"}
             elif req.voiceId:
                 channel_voice_id = req.voiceId  # 프론트엔드에서 선택한 음성
@@ -636,7 +633,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 with image_semaphore:
                     try:
                         cut_image_key = _get_image_key()
-                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key)
+                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=topic) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, topic=topic)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"이미지: {exc}")
@@ -1125,8 +1122,9 @@ async def prepare_endpoint(req: PrepareRequest):
             for i, cut in enumerate(cuts):
                 try:
                     img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys) if req.imageEngine == "imagen" else req.apiKey
+                    _topic = topic
                     img_path = await loop.run_in_executor(
-                        None, lambda idx=i, c=cut, k=img_key: gen_image_fn(c["prompt"], idx, topic_folder, k) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys)
+                        None, lambda idx=i, c=cut, k=img_key, t=_topic: gen_image_fn(c["prompt"], idx, topic_folder, k, topic=t) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys, topic=t)
                     )
                     image_paths.append(img_path)
                 except Exception as exc:

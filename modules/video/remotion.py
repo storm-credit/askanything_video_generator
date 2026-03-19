@@ -151,9 +151,11 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
 
     try:
         if os.name == "nt":
-            cmd_str = subprocess.list2cmdline(cmd)
+            # shell=False: list 형태로 전달하여 injection 방지
+            # Windows에서 npx를 찾기 위해 .cmd 확장자 사용
+            cmd[0] = shutil.which("npx") or "npx.cmd"
             result = subprocess.run(
-                cmd_str, cwd=remotion_dir, check=True, shell=True,
+                cmd, cwd=remotion_dir, check=True, shell=False,
                 capture_output=True, text=True, encoding="utf-8",
                 errors="replace", timeout=600,
             )

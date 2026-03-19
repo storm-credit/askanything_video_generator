@@ -12,7 +12,7 @@ from modules.utils.constants import MASTER_STYLE
 from modules.utils.cache import get_cached_image, save_to_cache
 from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 
-def generate_image(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None) -> str:
+def generate_image(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None, topic: str = "") -> str:
     final_api_key = api_key or os.getenv("OPENAI_API_KEY")
     if not final_api_key:
         raise EnvironmentError("OpenAI API 키가 제공되지 않았습니다.")
@@ -81,7 +81,7 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
             error_msg = str(e)
             if attempt < max_retries - 1:
                 if is_safety_error(error_msg):
-                    enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count)
+                    enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count, topic=topic)
                     safety_retry_count += 1
                     print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 대체 프롬프트로 재시도합니다... ({attempt+1}/{max_retries})")
                     continue
