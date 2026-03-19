@@ -1431,7 +1431,7 @@ export default function Home() {
 
       {/* 진행률 + 로그 패널 (단일 채널) */}
       <AnimatePresence>
-        {isGenerating && (selectedChannels.length < 2 || previewMode || !channelResults || Object.keys(channelResults).length === 0) && (
+        {isGenerating && Object.keys(renderResults).length === 0 && (selectedChannels.length < 2 || previewMode || !channelResults || Object.keys(channelResults).length === 0) && (
           <ProgressPanel progress={progress} logs={logs} />
         )}
       </AnimatePresence>
@@ -1541,7 +1541,7 @@ export default function Home() {
                   {result.status === 'error' && result.errorMsg && (
                     <p className="text-xs text-red-400 mb-2">{result.errorMsg}</p>
                   )}
-                  <div className="max-h-32 overflow-y-auto space-y-0.5">
+                  <div className="max-h-32 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
                     {result.logs.slice(-10).map((log, i) => (
                       <p key={i} className="text-[10px] text-gray-500 truncate">{log}</p>
                     ))}
