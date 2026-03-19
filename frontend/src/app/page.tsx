@@ -16,11 +16,11 @@ const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: s
 
 export default function Home() {
   const [topic, setTopic] = useState("");
-  const [qualityPreset, setQualityPreset] = useState("best");
+  const [qualityPreset, setQualityPreset] = useState("fast");
   const [llmProvider, setLlmProvider] = useState("gemini");
-  const [llmModel, setLlmModel] = useState("");
+  const [llmModel, setLlmModel] = useState("gemini-2.5-flash");
   const [imageEngine, setImageEngine] = useState("imagen");
-  const [imageModel, setImageModel] = useState("");
+  const [imageModel, setImageModel] = useState("imagen-4.0-fast-generate-001");
   const [videoEngine, setVideoEngine] = useState("none");
   const [videoModel, setVideoModel] = useState("");
   const [language, setLanguage] = useState("ko");
