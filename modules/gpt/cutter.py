@@ -3,10 +3,25 @@ import json
 import re
 import time
 import random
+import hashlib
 from typing import Any
 from modules.utils.slugify import slugify_topic
 from modules.utils.constants import PROVIDER_LABELS
 from modules.gpt.search import get_fact_check_context
+
+_YT_CONTENT_SEP = "\n\n[원본 영상 내용]\n"
+
+def _split_yt_topic(topic: str) -> tuple[str, str]:
+    """YouTube 자막이 포함된 topic을 (제목, 자막내용)으로 분리. 자막 없으면 ('', '')."""
+    if _YT_CONTENT_SEP in topic:
+        title, content = topic.split(_YT_CONTENT_SEP, 1)
+        return title.strip(), content.strip()
+    # 구분자 없이 [원본 영상 내용]만 있는 경우 (trailing newline 없음)
+    marker = "\n\n[원본 영상 내용]"
+    if marker in topic:
+        title = topic.split(marker, 1)[0].strip()
+        return title, ""
+    return topic, ""
 
 
 def _sanitize_cuts(cuts_data: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -133,7 +148,9 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
     client = genai.Client(api_key=api_key)
 
     # Context Caching: 시스템 프롬프트를 캐시하여 토큰 비용 절감
-    cache_key = f"{api_key}:{model_name}"
+    # 캐시 키에 프롬프트 해시 포함 (lang/channel 변경 시 잘못된 캐시 사용 방지)
+    prompt_hash = hashlib.sha256(system_prompt.encode()).hexdigest()[:12]
+    cache_key = f"{api_key}:{model_name}:{prompt_hash}"
     cached = _gemini_cache.get(cache_key)
     try:
         if cached:
@@ -225,9 +242,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
                   channel: str | None = None, llm_model: str | None = None,
                   reference_url: str | None = None) -> tuple[list[dict[str, Any]], str, str, list[str]]:
-    # YouTube 자막 포함된 topic에서 제목만 추출하여 폴더명 생성
-    _folder_topic = topic.split("\n\n[원본 영상 내용]")[0].strip() if "\n\n[원본 영상 내용]" in topic else topic
-    topic_folder = slugify_topic(_folder_topic, lang)
+    # YouTube 자막 포함된 topic에서 제목/자막 분리
+    _topic_title, _topic_content = _split_yt_topic(topic)
+    if not _topic_title:
+        _topic_title = topic
+    topic_folder = slugify_topic(_topic_title, lang)
 
     # 저장 폴더 구조 생성
     base_path = os.path.join("assets", topic_folder)
@@ -468,10 +487,6 @@ This is the channel's signature look — every image should feel cohesive with t
 
     print(f"-> [기획 전문가] {provider_label} 기반 스크립트 및 기획안 작성 중...")
 
-    # YouTube 자막 포함된 topic 분리: 제목 vs 원본 내용
-    _topic_title = topic.split("\n\n[원본 영상 내용]")[0].strip() if "\n\n[원본 영상 내용]" in topic else topic
-    _topic_content = topic.split("\n\n[원본 영상 내용]\n", 1)[1].strip() if "\n\n[원본 영상 내용]\n" in topic else ""
-
     # RAG 기법: 실시간 검색 팩트체크 주입 (제목만 사용)
     fact_context = get_fact_check_context(_topic_title)
     if lang == "en":
@@ -480,7 +495,10 @@ This is the channel's signature look — every image should feel cohesive with t
         user_content = f"주제: '{_topic_title}'에 대한 숏폼 기획안을 작성해주세요."
     # YouTube 원본 자막이 있으면 LLM 컨텍스트로 주입
     if _topic_content:
-        user_content += f"\n\n[원본 영상 자막 — 이 내용의 핵심 팩트와 주제를 반영하여 새로운 기획안을 작성하세요]\n{_topic_content}"
+        if lang == "en":
+            user_content += f"\n\n[Original Video Transcript — Reflect the key facts and themes from this content in your new plan]\n{_topic_content}"
+        else:
+            user_content += f"\n\n[원본 영상 자막 — 이 내용의 핵심 팩트와 주제를 반영하여 새로운 기획안을 작성하세요]\n{_topic_content}"
     if fact_context:
         user_content += f"\n\n{fact_context}"
 
@@ -502,7 +520,7 @@ This is the channel's signature look — every image should feel cohesive with t
                     ref_block += f"\n  <tone>{struct['style']}</tone>"
                 if ref_data.get("transcript"):
                     # 첫 문장 + 마지막 문장 + 중간 피벗만 추출
-                    sentences = [s.strip() for s in ref_data["transcript"].split(".") if s.strip()]
+                    sentences = [s.strip() for s in re.split(r"[.!?。？！]\s*", ref_data["transcript"]) if s.strip()]
                     key_parts = []
                     if sentences:
                         key_parts.append(sentences[0])
@@ -512,7 +530,10 @@ This is the channel's signature look — every image should feel cohesive with t
                         key_parts.append(sentences[-1])
                     ref_block += f"\n  <key_sentences>{'. '.join(key_parts)}.</key_sentences>"
                 ref_block += "\n</reference_analysis>"
-                ref_block += "\n[레퍼런스 활용 지시] 위 분석의 hook_technique/ending_technique/tone을 참고하되 내용은 완전히 새롭게 써라. 복사 금지."
+                if lang == "en":
+                    ref_block += "\n[Reference Instruction] Use the hook_technique/ending_technique/tone above as reference, but write completely original content. No copying."
+                else:
+                    ref_block += "\n[레퍼런스 활용 지시] 위 분석의 hook_technique/ending_technique/tone을 참고하되 내용은 완전히 새롭게 써라. 복사 금지."
                 user_content += ref_block
         except Exception as e:
             print(f"[레퍼런스 분석] 실패, 무시하고 진행: {e}")
@@ -534,6 +555,13 @@ This is the channel's signature look — every image should feel cohesive with t
         try:
             cuts, title, tags = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
             break  # 성공
+        except ValueError as ve:
+            # JSON 파싱 실패 — 최대 2회 재시도
+            last_error = ve
+            if attempt < 2:
+                print(f"  [JSON 파싱 실패] 재시도 {attempt+1}/2... ({ve})")
+                continue
+            raise
         except Exception as e:
             last_error = e
             err_str = str(e)
@@ -579,11 +607,17 @@ This is the channel's signature look — every image should feel cohesive with t
             retry_key = current_key
         # 기존 컷 데이터를 포함하여 확장만 요청 (전체 재생성 대신)
         existing_cuts_json = json.dumps([{"script": c["script"], "description": c.get("text", "")} for c in cuts], ensure_ascii=False)
-        retry_user = (
-            user_content
-            + f"\n\n기존에 {len(cuts)}컷이 생성되었습니다. 아래 기존 컷 사이에 중간 컷을 추가하여 총 7~10컷으로 확장하세요. "
-            + f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
-        )
+        if lang == "en":
+            retry_expansion = (
+                f"\n\n{len(cuts)} cuts were generated. Add intermediate cuts between existing ones to reach 7-10 total. "
+                f"Maintain the flow and style while reinforcing buildup/climax sections.\nExisting cuts: {existing_cuts_json}"
+            )
+        else:
+            retry_expansion = (
+                f"\n\n기존에 {len(cuts)}컷이 생성되었습니다. 아래 기존 컷 사이에 중간 컷을 추가하여 총 7~10컷으로 확장하세요. "
+                f"기존 컷의 흐름과 스타일을 유지하면서 빌드업/클라이맥스 구간을 보강하세요.\n기존 컷: {existing_cuts_json}"
+            )
+        retry_user = user_content + retry_expansion
         try:
             cuts, title, tags = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
         except Exception as retry_err:
@@ -599,9 +633,9 @@ This is the channel's signature look — every image should feel cohesive with t
     if len(cuts) < 7:
         raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 7~10).")
 
-    # title이 비어있으면 topic을 폴백으로 사용
+    # title이 비어있으면 제목을 폴백으로 사용 (자막 포함 방지)
     if not title:
-        title = topic
+        title = _topic_title
 
     # tags 기본값 보장
     if not tags or not isinstance(tags, list):

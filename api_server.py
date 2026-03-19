@@ -28,6 +28,8 @@ from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs
 from modules.transcription.whisper import generate_word_timestamps
 from modules.video.remotion import create_remotion_video
 from modules.utils.constants import PROVIDER_LABELS
+
+_YT_URL_PATTERN = re.compile(r"(?:youtube\.com/(?:shorts/|watch\?v=)|youtu\.be/)")
 from modules.utils.keys import get_google_key, count_google_keys, count_available_keys, get_key_usage_stats, get_service_usage_totals
 from modules.utils.models import MODEL_RATE_LIMITS
 from modules.utils.audio import normalize_audio_lufs
@@ -529,9 +531,8 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             yield {"data": "PROG|10\n"}
             # YouTube URL 자동 감지: referenceUrl이 없으면 topic에서 URL 추출
-            _yt_pattern = re.compile(r"(?:youtube\.com/(?:shorts/|watch\?v=)|youtu\.be/)")
             ref_url = req.referenceUrl
-            if not ref_url and _yt_pattern.search(topic):
+            if not ref_url and _YT_URL_PATTERN.search(topic):
                 ref_url = topic
                 yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 내용을 분석합니다...\n"}
                 # YouTube 영상 제목 + 자막 핵심 내용을 추출해서 topic 교체
@@ -1073,9 +1074,8 @@ async def prepare_endpoint(req: PrepareRequest):
 
             yield {"data": "PROG|10\n"}
             # YouTube URL 자동 감지
-            _yt_pat = re.compile(r"(?:youtube\.com/(?:shorts/|watch\?v=)|youtu\.be/)")
             prep_ref_url = req.referenceUrl
-            if not prep_ref_url and _yt_pat.search(req.topic):
+            if not prep_ref_url and _YT_URL_PATTERN.search(req.topic):
                 prep_ref_url = req.topic
                 yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 분석 후 스타일을 참고합니다\n"}
 

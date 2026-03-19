@@ -4,7 +4,6 @@ import os
 import re
 import threading
 import time
-import hashlib
 
 _ref_cache: dict[str, tuple[float, dict]] = {}
 _cache_lock = threading.Lock()
@@ -109,7 +108,10 @@ def _analyze_structure(transcript: str) -> dict:
 
     casual_count = sum(1 for s in sentences for m in casual_markers if m in s)
     formal_count = sum(1 for s in sentences for m in formal_markers if m in s)
-    style = "casual" if casual_count >= formal_count else "formal"
+    if casual_count == 0 and formal_count == 0:
+        style = "unknown"
+    else:
+        style = "casual" if casual_count >= formal_count else "formal"
 
     # 결론 패턴
     question_ending = ending.endswith("?") or any(m in ending for m in ["걸?", "잖아?", "거든?"])
@@ -145,7 +147,7 @@ def extract_youtube_reference(url: str, api_key: str | None = None) -> dict:
         return {}
 
     # 캐시 확인
-    cache_key = hashlib.sha256(video_id.encode()).hexdigest()
+    cache_key = video_id
     with _cache_lock:
         cached = _ref_cache.get(cache_key)
         if cached and time.time() - cached[0] < _CACHE_TTL:
@@ -172,23 +174,6 @@ def extract_youtube_reference(url: str, api_key: str | None = None) -> dict:
         "transcript": transcript,
         "structure": structure,
     }
-
-    # LLM 주입용 컨텍스트 문자열 생성
-    ctx_parts = ["\n\n[Reference Video Analysis]"]
-    if result["title"]:
-        ctx_parts.append(f"Title: {result['title']}")
-    if result["channel"]:
-        ctx_parts.append(f"Channel: {result['channel']} ({result['view_count']:,} views)")
-    if structure.get("hook"):
-        ctx_parts.append(f"Hook (first line): {structure['hook']}")
-    if structure.get("ending"):
-        ctx_parts.append(f"Ending (last line): {structure['ending']}")
-    ctx_parts.append(f"Style: {structure.get('style', 'unknown')}, {structure.get('sentence_count', 0)} sentences")
-    if transcript:
-        # 자막 전체는 너무 길 수 있으므로 앞 500자만
-        ctx_parts.append(f"Full transcript (first 500 chars): {transcript[:500]}")
-
-    result["context_string"] = "\n".join(ctx_parts)
 
     print(f"OK [레퍼런스 분석] 완료! 제목: {result['title']}, 자막 {len(transcript)}자 추출")
 

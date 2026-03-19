@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film, FolderOpen } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film, FolderOpen, Download, Loader2 } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -24,6 +24,7 @@ export default function Home() {
   const [videoEngine, setVideoEngine] = useState("none");
   const [videoModel, setVideoModel] = useState("");
   const [testMode, setTestMode] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [language, setLanguage] = useState("ko");
   const [cameraStyle, setCameraStyle] = useState("auto");
   const [bgmTheme, setBgmTheme] = useState("random");
@@ -977,10 +978,6 @@ export default function Home() {
             {/* 글로벌 설정 — 품질 · 언어 */}
             <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
               <div className="flex items-center justify-center gap-1.5">
-                <label className={`flex items-center gap-1 border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-colors ${testMode ? "bg-red-500/20 border-red-500/50 text-red-300" : "bg-white/5 border-white/10 text-gray-500 hover:bg-white/10"}`}>
-                  <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} className="sr-only" />
-                  <span>{testMode ? "TEST 3컷" : "TEST"}</span>
-                </label>
                 <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
                   <Crown className="w-3.5 h-3.5 text-amber-400" />
                   <select value={qualityPreset} onChange={(e) => applyPreset(e.target.value)} disabled={isGenerating} aria-label="품질 선택" className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer appearance-none pr-3">
@@ -1025,6 +1022,10 @@ export default function Home() {
                     {outputPath ? outputPath.split(/[\\/]/).pop() : "기본"}
                   </span>
                 </div>
+                <label className={`flex items-center gap-1 border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-colors ${testMode ? "bg-red-500/20 border-red-500/50 text-red-300" : "bg-white/5 border-white/10 text-gray-500 hover:bg-white/10"}`}>
+                  <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} className="sr-only" />
+                  <span>{testMode ? "TEST 3컷" : "TEST"}</span>
+                </label>
               </div>
             </div>
 
@@ -1463,27 +1464,32 @@ export default function Home() {
               <div className="flex flex-col gap-2 w-full">
                 {/* 다운로드 버튼 — cross-origin이므로 fetch blob 방식 */}
                 <button
+                  disabled={isDownloading}
                   onClick={async () => {
-                    if (!generatedVideoUrl) return;
+                    if (!generatedVideoUrl || isDownloading) return;
+                    setIsDownloading(true);
                     try {
                       const res = await fetch(generatedVideoUrl);
+                      if (!res.ok) throw new Error(res.statusText);
                       const blob = await res.blob();
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
                       a.href = url;
-                      a.download = generatedVideoPath.split('/').pop() || "AskAnything_Shorts.mp4";
+                      a.download = generatedVideoPath.split(/[\\/]/).pop() || "AskAnything_Shorts.mp4";
                       document.body.appendChild(a);
                       a.click();
                       a.remove();
                       URL.revokeObjectURL(url);
                     } catch {
                       window.open(generatedVideoUrl, "_blank");
+                    } finally {
+                      setIsDownloading(false);
                     }
                   }}
-                  className="flex items-center justify-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-xl transition-colors"
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white text-sm rounded-xl transition-colors"
                 >
-                  <ExternalLink className="w-4 h-4" />
-                  다운로드
+                  {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {isDownloading ? "다운로드 중..." : "다운로드"}
                 </button>
                 {/* 업로드 버튼들 */}
                 <button
