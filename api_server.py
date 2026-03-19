@@ -1073,18 +1073,35 @@ async def prepare_endpoint(req: PrepareRequest):
             loop = asyncio.get_running_loop()
 
             yield {"data": "PROG|10\n"}
-            # YouTube URL 자동 감지
+            # YouTube URL 자동 감지 + topic 교체
             prep_ref_url = req.referenceUrl
-            if not prep_ref_url and _YT_URL_PATTERN.search(req.topic):
-                prep_ref_url = req.topic
-                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 분석 후 스타일을 참고합니다\n"}
+            prep_topic = req.topic
+            if not prep_ref_url and _YT_URL_PATTERN.search(prep_topic):
+                prep_ref_url = prep_topic
+                yield {"data": "[레퍼런스 분석] YouTube URL 감지 — 영상 내용을 분석합니다...\n"}
+                try:
+                    from modules.utils.youtube_extractor import extract_youtube_reference
+                    _yt_ref = extract_youtube_reference(prep_ref_url)
+                    if _yt_ref and _yt_ref.get("title"):
+                        _yt_title = re.sub(r"#\S+", "", _yt_ref["title"]).strip()
+                        _transcript = _yt_ref.get("transcript", "")
+                        if _transcript:
+                            prep_topic = f"{_yt_title}\n\n[원본 영상 내용]\n{_transcript[:800].strip()}"
+                            yield {"data": f"[레퍼런스 분석] 주제 + 자막 추출 완료: '{_yt_title}' (자막 {len(_transcript)}자)\n"}
+                        else:
+                            prep_topic = _yt_title
+                            yield {"data": f"[레퍼런스 분석] 주제 추출 완료: '{_yt_title}' (자막 없음)\n"}
+                    else:
+                        yield {"data": "WARN|[레퍼런스 분석] 영상 제목을 가져올 수 없습니다.\n"}
+                except Exception as e:
+                    yield {"data": f"WARN|[레퍼런스 분석] 영상 분석 실패: {e}\n"}
 
-            yield {"data": f"[기획] '{req.topic}' 스크립트 생성 중...\n"}
+            yield {"data": f"[기획] '{prep_topic.split(chr(10))[0]}' 스크립트 생성 중...\n"}
 
             cuts, topic_folder, video_title, video_tags = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
-                    req.topic, api_key_override=req.apiKey, lang=req.language,
+                    prep_topic, api_key_override=req.apiKey, lang=req.language,
                     llm_provider=req.llmProvider, llm_key_override=llm_key_for_request,
                     channel=req.channel, llm_model=req.llmModel,
                     reference_url=prep_ref_url,
