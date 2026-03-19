@@ -150,20 +150,29 @@ def _try_engine(
     veo_model: str | None = None,
     gemini_api_keys: str | None = None,
 ) -> str | None:
-    """단일 엔진으로 비디오 생성을 시도합니다."""
-    try:
-        if engine == "veo3":
-            from modules.video.veo import generate_video_veo
-            return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key, description=description, model_override=veo_model, gemini_api_keys=gemini_api_keys)
+    """단일 엔진으로 비디오 생성을 시도합니다. 일시적 에러 시 1회 재시도."""
+    import time as _time
+    _transient_errors = ("timeout", "503", "UNAVAILABLE", "ConnectionReset", "ConnectionError")
+    for _retry in range(2):  # 최대 1회 재시도
+        try:
+            if engine == "veo3":
+                from modules.video.veo import generate_video_veo
+                return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key, description=description, model_override=veo_model, gemini_api_keys=gemini_api_keys)
 
-        if engine == "sora2":
-            return _generate_via_openai_sora(image_path, prompt, index, topic_folder, description=description)
+            if engine == "sora2":
+                return _generate_via_openai_sora(image_path, prompt, index, topic_folder, description=description)
 
-        if engine == "kling":
-            return _generate_via_kling_direct(image_path, prompt, index, topic_folder, description=description)
-    except Exception as e:
-        print(f"[비디오 엔진 오류] {engine} 예외: {e}")
-        return None
+            if engine == "kling":
+                return _generate_via_kling_direct(image_path, prompt, index, topic_folder, description=description)
+        except Exception as e:
+            err_str = str(e)
+            is_transient = any(t.lower() in err_str.lower() for t in _transient_errors)
+            if is_transient and _retry == 0:
+                print(f"[비디오 엔진] {engine} 일시적 에러, 5초 후 재시도: {e}")
+                _time.sleep(5)
+                continue
+            print(f"[비디오 엔진 오류] {engine} 예외: {e}")
+            return None
 
     print(f"[비디오 엔진 오류] 알 수 없는 엔진: {engine}")
     return None

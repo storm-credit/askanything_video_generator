@@ -4,6 +4,7 @@ import re
 import time
 import random
 import hashlib
+import threading
 from typing import Any
 from modules.utils.slugify import slugify_topic
 from modules.utils.constants import PROVIDER_LABELS
@@ -140,6 +141,7 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str, model_o
 
 
 _gemini_cache: dict[str, object] = {}  # key → cached_content (최대 20개, 초과 시 가장 오래된 것 제거)
+_gemini_cache_lock = threading.Lock()
 _GEMINI_CACHE_MAX = 20
 
 def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
@@ -153,7 +155,8 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
     # 캐시 키에 프롬프트 해시 포함 (lang/channel 변경 시 잘못된 캐시 사용 방지)
     prompt_hash = hashlib.sha256(system_prompt.encode()).hexdigest()[:12]
     cache_key = f"{api_key}:{model_name}:{prompt_hash}"
-    cached = _gemini_cache.get(cache_key)
+    with _gemini_cache_lock:
+        cached = _gemini_cache.get(cache_key)
     try:
         if cached:
             # 캐시된 컨텍스트 사용
@@ -171,7 +174,8 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
             return (response.text or "").strip()
     except Exception:
         # 캐시 만료 등 실패 시 일반 요청으로 폴백
-        _gemini_cache.pop(cache_key, None)
+        with _gemini_cache_lock:
+            _gemini_cache.pop(cache_key, None)
 
     # 캐시 생성 시도 (실패해도 일반 요청으로 진행)
     try:
@@ -183,10 +187,11 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
             ),
         )
         # 캐시 크기 제한 (LRU 간이 구현: 초과 시 첫 번째 키 제거)
-        if len(_gemini_cache) >= _GEMINI_CACHE_MAX:
-            oldest_key = next(iter(_gemini_cache))
-            _gemini_cache.pop(oldest_key, None)
-        _gemini_cache[cache_key] = cached.name
+        with _gemini_cache_lock:
+            if len(_gemini_cache) >= _GEMINI_CACHE_MAX:
+                oldest_key = next(iter(_gemini_cache))
+                _gemini_cache.pop(oldest_key, None)
+            _gemini_cache[cache_key] = cached.name
         response = client.models.generate_content(
             model=model_name,
             contents=user_content,
@@ -377,7 +382,7 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 
 [Script Style Rules]
 * Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
-* Each cut: 5–10 words MAX. Short. Punchy. One sentence only.
+* Each cut: 8–18 words. Short. Punchy. One or two sentences for natural voiceover pacing.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
 * Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
 * [CRITICAL WARNING] Write 7–10 cuts (~5–7 sec each). Target 50–60 second video for maximum watch time. NEVER less than 7 cuts.
@@ -428,7 +433,7 @@ Example: "A massive black hole swallowing light [SHOCK]"
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
       "image_prompt": "[English image prompt (MASTER_STYLE auto-applied)]",
-      "script": "[Voice-over: casual, 5-10 words]"
+      "script": "[Voice-over: casual, 8-18 words]"
     }
   ]
 }
@@ -506,7 +511,10 @@ This is the channel's signature look — every image should feel cohesive with t
         else:
             user_content += f"\n\n[원본 영상 자막 — 이 내용의 핵심 팩트와 주제를 반영하여 새로운 기획안을 작성하세요]\n{_topic_content}"
     if fact_context:
-        user_content += f"\n\n{fact_context}"
+        if lang == "en":
+            user_content += f"\n\n{fact_context}\n[Fact-Check Instruction] Prioritize facts from the reference above over your training data. Do NOT invent statistics — use only verified numbers."
+        else:
+            user_content += f"\n\n{fact_context}\n[팩트체크 지시] 위 검색 결과의 팩트를 우선 활용하세요. 통계나 수치를 지어내지 마세요 — 검증된 정보만 사용하세요."
 
     # 레퍼런스 영상 분석 주입 (XML 구조화)
     if reference_url:
@@ -557,15 +565,17 @@ This is the channel's signature look — every image should feel cohesive with t
         max_key_attempts = 10
     else:
         max_key_attempts = 3
+    parse_failures = 0  # JSON 파싱 실패 카운터 (429 카운터와 분리)
     for attempt in range(max_key_attempts):
         try:
             cuts, title, tags = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
             break  # 성공
         except ValueError as ve:
-            # JSON 파싱 실패 — 최대 2회 재시도
+            # JSON 파싱 실패 — 최대 2회 재시도 (429 카운터와 별개)
+            parse_failures += 1
             last_error = ve
-            if attempt < 2:
-                print(f"  [JSON 파싱 실패] 재시도 {attempt+1}/2... ({ve})")
+            if parse_failures <= 2:
+                print(f"  [JSON 파싱 실패] 재시도 {parse_failures}/2... ({ve})")
                 continue
             raise
         except Exception as e:

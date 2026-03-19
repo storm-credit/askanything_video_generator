@@ -922,7 +922,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                                 _cut_executor,
                                 lambda: yt_upload(
                                     video_path=abs_video_path,
-                                    title=title,
+                                    title=video_title,
                                     description=f"#{req.channel}",
                                     tags=[req.channel, language],
                                     privacy=yt_privacy,
@@ -944,7 +944,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                                 _cut_executor,
                                 lambda: tt_upload(
                                     video_path=abs_video_path,
-                                    title=title[:150],
+                                    title=video_title[:150],
                                     privacy_level=tt_privacy,
                                     user_id=account_id,
                                     schedule_time=tt_schedule_time,

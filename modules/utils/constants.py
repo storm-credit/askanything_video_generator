@@ -8,8 +8,8 @@ PROVIDER_LABELS = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
 
 # ── National Geographic 마스터 스타일 프롬프트 (DALL-E / Imagen 공용) ──
 MASTER_STYLE = (
-    "Cinematic photograph, National Geographic documentary style, "
-    "detailed, vertical 9:16 composition, "
+    "Cinematic photograph, highly detailed, "
+    "vertical 9:16 composition, "
     "family-friendly. NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS. "
 )
 
