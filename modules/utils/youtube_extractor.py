@@ -66,7 +66,7 @@ def _fetch_metadata_ytdlp(video_id: str) -> dict:
             ["python", "-m", "yt_dlp", "--no-download",
              "--print", f"%(title)s{_SEP}%(uploader)s{_SEP}%(view_count)s{_SEP}%(like_count)s{_SEP}%(description).200s",
              url],
-            capture_output=True, text=True, timeout=30, encoding="utf-8",
+            capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace",
         )
         if result.returncode != 0 or not result.stdout.strip():
             return {}
