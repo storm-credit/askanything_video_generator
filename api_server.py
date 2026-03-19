@@ -10,7 +10,7 @@ import traceback
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -1191,7 +1191,6 @@ async def render_endpoint(req: RenderRequest):
     with _session_lock:
         session = _prepared_sessions.get(req.sessionId)
     if not session:
-        from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"error": "세션이 만료되었습니다. 다시 준비해주세요."})
 
     async def sse_generator():

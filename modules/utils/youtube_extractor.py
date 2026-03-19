@@ -177,8 +177,13 @@ def extract_youtube_reference(url: str, api_key: str | None = None) -> dict:
 
     print(f"OK [레퍼런스 분석] 완료! 제목: {result['title']}, 자막 {len(transcript)}자 추출")
 
-    # 캐시 저장
+    # 캐시 저장 (50개 초과 시 만료된 항목 정리)
     with _cache_lock:
+        if len(_ref_cache) > 50:
+            now = time.time()
+            expired = [k for k, (ts, _) in _ref_cache.items() if now - ts > _CACHE_TTL]
+            for k in expired:
+                _ref_cache.pop(k, None)
         _ref_cache[cache_key] = (time.time(), result)
 
     return result

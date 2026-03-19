@@ -31,6 +31,7 @@ def _sanitize_cuts(cuts_data: list[dict[str, Any]]) -> list[dict[str, str]]:
         script = cut.get("script", "").strip().strip('"""')
         description = cut.get("description", "").strip()
         if not prompt or not script:
+            print(f"  [경고] 빈 컷 제거됨: prompt={bool(prompt)}, script={bool(script)}, desc='{description[:30]}'")
             continue
         cuts.append({"text": description, "description": description, "prompt": prompt, "script": script})
     return cuts
@@ -138,7 +139,8 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str, model_o
     return (response.choices[0].message.content or "").strip()
 
 
-_gemini_cache: dict[str, object] = {}  # key → cached_content
+_gemini_cache: dict[str, object] = {}  # key → cached_content (최대 20개, 초과 시 가장 오래된 것 제거)
+_GEMINI_CACHE_MAX = 20
 
 def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
     """Google Gemini API로 기획안을 생성합니다 (google-genai SDK). 시스템 프롬프트 캐싱 지원."""
@@ -180,6 +182,10 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
                 ttl="3600s",
             ),
         )
+        # 캐시 크기 제한 (LRU 간이 구현: 초과 시 첫 번째 키 제거)
+        if len(_gemini_cache) >= _GEMINI_CACHE_MAX:
+            oldest_key = next(iter(_gemini_cache))
+            _gemini_cache.pop(oldest_key, None)
         _gemini_cache[cache_key] = cached.name
         response = client.models.generate_content(
             model=model_name,

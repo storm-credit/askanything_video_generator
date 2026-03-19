@@ -59,6 +59,12 @@ def get_fact_check_context(topic: str) -> str:
 
         print("OK [팩트체크 엔진] 실시간 정보 검색 완료! (대본 기획에 RAG 주입 대기)")
         with _cache_lock:
+            # 캐시 크기 제한 (50개 초과 시 만료된 항목 정리)
+            if len(_fact_cache) > 50:
+                now = time.time()
+                expired = [k for k, (ts, _) in _fact_cache.items() if now - ts > _CACHE_TTL]
+                for k in expired:
+                    _fact_cache.pop(k, None)
             _fact_cache[topic_hash] = (time.time(), context)
         return context
     except Exception as e:
