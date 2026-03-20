@@ -855,12 +855,6 @@ async def generate_video_endpoint(req: GenerateRequest):
                     yield {"data": f"[저장] Downloads/{topic_folder}/{_dl_channel}.mp4\n"}
                 except Exception as cp_err:
                     print(f"[Downloads 복사 실패] {cp_err}")
-                # 썸네일도 복사
-                if thumbnail_path and os.path.exists(thumbnail_path):
-                    try:
-                        shutil.copy2(thumbnail_path, os.path.join(_dl_dir, f"{_dl_channel}_thumb.jpg"))
-                    except Exception:
-                        pass
 
             # 프론트엔드 라우팅용 경로 (StaticFiles mount 기준)
             final_filename = os.path.basename(video_path)
