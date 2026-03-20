@@ -67,8 +67,6 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
 
-  const quantizedTime = Math.floor(currentTime * 10) / 10;
-
   // 구(phrase) 단위 그룹핑: CJK는 3단어, 라틴은 4단어씩 묶어서 고정 표시
   const phrases = useMemo(() => {
     const groups: { words: (WordProps & { index: number; emphasis: boolean })[]; start: number; end: number }[] = [];
@@ -98,9 +96,9 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
   }, [wordTimestamps]);
 
   const visibleWords = useMemo(() => {
-    const activePhrase = phrases.find(p => quantizedTime >= p.start - 0.1 && quantizedTime <= p.end + 0.2);
+    const activePhrase = phrases.find(p => currentTime >= p.start - 0.1 && currentTime <= p.end + 0.2);
     return activePhrase ? activePhrase.words : [];
-  }, [phrases, quantizedTime]);
+  }, [phrases, currentTime]);
 
   return (
     <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: `${captionY}%` }}>
@@ -114,9 +112,9 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
         textAlign: 'center'
       }}>
         {visibleWords.map((w) => {
-          const isActive = quantizedTime >= w.start && quantizedTime <= w.end;
-          const hasPassed = quantizedTime > w.end;
-          const isVisible = quantizedTime >= w.start - 0.5;
+          const isActive = currentTime >= w.start && currentTime <= w.end;
+          const hasPassed = currentTime > w.end;
+          const isVisible = currentTime >= w.start - 0.5;
 
           if (!isVisible && !hasPassed && !isActive) return null;
 

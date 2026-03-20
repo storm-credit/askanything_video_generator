@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 import time
 from PIL import Image, ImageOps
 import io
@@ -87,8 +88,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 image_dir = f"assets/{topic_folder}/images"
                 os.makedirs(image_dir, exist_ok=True)
                 filename = os.path.join(image_dir, f"cut_{index:02}.png")
-                import tempfile as _tmpfile
-                fd, tmp_img = _tmpfile.mkstemp(dir=image_dir, suffix=".tmp")
+                fd, tmp_img = tempfile.mkstemp(dir=image_dir, suffix=".tmp")
                 os.close(fd)
                 try:
                     fitted_image.save(tmp_img, format="PNG")

@@ -5,6 +5,7 @@ import time
 import random
 import hashlib
 import threading
+from collections import OrderedDict
 from typing import Any
 from modules.utils.slugify import slugify_topic
 from modules.utils.constants import PROVIDER_LABELS
@@ -33,6 +34,8 @@ def _split_yt_topic(topic: str) -> tuple[str, str]:
     return topic, ""
 
 
+_VALID_EMOTIONS = {"[SHOCK]", "[WONDER]", "[TENSION]", "[REVEAL]", "[CALM]"}
+
 def _sanitize_cuts(cuts_data: list[dict[str, Any]]) -> list[dict[str, str]]:
     cuts = []
     for cut in cuts_data:
@@ -42,6 +45,9 @@ def _sanitize_cuts(cuts_data: list[dict[str, Any]]) -> list[dict[str, str]]:
         if not prompt or not script:
             print(f"  [경고] 빈 컷 제거됨: prompt={bool(prompt)}, script={bool(script)}, desc='{description[:30]}'")
             continue
+        # 감정 태그 누락 시 기본값 추가 (Remotion 카메라 프리셋 연동)
+        if not any(tag in description for tag in _VALID_EMOTIONS):
+            description += " [WONDER]"
         cuts.append({"text": description, "description": description, "prompt": prompt, "script": script})
     return cuts
 
@@ -167,7 +173,7 @@ def _request_openai_freeform(api_key: str, system_prompt: str, user_content: str
     return (response.choices[0].message.content or "").strip()
 
 
-_gemini_cache: dict[str, object] = {}  # key → cached_content (최대 20개, 초과 시 가장 오래된 것 제거)
+_gemini_cache: OrderedDict[str, object] = OrderedDict()  # LRU: 접근 시 move_to_end, 초과 시 popitem(last=False)
 _gemini_cache_lock = threading.Lock()
 _GEMINI_CACHE_MAX = 20
 
@@ -180,11 +186,13 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
 
     # Context Caching: 시스템 프롬프트를 캐시하여 토큰 비용 절감
     # 캐시 키에 프롬프트 해시 포함 (lang/channel 변경 시 잘못된 캐시 사용 방지)
-    prompt_hash = hashlib.sha256(system_prompt.encode()).hexdigest()[:12]
-    key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:12]
+    prompt_hash = hashlib.sha256(system_prompt.encode()).hexdigest()
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
     cache_key = f"{key_hash}:{model_name}:{prompt_hash}"
     with _gemini_cache_lock:
         cached = _gemini_cache.get(cache_key)
+        if cached:
+            _gemini_cache.move_to_end(cache_key)  # LRU: 최근 접근으로 이동
     try:
         if cached:
             # 캐시된 컨텍스트 사용
@@ -214,11 +222,9 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
                 ttl="3600s",
             ),
         )
-        # 캐시 크기 제한 (LRU 간이 구현: 초과 시 첫 번째 키 제거)
         with _gemini_cache_lock:
             if len(_gemini_cache) >= _GEMINI_CACHE_MAX:
-                oldest_key = next(iter(_gemini_cache))
-                _gemini_cache.pop(oldest_key, None)
+                _gemini_cache.popitem(last=False)  # LRU: 가장 오래된 항목 제거
             _gemini_cache[cache_key] = cached.name
         response = client.models.generate_content(
             model=model_name,
@@ -707,10 +713,11 @@ def _verify_facts(cuts: list[dict], fact_context: str, topic: str,
     """생성된 스크립트의 팩트를 검증하고, 틀린 부분을 수정합니다."""
     scripts = "\n".join(f"컷{i+1}: {c['script']}" for i, c in enumerate(cuts))
 
+    safe_facts = _sanitize_llm_input(fact_context, max_len=1500)
     verify_prompt = f"""You are a strict fact-checker. Verify each script line against the provided facts.
 
 [FACTS from search]
-{fact_context[:1500]}
+{safe_facts}
 
 [GENERATED SCRIPTS]
 {scripts}

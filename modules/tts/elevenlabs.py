@@ -129,6 +129,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                     os.replace(tmp_path, audio_path)
                     tmp_path = None  # 성공 — 정리 불필요
                 except Exception as write_exc:
+                    response.close()
                     print(f"[ElevenLabs 오류] 컷 {index+1} 파일 쓰기 실패: {write_exc}")
                     if tmp_path:
                         try:

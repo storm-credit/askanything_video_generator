@@ -54,7 +54,7 @@ _image_semaphore = threading.Semaphore(3)
 _cancel_events: dict[str, tuple[threading.Event, float]] = {}
 _active_generation_ids: set[str] = set()
 _generation_lock = threading.Lock()
-_CANCEL_EVENT_TTL = 600  # 10분 후 미정리 이벤트 자동 삭제
+_CANCEL_EVENT_TTL = 3600  # 1시간 후 미정리 이벤트 자동 삭제 (긴 영상 생성 대응)
 
 
 def _resolve_youtube_topic(topic: str, reference_url: str | None = None) -> tuple[str, str | None]:

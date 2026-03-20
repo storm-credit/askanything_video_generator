@@ -76,8 +76,12 @@ def _get_credentials(channel_id: str = None) -> Credentials | None:
 
     creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        token_path.write_text(creds.to_json())
+        try:
+            creds.refresh(Request())
+            token_path.write_text(creds.to_json())
+        except Exception as e:
+            print(f"[YouTube] 토큰 갱신 실패 (재인증 필요): {e}")
+            return None
     if creds and creds.valid:
         return creds
     return None

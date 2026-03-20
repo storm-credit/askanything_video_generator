@@ -159,7 +159,9 @@ def handle_auth_callback(code: str, state: str | None = None) -> dict:
     if resp.status_code != 200:
         raise Exception(f"Instagram 토큰 교환 실패: {resp.text}")
 
-    short_token = resp.json()["access_token"]
+    short_token = resp.json().get("access_token")
+    if not short_token:
+        raise Exception(f"Instagram 응답에 access_token 누락: {resp.text[:200]}")
 
     # 장기 토큰으로 교환
     long_resp = requests.get(
@@ -176,7 +178,9 @@ def handle_auth_callback(code: str, state: str | None = None) -> dict:
         raise Exception(f"Instagram 장기 토큰 교환 실패: {long_resp.text}")
 
     long_data = long_resp.json()
-    access_token = long_data["access_token"]
+    access_token = long_data.get("access_token")
+    if not access_token:
+        raise Exception(f"Instagram 장기 토큰 응답에 access_token 누락: {str(long_data)[:200]}")
 
     ig_user_id = _get_ig_user_id(access_token)
     if not ig_user_id:

@@ -1,4 +1,5 @@
 import os
+import tempfile
 import time
 import random
 import jwt
@@ -155,17 +156,16 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     os.makedirs(output_dir, exist_ok=True)
     final_video_path = os.path.join(output_dir, f"kling_cut_{index:02d}.mp4")
     
-    import tempfile
     tmp_path = None
     try:
         print(f"-> [Kling AI] 컷 {index+1} 렌더링 완료! 비디오 다운로드 중...")
-        vid_resp = requests.get(video_url, stream=True, timeout=30)
-        vid_resp.raise_for_status()
-        fd, tmp_path = tempfile.mkstemp(dir=output_dir, suffix=".tmp")
-        os.close(fd)
-        with open(tmp_path, "wb") as f:
-            for chunk in vid_resp.iter_content(chunk_size=8192):
-                f.write(chunk)
+        with requests.get(video_url, stream=True, timeout=30) as vid_resp:
+            vid_resp.raise_for_status()
+            fd, tmp_path = tempfile.mkstemp(dir=output_dir, suffix=".tmp")
+            os.close(fd)
+            with open(tmp_path, "wb") as f:
+                for chunk in vid_resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
         os.replace(tmp_path, final_video_path)
         return final_video_path
     except Exception as e:

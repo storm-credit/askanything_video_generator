@@ -23,11 +23,11 @@ type CutProps = {
 
 // Extract [EMOTION] tag from cut description field
 const EMOTION_TAGS = new Set(['SHOCK', 'WONDER', 'TENSION', 'REVEAL', 'CALM']);
-const extractEmotion = (cut: CutProps): string | undefined => {
-  if (cut.emotion) return cut.emotion;
+const extractEmotion = (cut: CutProps): EmotionTag | undefined => {
+  if (cut.emotion && EMOTION_TAGS.has(cut.emotion)) return cut.emotion as EmotionTag;
   if (!cut.description) return undefined;
   const match = cut.description.match(/\[(\w+)\]/);
-  if (match && EMOTION_TAGS.has(match[1])) return match[1];
+  if (match && EMOTION_TAGS.has(match[1])) return match[1] as EmotionTag;
   return undefined;
 };
 

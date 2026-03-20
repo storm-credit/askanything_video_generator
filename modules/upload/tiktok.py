@@ -1,5 +1,6 @@
 import os
 import json
+import threading
 import time
 import secrets
 import requests
@@ -11,6 +12,7 @@ CLIENT_KEY = os.getenv("TIKTOK_CLIENT_KEY", "")
 CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET", "")
 REDIRECT_URI = os.getenv("TIKTOK_REDIRECT_URI", "http://localhost:8003/api/tiktok/callback")
 TOKENS_DIR = Path("tiktok_tokens")
+_token_refresh_lock = threading.Lock()
 
 SCOPES = "user.info.basic,video.publish,video.upload"
 
@@ -37,10 +39,15 @@ def _load_token(user_id: str = "default") -> dict | None:
     try:
         data = json.loads(path.read_text())
         if data.get("expires_at", 0) < time.time():
-            refreshed = _refresh_token(data)
-            if refreshed:
-                return refreshed
-            return None
+            with _token_refresh_lock:
+                # 락 획득 후 다시 읽기 (다른 스레드가 이미 갱신했을 수 있음)
+                data = json.loads(path.read_text())
+                if data.get("expires_at", 0) < time.time():
+                    refreshed = _refresh_token(data)
+                    if refreshed:
+                        return refreshed
+                    return None
+                return data
         return data
     except (json.JSONDecodeError, KeyError, OSError) as e:
         print(f"[TikTok] 토큰 로드 실패 ({path}): {e}")
