@@ -60,6 +60,22 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "instagram": None,
         },
     },
+    "prismtale": {
+        "language": "ko",
+        "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
+        "tts_speed": 0.85,
+        "bgm_theme": "random",
+        "platforms": ["youtube", "tiktok"],
+        "caption_size": 54,
+        "caption_y": 35,
+        "visual_style": "dreamlike, prismatic colors, fantasy storytelling",
+        "tone": "동화적, 신비로운 분위기, 한국식 친근한 반말",
+        "upload_accounts": {
+            "youtube": None,
+            "tiktok": None,
+            "instagram": None,
+        },
+    },
 }
 
 
