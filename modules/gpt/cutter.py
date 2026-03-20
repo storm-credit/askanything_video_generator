@@ -690,5 +690,79 @@ This is the channel's signature look — every image should feel cohesive with t
     if not tags or not isinstance(tags, list):
         tags = ["#Shorts"]
 
+    # ── 팩트 검증: 생성된 스크립트가 실제 팩트와 일치하는지 LLM 검증 ──
+    if fact_context:
+        cuts = _verify_facts(cuts, fact_context, _topic_title, llm_provider, current_key, lang, llm_model)
+
     print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
     return cuts, topic_folder, title, tags
+
+
+def _verify_facts(cuts: list[dict], fact_context: str, topic: str,
+                  llm_provider: str, api_key: str, lang: str, llm_model: str | None = None) -> list[dict]:
+    """생성된 스크립트의 팩트를 검증하고, 틀린 부분을 수정합니다."""
+    scripts = "\n".join(f"컷{i+1}: {c['script']}" for i, c in enumerate(cuts))
+
+    verify_prompt = f"""You are a strict fact-checker. Verify each script line against the provided facts.
+
+[FACTS from search]
+{fact_context[:1500]}
+
+[GENERATED SCRIPTS]
+{scripts}
+
+[TASK]
+1. Check each script line for factual accuracy.
+2. If a line contains false or unverifiable information, rewrite it with correct facts.
+3. If a line is accurate, keep it unchanged.
+4. Maintain the same tone, style, and approximate length.
+
+Output ONLY a JSON array of objects: [{{"cut": 1, "original": "...", "verified": "...", "changed": true/false, "reason": "..."}}]
+Do NOT include markdown code blocks. Return raw JSON only."""
+
+    print(f"-> [팩트 검증] 생성된 {len(cuts)}개 스크립트 검증 중...")
+
+    try:
+        if llm_provider == "gemini":
+            raw = _request_gemini_freeform(api_key, verify_prompt, llm_model)
+        else:
+            raw = _request_openai_freeform(api_key, "You are a fact-checker.", verify_prompt, llm_model)
+
+        result = json.loads(_extract_json(raw) or "[]")
+        if not isinstance(result, list):
+            print(f"  [팩트 검증] 응답 파싱 실패 — 원본 유지")
+            return cuts
+
+        changed_count = 0
+        for item in result:
+            if not isinstance(item, dict) or not item.get("changed"):
+                continue
+            idx = item.get("cut", 0) - 1
+            if 0 <= idx < len(cuts) and item.get("verified"):
+                old_script = cuts[idx]["script"]
+                cuts[idx]["script"] = item["verified"]
+                changed_count += 1
+                print(f"  [팩트 수정] 컷{idx+1}: '{old_script[:30]}...' → '{item['verified'][:30]}...' ({item.get('reason', '')})")
+
+        if changed_count == 0:
+            print(f"OK [팩트 검증] 모든 스크립트 팩트 확인 완료 (수정 없음)")
+        else:
+            print(f"OK [팩트 검증] {changed_count}개 스크립트 팩트 수정 완료")
+        return cuts
+
+    except Exception as e:
+        print(f"  [팩트 검증 실패] {e} — 원본 유지")
+        return cuts
+
+
+def _request_gemini_freeform(api_key: str, prompt: str, model: str | None = None) -> str:
+    """Gemini에 자유형 프롬프트 전송 (스키마 없음)."""
+    from google import genai
+    client = genai.Client(api_key=api_key)
+    model_name = model or "gemini-2.5-flash"
+    response = client.models.generate_content(
+        model=model_name,
+        contents=prompt,
+        config={"response_mime_type": "application/json"},
+    )
+    return (response.text or "").strip()
