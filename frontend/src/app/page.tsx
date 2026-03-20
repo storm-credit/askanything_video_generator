@@ -9,9 +9,9 @@ import { ProgressPanel } from "../components/ProgressPanel";
 
 // 채널 프리셋 정의
 const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = {
-  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 48, captionY: 28 },
-  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
-  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 44, captionY: 28 },
+  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 54, captionY: 35 },
+  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 50, captionY: 35 },
+  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 50, captionY: 35 },
 };
 
 export default function Home() {
@@ -42,8 +42,8 @@ export default function Home() {
   const multiAbortRefs = useRef<Record<string, AbortController>>({});
   const [ttsSpeed, setTtsSpeed] = useState(0.9);
   const [voiceId, setVoiceId] = useState("auto"); // 자동 선택 (기본)
-  const [captionSize, setCaptionSize] = useState(48);
-  const [captionY, setCaptionY] = useState(28);
+  const [captionSize, setCaptionSize] = useState(54);
+  const [captionY, setCaptionY] = useState(35);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
