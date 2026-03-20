@@ -841,28 +841,24 @@ async def generate_video_endpoint(req: GenerateRequest):
                     except Exception as copy_err:
                         yield {"data": f"ERROR|[저장 오류] 지정 경로 복사 실패: {copy_err}\n"}
 
-            # Downloads 폴더로 자동 복사 (토픽/채널 구조)
+            # Downloads 폴더로 자동 복사: Downloads/토픽/채널명.mp4
             _dl_base = os.environ.get("DOWNLOAD_DIR", os.path.join(os.path.expanduser("~"), "Downloads"))
             downloads_path = None
             if os.path.isdir(_dl_base):
                 _dl_channel = req.channel or "default"
-                _dl_dir = os.path.join(_dl_base, topic_folder, _dl_channel)
+                _dl_dir = os.path.join(_dl_base, topic_folder)
                 os.makedirs(_dl_dir, exist_ok=True)
-                for plat, vpath in video_paths_map.items():
-                    fname = os.path.basename(vpath)
-                    try:
-                        dl_path = os.path.join(_dl_dir, fname)
-                        await asyncio.to_thread(shutil.copy2, os.path.abspath(vpath), dl_path)
-                        if plat == primary_platform:
-                            downloads_path = dl_path
-                        if len(video_paths_map) > 1:
-                            yield {"data": f"[저장] {plat.upper()} → Downloads/{topic_folder}/{_dl_channel}/{fname}\n"}
-                    except Exception as cp_err:
-                        print(f"[Downloads 복사 실패 {plat}] {cp_err}")
+                try:
+                    dl_path = os.path.join(_dl_dir, f"{_dl_channel}.mp4")
+                    await asyncio.to_thread(shutil.copy2, os.path.abspath(video_path), dl_path)
+                    downloads_path = dl_path
+                    yield {"data": f"[저장] Downloads/{topic_folder}/{_dl_channel}.mp4\n"}
+                except Exception as cp_err:
+                    print(f"[Downloads 복사 실패] {cp_err}")
                 # 썸네일도 복사
                 if thumbnail_path and os.path.exists(thumbnail_path):
                     try:
-                        shutil.copy2(thumbnail_path, os.path.join(_dl_dir, "thumbnail.jpg"))
+                        shutil.copy2(thumbnail_path, os.path.join(_dl_dir, f"{_dl_channel}_thumb.jpg"))
                     except Exception:
                         pass
 
