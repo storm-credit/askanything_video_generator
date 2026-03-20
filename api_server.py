@@ -1435,8 +1435,9 @@ async def youtube_callback(code: str, state: str | None = None):
             "<script>window.close()</script></body></html>"
         )
     except Exception as e:
-        import html as _html
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
+        import html as _html, traceback as _tb
+        _tb.print_exc()
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p><pre>{_html.escape(_tb.format_exc())}</pre></body></html>", status_code=400)
 
 
 @app.post("/api/youtube/upload")
