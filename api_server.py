@@ -681,16 +681,25 @@ async def generate_video_endpoint(req: GenerateRequest):
                             print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
 
                 threads = []
-                # Hero cut 선택: SHOCK/REVEAL 태그만 비디오 생성, 나머지는 Ken Burns (비용 50-70% 절감)
-                _hero_emotions = {"SHOCK", "REVEAL"}
-                _cut_desc = cut.get("description", "")
-                _is_hero = any(f"[{e}]" in _cut_desc for e in _hero_emotions)
-                if img_path and active_video_engine != "none" and _is_hero:
+                # 비디오 생성 여부 결정
+                _should_video = False
+                if img_path and active_video_engine != "none":
+                    if video_model_override == "hero-only":
+                        # Hero cut만: SHOCK/REVEAL 태그만 비디오 생성 (비용 50-70% 절감)
+                        _hero_emotions = {"SHOCK", "REVEAL"}
+                        _cut_desc = cut.get("description", "")
+                        _is_hero = any(f"[{e}]" in _cut_desc for e in _hero_emotions)
+                        if _is_hero:
+                            _should_video = True
+                        else:
+                            print(f"[컷 {i+1}] 히어로 컷 아님 → Ken Burns 사용")
+                    else:
+                        # 전체 비디오 모드
+                        _should_video = True
+                if _should_video:
                     t = threading.Thread(target=_run_video, name=f"video-cut{i}", daemon=True)
                     t.start()
                     threads.append(t)
-                elif img_path and active_video_engine != "none" and not _is_hero:
-                    print(f"[컷 {i+1}] 히어로 컷 아님 ({_cut_desc[:30]}…) → Ken Burns 사용")
                 t_tts = threading.Thread(target=_run_tts_and_whisper, name=f"tts-cut{i}", daemon=True)
                 t_tts.start()
                 threads.append(t_tts)

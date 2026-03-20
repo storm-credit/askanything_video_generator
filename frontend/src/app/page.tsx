@@ -287,7 +287,7 @@ export default function Home() {
       case "best":
         setLlmProvider("gemini"); setLlmModel("");
         setImageEngine("imagen"); setImageModel("");
-        setVideoEngine("veo3"); setVideoModel("");
+        setVideoEngine("veo3"); setVideoModel("hero-only");
         break;
       case "balanced":
         setLlmProvider("gemini"); setLlmModel("");
