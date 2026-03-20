@@ -83,8 +83,8 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // 배포 모드: 실시간(공개) / 비공개 / 예약
-  const [publishMode, setPublishMode] = useState<"realtime" | "private" | "scheduled">("realtime");
+  // 배포 모드: 생성만 (업로드는 모달에서 수동)
+  const [publishMode] = useState<"realtime" | "private" | "scheduled" | "local">("local");
   const [scheduledTime, setScheduledTime] = useState("");
 
   // 설정 모달
@@ -1231,34 +1231,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 실시간 · 비공개 · 예약 + 시간 */}
-            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
-              <div className="flex items-center justify-center gap-2">
-                <div className="flex items-center bg-white/5 border border-white/10 rounded-full overflow-hidden">
-                  <button type="button" onClick={() => setPublishMode("realtime")} disabled={isGenerating || selectedChannels.length === 0}
-                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 opacity-40 cursor-not-allowed bg-transparent" : publishMode === "realtime" ? "bg-green-500/20 text-green-300" : "text-gray-500 hover:text-gray-300"}`}>
-                    실시간
-                  </button>
-                  <button type="button" onClick={() => setPublishMode("private")} disabled={isGenerating || selectedChannels.length === 0}
-                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 opacity-40 cursor-not-allowed bg-transparent" : publishMode === "private" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
-                    비공개
-                  </button>
-                  <button type="button" onClick={() => setPublishMode("scheduled")} disabled={isGenerating || selectedChannels.length === 0}
-                    className={`px-4 py-1.5 text-xs font-medium transition-all ${selectedChannels.length === 0 ? "text-gray-600 opacity-40 cursor-not-allowed bg-transparent" : publishMode === "scheduled" ? "bg-amber-500/20 text-amber-300" : "text-gray-500 hover:text-gray-300"}`}>
-                    예약
-                  </button>
-                </div>
-                <input
-                  type="datetime-local"
-                  value={scheduledTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                  disabled={isGenerating || publishMode !== "scheduled" || selectedChannels.length === 0}
-                  min={new Date(Date.now() + 600000).toISOString().slice(0, 16)}
-                  className={`bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-xs focus:outline-none transition-opacity ${publishMode === "scheduled" ? "text-gray-200 opacity-100 focus:border-amber-500/50" : "text-gray-600 opacity-40 cursor-not-allowed"}`}
-                />
-              </div>
-            </div>
-
             {/* 채널 선택 (별도 행) */}
             <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
               <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -1444,20 +1416,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 플랫폼 */}
-            <div className="flex items-center justify-center gap-3">
-              {[
-                { id: "youtube", label: "YouTube", icon: Youtube, color: "text-red-400", accent: "checked:bg-red-500" },
-                { id: "tiktok", label: "TikTok", icon: Send, color: "text-cyan-400", accent: "checked:bg-cyan-500" },
-                { id: "reels", label: "Reels", icon: Instagram, color: "text-pink-400", accent: "checked:bg-pink-500" },
-              ].map(({ id, label, icon: Icon, color }) => (
-                <label key={id} className={`flex items-center gap-1.5 cursor-pointer select-none px-3 py-1.5 rounded-full border transition-colors ${platforms.includes(id) ? "bg-white/10 border-white/20" : "bg-transparent border-transparent hover:bg-white/5"}`}>
-                  <input type="checkbox" checked={platforms.includes(id)} onChange={(e) => { if (e.target.checked) { setPlatforms((prev) => [...prev, id]); } else { setPlatforms((prev) => { const next = prev.filter((p) => p !== id); return next.length > 0 ? next : ["youtube"]; }); } }} disabled={isGenerating} className="hidden" />
-                  <Icon className={`w-3.5 h-3.5 ${platforms.includes(id) ? color : "text-gray-600"}`} />
-                  <span className={`text-xs ${platforms.includes(id) ? "text-gray-200" : "text-gray-500"}`}>{label}</span>
-                </label>
-              ))}
-            </div>
+            {/* 플랫폼은 채널 프리셋에서 자동 결정, 업로드는 모달에서 수동 */}
           </div>
         </form>
       </motion.div>
@@ -1780,58 +1739,49 @@ export default function Home() {
                   {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                   {isDownloading ? "다운로드 중..." : "다운로드"}
                 </button>
-                {/* 업로드 버튼들 */}
-                <button
-                  onClick={() => {
+                {/* 업로드 버튼 — 채널 프리셋 플랫폼만 표시 */}
+                {(() => {
+                  const activeChannel = selectedChannels.length === 1 ? selectedChannels[0] : channel;
+                  const preset = activeChannel ? CHANNEL_PRESETS[activeChannel] : null;
+                  const channelPlatforms = preset ? preset.platforms : ["youtube", "tiktok", "reels"];
+                  const openUpload = (p: "youtube" | "tiktok" | "instagram") => {
                     setUploadTitle(topic);
                     setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
-                    setUploadTags(topic);
+                    if (p === "youtube") setUploadTags(topic);
                     setUploadResult(null);
                     setScheduleEnabled(false);
                     setScheduleDate("");
-                    setUploadPlatform("youtube");
+                    setUploadPlatform(p);
                     setShowUploadModal(true);
                     checkPlatformStatus();
-                  }}
-                  className="flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-colors w-full"
-                >
-                  <Youtube className="w-5 h-5" />
-                  YouTube Shorts
-                </button>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setUploadTitle(topic);
-                      setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
-                      setUploadResult(null);
-                      setScheduleEnabled(false);
-                      setScheduleDate("");
-                      setUploadPlatform("tiktok");
-                      setShowUploadModal(true);
-                      checkPlatformStatus();
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-xl transition-colors text-sm"
-                  >
-                    <Send className="w-4 h-4" />
-                    TikTok
-                  </button>
-                  <button
-                    onClick={() => {
-                      setUploadTitle(topic);
-                      setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
-                      setUploadResult(null);
-                      setScheduleEnabled(false);
-                      setScheduleDate("");
-                      setUploadPlatform("instagram");
-                      setShowUploadModal(true);
-                      checkPlatformStatus();
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-semibold rounded-xl transition-colors text-sm"
-                  >
-                    <Instagram className="w-4 h-4" />
-                    Reels
-                  </button>
-                </div>
+                  };
+                  const hasYT = channelPlatforms.includes("youtube");
+                  const hasTT = channelPlatforms.includes("tiktok");
+                  const hasIG = channelPlatforms.includes("reels");
+                  return (
+                    <>
+                      {hasYT && (
+                        <button onClick={() => openUpload("youtube")} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-colors w-full">
+                          <Youtube className="w-5 h-5" /> YouTube Shorts
+                        </button>
+                      )}
+                      {(hasTT || hasIG) && (
+                        <div className="flex gap-2">
+                          {hasTT && (
+                            <button onClick={() => openUpload("tiktok")} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-xl transition-colors text-sm">
+                              <Send className="w-4 h-4" /> TikTok
+                            </button>
+                          )}
+                          {hasIG && (
+                            <button onClick={() => openUpload("instagram")} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-semibold rounded-xl transition-colors text-sm">
+                              <Instagram className="w-4 h-4" /> Reels
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </motion.div>
@@ -1866,27 +1816,43 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* 플랫폼 선택 탭 */}
-              <div className="flex gap-1 bg-white/5 rounded-xl p-1">
-                <button
-                  onClick={() => { setUploadPlatform("youtube"); setUploadResult(null); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${uploadPlatform === "youtube" ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"}`}
-                >
-                  <Youtube className="w-4 h-4" /> YouTube
-                </button>
-                <button
-                  onClick={() => { setUploadPlatform("tiktok"); setUploadResult(null); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${uploadPlatform === "tiktok" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
-                >
-                  <Send className="w-4 h-4" /> TikTok
-                </button>
-                <button
-                  onClick={() => { setUploadPlatform("instagram"); setUploadResult(null); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${uploadPlatform === "instagram" ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white" : "text-gray-400 hover:text-white"}`}
-                >
-                  <Instagram className="w-4 h-4" /> Reels
-                </button>
-              </div>
+              {/* 플랫폼 선택 탭 — 채널 프리셋에 지정된 플랫폼만 표시 */}
+              {(() => {
+                const activeChannel = selectedChannels.length === 1 ? selectedChannels[0] : channel;
+                const preset = activeChannel ? CHANNEL_PRESETS[activeChannel] : null;
+                const platformMap: Record<string, string> = { youtube: "youtube", tiktok: "tiktok", reels: "instagram" };
+                const availablePlatforms = preset
+                  ? preset.platforms.map(p => platformMap[p] || p).filter((v, i, a) => a.indexOf(v) === i) as ("youtube" | "tiktok" | "instagram")[]
+                  : ["youtube" as const, "tiktok" as const, "instagram" as const];
+                return availablePlatforms.length > 1 ? (
+                  <div className="flex gap-1 bg-white/5 rounded-xl p-1">
+                    {availablePlatforms.includes("youtube") && (
+                      <button
+                        onClick={() => { setUploadPlatform("youtube"); setUploadResult(null); }}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${uploadPlatform === "youtube" ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"}`}
+                      >
+                        <Youtube className="w-4 h-4" /> YouTube
+                      </button>
+                    )}
+                    {availablePlatforms.includes("tiktok") && (
+                      <button
+                        onClick={() => { setUploadPlatform("tiktok"); setUploadResult(null); }}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${uploadPlatform === "tiktok" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
+                      >
+                        <Send className="w-4 h-4" /> TikTok
+                      </button>
+                    )}
+                    {availablePlatforms.includes("instagram") && (
+                      <button
+                        onClick={() => { setUploadPlatform("instagram"); setUploadResult(null); }}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${uploadPlatform === "instagram" ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white" : "text-gray-400 hover:text-white"}`}
+                      >
+                        <Instagram className="w-4 h-4" /> Reels
+                      </button>
+                    )}
+                  </div>
+                ) : null;
+              })()}
 
               {/* 연동 안 된 경우 */}
               {((uploadPlatform === "youtube" && !ytConnected) ||

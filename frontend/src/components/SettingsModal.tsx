@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle, Tv, Globe, ChevronDown, ChevronUp, Youtube, Music, Instagram } from "lucide-react";
 import { API_BASE, KeyConfig, KeyStatus, KeyUsageStats, KEY_CONFIGS } from "./types";
@@ -122,13 +122,32 @@ export function SettingsModal({
   const coreConfigs = KEY_CONFIGS.filter((c) => c.group === "core");
   const extraConfigs = KEY_CONFIGS.filter((c) => c.group === "extra");
 
-  // ── 채널 필드 수정 (로컬 상태 업데이트) ──
+  // ── 채널 설정 서버 자동저장 (디바운스 500ms) ──
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const saveChannelToServer = useCallback((name: string, data: Record<string, unknown>) => {
+    if (saveTimers.current[name]) clearTimeout(saveTimers.current[name]);
+    saveTimers.current[name] = setTimeout(async () => {
+      setChannelSaveStatus((prev) => ({ ...prev, [name]: "saving" }));
+      try {
+        const res = await fetch(`${API_BASE}/api/channels/${encodeURIComponent(name)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        setChannelSaveStatus((prev) => ({ ...prev, [name]: res.ok ? "saved" : "error" }));
+      } catch {
+        setChannelSaveStatus((prev) => ({ ...prev, [name]: "error" }));
+      }
+    }, 500);
+  }, []);
+
+  // ── 채널 필드 수정 (로컬 + 서버 자동저장) ──
   const updateChannelField = (name: string, field: string, value: unknown) => {
-    setChannels((prev) => ({
-      ...prev,
-      [name]: { ...prev[name], [field]: value },
-    }));
-    setChannelSaveStatus((prev) => ({ ...prev, [name]: null })); // 변경됨 표시
+    setChannels((prev) => {
+      const updated = { ...prev, [name]: { ...prev[name], [field]: value } };
+      saveChannelToServer(name, updated[name]);
+      return updated;
+    });
   };
 
   // ── 플랫폼 토글 ──
@@ -541,10 +560,10 @@ export function SettingsModal({
                               </div>
                             )}
 
-                            {/* 저장 안내 */}
-                            <p className="text-[10px] text-gray-600 italic">
-                              채널 설정 변경은 다음 생성 시 자동 적용됩니다. 영구 변경은 서버의 <code className="text-gray-400">channel_config.py</code>를 수정하세요.
-                            </p>
+                            {/* 저장 상태 */}
+                            {channelSaveStatus[name] === "saving" && <p className="text-[10px] text-yellow-400">저장 중...</p>}
+                            {channelSaveStatus[name] === "saved" && <p className="text-[10px] text-green-400">자동 저장됨</p>}
+                            {channelSaveStatus[name] === "error" && <p className="text-[10px] text-red-400">저장 실패</p>}
                           </div>
                         )}
                       </div>
