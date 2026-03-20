@@ -161,28 +161,23 @@ def get_google_key(override: str = None, service: str = None, exclude: set = Non
                 if not candidates:
                     return None  # 모든 키가 소진됨
 
-                # 3단계 분류
-                active_keys = []
-                warning_keys = []
+                # 2단계 분류: 사용 가능(active+warning) vs 차단(blocked)
+                available_keys = []
                 blocked_keys_list = []
 
                 for k in candidates:
                     state = _get_key_state_unlocked(k, service)
                     svc_usage = _key_usage[k].get(service, 0) if service else sum(_key_usage[k].values())
-                    if state == "active":
-                        active_keys.append((svc_usage, k))
-                    elif state == "warning":
-                        warning_keys.append((svc_usage, k))
+                    if state in ("active", "warning"):
+                        available_keys.append((svc_usage, k))
                     else:
                         blocked_keys_list.append((svc_usage, k))
 
-                # 우선순위: active → warning → blocked (반드시 하나 이상 존재)
-                pool = active_keys or warning_keys or blocked_keys_list
+                # 사용 가능 키 중 전체 최소 사용량 우선, 없으면 차단 키
+                pool = available_keys or blocked_keys_list
 
                 pool.sort(key=lambda x: x[0])
-                min_usage = pool[0][0]
-                min_keys = [k for u, k in pool if u == min_usage]
-                chosen = random.choice(min_keys)
+                chosen = pool[0][1]  # 최소 사용량 키 (동률 시 첫 번째 = 결정적)
 
                 # 로그 (warning/blocked 사용 시)
                 if not active_keys and warning_keys:

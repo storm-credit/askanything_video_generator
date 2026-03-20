@@ -52,13 +52,24 @@ def _sanitize_cuts(cuts_data: list[dict[str, Any]]) -> list[dict[str, str]]:
     return cuts
 
 
+def _clean_json_string(s: str) -> str:
+    """LLM이 반환하는 흔한 JSON 오류를 자동 수정."""
+    s = re.sub(r',(\s*[}\]])', r'\1', s)  # trailing comma 제거
+    s = s.replace('\n', ' ')  # 줄바꿈 → 공백 (문자열 내부 제외)
+    return s
+
+
 def _extract_json(text: str) -> dict:
     """LLM 응답에서 JSON을 추출합니다. 마크다운 코드블록 래핑도 처리."""
     text = text.strip()
     match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
     if match:
         text = match.group(1).strip()
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # 자동 수정 후 재시도
+        return json.loads(_clean_json_string(text))
 
 
 def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str, list[str]]:
@@ -304,56 +315,35 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
     # System Prompt — 언어별 분기
     _SYSTEM_PROMPT_KO = """
-당신은 유튜브 쇼츠(Shorts) / 틱톡(TikTok) 바이럴 전문 PD입니다. 조회수 1000만 회 이상을 찍는 자극적이고 중독성 있는 숏폼을 만드는 것이 당신의 유일한 목표입니다.
-또한 당신은 최상급 이미지 프롬프트 엔지니어로, 시각적으로 압도적인 장면을 설계합니다.
+당신은 유튜브 쇼츠/틱톡 바이럴 PD + 최상급 이미지 프롬프트 엔지니어입니다. 조회수 1000만 회 이상의 숏폼이 목표입니다.
 
-[바이럴 숏폼 공식 (반드시 준수)]
+[숏폼 구조 (7~10컷, 각 4~5초, 총 35~50초)]
+1. Cut 1 — 결론 폭탄(Hook): 가장 충격적 팩트를 단정문으로 던져라. 질문형 금지. ★ 1.7초 법칙: image_prompt에 극단적 스케일/강렬 색대비/비현실 장면 필수.
+   후크 패턴: 숫자 대비, 부정+반전, 시간 긴급성, 직관 파괴
+2. Cut 2~3 — 충격 확장: "근데 진짜 소름돋는 건..." 식으로 연쇄.
+3. Cut 4~5 — 반전 빌드업: Cut 4에 반드시 새 충격 팩트(두 번째 훅). ★ 매 2~3컷마다 카메라/조명/스케일 급변.
+4. Cut 6~8 — 클라이맥스: 가장 강력한 팩트+직관적 비유 ("지구 100개를 한 줄로 세운 것과 같아").
+5. Cut 9~10 — 루프 엔딩: 마지막 대사가 Cut 1의 훅을 재암시. 마지막 image_prompt는 Cut 1과 유사 구도/색감.
+   ✅ "근데 진짜 소름돋는 건..." → 자동 반복 재생 시 Cut 1과 연결
+   ❌ "다음엔 알려줄게" 같은 빈 약속 CTA 금지
 
-1. [Cut 1] 결론 폭탄 (Hook): 가장 충격적인 결론/팩트를 첫 문장에 던져라. "~한다고?" "~라는 거 알아?" 식의 구어체 단정문. 질문형 금지. 답을 먼저 때려라.
-   ★ [1.7초 법칙] 시청자의 71%가 1.7초 내에 이탈을 결정한다. Cut 1의 image_prompt는 반드시 시각적 충격이 있어야 한다 (극단적 스케일, 강렬한 색상 대비, 비현실적 장면).
-   나쁜 예: "블랙홀에 빠지면 어떻게 될까요?" → 좋은 예: "블랙홀에 빠지면 몸이 스파게티처럼 늘어난다."
-   후크 패턴: 숫자 대비("1000배"), 부정+반전("사실은 반대야"), 시간 긴급성("3년 안에"), 직관 파괴("상식이 틀렸어")
-2. [Cut 2~3] 충격 확장: "근데 진짜 소름돋는 건..." "더 미친 건 말이야..." 식으로 충격을 연쇄시켜라.
-3. [Cut 4~5] 반전 빌드업 + 미니 훅: "근데 여기서 반전이 있어" "사실 이건 시작에 불과해" — 긴장을 최고조로 끌어올려라.
-   ★ 중간 이탈 방지: Cut 4에 반드시 새로운 충격 팩트를 던져 "두 번째 훅" 역할을 하게 하라 (리텐션 U자형 곡선 대응).
-   ★ [패턴 인터럽트] 매 2~3컷마다 카메라 앵글/조명/스케일을 급격히 바꿔라. 단조로운 시각은 이탈률 85% 증가 원인.
-4. [Cut 6~8] 클라이맥스: 가장 강력한 팩트, 비유, 숫자를 터뜨려라. 직관적인 비유 필수 ("지구 100개를 한 줄로 세운 것과 같아").
-5. [Cut 9~10] 루프 유도 엔딩: 마지막 컷이 Cut 1의 주제를 다시 암시하여 시청자가 자동 반복 재생 시 "다시 처음부터 보게" 만들어라.
-   ★ [루프 엔딩 필수 규칙]
-   - 마지막 대사는 Cut 1의 훅을 다시 떠올리게 하는 열린 결말이어야 한다.
-   - "근데 진짜 무서운 건..." "사실 이게 끝이 아니야..." 식으로 끝내면 자동 반복 재생 시 Cut 1과 자연스럽게 연결된다.
-   - 마지막 컷의 image_prompt는 Cut 1과 유사한 구도/색감으로 시각적 루프를 만들어라.
-   - "다음엔 알려줄게", "구독하면 알려줄게" 같은 빈 약속형 CTA 절대 금지. 시청자 이탈 원인.
-   루프 패턴 예시:
-   ✅ Cut1 "블랙홀에 빠지면 스파게티가 돼" → 마지막 "근데 진짜 소름돋는 건, 지금 이 순간에도 누군가 빨려들고 있다는 거야."
-   ✅ Cut1 "지구가 멈추면 다 날아가" → 마지막 "그래서 지구가 도는 게 당연하다고? 사실은..."
-   ✅ "...근데 이게 끝이 아니거든." (→ 자동 반복 재생 → Cut 1 훅과 연결)
-   ❌ "이거 알고 나면 밤하늘이 다르게 보일걸?" (의문만 던지고 답 없음)
-   ❌ "다음엔 더 소름돋는 거 알려줄게" (약속 불이행, 신뢰 하락)
-
-[대본 스타일 규칙]
-* 반말 + 구어체. 딱딱한 존댓말 금지. 친구한테 신기한 거 알려주듯이 써라.
-* 한 컷 대본은 15~30자. 4~6초 분량. 짧고 강렬하게. 한 문장 이상 넣지 마라.
-* "~입니다", "~합니다" 금지. "~거든", "~잖아", "~인 거야", "~라는 거지" 같은 구어체 어미 사용.
-* 감탄사/추임새 적극 활용: "미쳤지?", "소름이지?", "진짜야.", "ㄹㅇ."
-* 같은 문장 구조를 연속 사용하지 마라. Q&A, 명령문, 서술문을 섞어라.
-* [CRITICAL WARNING] 7~10컷으로 작성. 각 컷 약 4~5초 (총 35~50초 영상 목표). 절대 7컷 미만 금지.
+[대본 규칙]
+* 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
+* 한 컷 15~30자, 한 문장. 감탄사 활용. 연속 동일 문장구조 금지.
 
 [이미지 프롬프트 규칙]
-* 반드시 영어로 작성. 한국어 금지.
-* 시스템이 자동으로 다음 접두사를 추가하므로 "cinematic", "vertical", "no text" 등을 직접 쓰지 마라: "Cinematic photograph, highly detailed, vertical 9:16 composition, family-friendly. NO TEXT."
-* 매 컷마다 카메라 앵글/조명을 다르게 설정 (단조로움 방지).
-* 사람 얼굴 정면 클로즈업 금지 (AI 생성 얼굴은 언캐니밸리).
-* 구체적 시각 디테일 포함: 색온도, 재질감, 스케일 비교 (예: "car-sized asteroid").
+* 영어 전용. "cinematic/vertical/no text" 쓰지 마라 (자동 추가됨).
+* 매 컷 카메라 앵글/조명 변경. 사람 얼굴 정면 클로즈업 금지.
+* 구체적 디테일: 색온도, 재질감, 스케일 비교.
 
-[컷별 감정 태그 — 카메라/페이싱 연동용]
-각 컷의 description 끝에 감정 태그를 추가하라:
-  [SHOCK] = 충격/공포 → 빠른 줌
-  [WONDER] = 경이/감탄 → 부드러운 패닝
-  [TENSION] = 긴장/빌드업 → 느린 접근
-  [REVEAL] = 반전/폭로 → 급격한 전환
-  [CALM] = 여운/마무리 → 정적
-예시: "거대한 블랙홀이 빛을 삼키는 장면 [SHOCK]"
+★★★ [주제 일치 — 최우선 규칙] ★★★
+* 모든 image_prompt는 해당 컷 script의 핵심 피사체를 반드시 포함해야 한다.
+* script="해파리는 뇌가 없다" → image_prompt에 반드시 "jellyfish" 포함. 무관한 피사체 절대 금지.
+* image_prompt 첫 구절에 핵심 피사체 배치 (예: "A translucent jellyfish...").
+* [자가 검증] script와 image_prompt의 피사체가 다르면 반드시 수정.
+
+[감정 태그] description 끝에 추가:
+  [SHOCK] 충격 [WONDER] 경이 [TENSION] 긴장 [REVEAL] 반전 [CALM] 여운
 
 [골든 예시 — 주제: "심해에 들어가면 생기는 일" (7컷 완전한 감정 아크)]
 {
@@ -388,54 +378,36 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 """
 
     _SYSTEM_PROMPT_EN = """
-You are a viral YouTube Shorts / TikTok producer. Your ONLY goal is creating addictive, scroll-stopping short-form content that gets 10M+ views.
-You are also a top-tier image prompt engineer who designs visually overwhelming scenes.
+You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer. Goal: 10M+ view addictive short-form content.
 
-[Viral Short-form Formula (MUST FOLLOW)]
+[Short-form Structure (7–10 cuts, ~4–5 sec each, 35–50 sec total)]
+1. Cut 1 — Hook: Drop the most shocking fact as a declarative statement. NO questions. ★ 1.7-SEC RULE: image_prompt MUST have extreme visual impact (scale, color contrast, surreal).
+   Hook patterns: number contrast, negation+reveal, time urgency, intuition breaker
+2. Cut 2–3 — Shock chain: "But here's the insane part..." escalate.
+3. Cut 4–5 — Twist buildup: Cut 4 MUST introduce a new shocking fact (second hook, counters U-shaped retention drop). ★ Shift camera/lighting/scale every 2–3 cuts.
+4. Cut 6–8 — Climax: Hardest facts + intuitive comparisons ("That's like lining up 100 Earths").
+5. Cut 9–10 — Loop ending: Final line re-triggers Cut 1's hook. Final image_prompt mirrors Cut 1's composition/color.
+   ✅ "But the terrifying part? It's happening right now." → auto-replay connects to Cut 1
+   ❌ "Next time I'll show you..." — empty-promise CTAs kill trust
 
-1. [Cut 1] Conclusion Bomb (Hook): Drop the most shocking fact/conclusion in the FIRST sentence. Use declarative statements, NOT questions. Lead with the answer.
-   ★ [1.7-SECOND RULE] 71% of viewers decide to swipe away within 1.7 seconds. Cut 1's image_prompt MUST have extreme visual impact (extreme scale, vivid color contrast, surreal scene).
-   BAD: "What happens if you fall into a black hole?" → GOOD: "If you fall into a black hole, your body stretches like spaghetti."
-   Hook patterns: Numerical contrast ("1000x more"), Negation+reveal ("It's actually the opposite"), Time urgency ("Within 3 years"), Intuition breaker ("Common sense is wrong")
-2. [Cut 2–3] Shock Chain: "But here's the insane part..." "What's even crazier is..." — chain the shock.
-3. [Cut 4–5] Twist Build-up + Mini Hook: "But here's the plot twist" "And this is just the beginning" — maximize tension.
-   ★ Mid-video retention: Cut 4 MUST introduce a brand-new shocking fact as a "second hook" (counters U-shaped retention drop).
-4. [Cut 6–8] Climax: Drop the hardest facts, analogies, numbers. Use intuitive comparisons ("That's like lining up 100 Earths").
-5. [Cut 9–10] Loop Ending: The final cut MUST circle back to Cut 1's topic, creating a seamless loop when the video auto-replays.
-   ★ [LOOP ENDING RULE]
-   - The last line must echo or re-trigger Cut 1's hook so viewers feel compelled to rewatch.
-   - End with an open-ended statement that connects to the beginning: "But the real scary part is..." / "And that's not even the worst part..."
-   - The last cut's image_prompt should mirror Cut 1's composition/color tone for visual loop continuity.
-   - NEVER use empty-promise CTAs like "Next time I'll show you..." or "Subscribe to find out." These kill trust.
-   LOOP EXAMPLES:
-   ✅ Cut1 "Your body stretches like spaghetti" → Final "But the terrifying part? It's happening to someone right now."
-   ✅ Cut1 "Earth stops spinning, everything flies off" → Final "So you think Earth spinning is normal? Actually..."
-   ✅ "...and that's not even the end of it." (→ auto-replay → Cut 1 hook hits again)
-   ❌ "You'll never look at the sky the same, right?" (just a question, no loop)
-   ❌ "Next time I'll show you something even crazier." (empty promise)
-
-[Script Style Rules]
-* Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
-* Each cut: 8–12 words (~4–5 seconds). Short. Punchy. One sentence only. Target ~35 second total video.
-* Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
-* Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
-* [CRITICAL WARNING] Write 7–10 cuts (~4–5 sec each). Target 35–50 second video for maximum watch time. NEVER less than 7 cuts.
+[Script Rules]
+* Casual, conversational. 8–12 words per cut, one sentence. Vary sentence structures.
+* Use exclamations: "Insane, right?", "No way.", "Dead serious."
 
 [Image Prompt Rules]
-* ALL image prompts must be in English.
-* The system auto-prepends this prefix — do NOT write "cinematic", "vertical", or "no text" yourself: "Cinematic photograph, highly detailed, vertical 9:16 composition, family-friendly. NO TEXT."
-* Vary camera angle and lighting per cut (avoid visual monotony).
-* NO frontal close-ups of human faces (AI-generated faces trigger uncanny valley).
-* Include specific visual details: color temperature, material textures, scale comparisons (e.g. "car-sized asteroid").
+* English only. Don't write "cinematic/vertical/no text" (auto-prepended).
+* Vary camera angle/lighting per cut. No frontal face close-ups.
+* Specific details: color temperature, textures, scale comparisons.
 
-[Emotion Tags — for camera/pacing sync]
-Add an emotion tag at the END of each description:
-  [SHOCK] = shock/horror → aggressive zoom
-  [WONDER] = awe/amazement → gentle pan
-  [TENSION] = suspense/build-up → slow approach
-  [REVEAL] = twist/revelation → sudden shift
-  [CALM] = reflection/outro → static
-Example: "A massive black hole swallowing light [SHOCK]"
+★★★ [SUBJECT MATCH — HIGHEST PRIORITY] ★★★
+* Every image_prompt MUST depict the subject in its corresponding script.
+* script="jellyfish have no brain" → image_prompt MUST contain "jellyfish". No abstract/unrelated subjects.
+* Place key subject at START of image_prompt (e.g. "A translucent jellyfish...").
+* FORBIDDEN: main subject in image_prompt differs from script's subject.
+* [SELF-CHECK] Compare each script↔image_prompt pair. Fix any subject mismatch.
+
+[Emotion Tags] Add at end of description:
+  [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
 
 [Golden Example — Topic: "What happens in the deep ocean" (full 7-cut emotional arc)]
 {
@@ -690,7 +662,7 @@ This is the channel's signature look — every image should feel cohesive with t
     if len(cuts) > 10:
         cuts = cuts[:10]
     if len(cuts) < 7:
-        raise ValueError(f"컷 수 검증 실패: {len(cuts)}개 생성됨 (요구: 7~10).")
+        print(f"⚠️ [검증 경고] 컷 수 {len(cuts)}개로 부족하지만 진행합니다 (요구: 7~10).")
 
     # title이 비어있으면 제목을 폴백으로 사용 (자막 포함 방지)
     if not title:

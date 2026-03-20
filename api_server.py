@@ -636,9 +636,19 @@ async def generate_video_endpoint(req: GenerateRequest):
                         cut_image_key = _get_image_key()
                         img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=_topic) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, topic=_topic)
                     except Exception as exc:
-                        with errors_lock:
-                            errors.append(f"이미지: {exc}")
-                        print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
+                        # Imagen 실패 시 DALL-E 자동 폴백
+                        if image_engine == "imagen" and api_key_override:
+                            print(f"[컷 {i+1} Imagen 실패 → DALL-E 폴백] {exc}")
+                            try:
+                                img_path = generate_image_dalle(cut["prompt"], i, topic_folder, api_key_override, topic=_topic)
+                            except Exception as dalle_exc:
+                                with errors_lock:
+                                    errors.append(f"이미지: Imagen+DALL-E 모두 실패: {dalle_exc}")
+                                print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
+                        else:
+                            with errors_lock:
+                                errors.append(f"이미지: {exc}")
+                            print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
 
                 # 비디오 변환과 TTS를 threading으로 병렬 실행 (데드락 방지: 직접 스레드 사용)
                 video_result = [None]  # mutable container for thread result
@@ -1122,8 +1132,22 @@ async def prepare_endpoint(req: PrepareRequest):
                     )
                     image_paths.append(img_path)
                 except Exception as exc:
-                    print(f"[컷 {i+1} 이미지 실패] {exc}")
-                    image_paths.append(None)
+                    # Imagen 실패 시 DALL-E 자동 폴백
+                    if req.imageEngine == "imagen" and req.apiKey:
+                        print(f"[컷 {i+1} Imagen 실패 → DALL-E 폴백] {exc}")
+                        yield {"data": f"  -> 컷 {i+1} Imagen 실패, DALL-E로 폴백\n"}
+                        try:
+                            _topic2 = prep_topic
+                            img_path = await loop.run_in_executor(
+                                None, lambda idx=i, c=cut, k=req.apiKey, t=_topic2: generate_image_dalle(c["prompt"], idx, topic_folder, k, topic=t)
+                            )
+                            image_paths.append(img_path)
+                        except Exception as dalle_exc:
+                            print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
+                            image_paths.append(None)
+                    else:
+                        print(f"[컷 {i+1} 이미지 실패] {exc}")
+                        image_paths.append(None)
 
                 prog = 30 + int(60 * ((i + 1) / len(cuts)))
                 yield {"data": f"PROG|{prog}\n"}

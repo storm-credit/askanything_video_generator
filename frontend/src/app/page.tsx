@@ -345,6 +345,7 @@ export default function Home() {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     cancelledRef.current = false;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
     try {
       const response = await fetch(`${API_BASE}/api/generate`, {
@@ -382,7 +383,7 @@ export default function Home() {
 
       if (!response.body) throw new Error("No response body");
 
-      const reader = response.body.getReader();
+      reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let buffer = "";  // chunk 경계에서 잘린 메시지 버퍼
 
@@ -462,6 +463,7 @@ export default function Home() {
       setLogs(prev => [...prev.slice(-99), `ERROR:${userMsg}`]);
       setErrorMessage(userMsg);
     } finally {
+      reader?.cancel().catch(() => {});
       setIsGenerating(false);
       abortControllerRef.current = null;
     }
@@ -501,6 +503,7 @@ export default function Home() {
     const geminiKeys = savedKeys["gemini"] || [];
     const geminiKeysStr = geminiKeys.length > 0 ? geminiKeys.join(",") : undefined;
 
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
       const response = await fetch(`${API_BASE}/api/generate`, {
         method: "POST",
@@ -533,7 +536,7 @@ export default function Home() {
       });
 
       if (!response.body) throw new Error("No response body");
-      const reader = response.body.getReader();
+      reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let buffer = "";
 
@@ -549,6 +552,8 @@ export default function Home() {
       if (ac.signal.aborted) return;
       const msg = error instanceof Error ? error.message : "Unknown error";
       setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: msg } }));
+    } finally {
+      reader?.cancel().catch(() => {});
     }
   };
 
@@ -1466,14 +1471,71 @@ export default function Home() {
                       />
                     </div>
                     {result.status === 'done' && result.videoUrl && (
-                      <a href={result.videoUrl} download className="mt-2 inline-flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300">
-                        <ExternalLink className="w-3 h-3" /> 다운로드
-                      </a>
+                      <div className="mt-2 space-y-2">
+                        <div className="rounded-xl overflow-hidden bg-black/50 border border-white/10">
+                          <video src={result.videoUrl} controls playsInline className="w-full aspect-[9/16] max-h-[40vh] object-contain" />
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(result.videoUrl!);
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = result.videoUrl!.split('/').pop() || "video.mp4";
+                                document.body.appendChild(a); a.click(); a.remove();
+                                URL.revokeObjectURL(url);
+                              } catch { window.open(result.videoUrl!, "_blank"); }
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[10px] rounded-lg transition-colors"
+                          >
+                            <Download className="w-3 h-3" /> 다운로드
+                          </button>
+                          {(() => {
+                            const chPlatforms = preset?.platforms || ["youtube"];
+                            const openChUpload = (p: "youtube" | "tiktok" | "instagram") => {
+                              const videoPath = decodeURIComponent(result.videoUrl!.replace(API_BASE, ''));
+                              setGeneratedVideoPath(videoPath);
+                              setGeneratedVideoUrl(result.videoUrl!);
+                              setUploadTitle(topic);
+                              setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
+                              if (p === "youtube") setUploadTags(topic);
+                              setUploadResult(null);
+                              setScheduleEnabled(false);
+                              setScheduleDate("");
+                              setUploadPlatform(p);
+                              setShowUploadModal(true);
+                              checkPlatformStatus();
+                            };
+                            return (
+                              <>
+                                {chPlatforms.includes("youtube") && (
+                                  <button onClick={() => openChUpload("youtube")} className="flex items-center gap-1 px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white text-[10px] font-semibold rounded-lg transition-colors">
+                                    <Youtube className="w-3 h-3" /> YouTube
+                                  </button>
+                                )}
+                                {chPlatforms.includes("tiktok") && (
+                                  <button onClick={() => openChUpload("tiktok")} className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-[10px] font-semibold rounded-lg transition-colors">
+                                    <Send className="w-3 h-3" /> TikTok
+                                  </button>
+                                )}
+                                {chPlatforms.includes("reels") && (
+                                  <button onClick={() => openChUpload("instagram")} className="flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white text-[10px] font-semibold rounded-lg transition-colors">
+                                    <Instagram className="w-3 h-3" /> Reels
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
                     )}
                     {result.status === 'error' && result.errorMsg && (
                       <p className="mt-1 text-[10px] text-red-400 truncate">{result.errorMsg}</p>
                     )}
-                    {result.logs.length > 0 && (
+                    {result.status !== 'done' && result.logs.length > 0 && (
                       <p className="mt-1 text-[10px] text-gray-500 truncate">{result.logs[result.logs.length - 1]}</p>
                     )}
                   </div>
@@ -1526,18 +1588,78 @@ export default function Home() {
                     }`} style={{ width: `${result.progress}%` }} />
                   </div>
                   {result.status === 'done' && result.videoUrl && (
-                    <a href={result.videoUrl} download className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 mb-2">
-                      <Download className="w-3.5 h-3.5" /> 다운로드
-                    </a>
+                    <div className="space-y-3 mb-3">
+                      <div className="rounded-xl overflow-hidden bg-black/50 border border-white/10">
+                        <video src={result.videoUrl} controls playsInline className="w-full aspect-[9/16] max-h-[40vh] object-contain" />
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(result.videoUrl!);
+                              const blob = await res.blob();
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = result.videoUrl!.split('/').pop() || "video.mp4";
+                              document.body.appendChild(a); a.click(); a.remove();
+                              URL.revokeObjectURL(url);
+                            } catch { window.open(result.videoUrl!, "_blank"); }
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs rounded-lg transition-colors"
+                        >
+                          <Download className="w-3.5 h-3.5" /> 다운로드
+                        </button>
+                        {(() => {
+                          const renderPreset = CHANNEL_PRESETS[activeRenderTab];
+                          const renderPlatforms = renderPreset?.platforms || ["youtube"];
+                          const openRenderUpload = (p: "youtube" | "tiktok" | "instagram") => {
+                            const videoPath = decodeURIComponent(result.videoUrl!.replace(API_BASE, ''));
+                            setGeneratedVideoPath(videoPath);
+                            setGeneratedVideoUrl(result.videoUrl!);
+                            setUploadTitle(topic);
+                            setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
+                            if (p === "youtube") setUploadTags(topic);
+                            setUploadResult(null);
+                            setScheduleEnabled(false);
+                            setScheduleDate("");
+                            setUploadPlatform(p);
+                            setShowUploadModal(true);
+                            checkPlatformStatus();
+                          };
+                          return (
+                            <>
+                              {renderPlatforms.includes("youtube") && (
+                                <button onClick={() => openRenderUpload("youtube")} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold rounded-lg transition-colors">
+                                  <Youtube className="w-3.5 h-3.5" /> YouTube
+                                </button>
+                              )}
+                              {renderPlatforms.includes("tiktok") && (
+                                <button onClick={() => openRenderUpload("tiktok")} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold rounded-lg transition-colors">
+                                  <Send className="w-3.5 h-3.5" /> TikTok
+                                </button>
+                              )}
+                              {renderPlatforms.includes("reels") && (
+                                <button onClick={() => openRenderUpload("instagram")} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white text-xs font-semibold rounded-lg transition-colors">
+                                  <Instagram className="w-3.5 h-3.5" /> Reels
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
                   )}
                   {result.status === 'error' && result.errorMsg && (
                     <p className="text-xs text-red-400 mb-2">{result.errorMsg}</p>
                   )}
+                  {result.status !== 'done' && (
                   <div className="max-h-32 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
                     {result.logs.slice(-10).map((log, i) => (
                       <p key={i} className="text-[10px] text-gray-500 truncate">{log}</p>
                     ))}
                   </div>
+                  )}
                 </div>
               );
             })()}

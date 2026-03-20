@@ -13,6 +13,8 @@ services:
       - CORS_ORIGINS=http://localhost:3000
       - DOWNLOAD_DIR=/app/downloads
     volumes:
+      - ./api_server.py:/app/api_server.py
+      - ./modules:/app/modules
       - ./assets:/app/assets
       - ./brand:/app/brand
       - ./client_secrets:/app/client_secrets
@@ -25,11 +27,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8003
     container_name: askanything-frontend
     ports:
       - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8003
     depends_on:
       - backend
     restart: unless-stopped

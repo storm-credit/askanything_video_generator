@@ -10,6 +10,10 @@ RUN npm install
 # App code
 COPY frontend/ .
 
+# NEXT_PUBLIC_ vars must be available at build time
+ARG NEXT_PUBLIC_API_URL=http://localhost:8003
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 # Build for production
 RUN npm run build
 
