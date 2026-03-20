@@ -15,36 +15,68 @@ const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: s
   prismtale: { label: "Prism Tale", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.85, platforms: ["youtube", "tiktok"], captionSize: 54, captionY: 35 },
 };
 
+// localStorage 유틸
+const loadSetting = <T,>(key: string, fallback: T): T => {
+  if (typeof window === "undefined") return fallback;
+  try { const v = localStorage.getItem(`aa_${key}`); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
+};
+const saveSetting = (key: string, value: unknown) => {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(`aa_${key}`, JSON.stringify(value)); } catch { /* quota exceeded */ }
+};
+
 export default function Home() {
   const [topic, setTopic] = useState("");
-  const [qualityPreset, setQualityPreset] = useState("best");
-  const [llmProvider, setLlmProvider] = useState("gemini");
-  const [llmModel, setLlmModel] = useState("");
-  const [imageEngine, setImageEngine] = useState("imagen");
-  const [imageModel, setImageModel] = useState("");
-  const [videoEngine, setVideoEngine] = useState("veo3");
-  const [videoModel, setVideoModel] = useState("");
-  const [testMode, setTestMode] = useState(false);
+  const [qualityPreset, setQualityPreset] = useState(() => loadSetting("qualityPreset", "best"));
+  const [llmProvider, setLlmProvider] = useState(() => loadSetting("llmProvider", "gemini"));
+  const [llmModel, setLlmModel] = useState(() => loadSetting("llmModel", ""));
+  const [imageEngine, setImageEngine] = useState(() => loadSetting("imageEngine", "imagen"));
+  const [imageModel, setImageModel] = useState(() => loadSetting("imageModel", ""));
+  const [videoEngine, setVideoEngine] = useState(() => loadSetting("videoEngine", "veo3"));
+  const [videoModel, setVideoModel] = useState(() => loadSetting("videoModel", ""));
+  const [testMode, setTestMode] = useState(() => loadSetting("testMode", false));
   const [isDownloading, setIsDownloading] = useState(false);
-  const [language, setLanguage] = useState("ko");
-  const [cameraStyle, setCameraStyle] = useState("auto");
-  const [bgmTheme, setBgmTheme] = useState("random");
+  const [language, setLanguage] = useState(() => loadSetting("language", "ko"));
+  const [cameraStyle, setCameraStyle] = useState(() => loadSetting("cameraStyle", "auto"));
+  const [bgmTheme, setBgmTheme] = useState(() => loadSetting("bgmTheme", "random"));
 
   // YouTube URL 자동 감지 (토픽 입력란에서)
   const isYouTubeUrl = (text: string) => /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)/.test(text.trim());
   const detectedRefUrl = isYouTubeUrl(topic) ? topic.trim() : undefined;
-  const [channel, setChannel] = useState("");
-  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
-  const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
+  const [channel, setChannel] = useState(() => loadSetting("channel", ""));
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(() => loadSetting("selectedChannels", []));
+  const [platforms, setPlatforms] = useState<string[]>(() => loadSetting("platforms", ["youtube"]));
 
   // 멀티채널 진행 상태
   type ChannelStatus = { progress: number; logs: string[]; status: 'idle' | 'generating' | 'done' | 'error'; videoUrl?: string; errorMsg?: string; genId?: string };
   const [channelResults, setChannelResults] = useState<Record<string, ChannelStatus>>({});
   const multiAbortRefs = useRef<Record<string, AbortController>>({});
-  const [ttsSpeed, setTtsSpeed] = useState(0.9);
-  const [voiceId, setVoiceId] = useState("auto"); // 자동 선택 (기본)
-  const [captionSize, setCaptionSize] = useState(54);
-  const [captionY, setCaptionY] = useState(35);
+  const [ttsSpeed, setTtsSpeed] = useState(() => loadSetting("ttsSpeed", 0.9));
+  const [voiceId, setVoiceId] = useState(() => loadSetting("voiceId", "auto"));
+  const [captionSize, setCaptionSize] = useState(() => loadSetting("captionSize", 54));
+  const [captionY, setCaptionY] = useState(() => loadSetting("captionY", 35));
+
+  // 설정 변경 시 localStorage에 자동 저장
+  useEffect(() => {
+    saveSetting("qualityPreset", qualityPreset);
+    saveSetting("llmProvider", llmProvider);
+    saveSetting("llmModel", llmModel);
+    saveSetting("imageEngine", imageEngine);
+    saveSetting("imageModel", imageModel);
+    saveSetting("videoEngine", videoEngine);
+    saveSetting("videoModel", videoModel);
+    saveSetting("testMode", testMode);
+    saveSetting("language", language);
+    saveSetting("cameraStyle", cameraStyle);
+    saveSetting("bgmTheme", bgmTheme);
+    saveSetting("channel", channel);
+    saveSetting("selectedChannels", selectedChannels);
+    saveSetting("platforms", platforms);
+    saveSetting("ttsSpeed", ttsSpeed);
+    saveSetting("voiceId", voiceId);
+    saveSetting("captionSize", captionSize);
+    saveSetting("captionY", captionY);
+  }, [qualityPreset, llmProvider, llmModel, imageEngine, imageModel, videoEngine, videoModel, testMode, language, cameraStyle, bgmTheme, channel, selectedChannels, platforms, ttsSpeed, voiceId, captionSize, captionY]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
