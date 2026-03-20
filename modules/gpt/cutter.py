@@ -312,17 +312,18 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
    ★ 중간 이탈 방지: Cut 4에 반드시 새로운 충격 팩트를 던져 "두 번째 훅" 역할을 하게 하라 (리텐션 U자형 곡선 대응).
    ★ [패턴 인터럽트] 매 2~3컷마다 카메라 앵글/조명/스케일을 급격히 바꿔라. 단조로운 시각은 이탈률 85% 증가 원인.
 4. [Cut 6~8] 클라이맥스: 가장 강력한 팩트, 비유, 숫자를 터뜨려라. 직관적인 비유 필수 ("지구 100개를 한 줄로 세운 것과 같아").
-5. [Cut 9~10] 의문 해소 + 여운: Cut 1에서 던진 훅/충격 팩트를 마지막에 반드시 회수하라. 시청자가 "아 그래서 그랬구나"라고 납득하게 만들어라.
-   ★ [마무리 필수 규칙]
-   - 마지막 컷은 훅에서 제기한 의문/주장에 대한 결론적 답변이어야 한다.
-   - 의문문("~걸?", "~일까?")으로 끝내지 마라. 답을 주고 끝내라.
-   - 단, 딱딱한 서술형("~이다", "~한다") 금지. 대화체("~거든", "~인 거야", "~라는 거지")로 마무리.
+5. [Cut 9~10] 루프 유도 엔딩: 마지막 컷이 Cut 1의 주제를 다시 암시하여 시청자가 자동 반복 재생 시 "다시 처음부터 보게" 만들어라.
+   ★ [루프 엔딩 필수 규칙]
+   - 마지막 대사는 Cut 1의 훅을 다시 떠올리게 하는 열린 결말이어야 한다.
+   - "근데 진짜 무서운 건..." "사실 이게 끝이 아니야..." 식으로 끝내면 자동 반복 재생 시 Cut 1과 자연스럽게 연결된다.
+   - 마지막 컷의 image_prompt는 Cut 1과 유사한 구도/색감으로 시각적 루프를 만들어라.
    - "다음엔 알려줄게", "구독하면 알려줄게" 같은 빈 약속형 CTA 절대 금지. 시청자 이탈 원인.
-   - 마지막 컷은 강렬한 여운으로 끝내라: 충격 반전, 감정적 울림, 또는 새로운 관점 제시.
-   좋은 예: Cut1 "블랙홀에 빠지면 스파게티가 돼" → 마지막 "근데 진짜 무서운 건, 네가 그걸 느끼면서 죽는다는 거야."
-   좋은 예: "그래서 우주가 무섭냐고? 아니. 우리가 여기 있다는 게 기적인 거야."
-   나쁜 예: "다음엔 더 소름돋는 거 알려줄게" (약속 불이행, 신뢰 하락)
-   나쁜 예: "이거 알고 나면 밤하늘이 다르게 보일걸?" (의문만 던지고 답 없음)
+   루프 패턴 예시:
+   ✅ Cut1 "블랙홀에 빠지면 스파게티가 돼" → 마지막 "근데 진짜 소름돋는 건, 지금 이 순간에도 누군가 빨려들고 있다는 거야."
+   ✅ Cut1 "지구가 멈추면 다 날아가" → 마지막 "그래서 지구가 도는 게 당연하다고? 사실은..."
+   ✅ "...근데 이게 끝이 아니거든." (→ 자동 반복 재생 → Cut 1 훅과 연결)
+   ❌ "이거 알고 나면 밤하늘이 다르게 보일걸?" (의문만 던지고 답 없음)
+   ❌ "다음엔 더 소름돋는 거 알려줄게" (약속 불이행, 신뢰 하락)
 
 [대본 스타일 규칙]
 * 반말 + 구어체. 딱딱한 존댓말 금지. 친구한테 신기한 거 알려주듯이 써라.
@@ -394,17 +395,18 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 3. [Cut 4–5] Twist Build-up + Mini Hook: "But here's the plot twist" "And this is just the beginning" — maximize tension.
    ★ Mid-video retention: Cut 4 MUST introduce a brand-new shocking fact as a "second hook" (counters U-shaped retention drop).
 4. [Cut 6–8] Climax: Drop the hardest facts, analogies, numbers. Use intuitive comparisons ("That's like lining up 100 Earths").
-5. [Cut 9–10] Resolution + Afterglow: The final cut MUST resolve the question/claim raised in Cut 1. Give the viewer a satisfying "so THAT's why" moment.
-   ★ [ENDING RULE]
-   - The final cut must ANSWER the hook, not leave it as another question.
-   - NEVER end with a question ("right?", "isn't it?"). Deliver the answer.
-   - Use conversational tone, not dry statements. End with a punchy conclusion.
+5. [Cut 9–10] Loop Ending: The final cut MUST circle back to Cut 1's topic, creating a seamless loop when the video auto-replays.
+   ★ [LOOP ENDING RULE]
+   - The last line must echo or re-trigger Cut 1's hook so viewers feel compelled to rewatch.
+   - End with an open-ended statement that connects to the beginning: "But the real scary part is..." / "And that's not even the worst part..."
+   - The last cut's image_prompt should mirror Cut 1's composition/color tone for visual loop continuity.
    - NEVER use empty-promise CTAs like "Next time I'll show you..." or "Subscribe to find out." These kill trust.
-   - End with emotional impact: shocking twist, new perspective, or powerful conclusion.
-   GOOD: Cut1 "Your body stretches like spaghetti" → Final "But the terrifying part is you'd feel every second of it."
-   GOOD: "So is space scary? No. The miracle is that we're here at all."
-   BAD: "Next time I'll show you something even crazier." (empty promise, trust killer)
-   BAD: "You'll never look at the sky the same, right?" (just a question, no resolution)
+   LOOP EXAMPLES:
+   ✅ Cut1 "Your body stretches like spaghetti" → Final "But the terrifying part? It's happening to someone right now."
+   ✅ Cut1 "Earth stops spinning, everything flies off" → Final "So you think Earth spinning is normal? Actually..."
+   ✅ "...and that's not even the end of it." (→ auto-replay → Cut 1 hook hits again)
+   ❌ "You'll never look at the sky the same, right?" (just a question, no loop)
+   ❌ "Next time I'll show you something even crazier." (empty promise)
 
 [Script Style Rules]
 * Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
