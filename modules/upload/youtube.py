@@ -113,8 +113,10 @@ def get_channels() -> list[dict]:
 
 def get_auth_status() -> dict:
     """YouTube 연동 상태를 반환합니다."""
-    if not CLIENT_SECRET_PATH.exists():
-        return {"connected": False, "reason": "client_secret.json 파일이 없습니다", "channels": []}
+    # 채널별 client_secret 또는 기본 client_secret 중 하나라도 있으면 OK
+    has_any_secret = CLIENT_SECRET_PATH.exists() or (CLIENT_SECRETS_DIR.exists() and any(CLIENT_SECRETS_DIR.glob("*.json")))
+    if not has_any_secret:
+        return {"connected": False, "reason": "client_secret 파일이 없습니다", "channels": []}
     channels = get_channels()
     connected = any(ch["connected"] for ch in channels)
     return {"connected": connected, "channels": channels}
@@ -127,12 +129,10 @@ def create_auth_url(channel: str | None = None) -> str:
         raise FileNotFoundError(f"client_secret 파일이 필요합니다: {secret_path}")
 
     state = secrets.token_urlsafe(16)
-    # state에 채널 + 시크릿 경로 정보 저장 (콜백에서 같은 시크릿으로 토큰 교환)
-    _pending_states[state] = (time.time() + 300, str(secret_path))
 
     # 만료된 state 정리
     now = time.time()
-    expired = [s for s, (exp, _) in _pending_states.items() if exp < now]
+    expired = [s for s, _ in _pending_states.items() if _[0] < now]
     for s in expired:
         _pending_states.pop(s, None)
 
@@ -147,6 +147,9 @@ def create_auth_url(channel: str | None = None) -> str:
         prompt="consent",
         state=state,
     )
+    # state에 시크릿 경로 + PKCE code_verifier 저장 (콜백에서 토큰 교환에 필요)
+    _pending_states[state] = (time.time() + 300, str(secret_path), flow.code_verifier)
+
     return auth_url
 
 
@@ -157,7 +160,7 @@ def handle_auth_callback(auth_code: str, state: str | None = None) -> dict:
     state_data = _pending_states.pop(state, None)
     if state_data is None:
         raise ValueError("인증 state가 유효하지 않습니다. 다시 시도해주세요.")
-    expires_at, secret_path_str = state_data
+    expires_at, secret_path_str, code_verifier = state_data
     if time.time() > expires_at:
         raise ValueError("인증 state가 만료되었습니다. 다시 시도해주세요.")
     flow = Flow.from_client_secrets_file(
@@ -165,6 +168,7 @@ def handle_auth_callback(auth_code: str, state: str | None = None) -> dict:
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI,
     )
+    flow.code_verifier = code_verifier
     flow.fetch_token(code=auth_code)
     creds = flow.credentials
 

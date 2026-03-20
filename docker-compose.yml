@@ -11,12 +11,14 @@ services:
       - API_PORT=8003
       - UVICORN_RELOAD=false
       - CORS_ORIGINS=http://localhost:3000
+      - DOWNLOAD_DIR=/app/downloads
     volumes:
       - ./assets:/app/assets
       - ./brand:/app/brand
       - ./client_secrets:/app/client_secrets
       - ./youtube_tokens:/app/youtube_tokens
       - ./tiktok_tokens:/app/tiktok_tokens
+      - ${DOWNLOAD_DIR:-C:/Users/Storm Credit/Downloads}:/app/downloads
     restart: unless-stopped
 
   frontend:

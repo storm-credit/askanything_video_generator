@@ -83,6 +83,14 @@ export function SettingsModal({
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
   const [channelSaveStatus, setChannelSaveStatus] = useState<Record<string, "saved" | "saving" | "error" | null>>({});
+  const [ytConnectedChannels, setYtConnectedChannels] = useState<string[]>([]);
+
+  // YouTube 연동 상태 로드
+  useEffect(() => {
+    fetch(`${API_BASE}/api/youtube/status`).then(r => r.json()).then(data => {
+      if (data.channels) setYtConnectedChannels(data.channels.filter((c: {connected: boolean}) => c.connected).map((c: {id: string}) => c.id));
+    }).catch(() => {});
+  }, []);
 
   // ── 채널 데이터 로드 ──
   const fetchChannels = useCallback(async () => {
@@ -377,7 +385,9 @@ export function SettingsModal({
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">{langLabel}</span>
                               {(ch.platforms || []).map((p) => {
-                                const connected = !!ch.upload_accounts?.[p];
+                                const hasAccount = !!ch.upload_accounts?.[p];
+                                const isYtConnected = p === "youtube" && ytConnectedChannels.length > 0;
+                                const connected = hasAccount || isYtConnected;
                                 return (
                                   <span key={p} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 ${connected ? "bg-green-500/15 text-green-400" : "bg-purple-500/15 text-purple-400"}`}>
                                     <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-green-500" : "bg-gray-500"}`} />
@@ -444,7 +454,8 @@ export function SettingsModal({
                             <div>
                               <label className="text-[10px] text-gray-500 block mb-1.5">플랫폼 계정 연결</label>
                               <div className="space-y-1.5">
-                                {(ch.platforms || []).map((platform) => {
+                                <YouTubeAccountRow channelName={name} accountId={ch.upload_accounts?.youtube} onUpdate={(id) => { const accounts = { ...(ch.upload_accounts || {}) }; accounts.youtube = id || null; updateChannelField(name, "upload_accounts", accounts); }} />
+                                {(ch.platforms || []).filter(p => p !== "youtube").map((platform) => {
                                   const accountId = ch.upload_accounts?.[platform];
                                   return (
                                     <div key={platform} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
@@ -457,7 +468,7 @@ export function SettingsModal({
                                           accounts[platform] = e.target.value || null;
                                           updateChannelField(name, "upload_accounts", accounts);
                                         }}
-                                        placeholder={platform === "youtube" ? "채널 ID (UC...)" : platform === "tiktok" ? "Open ID" : "IG User ID"}
+                                        placeholder={platform === "tiktok" ? "Open ID" : "IG User ID"}
                                         className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-[10px] text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500/50 font-mono"
                                       />
                                       <div className={`w-2 h-2 rounded-full ${accountId ? "bg-green-500" : "bg-gray-600"}`} />
@@ -728,6 +739,65 @@ function KeySection({
         <p className="text-[10px] text-gray-600 mt-1.5">
           등록된 {savedKeys.length}개의 키 중 랜덤으로 선택되어 사용됩니다 (무료 티어 로테이션)
         </p>
+      )}
+    </div>
+  );
+}
+
+
+/* ─── YouTube 계정 연결 행 (연동 상태 자동 표시) ─── */
+function YouTubeAccountRow({ channelName, accountId, onUpdate }: { channelName: string; accountId?: string | null; onUpdate: (id: string) => void }) {
+  const [ytChannels, setYtChannels] = useState<{ id: string; title: string; connected: boolean }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/youtube/status`).then(r => r.json()).then(data => {
+      if (data.channels) setYtChannels(data.channels);
+    }).catch(() => {});
+  }, []);
+
+  // 연동된 채널 중 첫 번째를 자동 매핑 (accountId가 비어있을 때)
+  const connectedChannel = ytChannels.find(c => c.connected);
+  const displayId = accountId || connectedChannel?.id || "";
+  const displayTitle = ytChannels.find(c => c.id === displayId)?.title;
+  const isConnected = ytChannels.some(c => c.id === displayId && c.connected);
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
+      <span className="text-xs text-gray-400 w-20 shrink-0">YouTube</span>
+      {isConnected ? (
+        <div className="flex-1 flex items-center gap-2">
+          <span className="text-[10px] text-green-400 font-mono">{displayTitle || displayId}</span>
+          <span className="text-[9px] text-gray-600">{displayId.slice(0, 8)}...</span>
+        </div>
+      ) : (
+        <input
+          type="text"
+          value={displayId}
+          onChange={(e) => onUpdate(e.target.value)}
+          placeholder="채널 ID (UC...)"
+          className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-[10px] text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500/50 font-mono"
+        />
+      )}
+      <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-gray-600"}`} />
+      {!isConnected && (
+        <button
+          type="button"
+          disabled={loading}
+          onClick={async () => {
+            setLoading(true);
+            try {
+              const res = await fetch(`${API_BASE}/api/youtube/auth`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({channel: channelName}) });
+              const data = await res.json();
+              if (data.auth_url) window.location.href = data.auth_url;
+              else alert(data.error || "인증 URL 생성 실패");
+            } catch { alert("서버 연결 실패"); }
+            setLoading(false);
+          }}
+          className="px-2 py-0.5 text-[9px] bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors whitespace-nowrap"
+        >
+          {loading ? "..." : "연동"}
+        </button>
       )}
     </div>
   );

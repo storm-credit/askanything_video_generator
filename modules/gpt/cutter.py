@@ -312,25 +312,26 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
    ★ 중간 이탈 방지: Cut 4에 반드시 새로운 충격 팩트를 던져 "두 번째 훅" 역할을 하게 하라 (리텐션 U자형 곡선 대응).
    ★ [패턴 인터럽트] 매 2~3컷마다 카메라 앵글/조명/스케일을 급격히 바꿔라. 단조로운 시각은 이탈률 85% 증가 원인.
 4. [Cut 6~8] 클라이맥스: 가장 강력한 팩트, 비유, 숫자를 터뜨려라. 직관적인 비유 필수 ("지구 100개를 한 줄로 세운 것과 같아").
-5. [Cut 9~10] 의문 해소 + 여운: Cut 1에서 던진 훅/충격 팩트를 마지막에 반드시 회수하라. 시청자가 "아 그래서 그랬구나"라고 납득하게 만들어라.
-   ★ [마무리 필수 규칙]
-   - 마지막 컷은 훅에서 제기한 의문/주장에 대한 결론적 답변이어야 한다.
-   - 의문문("~걸?", "~일까?")으로 끝내지 마라. 답을 주고 끝내라.
-   - 단, 딱딱한 서술형("~이다", "~한다") 금지. 대화체("~거든", "~인 거야", "~라는 거지")로 마무리.
+5. [Cut 9~10] 루프 유도 엔딩: 마지막 컷이 Cut 1의 주제를 다시 암시하여 시청자가 자동 반복 재생 시 "다시 처음부터 보게" 만들어라.
+   ★ [루프 엔딩 필수 규칙]
+   - 마지막 대사는 Cut 1의 훅을 다시 떠올리게 하는 열린 결말이어야 한다.
+   - "근데 진짜 무서운 건..." "사실 이게 끝이 아니야..." 식으로 끝내면 자동 반복 재생 시 Cut 1과 자연스럽게 연결된다.
+   - 마지막 컷의 image_prompt는 Cut 1과 유사한 구도/색감으로 시각적 루프를 만들어라.
    - "다음엔 알려줄게", "구독하면 알려줄게" 같은 빈 약속형 CTA 절대 금지. 시청자 이탈 원인.
-   - 마지막 컷은 강렬한 여운으로 끝내라: 충격 반전, 감정적 울림, 또는 새로운 관점 제시.
-   좋은 예: Cut1 "블랙홀에 빠지면 스파게티가 돼" → 마지막 "근데 진짜 무서운 건, 네가 그걸 느끼면서 죽는다는 거야."
-   좋은 예: "그래서 우주가 무섭냐고? 아니. 우리가 여기 있다는 게 기적인 거야."
-   나쁜 예: "다음엔 더 소름돋는 거 알려줄게" (약속 불이행, 신뢰 하락)
-   나쁜 예: "이거 알고 나면 밤하늘이 다르게 보일걸?" (의문만 던지고 답 없음)
+   루프 패턴 예시:
+   ✅ Cut1 "블랙홀에 빠지면 스파게티가 돼" → 마지막 "근데 진짜 소름돋는 건, 지금 이 순간에도 누군가 빨려들고 있다는 거야."
+   ✅ Cut1 "지구가 멈추면 다 날아가" → 마지막 "그래서 지구가 도는 게 당연하다고? 사실은..."
+   ✅ "...근데 이게 끝이 아니거든." (→ 자동 반복 재생 → Cut 1 훅과 연결)
+   ❌ "이거 알고 나면 밤하늘이 다르게 보일걸?" (의문만 던지고 답 없음)
+   ❌ "다음엔 더 소름돋는 거 알려줄게" (약속 불이행, 신뢰 하락)
 
 [대본 스타일 규칙]
 * 반말 + 구어체. 딱딱한 존댓말 금지. 친구한테 신기한 거 알려주듯이 써라.
-* 한 컷 대본은 20~35자. 5~7초 분량. 짧고 강렬하게. 한 문장 이상 넣지 마라.
+* 한 컷 대본은 15~30자. 4~6초 분량. 짧고 강렬하게. 한 문장 이상 넣지 마라.
 * "~입니다", "~합니다" 금지. "~거든", "~잖아", "~인 거야", "~라는 거지" 같은 구어체 어미 사용.
 * 감탄사/추임새 적극 활용: "미쳤지?", "소름이지?", "진짜야.", "ㄹㅇ."
 * 같은 문장 구조를 연속 사용하지 마라. Q&A, 명령문, 서술문을 섞어라.
-* [CRITICAL WARNING] 7~10컷으로 작성. 각 컷 약 5~7초 (총 50~60초 영상 목표 — 시청시간 극대화). 절대 7컷 미만 금지.
+* [CRITICAL WARNING] 7~10컷으로 작성. 각 컷 약 4~5초 (총 35~50초 영상 목표). 절대 7컷 미만 금지.
 
 [이미지 프롬프트 규칙]
 * 반드시 영어로 작성. 한국어 금지.
@@ -394,24 +395,25 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 3. [Cut 4–5] Twist Build-up + Mini Hook: "But here's the plot twist" "And this is just the beginning" — maximize tension.
    ★ Mid-video retention: Cut 4 MUST introduce a brand-new shocking fact as a "second hook" (counters U-shaped retention drop).
 4. [Cut 6–8] Climax: Drop the hardest facts, analogies, numbers. Use intuitive comparisons ("That's like lining up 100 Earths").
-5. [Cut 9–10] Resolution + Afterglow: The final cut MUST resolve the question/claim raised in Cut 1. Give the viewer a satisfying "so THAT's why" moment.
-   ★ [ENDING RULE]
-   - The final cut must ANSWER the hook, not leave it as another question.
-   - NEVER end with a question ("right?", "isn't it?"). Deliver the answer.
-   - Use conversational tone, not dry statements. End with a punchy conclusion.
+5. [Cut 9–10] Loop Ending: The final cut MUST circle back to Cut 1's topic, creating a seamless loop when the video auto-replays.
+   ★ [LOOP ENDING RULE]
+   - The last line must echo or re-trigger Cut 1's hook so viewers feel compelled to rewatch.
+   - End with an open-ended statement that connects to the beginning: "But the real scary part is..." / "And that's not even the worst part..."
+   - The last cut's image_prompt should mirror Cut 1's composition/color tone for visual loop continuity.
    - NEVER use empty-promise CTAs like "Next time I'll show you..." or "Subscribe to find out." These kill trust.
-   - End with emotional impact: shocking twist, new perspective, or powerful conclusion.
-   GOOD: Cut1 "Your body stretches like spaghetti" → Final "But the terrifying part is you'd feel every second of it."
-   GOOD: "So is space scary? No. The miracle is that we're here at all."
-   BAD: "Next time I'll show you something even crazier." (empty promise, trust killer)
-   BAD: "You'll never look at the sky the same, right?" (just a question, no resolution)
+   LOOP EXAMPLES:
+   ✅ Cut1 "Your body stretches like spaghetti" → Final "But the terrifying part? It's happening to someone right now."
+   ✅ Cut1 "Earth stops spinning, everything flies off" → Final "So you think Earth spinning is normal? Actually..."
+   ✅ "...and that's not even the end of it." (→ auto-replay → Cut 1 hook hits again)
+   ❌ "You'll never look at the sky the same, right?" (just a question, no loop)
+   ❌ "Next time I'll show you something even crazier." (empty promise)
 
 [Script Style Rules]
 * Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
-* Each cut: 12–20 words (~5–7 seconds). Short. Punchy. One or two sentences for natural voiceover pacing.
+* Each cut: 8–12 words (~4–5 seconds). Short. Punchy. One sentence only. Target ~35 second total video.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
 * Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
-* [CRITICAL WARNING] Write 7–10 cuts (~5–7 sec each). Target 50–60 second video for maximum watch time. NEVER less than 7 cuts.
+* [CRITICAL WARNING] Write 7–10 cuts (~4–5 sec each). Target 35–50 second video for maximum watch time. NEVER less than 7 cuts.
 
 [Image Prompt Rules]
 * ALL image prompts must be in English.
@@ -454,7 +456,7 @@ Example: "A massive black hole swallowing light [SHOCK]"
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
       "image_prompt": "[English image prompt (MASTER_STYLE auto-applied)]",
-      "script": "[Voice-over: casual, 8-18 words]"
+      "script": "[Voice-over: casual, 8-15 words max]"
     }
   ]
 }
@@ -480,8 +482,10 @@ Example: "A massive black hole swallowing light [SHOCK]"
 
 [LANGUAGE OVERRIDE]
 You MUST write ALL "script" fields and the "title" field in {lang_name}.
+NEVER write scripts in English. All "script" fields MUST be in {lang_name} only.
 The "image_prompt" and "description" fields must remain in English.
 The narrator will speak in {lang_name}, so the script must be natural {lang_name}.
+IMPORTANT: {lang_name} sentences tend to be longer than English. Keep each script to 6–12 words equivalent (~4–6 seconds) to maintain ~50 second total video length. Be extra concise.
 """
 
     # 채널별 비주얼 스타일 주입 (이미지 프롬프트 차별화 — 유튜브 스팸 회피)
@@ -690,5 +694,79 @@ This is the channel's signature look — every image should feel cohesive with t
     if not tags or not isinstance(tags, list):
         tags = ["#Shorts"]
 
+    # ── 팩트 검증: 생성된 스크립트가 실제 팩트와 일치하는지 LLM 검증 ──
+    if fact_context:
+        cuts = _verify_facts(cuts, fact_context, _topic_title, llm_provider, current_key, lang, llm_model)
+
     print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
     return cuts, topic_folder, title, tags
+
+
+def _verify_facts(cuts: list[dict], fact_context: str, topic: str,
+                  llm_provider: str, api_key: str, lang: str, llm_model: str | None = None) -> list[dict]:
+    """생성된 스크립트의 팩트를 검증하고, 틀린 부분을 수정합니다."""
+    scripts = "\n".join(f"컷{i+1}: {c['script']}" for i, c in enumerate(cuts))
+
+    verify_prompt = f"""You are a strict fact-checker. Verify each script line against the provided facts.
+
+[FACTS from search]
+{fact_context[:1500]}
+
+[GENERATED SCRIPTS]
+{scripts}
+
+[TASK]
+1. Check each script line for factual accuracy.
+2. If a line contains false or unverifiable information, rewrite it with correct facts.
+3. If a line is accurate, keep it unchanged.
+4. Maintain the same tone, style, and approximate length.
+
+Output ONLY a JSON array of objects: [{{"cut": 1, "original": "...", "verified": "...", "changed": true/false, "reason": "..."}}]
+Do NOT include markdown code blocks. Return raw JSON only."""
+
+    print(f"-> [팩트 검증] 생성된 {len(cuts)}개 스크립트 검증 중...")
+
+    try:
+        if llm_provider == "gemini":
+            raw = _request_gemini_freeform(api_key, verify_prompt, llm_model)
+        else:
+            raw = _request_openai_freeform(api_key, "You are a fact-checker.", verify_prompt, llm_model)
+
+        result = json.loads(_extract_json(raw) or "[]")
+        if not isinstance(result, list):
+            print(f"  [팩트 검증] 응답 파싱 실패 — 원본 유지")
+            return cuts
+
+        changed_count = 0
+        for item in result:
+            if not isinstance(item, dict) or not item.get("changed"):
+                continue
+            idx = item.get("cut", 0) - 1
+            if 0 <= idx < len(cuts) and item.get("verified"):
+                old_script = cuts[idx]["script"]
+                cuts[idx]["script"] = item["verified"]
+                changed_count += 1
+                print(f"  [팩트 수정] 컷{idx+1}: '{old_script[:30]}...' → '{item['verified'][:30]}...' ({item.get('reason', '')})")
+
+        if changed_count == 0:
+            print(f"OK [팩트 검증] 모든 스크립트 팩트 확인 완료 (수정 없음)")
+        else:
+            print(f"OK [팩트 검증] {changed_count}개 스크립트 팩트 수정 완료")
+        return cuts
+
+    except Exception as e:
+        print(f"  [팩트 검증 실패] {e} — 원본 유지")
+        return cuts
+
+
+def _request_gemini_freeform(api_key: str, prompt: str, model: str | None = None) -> str:
+    """Gemini에 자유형 프롬프트 전송 (스키마 없음)."""
+    from google import genai
+    client = genai.Client(api_key=api_key)
+    model_name = model or "gemini-2.5-flash"
+    response = client.models.generate_content(
+        model=model_name,
+        contents=prompt,
+        config={"response_mime_type": "application/json"},
+    )
+    return (response.text or "").strip()

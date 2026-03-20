@@ -681,16 +681,25 @@ async def generate_video_endpoint(req: GenerateRequest):
                             print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
 
                 threads = []
-                # Hero cut 선택: SHOCK/REVEAL 태그만 비디오 생성, 나머지는 Ken Burns (비용 50-70% 절감)
-                _hero_emotions = {"SHOCK", "REVEAL"}
-                _cut_desc = cut.get("description", "")
-                _is_hero = any(f"[{e}]" in _cut_desc for e in _hero_emotions)
-                if img_path and active_video_engine != "none" and _is_hero:
+                # 비디오 생성 여부 결정
+                _should_video = False
+                if img_path and active_video_engine != "none":
+                    if video_model_override == "hero-only":
+                        # Hero cut만: SHOCK/REVEAL 태그만 비디오 생성 (비용 50-70% 절감)
+                        _hero_emotions = {"SHOCK", "REVEAL"}
+                        _cut_desc = cut.get("description", "")
+                        _is_hero = any(f"[{e}]" in _cut_desc for e in _hero_emotions)
+                        if _is_hero:
+                            _should_video = True
+                        else:
+                            print(f"[컷 {i+1}] 히어로 컷 아님 → Ken Burns 사용")
+                    else:
+                        # 전체 비디오 모드
+                        _should_video = True
+                if _should_video:
                     t = threading.Thread(target=_run_video, name=f"video-cut{i}", daemon=True)
                     t.start()
                     threads.append(t)
-                elif img_path and active_video_engine != "none" and not _is_hero:
-                    print(f"[컷 {i+1}] 히어로 컷 아님 ({_cut_desc[:30]}…) → Ken Burns 사용")
                 t_tts = threading.Thread(target=_run_tts_and_whisper, name=f"tts-cut{i}", daemon=True)
                 t_tts.start()
                 threads.append(t_tts)
@@ -841,21 +850,20 @@ async def generate_video_endpoint(req: GenerateRequest):
                     except Exception as copy_err:
                         yield {"data": f"ERROR|[저장 오류] 지정 경로 복사 실패: {copy_err}\n"}
 
-            # Downloads 폴더로 자동 복사 (모든 플랫폼 영상)
-            downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            # Downloads 폴더로 자동 복사: Downloads/토픽/채널명.mp4
+            _dl_base = os.environ.get("DOWNLOAD_DIR", os.path.join(os.path.expanduser("~"), "Downloads"))
             downloads_path = None
-            for plat, vpath in video_paths_map.items():
-                fname = os.path.basename(vpath)
-                if os.path.isdir(downloads_dir):
-                    try:
-                        dl_path = os.path.join(downloads_dir, fname)
-                        await asyncio.to_thread(shutil.copy2, os.path.abspath(vpath), dl_path)
-                        if plat == primary_platform:
-                            downloads_path = dl_path
-                        if len(video_paths_map) > 1:
-                            yield {"data": f"[저장] {plat.upper()} 버전 → Downloads/{fname}\n"}
-                    except Exception as cp_err:
-                        print(f"[Downloads 복사 실패 {plat}] {cp_err}")
+            if os.path.isdir(_dl_base):
+                _dl_channel = req.channel or "default"
+                _dl_dir = os.path.join(_dl_base, topic_folder)
+                os.makedirs(_dl_dir, exist_ok=True)
+                try:
+                    dl_path = os.path.join(_dl_dir, f"{_dl_channel}.mp4")
+                    await asyncio.to_thread(shutil.copy2, os.path.abspath(video_path), dl_path)
+                    downloads_path = dl_path
+                    yield {"data": f"[저장] Downloads/{topic_folder}/{_dl_channel}.mp4\n"}
+                except Exception as cp_err:
+                    print(f"[Downloads 복사 실패] {cp_err}")
 
             # 프론트엔드 라우팅용 경로 (StaticFiles mount 기준)
             final_filename = os.path.basename(video_path)
@@ -1436,17 +1444,19 @@ async def youtube_callback(code: str, state: str | None = None):
             "<script>window.close()</script></body></html>"
         )
     except Exception as e:
-        import html as _html
-        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p></body></html>", status_code=400)
+        import html as _html, traceback as _tb
+        _tb.print_exc()
+        return HTMLResponse(f"<html><body><h2>오류</h2><p>{_html.escape(str(e))}</p><pre>{_html.escape(_tb.format_exc())}</pre></body></html>", status_code=400)
 
 
 @app.post("/api/youtube/upload")
 async def youtube_upload(req: YouTubeUploadRequest):
     from modules.upload.youtube import upload_video
     try:
-        # 경로 보안 검증
+        # 경로 보안 검증: /assets/... → assets/... (선행 슬래시 제거)
         from pathlib import Path as _P
-        abs_path = os.path.abspath(os.path.realpath(req.video_path))
+        _vpath = req.video_path.lstrip("/")
+        abs_path = os.path.abspath(os.path.realpath(_vpath))
         assets_dir = os.path.abspath(os.path.realpath("assets"))
         if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
