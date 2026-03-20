@@ -1,10 +1,16 @@
 # ── Backend: Python 3.12 + Node 20 + ffmpeg ──
 FROM python:3.12-slim AS backend
 
-# System dependencies
+# System dependencies + Chromium libs for Remotion rendering
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
+    # Chromium dependencies required by Remotion
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+    libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+    libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 \
+    libcairo2 libasound2 libxshmfence1 \
+    fonts-noto-cjk fonts-noto-color-emoji \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
