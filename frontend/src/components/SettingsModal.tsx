@@ -468,7 +468,7 @@ export function SettingsModal({
                                             try {
                                               const res = await fetch(`${API_BASE}/api/youtube/auth`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({channel: name}) });
                                               const data = await res.json();
-                                              if (data.auth_url) window.open(data.auth_url, "_blank", "width=500,height=600");
+                                              if (data.auth_url) window.location.href = data.auth_url;
                                               else alert(data.error || "인증 URL 생성 실패");
                                             } catch { alert("서버 연결 실패"); }
                                           }}
