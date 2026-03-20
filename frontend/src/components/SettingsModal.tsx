@@ -461,6 +461,22 @@ export function SettingsModal({
                                         className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-[10px] text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500/50 font-mono"
                                       />
                                       <div className={`w-2 h-2 rounded-full ${accountId ? "bg-green-500" : "bg-gray-600"}`} />
+                                      {platform === "youtube" && !accountId && (
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            try {
+                                              const res = await fetch(`${API_BASE}/api/youtube/auth`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({channel: name}) });
+                                              const data = await res.json();
+                                              if (data.auth_url) window.open(data.auth_url, "_blank", "width=500,height=600");
+                                              else alert(data.error || "인증 URL 생성 실패");
+                                            } catch { alert("서버 연결 실패"); }
+                                          }}
+                                          className="px-2 py-0.5 text-[9px] bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors whitespace-nowrap"
+                                        >
+                                          연동
+                                        </button>
+                                      )}
                                     </div>
                                   );
                                 })}
