@@ -124,7 +124,7 @@ export function SettingsModal({
 
   // ── 채널 설정 서버 자동저장 (디바운스 500ms) ──
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const saveChannelToServer = useCallback((name: string, data: Record<string, unknown>) => {
+  const saveChannelToServer = useCallback((name: string, data: object) => {
     if (saveTimers.current[name]) clearTimeout(saveTimers.current[name]);
     saveTimers.current[name] = setTimeout(async () => {
       setChannelSaveStatus((prev) => ({ ...prev, [name]: "saving" }));
