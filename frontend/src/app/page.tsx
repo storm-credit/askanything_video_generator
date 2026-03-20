@@ -254,11 +254,11 @@ export default function Home() {
       case "best":
         setLlmProvider("gemini"); setLlmModel("");
         setImageEngine("imagen"); setImageModel("");
-        setVideoEngine("none"); setVideoModel("");
+        setVideoEngine("veo3"); setVideoModel("");
         break;
       case "balanced":
         setLlmProvider("gemini"); setLlmModel("");
-        setImageEngine("imagen"); setImageModel("imagen-4.0-fast-generate-001");
+        setImageEngine("imagen"); setImageModel("");
         setVideoEngine("none"); setVideoModel("");
         break;
       case "fast":
