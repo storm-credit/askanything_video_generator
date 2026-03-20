@@ -334,6 +334,9 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
 
         results: dict[str, str] = {}
 
+        # 플랫폼별 설정이 동일하면 1번만 렌더하고 나머지는 복사
+        rendered_configs: dict[str, str] = {}  # config_key → rendered video path
+
         for platform in valid_platforms:
             cfg = PLATFORM_CONFIGS[platform]
             label = f" {platform.upper()}" if multi else ""
@@ -343,6 +346,19 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             outro_rel = path_map.get(os.path.abspath(outro_src)) if (cfg["outro"] and outro_available) else None
             bgm_rel = path_map.get(os.path.abspath(bgm_src_path)) if bgm_src_path else None
             use_title = title if cfg["title"] else None
+
+            # 설정 키: 동일 설정이면 렌더링 재사용
+            config_key = f"{intro_rel}|{outro_rel}|{use_title}"
+
+            suffix = f"_{platform}" if multi else ""
+            video_path = os.path.join(output_dir, f"{topic_folder}_{timestamp}{suffix}.mp4")
+
+            if config_key in rendered_configs:
+                # 동일 설정 → 복사로 대체 (렌더링 스킵)
+                shutil.copy2(rendered_configs[config_key], video_path)
+                results[platform] = video_path
+                print(f"-> [완료{label}] 동일 설정 — 복사 완료")
+                continue
 
             total_frames = cuts_duration
             if intro_rel:
@@ -366,13 +382,12 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
                 "captionY": caption_y,
             }
 
-            suffix = f"_{platform}" if multi else ""
-            video_path = os.path.join(output_dir, f"{topic_folder}_{timestamp}{suffix}.mp4")
             props_path = os.path.join(output_dir, f"remotion_props{suffix}.json")
 
             result = _render_single(props_data, props_path, video_path, remotion_dir, pub_dir, label)
             if result:
                 results[platform] = result
+                rendered_configs[config_key] = result
                 print(f"-> [완료{label}] {result}")
 
     except Exception as e:
