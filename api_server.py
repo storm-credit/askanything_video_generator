@@ -634,7 +634,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 with image_semaphore:
                     try:
                         cut_image_key = _get_image_key()
-                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=topic) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, topic=topic)
+                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=_topic) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, topic=_topic)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"이미지: {exc}")

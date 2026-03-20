@@ -31,15 +31,16 @@ def get_safety_fallback_prompt(original_prompt: str, retry_count: int, topic: st
         cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
         if cleaned:
             return cleaned
-    # 주제 컨텍스트 확보: topic 파라미터 > 원본 프롬프트 키워드
+    # 주제 컨텍스트 확보: 원본 프롬프트에서 핵심 키워드 최대한 보존
     topic_clean = _BANNED_KEYWORDS.sub("", topic).strip() if topic else ""
-    words = _BANNED_KEYWORDS.sub("", original_prompt).split()
-    prompt_hint = " ".join(w for w in words if len(w) > 2)[:120]
-    # 주제가 있으면 주제 우선, 없으면 프롬프트 키워드
-    context = f"about {topic_clean}. {prompt_hint}" if topic_clean else prompt_hint
-    if not context.strip():
-        context = "abstract artistic scene with vibrant colors"
-    return (
-        f"A safe, beautiful cinematic visualization {context}. "
-        "Atmospheric lighting, detailed textures, peaceful scene."
-    )
+    cleaned_prompt = _BANNED_KEYWORDS.sub("", original_prompt)
+    cleaned_prompt = re.sub(r'\s{2,}', ' ', cleaned_prompt).strip()
+    # 원본 프롬프트를 최대한 유지 (주제 키워드 + 시각 디테일)
+    if cleaned_prompt:
+        if topic_clean:
+            return f"{cleaned_prompt}, related to {topic_clean}. Safe, family-friendly depiction."
+        return f"{cleaned_prompt}. Safe, family-friendly depiction."
+    # 원본이 완전히 비었을 때만 주제 기반 폴백
+    if topic_clean:
+        return f"A beautiful cinematic scene about {topic_clean}. Atmospheric lighting, detailed textures."
+    return "A beautiful cinematic scene with atmospheric lighting and detailed textures."
