@@ -1190,7 +1190,7 @@ export default function Home() {
                 <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
                   <Globe className="w-3.5 h-3.5 text-blue-400" />
                   <select value={selectedChannels.length >= 2 ? "auto" : language} onChange={(e) => setLanguage(e.target.value)} disabled={isGenerating || selectedChannels.length >= 2} aria-label="언어 선택" className={`bg-transparent text-xs focus:outline-none appearance-none pr-3 ${selectedChannels.length >= 2 ? "text-gray-500 cursor-not-allowed" : "text-gray-200 cursor-pointer"}`}>
-                    {selectedChannels.length >= 2 && <option value="auto" className="bg-gray-900">Auto (채널별)</option>}
+                    <option value="auto" className="bg-gray-900">Auto (채널별)</option>
                     <option value="ko" className="bg-gray-900">한국어</option>
                     <option value="en" className="bg-gray-900">English</option>
                     <option value="ja" className="bg-gray-900">日本語</option>
