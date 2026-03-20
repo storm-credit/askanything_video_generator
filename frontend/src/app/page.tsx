@@ -16,7 +16,7 @@ const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: s
 
 export default function Home() {
   const [topic, setTopic] = useState("");
-  const [qualityPreset, setQualityPreset] = useState("fast");
+  const [qualityPreset, setQualityPreset] = useState("best");
   const [llmProvider, setLlmProvider] = useState("gemini");
   const [llmModel, setLlmModel] = useState("gemini-2.5-flash");
   const [imageEngine, setImageEngine] = useState("imagen");
@@ -1273,8 +1273,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* AI 엔진 — 기획 · 이미지 · 비디오 */}
-            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+            {/* AI 엔진 — 수동 모드에서만 표시 */}
+            {qualityPreset === "manual" && <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
@@ -1325,7 +1325,7 @@ export default function Home() {
                   )}
                 </div>
               </div>
-            </div>
+            </div>}
 
             {/* 연출 — 카메라 · BGM · 음성 */}
             <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
