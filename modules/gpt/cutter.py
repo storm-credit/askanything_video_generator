@@ -327,11 +327,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [대본 스타일 규칙]
 * 반말 + 구어체. 딱딱한 존댓말 금지. 친구한테 신기한 거 알려주듯이 써라.
-* 한 컷 대본은 20~35자. 5~7초 분량. 짧고 강렬하게. 한 문장 이상 넣지 마라.
+* 한 컷 대본은 15~30자. 4~6초 분량. 짧고 강렬하게. 한 문장 이상 넣지 마라.
 * "~입니다", "~합니다" 금지. "~거든", "~잖아", "~인 거야", "~라는 거지" 같은 구어체 어미 사용.
 * 감탄사/추임새 적극 활용: "미쳤지?", "소름이지?", "진짜야.", "ㄹㅇ."
 * 같은 문장 구조를 연속 사용하지 마라. Q&A, 명령문, 서술문을 섞어라.
-* [CRITICAL WARNING] 7~10컷으로 작성. 각 컷 약 5~7초 (총 50~60초 영상 목표 — 시청시간 극대화). 절대 7컷 미만 금지.
+* [CRITICAL WARNING] 7~10컷으로 작성. 각 컷 약 4~5초 (총 35~50초 영상 목표). 절대 7컷 미만 금지.
 
 [이미지 프롬프트 규칙]
 * 반드시 영어로 작성. 한국어 금지.
@@ -410,10 +410,10 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 
 [Script Style Rules]
 * Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
-* Each cut: 8–15 words (~4–6 seconds). Short. Punchy. One sentence only. English is spoken faster than Korean, so keep scripts SHORTER to match ~50 second total.
+* Each cut: 8–12 words (~4–5 seconds). Short. Punchy. One sentence only. Target ~35 second total video.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
 * Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
-* [CRITICAL WARNING] Write 7–10 cuts (~5–7 sec each). Target 50–60 second video for maximum watch time. NEVER less than 7 cuts.
+* [CRITICAL WARNING] Write 7–10 cuts (~4–5 sec each). Target 35–50 second video for maximum watch time. NEVER less than 7 cuts.
 
 [Image Prompt Rules]
 * ALL image prompts must be in English.
