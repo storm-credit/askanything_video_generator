@@ -83,6 +83,14 @@ export function SettingsModal({
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
   const [channelSaveStatus, setChannelSaveStatus] = useState<Record<string, "saved" | "saving" | "error" | null>>({});
+  const [ytConnectedChannels, setYtConnectedChannels] = useState<string[]>([]);
+
+  // YouTube 연동 상태 로드
+  useEffect(() => {
+    fetch(`${API_BASE}/api/youtube/status`).then(r => r.json()).then(data => {
+      if (data.channels) setYtConnectedChannels(data.channels.filter((c: {connected: boolean}) => c.connected).map((c: {id: string}) => c.id));
+    }).catch(() => {});
+  }, []);
 
   // ── 채널 데이터 로드 ──
   const fetchChannels = useCallback(async () => {
@@ -377,7 +385,9 @@ export function SettingsModal({
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">{langLabel}</span>
                               {(ch.platforms || []).map((p) => {
-                                const connected = !!ch.upload_accounts?.[p];
+                                const hasAccount = !!ch.upload_accounts?.[p];
+                                const isYtConnected = p === "youtube" && ytConnectedChannels.length > 0;
+                                const connected = hasAccount || isYtConnected;
                                 return (
                                   <span key={p} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 ${connected ? "bg-green-500/15 text-green-400" : "bg-purple-500/15 text-purple-400"}`}>
                                     <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-green-500" : "bg-gray-500"}`} />
