@@ -69,10 +69,12 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
 
   const quantizedTime = Math.floor(currentTime * 10) / 10;
 
-  // 구(phrase) 단위 그룹핑: 최대 4단어씩 묶어서 고정 표시
+  // 구(phrase) 단위 그룹핑: CJK는 3단어, 라틴은 4단어씩 묶어서 고정 표시
   const phrases = useMemo(() => {
     const groups: { words: (WordProps & { index: number; emphasis: boolean })[]; start: number; end: number }[] = [];
-    const MAX_WORDS_PER_PHRASE = 4;
+    // 한국어/일본어/중국어 단어가 포함되면 3단어로 제한 (줄 넘김 방지)
+    const hasCJK = wordTimestamps.some(w => /[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/.test(w.word));
+    const MAX_WORDS_PER_PHRASE = hasCJK ? 3 : 4;
     let current: (WordProps & { index: number; emphasis: boolean })[] = [];
 
     wordTimestamps.forEach((w, index) => {
