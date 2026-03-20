@@ -290,7 +290,7 @@ export default function Home() {
         setVideoEngine("none"); setVideoModel("");
         break;
       case "balanced":
-        setLlmProvider("gemini"); setLlmModel("");
+        setLlmProvider("gemini"); setLlmModel("gemini-2.5-flash");
         setImageEngine("imagen"); setImageModel("");
         setVideoEngine("none"); setVideoModel("");
         break;
