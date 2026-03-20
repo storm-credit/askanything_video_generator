@@ -1,0 +1,37 @@
+# ── Backend: Python 3.12 + Node 20 + ffmpeg ──
+FROM python:3.12-slim AS backend
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir elevenlabs yt-dlp
+
+# Remotion dependencies (Node)
+COPY remotion/package.json remotion/package-lock.json* remotion/
+RUN cd remotion && npm install --production=false
+
+# Copy application code
+COPY api_server.py .
+COPY modules/ modules/
+COPY remotion/ remotion/
+COPY preflight_check.py syntax_check.py ./
+
+# Create directories
+RUN mkdir -p assets brand client_secrets youtube_tokens tiktok_tokens
+
+EXPOSE 8003
+
+ENV UVICORN_RELOAD=false
+ENV API_PORT=8003
+
+CMD ["python", "api_server.py"]

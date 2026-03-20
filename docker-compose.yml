@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: askanything-backend
+    ports:
+      - "8003:8003"
+    env_file: .env
+    environment:
+      - API_PORT=8003
+      - UVICORN_RELOAD=false
+      - CORS_ORIGINS=http://localhost:3000
+    volumes:
+      - ./assets:/app/assets
+      - ./brand:/app/brand
+      - ./client_secrets:/app/client_secrets
+      - ./youtube_tokens:/app/youtube_tokens
+      - ./tiktok_tokens:/app/tiktok_tokens
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: askanything-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8003
+    depends_on:
+      - backend
+    restart: unless-stopped
