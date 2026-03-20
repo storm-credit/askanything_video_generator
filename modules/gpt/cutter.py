@@ -410,7 +410,7 @@ You are also a top-tier image prompt engineer who designs visually overwhelming 
 
 [Script Style Rules]
 * Casual, conversational tone. Talk like you're telling a friend something mind-blowing.
-* Each cut: 12–20 words (~5–7 seconds). Short. Punchy. One or two sentences for natural voiceover pacing.
+* Each cut: 8–15 words (~4–6 seconds). Short. Punchy. One sentence only. English is spoken faster than Korean, so keep scripts SHORTER to match ~50 second total.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious.", "Think about that."
 * Never repeat the same sentence structure in consecutive cuts. Mix Q&A, imperative, declarative.
 * [CRITICAL WARNING] Write 7–10 cuts (~5–7 sec each). Target 50–60 second video for maximum watch time. NEVER less than 7 cuts.
@@ -456,7 +456,7 @@ Example: "A massive black hole swallowing light [SHOCK]"
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
       "image_prompt": "[English image prompt (MASTER_STYLE auto-applied)]",
-      "script": "[Voice-over: casual, 8-18 words]"
+      "script": "[Voice-over: casual, 8-15 words max]"
     }
   ]
 }
@@ -482,8 +482,10 @@ Example: "A massive black hole swallowing light [SHOCK]"
 
 [LANGUAGE OVERRIDE]
 You MUST write ALL "script" fields and the "title" field in {lang_name}.
+NEVER write scripts in English. All "script" fields MUST be in {lang_name} only.
 The "image_prompt" and "description" fields must remain in English.
 The narrator will speak in {lang_name}, so the script must be natural {lang_name}.
+IMPORTANT: {lang_name} sentences tend to be longer than English. Keep each script to 6–12 words equivalent (~4–6 seconds) to maintain ~50 second total video length. Be extra concise.
 """
 
     # 채널별 비주얼 스타일 주입 (이미지 프롬프트 차별화 — 유튜브 스팸 회피)
