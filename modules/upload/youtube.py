@@ -113,8 +113,10 @@ def get_channels() -> list[dict]:
 
 def get_auth_status() -> dict:
     """YouTube 연동 상태를 반환합니다."""
-    if not CLIENT_SECRET_PATH.exists():
-        return {"connected": False, "reason": "client_secret.json 파일이 없습니다", "channels": []}
+    # 채널별 client_secret 또는 기본 client_secret 중 하나라도 있으면 OK
+    has_any_secret = CLIENT_SECRET_PATH.exists() or (CLIENT_SECRETS_DIR.exists() and any(CLIENT_SECRETS_DIR.glob("*.json")))
+    if not has_any_secret:
+        return {"connected": False, "reason": "client_secret 파일이 없습니다", "channels": []}
     channels = get_channels()
     connected = any(ch["connected"] for ch in channels)
     return {"connected": connected, "channels": channels}
