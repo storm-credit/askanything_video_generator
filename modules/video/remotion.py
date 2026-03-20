@@ -248,19 +248,12 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     fps = 24
     desc_list = descriptions or [""] * len(visual_paths)
 
-    # 브랜드 에셋 준비
+    # 브랜드 에셋 준비 (채널별 원본 경로 직접 사용 — 공유 assets/ 덮어쓰기 방지)
     channel_label = f" ({channel})" if channel else ""
-    for asset_name in [INTRO_IMAGE, OUTRO_IMAGE]:
-        brand_src = _resolve_brand_asset(asset_name, channel)
-        assets_dst = os.path.join("assets", asset_name)
-        if brand_src:
-            if not os.path.exists(assets_dst) or os.path.getmtime(brand_src) > os.path.getmtime(assets_dst):
-                shutil.copy2(brand_src, assets_dst)
-
-    intro_src = os.path.join("assets", INTRO_IMAGE)
-    outro_src = os.path.join("assets", OUTRO_IMAGE)
-    intro_available = os.path.exists(intro_src)
-    outro_available = os.path.exists(outro_src)
+    intro_src = _resolve_brand_asset(INTRO_IMAGE, channel)
+    outro_src = _resolve_brand_asset(OUTRO_IMAGE, channel)
+    intro_available = intro_src is not None and os.path.exists(intro_src)
+    outro_available = outro_src is not None and os.path.exists(outro_src)
 
     # BGM 준비
     bgm_source = _select_bgm(bgm_theme)

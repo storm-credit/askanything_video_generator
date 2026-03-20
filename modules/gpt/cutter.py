@@ -286,6 +286,9 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     if not _topic_title:
         _topic_title = topic
     topic_folder = slugify_topic(_topic_title, lang)
+    # 채널별 폴더 분리 (멀티채널 병렬 생성 시 파일 충돌 방지)
+    if channel:
+        topic_folder = f"{topic_folder}_{channel}"
 
     # 저장 폴더 구조 생성
     base_path = os.path.join("assets", topic_folder)
