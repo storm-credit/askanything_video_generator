@@ -12,16 +12,17 @@ const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: s
   askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 54, captionY: 35 },
   wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 50, captionY: 35 },
   exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 0.9, platforms: ["youtube", "tiktok"], captionSize: 50, captionY: 35 },
+  prismtale: { label: "Prism Tale", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.85, platforms: ["youtube", "tiktok"], captionSize: 54, captionY: 35 },
 };
 
 export default function Home() {
   const [topic, setTopic] = useState("");
   const [qualityPreset, setQualityPreset] = useState("best");
   const [llmProvider, setLlmProvider] = useState("gemini");
-  const [llmModel, setLlmModel] = useState("gemini-2.5-flash");
+  const [llmModel, setLlmModel] = useState("");
   const [imageEngine, setImageEngine] = useState("imagen");
-  const [imageModel, setImageModel] = useState("imagen-4.0-fast-generate-001");
-  const [videoEngine, setVideoEngine] = useState("none");
+  const [imageModel, setImageModel] = useState("");
+  const [videoEngine, setVideoEngine] = useState("veo3");
   const [videoModel, setVideoModel] = useState("");
   const [testMode, setTestMode] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
