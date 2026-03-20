@@ -1444,9 +1444,10 @@ async def youtube_callback(code: str, state: str | None = None):
 async def youtube_upload(req: YouTubeUploadRequest):
     from modules.upload.youtube import upload_video
     try:
-        # 경로 보안 검증
+        # 경로 보안 검증: /assets/... → assets/... (선행 슬래시 제거)
         from pathlib import Path as _P
-        abs_path = os.path.abspath(os.path.realpath(req.video_path))
+        _vpath = req.video_path.lstrip("/")
+        abs_path = os.path.abspath(os.path.realpath(_vpath))
         assets_dir = os.path.abspath(os.path.realpath("assets"))
         if not _P(abs_path).is_relative_to(assets_dir):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
