@@ -151,8 +151,8 @@ def create_auth_url(channel: str | None = None) -> str:
         prompt="consent",
         state=state,
     )
-    # state에 시크릿 경로 + PKCE code_verifier 저장 (콜백에서 토큰 교환에 필요)
-    _pending_states[state] = (time.time() + 300, str(secret_path), flow.code_verifier)
+    # state에 시크릿 경로 + PKCE code_verifier + 채널 프리셋 이름 저장
+    _pending_states[state] = (time.time() + 300, str(secret_path), flow.code_verifier, channel)
 
     return auth_url
 
@@ -164,7 +164,7 @@ def handle_auth_callback(auth_code: str, state: str | None = None) -> dict:
     state_data = _pending_states.pop(state, None)
     if state_data is None:
         raise ValueError("인증 state가 유효하지 않습니다. 다시 시도해주세요.")
-    expires_at, secret_path_str, code_verifier = state_data
+    expires_at, secret_path_str, code_verifier, channel_preset = state_data
     if time.time() > expires_at:
         raise ValueError("인증 state가 만료되었습니다. 다시 시도해주세요.")
     flow = Flow.from_client_secrets_file(
@@ -179,6 +179,12 @@ def handle_auth_callback(auth_code: str, state: str | None = None) -> dict:
     # 채널 정보 조회 후 채널 ID로 저장
     info = _get_channel_info(creds)
     _save_credentials(creds, info["id"])
+
+    # 채널 프리셋에 YouTube 계정 자동 매핑
+    if channel_preset:
+        from modules.utils.channel_config import set_upload_account
+        set_upload_account(channel_preset, "youtube", info["id"])
+        print(f"[YouTube] 채널 '{channel_preset}' → YouTube '{info['title']}' ({info['id']}) 자동 매핑 완료")
 
     return {"success": True, "message": f"YouTube 채널 '{info['title']}' 연동 완료", "channel": info}
 
