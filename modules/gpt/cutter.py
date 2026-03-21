@@ -323,9 +323,14 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 2. Cut 2~3 — 충격 확장: "근데 진짜 소름돋는 건..." 식으로 연쇄.
 3. Cut 4~5 — 반전 빌드업: Cut 4에 반드시 새 충격 팩트(두 번째 훅). ★ 매 2~3컷마다 카메라/조명/스케일 급변.
 4. Cut 6~8 — 클라이맥스: 가장 강력한 팩트+직관적 비유 ("지구 100개를 한 줄로 세운 것과 같아").
-5. Cut 9~10 — 루프 엔딩: 마지막 대사가 Cut 1의 훅을 재암시. 마지막 image_prompt는 Cut 1과 유사 구도/색감.
-   ✅ "근데 진짜 소름돋는 건..." → 자동 반복 재생 시 Cut 1과 연결
+5. Cut 9~10 — 루프 엔딩: 마지막 대사가 Cut 1의 훅을 자연스럽게 다시 듣고 싶게 만들어야 함. 마지막 image_prompt는 Cut 1과 유사 구도/색감.
+   ★★★ [루프 엔딩 필수 규칙] ★★★
+   * 마지막 컷은 반드시 완결된 문장이어야 함. 미완성 문장("...사실은", "...인데") 절대 금지.
+   * 마지막 컷이 끝나면 시청자가 "어? 다시 보고 싶다"고 느끼도록 Cut 1의 핵심 키워드를 재등장시켜라.
+   * 예시 패턴: Cut1="북극곰은 사실 흑곰이었어" → 마지막="그래서 북극곰을 볼 때마다 그 검은 속이 떠오를 거야"
+   ✅ 완결된 문장 + Cut 1 키워드 재등장 → 자동 반복 시 자연 연결
    ❌ "다음엔 알려줄게" 같은 빈 약속 CTA 금지
+   ❌ "...사실은", "근데 진짜는..." 같은 미완성 끊김 금지
 
 [대본 규칙]
 * 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
@@ -394,9 +399,14 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 2. Cut 2–3 — Shock chain: "But here's the insane part..." escalate.
 3. Cut 4–5 — Twist buildup: Cut 4 MUST introduce a new shocking fact (second hook, counters U-shaped retention drop). ★ Shift camera/lighting/scale every 2–3 cuts.
 4. Cut 6–8 — Climax: Hardest facts + intuitive comparisons ("That's like lining up 100 Earths").
-5. Cut 9–10 — Loop ending: Final line re-triggers Cut 1's hook. Final image_prompt mirrors Cut 1's composition/color.
-   ✅ "But the terrifying part? It's happening right now." → auto-replay connects to Cut 1
+5. Cut 9–10 — Loop ending: Final line MUST make viewers want to re-watch from Cut 1. Final image_prompt mirrors Cut 1's composition/color.
+   ★★★ [LOOP ENDING MANDATORY RULES] ★★★
+   * Last cut MUST be a COMPLETE sentence. Incomplete sentences ("...actually", "...but then") are FORBIDDEN.
+   * Last cut must re-introduce Cut 1's core keyword so auto-replay feels seamless.
+   * Pattern: Cut1="Polar bears are actually black bears" → Last="And now every time you see a polar bear, you'll think of what's hiding underneath"
+   ✅ Complete sentence + Cut 1 keyword callback → seamless loop
    ❌ "Next time I'll show you..." — empty-promise CTAs kill trust
+   ❌ "...actually it's", "But the real truth..." — incomplete trailing sentences FORBIDDEN
 
 [Script Rules]
 * Casual, conversational. 10–15 words per cut, one sentence. Vary sentence structures.
