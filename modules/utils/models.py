@@ -9,10 +9,11 @@ Google AI 모델 체인 설정
   IMAGEN_MODEL, VEO_MODEL 등을 설정하면 체인이 비활성화되고 해당 모델만 사용.
 """
 
-# Imagen 모델 체인: Standard (RPM 10) → Fast (RPM 10)
+# Imagen 모델 체인: Standard → Fast → Ultra (별도 쿼터 가능)
 IMAGEN_MODELS = [
     {"id": "imagen-4.0-generate-001", "tag": "standard", "label": "Imagen 4"},
     {"id": "imagen-4.0-fast-generate-001", "tag": "fast", "label": "Imagen 4 Fast"},
+    {"id": "imagen-4.0-ultra-generate-001", "tag": "ultra", "label": "Imagen 4 Ultra"},
 ]
 
 # Veo 모델 체인: Standard (RPM 2) → Fast (RPM 2)
@@ -30,6 +31,7 @@ MODEL_RATE_LIMITS = {
     # Imagen
     "imagen-4.0-generate-001": {"rpm": 10, "rpd": 100, "note": "무료"},
     "imagen-4.0-fast-generate-001": {"rpm": 10, "rpd": 100, "note": "무료"},
+    "imagen-3.0-generate-002": {"rpm": 10, "rpd": 100, "note": "무료"},
     # Veo
     "veo-3.0-generate-001": {"rpm": 2, "rpd": 6, "note": "무료"},
     "veo-3.0-fast-generate-001": {"rpm": 2, "rpd": 6, "note": "무료"},

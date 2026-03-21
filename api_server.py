@@ -22,7 +22,7 @@ load_dotenv(override=True)
 
 from modules.gpt.cutter import generate_cuts
 from modules.image.dalle import generate_image as generate_image_dalle
-from modules.image.imagen import generate_image_imagen
+from modules.image.imagen import generate_image_imagen, generate_image_nano_banana
 from modules.video.engines import generate_video_from_image, get_available_engines, check_engine_available
 from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs_quota
 from modules.transcription.whisper import generate_word_timestamps
@@ -636,15 +636,25 @@ async def generate_video_endpoint(req: GenerateRequest):
                         cut_image_key = _get_image_key()
                         img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=_topic) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, topic=_topic)
                     except Exception as exc:
-                        # Imagen 실패 시 DALL-E 자동 폴백
-                        if image_engine == "imagen" and api_key_override:
-                            print(f"[컷 {i+1} Imagen 실패 → DALL-E 폴백] {exc}")
+                        # Imagen 실패 → Nano Banana → DALL-E 폴백 체인
+                        if image_engine == "imagen":
+                            print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
                             try:
-                                img_path = generate_image_dalle(cut["prompt"], i, topic_folder, api_key_override, topic=_topic)
-                            except Exception as dalle_exc:
-                                with errors_lock:
-                                    errors.append(f"이미지: Imagen+DALL-E 모두 실패: {dalle_exc}")
-                                print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
+                                _nb_key = get_google_key(llm_key_override, service="nano_banana", extra_keys=gemini_keys_override)
+                                img_path = generate_image_nano_banana(cut["prompt"], i, topic_folder, _nb_key, topic=_topic)
+                            except Exception as nb_exc:
+                                print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {nb_exc}")
+                                _dalle_fallback_key = api_key_override or os.getenv("OPENAI_API_KEY")
+                                if _dalle_fallback_key:
+                                    try:
+                                        img_path = generate_image_dalle(cut["prompt"], i, topic_folder, _dalle_fallback_key, topic=_topic)
+                                    except Exception as dalle_exc:
+                                        with errors_lock:
+                                            errors.append(f"이미지: 전체 폴백 실패: {dalle_exc}")
+                                        print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
+                                else:
+                                    with errors_lock:
+                                        errors.append(f"이미지: Imagen+NanoBanana 실패, DALL-E 키 없음")
                         else:
                             with errors_lock:
                                 errors.append(f"이미지: {exc}")
@@ -1132,19 +1142,32 @@ async def prepare_endpoint(req: PrepareRequest):
                     )
                     image_paths.append(img_path)
                 except Exception as exc:
-                    # Imagen 실패 시 DALL-E 자동 폴백
-                    if req.imageEngine == "imagen" and req.apiKey:
-                        print(f"[컷 {i+1} Imagen 실패 → DALL-E 폴백] {exc}")
-                        yield {"data": f"  -> 컷 {i+1} Imagen 실패, DALL-E로 폴백\n"}
+                    # Imagen 실패 → Nano Banana → DALL-E 폴백 체인
+                    if req.imageEngine == "imagen":
+                        print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
+                        yield {"data": f"  -> 컷 {i+1} Imagen 실패, Nano Banana로 폴백\n"}
                         try:
+                            _nb_key = get_google_key(req.llmKey, service="nano_banana", extra_keys=_gemini_keys)
                             _topic2 = prep_topic
                             img_path = await loop.run_in_executor(
-                                None, lambda idx=i, c=cut, k=req.apiKey, t=_topic2: generate_image_dalle(c["prompt"], idx, topic_folder, k, topic=t)
+                                None, lambda idx=i, c=cut, k=_nb_key, t=_topic2: generate_image_nano_banana(c["prompt"], idx, topic_folder, k, topic=t)
                             )
                             image_paths.append(img_path)
-                        except Exception as dalle_exc:
-                            print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
-                            image_paths.append(None)
+                        except Exception as nb_exc:
+                            print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {nb_exc}")
+                            yield {"data": f"  -> 컷 {i+1} Nano Banana 실패, DALL-E로 폴백\n"}
+                            _dalle_key = req.apiKey or os.getenv("OPENAI_API_KEY")
+                            if _dalle_key:
+                                try:
+                                    img_path = await loop.run_in_executor(
+                                        None, lambda idx=i, c=cut, k=_dalle_key, t=_topic2: generate_image_dalle(c["prompt"], idx, topic_folder, k, topic=t)
+                                    )
+                                    image_paths.append(img_path)
+                                except Exception as dalle_exc:
+                                    print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
+                                    image_paths.append(None)
+                            else:
+                                image_paths.append(None)
                     else:
                         print(f"[컷 {i+1} 이미지 실패] {exc}")
                         image_paths.append(None)

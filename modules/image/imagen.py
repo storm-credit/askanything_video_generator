@@ -129,6 +129,83 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
     raise RuntimeError(f"[Imagen] 컷 {index+1}: 모든 모델 체인 및 키 소진")
 
 
+# ── Nano Banana (Gemini 네이티브 이미지 생성) — Imagen과 별도 쿼터 ──
+NANO_BANANA_MODELS = [
+    "gemini-2.5-flash-image",            # 가장 빠름
+    "gemini-3.1-flash-image-preview",    # 기본 추천
+]
+
+
+def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_key: str | None = None, topic: str = "") -> str:
+    """Nano Banana (Gemini 네이티브 이미지 생성)로 이미지를 생성합니다. Imagen 폴백용."""
+    from google import genai
+    from google.genai import types
+
+    enhanced_prompt = MASTER_STYLE + prompt
+
+    image_dir = os.path.join("assets", topic_folder, "images")
+    os.makedirs(image_dir, exist_ok=True)
+    filename = os.path.join(image_dir, f"cut_{index:02}.png")
+
+    final_key = api_key or os.getenv("GEMINI_API_KEY")
+    if not final_key:
+        raise EnvironmentError("Gemini API 키가 없습니다.")
+
+    last_error = None
+    for model_name in NANO_BANANA_MODELS:
+        try:
+            print(f"  [Nano Banana] 컷 {index+1} {model_name}로 생성 중...")
+            client = genai.Client(api_key=final_key)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=enhanced_prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["IMAGE"],
+                    image_config=types.ImageConfig(
+                        aspect_ratio="9:16",
+                    ),
+                ),
+            )
+
+            # 이미지 파트 추출
+            image_bytes = None
+            for part in response.parts:
+                if part.inline_data is not None:
+                    image_bytes = part.inline_data.data
+                    break
+
+            if not image_bytes:
+                raise ValueError(f"Nano Banana 응답에 이미지가 없습니다 ({model_name})")
+
+            # 저장
+            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            target_size = (1080, 1920)
+            fitted = ImageOps.fit(image, target_size, method=Image.LANCZOS, centering=(0.5, 0.5))
+
+            fd, tmp = tempfile.mkstemp(dir=image_dir, suffix=".tmp")
+            os.close(fd)
+            try:
+                fitted.save(tmp, format="PNG")
+                os.replace(tmp, filename)
+            except Exception:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                raise
+
+            save_to_cache(enhanced_prompt, filename)
+            print(f"  [Nano Banana] 컷 {index+1} 생성 완료 ({model_name})")
+            return filename
+
+        except Exception as e:
+            last_error = e
+            print(f"  [Nano Banana] {model_name} 실패: {e}")
+            continue
+
+    raise RuntimeError(f"[Nano Banana] 컷 {index+1}: 모든 모델 실패 — {last_error}")
+
+
 def _generate_imagen(api_key: str, prompt: str, model_name: str) -> bytes:
     """google-genai SDK로 Imagen 이미지를 생성합니다."""
     from google import genai

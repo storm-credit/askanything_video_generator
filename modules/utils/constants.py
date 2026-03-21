@@ -6,10 +6,10 @@ import os
 PROVIDER_LABELS = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
 
 
-# ── National Geographic 마스터 스타일 프롬프트 (DALL-E / Imagen 공용) ──
+# ── 마스터 스타일 프롬프트 (DALL-E / Imagen 공용, Imagen 프롬프트 가이드 기반) ──
 MASTER_STYLE = (
-    "Cinematic photograph, photorealistic, highly detailed, "
-    "professional lighting, 8K quality, "
+    "Professional photograph, photorealistic, 4K HDR, highly detailed, "
+    "sharp focus, controlled lighting, "
     "vertical 9:16 composition, "
     "family-friendly. NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS. "
 )

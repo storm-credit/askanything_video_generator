@@ -33,7 +33,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
         "tts_speed": 0.9,
         "bgm_theme": "random",
-        "platforms": ["youtube", "tiktok"],
+        "platforms": ["youtube"],
         "caption_size": 44,
         "caption_y": 28,
         "visual_style": "bright, colorful, wonder-inspiring, nature-focused",
@@ -49,7 +49,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
         "tts_speed": 0.9,
         "bgm_theme": "random",
-        "platforms": ["youtube", "tiktok"],
+        "platforms": ["youtube"],
         "caption_size": 44,
         "caption_y": 28,
         "visual_style": "adventurous, vibrant, curiosity-driven, Latin-inspired",
@@ -65,7 +65,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
         "tts_speed": 0.85,
         "bgm_theme": "random",
-        "platforms": ["youtube", "tiktok"],
+        "platforms": ["youtube"],
         "caption_size": 54,
         "caption_y": 35,
         "visual_style": "dreamlike, prismatic colors, fantasy storytelling",

@@ -329,11 +329,18 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [대본 규칙]
 * 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
-* 한 컷 15~30자, 한 문장. 감탄사 활용. 연속 동일 문장구조 금지.
+* 한 컷 15~30자, 한 문장. 연속 동일 문장구조 금지.
+* 비속어/욕설 금지 (제목+대본 모두): "미쳤", "미친", "ㅋㅋ", "ㄹㅇ", "ㅁㅊ" 등 사용 금지. 대신 "놀라운", "대박", "소름" 같은 표현 사용. 제목 예: "미친 생존법" ❌ → "놀라운 생존법" ✅
 
 [이미지 프롬프트 규칙]
-* 영어 전용. "cinematic/vertical/no text" 쓰지 마라 (자동 추가됨).
-* 매 컷 카메라 앵글/조명 변경. 사람 얼굴 정면 클로즈업 금지.
+* 영어 전용. "photorealistic/vertical/no text" 쓰지 마라 (자동 추가됨).
+* 키워드만 나열하지 말고 장면을 묘사하라. 설명적 문장이 단어 나열보다 훨씬 좋은 이미지를 생성한다.
+* 매 컷마다 다른 카메라 기법 사용 (사진 용어 활용):
+  - 카메라 근접성: close-up, wide shot, aerial view
+  - 렌즈 유형: 35mm, 50mm, macro lens, wide-angle, fisheye
+  - 조명: natural light, dramatic lighting, golden hour, studio lighting
+  - 카메라 설정: motion blur, soft focus, bokeh, shallow depth of field
+* 사람 얼굴 정면 클로즈업 금지.
 * 구체적 디테일: 색온도, 재질감, 스케일 비교.
 
 ★★★ [주제 일치 — 최우선 규칙] ★★★
@@ -395,8 +402,14 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious."
 
 [Image Prompt Rules]
-* English only. Don't write "cinematic/vertical/no text" (auto-prepended).
-* Vary camera angle/lighting per cut. No frontal face close-ups.
+* English only. Don't write "photorealistic/vertical/no text" (auto-prepended).
+* Describe scenes, don't just list keywords. Descriptive sentences produce much better images than disconnected words.
+* Use different camera techniques per cut (photography terms):
+  - Camera proximity: close-up, wide shot, aerial view
+  - Lens type: 35mm, 50mm, macro lens, wide-angle, fisheye
+  - Lighting: natural light, dramatic lighting, golden hour, studio lighting
+  - Camera settings: motion blur, soft focus, bokeh, shallow depth of field
+* No frontal face close-ups.
 * Specific details: color temperature, textures, scale comparisons.
 
 ★★★ [SUBJECT MATCH — HIGHEST PRIORITY] ★★★

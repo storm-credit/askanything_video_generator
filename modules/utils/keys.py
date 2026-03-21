@@ -179,10 +179,8 @@ def get_google_key(override: str = None, service: str = None, exclude: set = Non
                 pool.sort(key=lambda x: x[0])
                 chosen = pool[0][1]  # 최소 사용량 키 (동률 시 첫 번째 = 결정적)
 
-                # 로그 (warning/blocked 사용 시)
-                if not active_keys and warning_keys:
-                    print(f"[키 로테이션] active 키 없음 → warning 키 사용: {mask_key(chosen)} ({service})")
-                elif not active_keys and not warning_keys:
+                # 로그 (blocked 키만 남았을 때)
+                if not available_keys:
                     print(f"[키 로테이션 경고] 모든 키 차단됨 → 최소 사용 키 강제 사용: {mask_key(chosen)} ({service})")
 
                 return chosen
