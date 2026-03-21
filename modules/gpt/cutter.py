@@ -326,15 +326,19 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 5. Cut 9~10 — 루프 엔딩: 마지막 대사가 Cut 1의 훅을 자연스럽게 다시 듣고 싶게 만들어야 함. 마지막 image_prompt는 Cut 1과 유사 구도/색감.
    ★★★ [루프 엔딩 필수 규칙] ★★★
    * 마지막 컷은 반드시 완결된 문장. 미완성 문장("...사실은", "...인데") 절대 금지.
-   * 마지막 컷이 끝나고 Cut 1이 재생되면 "새로운 의미"로 들려야 함.
+   * 마지막 컷이 끝나고 Cut 1이 자동 재생되면 자연스럽게 이어져야 함.
    * 아래 3가지 패턴 중 하나를 반드시 사용:
-     (A) 반전 확장: "근데 이런 비밀을 가진 건 북극곰만이 아니야" → Cut 1 재생 시 대상이 확장되어 들림
-     (B) 답은 처음에: "그 이유? 사실 처음에 이미 말했어" → Cut 1을 다시 확인하고 싶어짐
-     (C) 스케일 업: "이게 한 마리 얘기인데, 북극에 2만 마리가 있어" → 충격이 증폭되며 루프
-   ✅ 완결 문장 + Cut 1이 "새롭게" 들리는 효과
+     (A) 질문 회귀형: 마지막 컷이 질문으로 끝나고 Cut 1이 그 답처럼 들림
+         예) 끝="그래서 이 작은 미생물이 정말 사람을 살릴 수 있을까?" → Cut 1="독도에서 발견된 미생물이 뇌 치료의 단서가 될 수 있어"
+     (B) 궁금증 점화형: 마지막 컷이 새 사실을 던져서 Cut 1을 다시 들으면 "뭔데?" 하게 만듦
+         예) 끝="근데 진짜 놀라운 건, 이게 독도에서 발견됐다는 거야" → Cut 1="이 작은 생물이 의학계를 놀라게 했어"
+     (C) 문장 연결형: 마지막 문장과 첫 문장이 하나의 이야기로 직접 연결됨
+         예) 끝="그 물질은, 독도의 미생물에서 나왔어" → Cut 1="뇌 염증을 줄일 수 있는 물질이 발견됐어"
+   ✅ 마지막→처음이 대화처럼 자연스럽게 이어지는 것이 핵심
    ❌ "다음엔 알려줄게" 같은 빈 약속 CTA 금지
    ❌ "...사실은", "근데 진짜는..." 같은 미완성 끊김 금지
    ❌ "떠오를 거야", "생각날 거야" 같은 약한 감상형 마무리 금지
+   ❌ "처음에 이미 말했어" 같은 메타적 4th wall 깨기 금지
 
 [대본 규칙]
 * 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
@@ -406,15 +410,19 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 5. Cut 9–10 — Loop ending: Final line MUST make viewers want to re-watch from Cut 1. Final image_prompt mirrors Cut 1's composition/color.
    ★★★ [LOOP ENDING MANDATORY RULES] ★★★
    * Last cut MUST be a COMPLETE sentence. Incomplete sentences ("...actually", "...but then") are FORBIDDEN.
-   * When Cut 1 auto-replays after the last cut, it must feel like a NEW revelation.
+   * When Cut 1 auto-replays after the last cut, it must flow naturally like a conversation.
    * Use ONE of these 3 patterns:
-     (A) Expand scope: "But polar bears aren't the only ones hiding this secret" → Cut 1 replays with expanded meaning
-     (B) Answer is at start: "The reason? I already told you at the beginning" → viewer wants to re-check Cut 1
-     (C) Scale up: "That's just one bear. There are 20,000 in the Arctic" → shock amplifies into loop
-   ✅ Complete sentence + Cut 1 gains NEW meaning on replay
-   ❌ "Next time I'll show you..." — empty-promise CTAs kill trust
+     (A) Question callback: Last cut ends with a question, and Cut 1 sounds like the answer.
+         e.g. Last="So can this tiny microbe really save a human life?" → Cut 1="A microbe found in Dokdo could hold the key to brain therapy"
+     (B) Curiosity ignition: Last cut drops a new fact that makes Cut 1 feel like "wait, what?"
+         e.g. Last="But the craziest part? It was found on a tiny island in Korea" → Cut 1="This tiny organism just shocked the medical world"
+     (C) Sentence bridge: Last sentence and first sentence connect as one continuous story.
+         e.g. Last="That substance came from a microbe found in Dokdo" → Cut 1="A compound that could reduce brain inflammation was just discovered"
+   ✅ Last→First must flow like natural conversation — this is the KEY
+   ❌ "Next time I'll show you..." — empty-promise CTAs FORBIDDEN
    ❌ "...actually it's", "But the real truth..." — incomplete trailing sentences FORBIDDEN
    ❌ "You'll never forget", "Think about that" — weak reflective endings FORBIDDEN
+   ❌ "I already told you at the beginning" — meta 4th-wall breaking FORBIDDEN
 
 [Script Rules]
 * Casual, conversational. 10–15 words per cut, one sentence. Vary sentence structures.
