@@ -64,8 +64,8 @@ def _get_credentials(channel_id: str = None) -> Credentials | None:
         if not token_path.exists():
             return None
     else:
-        # 첫 번째 토큰 파일 사용
-        tokens = list(TOKENS_DIR.glob("*.json"))
+        # 첫 번째 토큰 파일 사용 (channel_accounts.json 제외)
+        tokens = [t for t in TOKENS_DIR.glob("*.json") if t.name != "channel_accounts.json"]
         if not tokens:
             # 레거시 단일 토큰 마이그레이션
             legacy = Path("youtube_token.json")
@@ -98,6 +98,8 @@ def get_channels() -> list[dict]:
     _ensure_tokens_dir()
     channels = []
     for token_file in sorted(TOKENS_DIR.glob("*.json")):
+        if token_file.name == "channel_accounts.json":
+            continue
         channel_id = token_file.stem
         try:
             creds = Credentials.from_authorized_user_file(str(token_file), SCOPES)
@@ -289,5 +291,7 @@ def disconnect(channel_id: str = None) -> dict:
         return {"success": True, "message": f"채널 {channel_id} 연동 해제"}
     else:
         for f in TOKENS_DIR.glob("*.json"):
+            if f.name == "channel_accounts.json":
+                continue
             f.unlink()
         return {"success": True, "message": "모든 YouTube 연동이 해제되었습니다"}
