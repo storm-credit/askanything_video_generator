@@ -317,7 +317,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     _SYSTEM_PROMPT_KO = """
 당신은 유튜브 쇼츠/틱톡 바이럴 PD + 최상급 이미지 프롬프트 엔지니어입니다. 조회수 1000만 회 이상의 숏폼이 목표입니다.
 
-[숏폼 구조 (7~10컷, 각 4~5초, 총 35~50초)]
+[숏폼 구조 (8~10컷, 각 4~5초, 총 35~50초)]
 1. Cut 1 — 결론 폭탄(Hook): 가장 충격적 팩트를 단정문으로 던져라. 질문형 금지. ★ 1.7초 법칙: image_prompt에 극단적 스케일/강렬 색대비/비현실 장면 필수.
    후크 패턴: 숫자 대비, 부정+반전, 시간 긴급성, 직관 파괴
 2. Cut 2~3 — 충격 확장: "근데 진짜 소름돋는 건..." 식으로 연쇄.
@@ -329,7 +329,8 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [대본 규칙]
 * 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
-* 한 컷 15~30자, 한 문장. 연속 동일 문장구조 금지.
+* 한 컷 20~35자, 한 문장. 연속 동일 문장구조 금지.
+* [CRITICAL WARNING] 8~10컷으로 작성. 총 40~50초 영상 목표. 절대 8컷 미만 금지.
 * 비속어/욕설 금지 (제목+대본 모두): "미쳤", "미친", "ㅋㅋ", "ㄹㅇ", "ㅁㅊ" 등 사용 금지. 대신 "놀라운", "대박", "소름" 같은 표현 사용. 제목 예: "미친 생존법" ❌ → "놀라운 생존법" ✅
 
 [이미지 프롬프트 규칙]
@@ -368,7 +369,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 }
 
 [Output Format — 순수 JSON만 출력, 마크다운 코드블록 금지]
-7~10컷:
+8~10컷:
 
 {
   "title": "[자극적이고 클릭을 부르는 한국어 제목 (15자 이내, ~하면 생기는 일, ~의 비밀 등)]",
@@ -387,7 +388,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     _SYSTEM_PROMPT_EN = """
 You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer. Goal: 10M+ view addictive short-form content.
 
-[Short-form Structure (7–10 cuts, ~4–5 sec each, 35–50 sec total)]
+[Short-form Structure (8–10 cuts, ~4–5 sec each, 35–50 sec total)]
 1. Cut 1 — Hook: Drop the most shocking fact as a declarative statement. NO questions. ★ 1.7-SEC RULE: image_prompt MUST have extreme visual impact (scale, color contrast, surreal).
    Hook patterns: number contrast, negation+reveal, time urgency, intuition breaker
 2. Cut 2–3 — Shock chain: "But here's the insane part..." escalate.
@@ -398,7 +399,8 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
    ❌ "Next time I'll show you..." — empty-promise CTAs kill trust
 
 [Script Rules]
-* Casual, conversational. 8–12 words per cut, one sentence. Vary sentence structures.
+* Casual, conversational. 10–15 words per cut, one sentence. Vary sentence structures.
+* [CRITICAL WARNING] Write 8–10 cuts. Target 40–50 second video. NEVER less than 8 cuts.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious."
 
 [Image Prompt Rules]
@@ -438,7 +440,7 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 }
 
 [Output Format — pure JSON only, no markdown code blocks]
-7–10 cuts:
+8–10 cuts:
 
 {
   "title": "[Click-bait English title (max 8 words)]",
@@ -476,7 +478,7 @@ You MUST write ALL "script" fields and the "title" field in {lang_name}.
 NEVER write scripts in English. All "script" fields MUST be in {lang_name} only.
 The "image_prompt" and "description" fields must remain in English.
 The narrator will speak in {lang_name}, so the script must be natural {lang_name}.
-IMPORTANT: {lang_name} sentences tend to be longer than English. Keep each script to 6–12 words equivalent (~4–6 seconds) to maintain ~50 second total video length. Be extra concise.
+IMPORTANT: {lang_name} sentences tend to be longer than English. Keep each script to 8–15 words equivalent (~4–6 seconds) to maintain 40–50 second total video length. Write 8–10 cuts minimum.
 """
 
     # 채널별 비주얼 스타일 주입 (이미지 프롬프트 차별화 — 유튜브 스팸 회피)
@@ -635,7 +637,7 @@ This is the channel's signature look — every image should feel cohesive with t
         print(f"-> [검증] 컷 수 {len(cuts)}개 → 10개로 트림")
         cuts = cuts[:10]
     elif len(cuts) < 7:
-        print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 기존 컷 기반 확장 요청합니다 (목표: 7~10컷).")
+        print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 기존 컷 기반 확장 요청합니다 (목표: 8~10컷).")
         if llm_provider == "gemini":
             retry_key = get_google_key(None, service="gemini", exclude=exhausted_keys) or current_key
         else:
@@ -653,7 +655,7 @@ This is the channel's signature look — every image should feel cohesive with t
             )
         else:
             retry_expansion = (
-                f"\n\n기존에 {len(cuts)}컷만 생성되었습니다. 총 7~10컷으로 확장하세요. "
+                f"\n\n기존에 {len(cuts)}컷만 생성되었습니다. 총 8~10컷으로 확장하세요. "
                 f"기존 컷은 반드시 그대로 유지하고, 사이에 2~4개의 새 컷을 추가하여 빌드업/클라이맥스를 보강하세요. "
                 f"확장된 전체 배열을 반환하세요.\n기존 컷: {existing_cuts_json}"
             )

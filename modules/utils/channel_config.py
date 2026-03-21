@@ -18,8 +18,8 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tts_speed": 0.85,
         "bgm_theme": "random",
         "platforms": ["youtube"],
-        "caption_size": 48,
-        "caption_y": 28,
+        "caption_size": 58,
+        "caption_y": 38,
         "visual_style": "cinematic dark, dramatic lighting, mystery vibe",
         "tone": "궁금증 자극, 충격적 팩트, 한국식 친근한 반말",
         "upload_accounts": {
@@ -34,8 +34,8 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tts_speed": 0.9,
         "bgm_theme": "random",
         "platforms": ["youtube"],
-        "caption_size": 44,
-        "caption_y": 28,
+        "caption_size": 54,
+        "caption_y": 38,
         "visual_style": "bright, colorful, wonder-inspiring, nature-focused",
         "tone": "curious, wonder-filled, educational storytelling",
         "upload_accounts": {
@@ -50,8 +50,8 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tts_speed": 0.9,
         "bgm_theme": "random",
         "platforms": ["youtube"],
-        "caption_size": 44,
-        "caption_y": 28,
+        "caption_size": 54,
+        "caption_y": 38,
         "visual_style": "adventurous, vibrant, curiosity-driven, Latin-inspired",
         "tone": "curious, adventurous, engaging storytelling in Spanish",
         "upload_accounts": {
@@ -66,8 +66,8 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tts_speed": 0.85,
         "bgm_theme": "random",
         "platforms": ["youtube"],
-        "caption_size": 54,
-        "caption_y": 35,
+        "caption_size": 58,
+        "caption_y": 38,
         "visual_style": "dreamlike, prismatic colors, fantasy storytelling",
         "tone": "동화적, 신비로운 분위기, 한국식 친근한 반말",
         "upload_accounts": {
