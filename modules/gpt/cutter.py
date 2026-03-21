@@ -325,12 +325,16 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 4. Cut 6~8 — 클라이맥스: 가장 강력한 팩트+직관적 비유 ("지구 100개를 한 줄로 세운 것과 같아").
 5. Cut 9~10 — 루프 엔딩: 마지막 대사가 Cut 1의 훅을 자연스럽게 다시 듣고 싶게 만들어야 함. 마지막 image_prompt는 Cut 1과 유사 구도/색감.
    ★★★ [루프 엔딩 필수 규칙] ★★★
-   * 마지막 컷은 반드시 완결된 문장이어야 함. 미완성 문장("...사실은", "...인데") 절대 금지.
-   * 마지막 컷이 끝나면 시청자가 "어? 다시 보고 싶다"고 느끼도록 Cut 1의 핵심 키워드를 재등장시켜라.
-   * 예시 패턴: Cut1="북극곰은 사실 흑곰이었어" → 마지막="그래서 북극곰을 볼 때마다 그 검은 속이 떠오를 거야"
-   ✅ 완결된 문장 + Cut 1 키워드 재등장 → 자동 반복 시 자연 연결
+   * 마지막 컷은 반드시 완결된 문장. 미완성 문장("...사실은", "...인데") 절대 금지.
+   * 마지막 컷이 끝나고 Cut 1이 재생되면 "새로운 의미"로 들려야 함.
+   * 아래 3가지 패턴 중 하나를 반드시 사용:
+     (A) 반전 확장: "근데 이런 비밀을 가진 건 북극곰만이 아니야" → Cut 1 재생 시 대상이 확장되어 들림
+     (B) 답은 처음에: "그 이유? 사실 처음에 이미 말했어" → Cut 1을 다시 확인하고 싶어짐
+     (C) 스케일 업: "이게 한 마리 얘기인데, 북극에 2만 마리가 있어" → 충격이 증폭되며 루프
+   ✅ 완결 문장 + Cut 1이 "새롭게" 들리는 효과
    ❌ "다음엔 알려줄게" 같은 빈 약속 CTA 금지
    ❌ "...사실은", "근데 진짜는..." 같은 미완성 끊김 금지
+   ❌ "떠오를 거야", "생각날 거야" 같은 약한 감상형 마무리 금지
 
 [대본 규칙]
 * 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
@@ -402,11 +406,15 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 5. Cut 9–10 — Loop ending: Final line MUST make viewers want to re-watch from Cut 1. Final image_prompt mirrors Cut 1's composition/color.
    ★★★ [LOOP ENDING MANDATORY RULES] ★★★
    * Last cut MUST be a COMPLETE sentence. Incomplete sentences ("...actually", "...but then") are FORBIDDEN.
-   * Last cut must re-introduce Cut 1's core keyword so auto-replay feels seamless.
-   * Pattern: Cut1="Polar bears are actually black bears" → Last="And now every time you see a polar bear, you'll think of what's hiding underneath"
-   ✅ Complete sentence + Cut 1 keyword callback → seamless loop
+   * When Cut 1 auto-replays after the last cut, it must feel like a NEW revelation.
+   * Use ONE of these 3 patterns:
+     (A) Expand scope: "But polar bears aren't the only ones hiding this secret" → Cut 1 replays with expanded meaning
+     (B) Answer is at start: "The reason? I already told you at the beginning" → viewer wants to re-check Cut 1
+     (C) Scale up: "That's just one bear. There are 20,000 in the Arctic" → shock amplifies into loop
+   ✅ Complete sentence + Cut 1 gains NEW meaning on replay
    ❌ "Next time I'll show you..." — empty-promise CTAs kill trust
    ❌ "...actually it's", "But the real truth..." — incomplete trailing sentences FORBIDDEN
+   ❌ "You'll never forget", "Think about that" — weak reflective endings FORBIDDEN
 
 [Script Rules]
 * Casual, conversational. 10–15 words per cut, one sentence. Vary sentence structures.
