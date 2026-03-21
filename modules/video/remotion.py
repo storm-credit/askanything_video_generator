@@ -271,8 +271,10 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         print("[Remotion 렌더링 실패] remotion/node_modules가 없습니다. `npm --prefix remotion install` 실행 필요")
         return None
 
-    if not re.match(r'^[\w\-]+$', topic_folder):
-        print(f"[Remotion 보안 오류] topic_folder에 허용되지 않는 문자가 포함됨: {topic_folder}")
+    # topic_folder는 "assets/폴더명" 또는 "폴더명" 형태 허용
+    folder_name = os.path.basename(topic_folder) if '/' in topic_folder or '\\' in topic_folder else topic_folder
+    if not re.match(r'^[\w\-]+$', folder_name):
+        print(f"[Remotion 보안 오류] topic_folder에 허용되지 않는 문자가 포함됨: {folder_name}")
         return None
 
     camera = camera_style if camera_style in ("auto", "dynamic", "gentle", "static") else "dynamic"
