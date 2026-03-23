@@ -16,8 +16,11 @@ const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: s
 };
 
 // localStorage 유틸
+// SSR/CSR 초기 렌더에서는 항상 fallback 반환 (hydration 불일치 방지)
+// localStorage 복원은 _restoreSettings useEffect에서 수행
+let _hydrated = false;
 const loadSetting = <T,>(key: string, fallback: T): T => {
-  if (typeof window === "undefined") return fallback;
+  if (!_hydrated || typeof window === "undefined") return fallback;
   try { const v = localStorage.getItem(`aa_${key}`); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
 };
 const saveSetting = (key: string, value: unknown) => {
@@ -76,7 +79,35 @@ export default function Home() {
     saveSetting("voiceId", voiceId);
     saveSetting("captionSize", captionSize);
     saveSetting("captionY", captionY);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qualityPreset, llmProvider, llmModel, imageEngine, imageModel, videoEngine, videoModel, testMode, language, cameraStyle, bgmTheme, channel, selectedChannels, platforms, ttsSpeed, voiceId, captionSize, captionY]);
+
+  // localStorage → state 복원 (hydration 후 1회만 실행)
+  useEffect(() => {
+    _hydrated = true;
+    const _load = <T,>(key: string, fallback: T): T => {
+      try { const v = localStorage.getItem(`aa_${key}`); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
+    };
+    setQualityPreset(_load("qualityPreset", "best"));
+    setLlmProvider(_load("llmProvider", "gemini"));
+    setLlmModel(_load("llmModel", ""));
+    setImageEngine(_load("imageEngine", "imagen"));
+    setImageModel(_load("imageModel", ""));
+    setVideoEngine(_load("videoEngine", "veo3"));
+    setVideoModel(_load("videoModel", ""));
+    setTestMode(_load("testMode", false));
+    setLanguage(_load("language", "ko"));
+    setCameraStyle(_load("cameraStyle", "auto"));
+    setBgmTheme(_load("bgmTheme", "random"));
+    setChannel(_load("channel", ""));
+    setSelectedChannels(_load("selectedChannels", []));
+    setPlatforms(_load("platforms", ["youtube"]));
+    setTtsSpeed(_load("ttsSpeed", 0.9));
+    setVoiceId(_load("voiceId", "auto"));
+    setCaptionSize(_load("captionSize", 54));
+    setCaptionY(_load("captionY", 35));
+  }, []);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
