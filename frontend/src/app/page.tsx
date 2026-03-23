@@ -35,7 +35,7 @@ export default function Home() {
   const [llmModel, setLlmModel] = useState(() => loadSetting("llmModel", ""));
   const [imageEngine, setImageEngine] = useState(() => loadSetting("imageEngine", "imagen"));
   const [imageModel, setImageModel] = useState(() => loadSetting("imageModel", ""));
-  const [videoEngine, setVideoEngine] = useState(() => loadSetting("videoEngine", "veo3"));
+  const [videoEngine, setVideoEngine] = useState(() => loadSetting("videoEngine", "none"));
   const [videoModel, setVideoModel] = useState(() => loadSetting("videoModel", ""));
   const [testMode, setTestMode] = useState(() => loadSetting("testMode", false));
   const [isDownloading, setIsDownloading] = useState(false);
@@ -93,7 +93,7 @@ export default function Home() {
     setLlmModel(_load("llmModel", ""));
     setImageEngine(_load("imageEngine", "imagen"));
     setImageModel(_load("imageModel", ""));
-    setVideoEngine(_load("videoEngine", "veo3"));
+    setVideoEngine(_load("videoEngine", "none"));
     setVideoModel(_load("videoModel", ""));
     setTestMode(_load("testMode", false));
     setLanguage(_load("language", "ko"));
