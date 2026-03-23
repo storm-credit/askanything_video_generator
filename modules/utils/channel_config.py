@@ -15,13 +15,20 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "askanything": {
         "language": "ko",
         "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
-        "tts_speed": 0.85,
+        "tts_speed": 0.9,
+        "voice_settings": {
+            "stability": 0.4,
+            "similarity_boost": 0.8,
+            "style": 0.65,
+            "use_speaker_boost": True,
+        },
         "bgm_theme": "random",
         "platforms": ["youtube"],
         "caption_size": 58,
         "caption_y": 38,
-        "visual_style": "cinematic dark, dramatic lighting, mystery vibe",
-        "tone": "궁금증 자극, 충격적 팩트, 한국식 친근한 반말",
+        "camera_style": "dynamic",
+        "visual_style": "high contrast, dramatic lighting, ultra detailed, vibrant colors, cinematic angle, bold composition, highly saturated",
+        "tone": "궁금증 자극, 충격적 팩트, 한국식 친근한 반말. Loop: very strong — first and last lines should nearly mirror each other for obvious repetition",
         "upload_accounts": {
             "youtube": None,   # askanything0725@gmail.com → OAuth 연동 후 자동 매핑
             "tiktok": None,
@@ -31,13 +38,20 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "wonderdrop": {
         "language": "en",
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
-        "tts_speed": 0.9,
+        "tts_speed": 0.85,
+        "voice_settings": {
+            "stability": 0.65,
+            "similarity_boost": 0.85,
+            "style": 0.2,
+            "use_speaker_boost": True,
+        },
         "bgm_theme": "random",
         "platforms": ["youtube"],
         "caption_size": 54,
         "caption_y": 38,
-        "visual_style": "bright, colorful, wonder-inspiring, nature-focused",
-        "tone": "curious, wonder-filled, educational storytelling",
+        "camera_style": "gentle",
+        "visual_style": "cinematic, realistic, natural lighting, documentary style, ultra detailed, depth of field, subtle colors, high realism",
+        "tone": "calm, cinematic, documentary-style narration, confident, clear, slightly mysterious. Loop: natural and subtle — reconnect to the opening line smoothly without obvious repetition",
         "upload_accounts": {
             "youtube": None,
             "tiktok": None,
@@ -47,13 +61,20 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "exploratodo": {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
-        "tts_speed": 0.9,
+        "tts_speed": 0.95,
+        "voice_settings": {
+            "stability": 0.4,
+            "similarity_boost": 0.8,
+            "style": 0.6,
+            "use_speaker_boost": True,
+        },
         "bgm_theme": "random",
         "platforms": ["youtube"],
         "caption_size": 54,
         "caption_y": 38,
-        "visual_style": "adventurous, vibrant, curiosity-driven, Latin-inspired",
-        "tone": "curious, adventurous, engaging storytelling in Spanish",
+        "camera_style": "dynamic",
+        "visual_style": "bright colors, vibrant, exaggerated, glowing effects, eye catching, high saturation, dramatic, colorful",
+        "tone": "energetic, curious, fast-paced, engaging, surprising, entertaining, quick rhythm. Loop: strong and direct — simple repetition, punchy endings that mirror the hook",
         "upload_accounts": {
             "youtube": None,
             "tiktok": None,
@@ -61,15 +82,23 @@ CHANNEL_PRESETS: dict[str, dict] = {
         },
     },
     "prismtale": {
-        "language": "ko",
-        "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
-        "tts_speed": 0.85,
+        "language": "es",
+        "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성 — 미국 히스패닉 타겟)
+        "tts_speed": 0.9,
+        "voice_settings": {
+            "stability": 0.55,
+            "similarity_boost": 0.85,
+            "style": 0.35,
+            "use_speaker_boost": True,
+        },
         "bgm_theme": "random",
         "platforms": ["youtube"],
-        "caption_size": 58,
+        "caption_size": 54,
         "caption_y": 38,
-        "visual_style": "dreamlike, prismatic colors, fantasy storytelling",
-        "tone": "동화적, 신비로운 분위기, 한국식 친근한 반말",
+        "camera_style": "dynamic",
+        "visual_style": "cinematic, dramatic lighting, ultra detailed, high contrast focus, mysterious atmosphere, glowing elements, sharp subject, dark background",
+        "tone": "neutral Spanish with US Hispanic feel, clear, intriguing, cinematic, controlled, slight emphasis on shocking words, avoid sounding playful. Loop: medium — reconnect naturally but more explicitly than English, less obvious than Latin",
+        "keyword_tags": ["NASA", "Universe", "Science", "Brain", "Space", "Discovery"],
         "upload_accounts": {
             "youtube": None,
             "tiktok": None,

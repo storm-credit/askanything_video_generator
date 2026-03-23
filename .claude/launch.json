@@ -5,16 +5,18 @@
       "name": "backend",
       "runtimeExecutable": "python",
       "runtimeArgs": ["api_server.py"],
-      "port": 8003,
-      "env": { "UVICORN_RELOAD": "false", "API_PORT": "8003" }
+      "port": 8004,
+      "autoPort": false,
+      "env": { "UVICORN_RELOAD": "false", "API_PORT": "8004" }
     },
     {
       "name": "frontend",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "--port", "3001"],
       "cwd": "frontend",
-      "port": 3000,
-      "autoPort": true
+      "port": 3001,
+      "autoPort": false,
+      "env": { "NEXT_PUBLIC_API_URL": "http://localhost:8004" }
     }
   ]
 }

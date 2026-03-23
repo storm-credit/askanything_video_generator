@@ -8,11 +8,11 @@ import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
 
 // 채널 프리셋 정의
-const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number }> = {
-  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 54, captionY: 35 },
-  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 50, captionY: 35 },
-  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 50, captionY: 35 },
-  prismtale: { label: "Prism Tale", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 54, captionY: 35 },
+const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number; cameraStyle: string }> = {
+  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 54, captionY: 35, cameraStyle: "dynamic" },
+  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "gentle" },
+  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 0.95, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "dynamic" },
+  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "dynamic" },
 };
 
 // localStorage 유틸
@@ -1263,6 +1263,7 @@ export default function Home() {
                             setPlatforms(ch.platforms);
                             setCaptionSize(ch.captionSize);
                             setCaptionY(ch.captionY);
+                            setCameraStyle(ch.cameraStyle);
                             setVoiceId("auto");
                           }
                         } else if (newSelected.length === 0) {

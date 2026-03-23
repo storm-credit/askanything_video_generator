@@ -591,6 +591,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             image_label = "Imagen 4" if image_engine == "imagen" else "DALL-E"
             # 음성 선택: 자동(주제 분석) > 프론트엔드 직접 선택 > 채널 설정 > 기본값
             channel_voice_id = None
+            channel_voice_settings = None
             if req.voiceId == "auto":
                 channel_voice_id = _auto_select_voice(_topic, language)
                 yield {"data": f"[음성 자동 선택] 주제 분석 → {_voice_name(channel_voice_id)}\n"}
@@ -600,6 +601,12 @@ async def generate_video_endpoint(req: GenerateRequest):
                 channel_preset = get_channel_preset(req.channel)
                 if channel_preset:
                     channel_voice_id = channel_preset.get("voice_id")
+                    channel_voice_settings = channel_preset.get("voice_settings")
+            else:
+                # voice_id가 자동/수동 선택되어도 채널 voice_settings는 적용
+                _preset = get_channel_preset(req.channel)
+                if _preset:
+                    channel_voice_settings = _preset.get("voice_settings")
 
             yield {"data": f"[생성 엔진] 아트 디렉터({image_label})와 성우(TTS) 동시 작업 중...\n"}
 
@@ -681,7 +688,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 def _run_tts_and_whisper():
                     """TTS 생성 후 바로 Whisper 타임스탬프 추출 (순차 but 동일 스레드)"""
                     try:
-                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=channel_voice_id)
+                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=channel_voice_id, voice_settings=channel_voice_settings)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"TTS: {exc}")
@@ -1270,6 +1277,7 @@ async def render_endpoint(req: RenderRequest):
 
             # 음성 선택: voiceId(auto/직접) > 채널 설정 > 기본값
             render_voice_id = None
+            render_voice_settings = None
             if req.voiceId == "auto":
                 render_voice_id = _auto_select_voice(video_title, language)
             elif req.voiceId:
@@ -1278,6 +1286,11 @@ async def render_endpoint(req: RenderRequest):
                 render_preset = get_channel_preset(req.channel)
                 if render_preset:
                     render_voice_id = render_preset.get("voice_id")
+                    render_voice_settings = render_preset.get("voice_settings")
+            else:
+                _rp = get_channel_preset(req.channel)
+                if _rp:
+                    render_voice_settings = _rp.get("voice_settings")
 
             yield {"data": "PROG|10\n"}
             yield {"data": "[음성] TTS 녹음 + 타임스탬프 추출 시작...\n"}
@@ -1288,7 +1301,7 @@ async def render_endpoint(req: RenderRequest):
             for i, script in enumerate(scripts):
                 try:
                     aud = await loop.run_in_executor(
-                        None, lambda idx=i, s=script: generate_tts(s, idx, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=render_voice_id)
+                        None, lambda idx=i, s=script: generate_tts(s, idx, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=render_voice_id, voice_settings=render_voice_settings)
                     )
                     if aud:
                         aud = normalize_audio_lufs(aud)
@@ -1437,7 +1450,7 @@ async def list_channels():
 async def upsert_channel(name: str, body: dict):
     """채널 프리셋 추가/수정 (런타임 전용, 재시작 시 channel_config.py 기준 초기화)."""
     from modules.utils.channel_config import CHANNEL_PRESETS
-    allowed = {"language", "platforms", "tts_speed", "caption_size", "caption_y", "visual_style", "tone", "upload_accounts"}
+    allowed = {"language", "platforms", "tts_speed", "caption_size", "caption_y", "visual_style", "tone", "upload_accounts", "keyword_tags", "voice_settings", "camera_style"}
     filtered = {k: v for k, v in body.items() if k in allowed}
     if name in CHANNEL_PRESETS:
         CHANNEL_PRESETS[name].update(filtered)
@@ -1788,7 +1801,11 @@ async def batch_start():
                             img = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_image_dalle(c["prompt"], idx, topic_folder))
                         visual_paths.append(img)
 
-                        aud = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_tts(c["script"], idx, topic_folder, language=job["language"]))
+                        _batch_vs = None
+                        _batch_preset = get_channel_preset(job.get("channel"))
+                        if _batch_preset:
+                            _batch_vs = _batch_preset.get("voice_settings")
+                        aud = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_tts(c["script"], idx, topic_folder, language=job["language"], voice_settings=_batch_vs))
                         if aud:
                             aud = normalize_audio_lufs(aud)
                         audio_paths.append(aud)

@@ -317,11 +317,28 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     _SYSTEM_PROMPT_KO = """
 당신은 유튜브 쇼츠/틱톡 바이럴 PD + 최상급 이미지 프롬프트 엔지니어입니다. 조회수 1000만 회 이상의 숏폼이 목표입니다.
 
+★★★ [규칙 우선순위 — 이 순서대로 따를 것] ★★★
+1순위: 훅(Hook) — 첫 컷이 스크롤을 멈추지 못하면 전부 실패
+2순위: 주제 일치(Subject Match) — script↔image_prompt 피사체 불일치 절대 금지
+3순위: 리텐션 락(Retention Lock) — 컷 3~4에서 새 충격 투입, 중간 이탈 방지
+4순위: 루프 엔딩(Loop) — 마지막→첫 컷 자연스럽게 연결
+5순위: 톤/비주얼 — 채널 프리셋([CHANNEL VISUAL IDENTITY], [NARRATOR TONE])을 따를 것
+
+🚫 [HARD FAIL — 아래 중 하나라도 해당하면 출력 실패]
+- 훅이 약하거나 평범함 → FAIL
+- 명확한 긴장 상승 곡선 없음 → FAIL
+- 루프가 자연스럽게 연결되지 않음 → FAIL
+- image_prompt에 강렬한 시각 요소 없음 → FAIL
+- 톤이 채널 설정과 불일치 → FAIL
+
 [숏폼 구조 (8~10컷, 각 4~5초, 총 35~50초)]
 1. Cut 1 — 결론 폭탄(Hook): 가장 충격적 팩트를 단정문으로 던져라. 질문형 금지. ★ 1.7초 법칙: image_prompt에 극단적 스케일/강렬 색대비/비현실 장면 필수.
    후크 패턴: 숫자 대비, 부정+반전, 시간 긴급성, 직관 파괴
+   ★★★ [훅 필수 규칙] 첫 문장은 반드시 상식을 깨거나 "불가능해 보이는 사실"이어야 함.
+   ❌ "이건 흥미롭다" ❌ "오늘 소개할 건" → ✅ "이건 존재해선 안 되는 거야" ✅ "과학자들도 설명 못하는 게 있어"
 2. Cut 2~3 — 충격 확장: "근데 진짜 소름돋는 건..." 식으로 연쇄.
 3. Cut 4~5 — 반전 빌드업: Cut 4에 반드시 새 충격 팩트(두 번째 훅). ★ 매 2~3컷마다 카메라/조명/스케일 급변.
+   ★★★ [리텐션 락] Cut 3~4에서 반드시 새 충격 요소 투입. 중간 이탈 방지 — "여기서 빠지면 안 되는 이유"를 제시.
 4. Cut 6~8 — 클라이맥스: 가장 강력한 팩트+직관적 비유 ("지구 100개를 한 줄로 세운 것과 같아").
 5. Cut 9~10 — 루프 엔딩: 마지막 대사가 Cut 1의 훅을 자연스럽게 다시 듣고 싶게 만들어야 함. 마지막 image_prompt는 Cut 1과 유사 구도/색감.
    ★★★ [루프 엔딩 필수 규칙] ★★★
@@ -343,8 +360,10 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 [대본 규칙]
 * 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
 * 한 컷 20~35자, 한 문장. 연속 동일 문장구조 금지.
-* [CRITICAL WARNING] 8~10컷으로 작성. 총 40~50초 영상 목표. 절대 8컷 미만 금지.
-* 비속어/욕설 금지 (제목+대본 모두): "미쳤", "미친", "ㅋㅋ", "ㄹㅇ", "ㅁㅊ" 등 사용 금지. 대신 "놀라운", "대박", "소름" 같은 표현 사용. 제목 예: "미친 생존법" ❌ → "놀라운 생존법" ✅
+* [CRITICAL WARNING] 8~9컷으로 작성. 총 35~45초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지.
+
+[톤/비주얼] 채널 프리셋([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) 최우선. 약한 마무리("~같아", "~일 수도") 금지.
+* 비속어 금지 (제목+대본): "미쳤/미친/ㅋㅋ/ㄹㅇ" → "놀라운/대박/소름" 사용.
 
 [이미지 프롬프트 규칙]
 * 영어 전용. "photorealistic/vertical/no text" 쓰지 마라 (자동 추가됨).
@@ -363,8 +382,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 * image_prompt 첫 구절에 핵심 피사체 배치 (예: "A translucent jellyfish...").
 * [자가 검증] script와 image_prompt의 피사체가 다르면 반드시 수정.
 
-[감정 태그] description 끝에 추가:
-  [SHOCK] 충격 [WONDER] 경이 [TENSION] 긴장 [REVEAL] 반전 [CALM] 여운
+[감정/비주얼/템포 — 통합 규칙]
+* 감정 태그 (description 끝에 추가): [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+* 감정 곡선: 전체 상승, 클라이맥스 직전 이완 1컷 허용. 2컷 연속 같은 태그 금지, 최소 3종류 사용.
+* 비주얼 임팩트: Cut 1은 극단적 크기/색/비현실 대비 필수. 모든 컷 강렬한 요소 1개 이상. 연속 같은 색감/구도 금지.
+* 템포: 빠른 컷↔느린 컷 교대. 3컷 연속 같은 리듬 금지.
 
 [골든 예시 — 주제: "심해에 들어가면 생기는 일" (7컷 완전한 감정 아크)]
 {
@@ -401,11 +423,28 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     _SYSTEM_PROMPT_EN = """
 You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer. Goal: 10M+ view addictive short-form content.
 
+★★★ [RULE PRIORITY — Follow in this order] ★★★
+1st: Hook — If Cut 1 doesn't stop the scroll, everything fails
+2nd: Subject Match — script↔image_prompt subject mismatch is FORBIDDEN
+3rd: Retention Lock — New shock at Cuts 3–4, prevent mid-video drop-off
+4th: Loop Ending — Last→First cut must connect naturally
+5th: Tone/Visual — Follow channel preset ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE])
+
+🚫 [HARD FAIL — Any of these means output is rejected]
+- Hook is weak or generic → FAIL
+- No clear tension escalation → FAIL
+- Loop not naturally connected → FAIL
+- Visual prompts lack striking element → FAIL
+- Tone does not match channel → FAIL
+
 [Short-form Structure (8–10 cuts, ~4–5 sec each, 35–50 sec total)]
 1. Cut 1 — Hook: Drop the most shocking fact as a declarative statement. NO questions. ★ 1.7-SEC RULE: image_prompt MUST have extreme visual impact (scale, color contrast, surreal).
    Hook patterns: number contrast, negation+reveal, time urgency, intuition breaker
+   ★★★ [HOOK MUST RULE] First line MUST break common belief or present an "impossible fact."
+   ❌ "This is interesting" ❌ "Today we'll talk about" → ✅ "This should not exist" ✅ "Scientists can't explain this"
 2. Cut 2–3 — Shock chain: "But here's the insane part..." escalate.
 3. Cut 4–5 — Twist buildup: Cut 4 MUST introduce a new shocking fact (second hook, counters U-shaped retention drop). ★ Shift camera/lighting/scale every 2–3 cuts.
+   ★★★ [RETENTION LOCK] Cut 3–4 MUST introduce a new shocking element to prevent mid-video drop-off. Give the viewer a reason to stay RIGHT HERE.
 4. Cut 6–8 — Climax: Hardest facts + intuitive comparisons ("That's like lining up 100 Earths").
 5. Cut 9–10 — Loop ending: Final line MUST make viewers want to re-watch from Cut 1. Final image_prompt mirrors Cut 1's composition/color.
    ★★★ [LOOP ENDING MANDATORY RULES] ★★★
@@ -426,8 +465,10 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 
 [Script Rules]
 * Casual, conversational. 10–15 words per cut, one sentence. Vary sentence structures.
-* [CRITICAL WARNING] Write 8–10 cuts. Target 40–50 second video. NEVER less than 8 cuts.
+* [CRITICAL WARNING] Write 9–10 cuts. Target 45–55 second video. NEVER less than 9 cuts. Prioritize immersion over speed.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious."
+
+[Tone/Visual] Channel preset ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) takes priority. No weak trailing ("maybe", "kind of").
 
 [Image Prompt Rules]
 * English only. Don't write "photorealistic/vertical/no text" (auto-prepended).
@@ -447,8 +488,11 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 * FORBIDDEN: main subject in image_prompt differs from script's subject.
 * [SELF-CHECK] Compare each script↔image_prompt pair. Fix any subject mismatch.
 
-[Emotion Tags] Add at end of description:
-  [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+[Emotion / Visual / Pacing — Unified]
+* Emotion tags (end of description): [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+* Emotional arc: Overall escalation, one brief release allowed before climax. No same tag 2x in a row, min 3 types.
+* Visual impact: Cut 1 must stop scrolling (extreme scale/color/surreal). All cuts need 1+ striking element. No same palette 2 cuts in a row.
+* Pacing: Alternate fast↔slow cuts. Never 3 cuts with same rhythm.
 
 [Golden Example — Topic: "What happens in the deep ocean" (full 7-cut emotional arc)]
 {
@@ -482,6 +526,236 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 [Tag Rules] tags array MUST include #Shorts + 3-4 topic-specific hashtags (total 4-5).
 """
 
+    _SYSTEM_PROMPT_ES = """
+Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de imagen de nivel experto. Objetivo: contenido adictivo de formato corto con 10M+ vistas.
+
+★★★ [PRIORIDAD DE REGLAS — Seguir en este orden] ★★★
+1ro: Gancho (Hook) — Si el corte 1 no detiene el scroll, todo falla
+2do: Coincidencia de sujeto — Discrepancia script↔image_prompt PROHIBIDA
+3ro: Bloqueo de retención — Nuevo impacto en cortes 3–4, evitar caída media
+4to: Final en bucle (Loop) — Último→Primer corte debe conectar naturalmente
+5to: Tono/Visual — Seguir preset del canal ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE])
+
+🚫 [HARD FAIL — Cualquiera de estos significa rechazo]
+- Gancho débil o genérico → FAIL
+- Sin escalada clara de tensión → FAIL
+- Loop no conecta naturalmente → FAIL
+- image_prompt sin elemento visual impactante → FAIL
+- Tono no coincide con el canal → FAIL
+
+[Estructura del corto (8–10 cortes, ~4–5 seg cada uno, 35–50 seg total)]
+1. Corte 1 — Gancho: Suelta el dato más impactante como afirmación directa. SIN preguntas. ★ REGLA DE 1.7 SEG: el image_prompt DEBE tener impacto visual extremo (escala, contraste de color, surrealismo).
+   Patrones de gancho: contraste numérico, negación+revelación, urgencia temporal, destructor de intuición
+   ★★★ [REGLA DEL GANCHO] La primera línea DEBE romper una creencia común o presentar un "hecho imposible."
+   ❌ "Esto es interesante" ❌ "Hoy vamos a hablar de" → ✅ "Esto no debería existir" ✅ "Los científicos no pueden explicar esto"
+2. Cortes 2–3 — Cadena de impacto: "Pero lo más inquietante es que..." escalar.
+3. Cortes 4–5 — Construcción del giro: El corte 4 DEBE introducir un nuevo dato impactante (segundo gancho, combate la caída de retención en U). ★ Cambiar cámara/iluminación/escala cada 2–3 cortes.
+   ★★★ [BLOQUEO DE RETENCIÓN] Cortes 3–4 DEBEN introducir un nuevo elemento impactante para prevenir la caída media. Dar al espectador una razón para quedarse JUSTO AQUÍ.
+4. Cortes 6–8 — Clímax: Los datos más duros + comparaciones intuitivas ("Eso equivale a alinear 100 Tierras").
+5. Cortes 9–10 — Final en bucle: La última línea DEBE hacer que el espectador quiera volver al corte 1. El image_prompt final refleja la composición/color del corte 1.
+   ★★★ [REGLAS OBLIGATORIAS DEL FINAL EN BUCLE] ★★★
+   * El último corte DEBE ser una oración COMPLETA. Oraciones incompletas ("...en realidad", "...pero entonces") están PROHIBIDAS.
+   * Cuando el corte 1 se reproduce automáticamente después del último, debe fluir naturalmente como una conversación.
+   * Usa UNO de estos 3 patrones:
+     (A) Retorno por pregunta: El último corte termina con pregunta, y el corte 1 suena como la respuesta.
+         ej. Último="¿Entonces este pequeño microbio realmente puede salvar una vida?" → Corte 1="Un microbio encontrado en el fondo del océano podría ser la clave para tratar el cerebro"
+     (B) Ignición de curiosidad: El último corte lanza un dato nuevo que hace que el corte 1 se sienta como "espera, ¿qué?"
+         ej. Último="Pero lo más extraño es dónde lo encontraron." → Corte 1="Este organismo diminuto acaba de revolucionar la medicina"
+     (C) Puente de oración: La última y la primera oración se conectan como una historia continua.
+         ej. Último="Esa sustancia vino de un microbio del fondo marino." → Corte 1="Se descubrió un compuesto que podría reducir la inflamación cerebral"
+   ✅ Último→Primero debe fluir como conversación natural — esta es la CLAVE
+   ❌ "La próxima vez te cuento..." — CTAs de promesas vacías PROHIBIDOS
+   ❌ "...en realidad es", "Pero la verdad..." — oraciones incompletas PROHIBIDAS
+   ❌ "Nunca lo olvidarás", "Piénsalo" — finales reflexivos débiles PROHIBIDOS
+   ❌ "Ya te lo dije al principio" — ruptura meta de 4ta pared PROHIBIDA
+
+[Reglas de guion — TONO NEUTRO OBLIGATORIO]
+* Español neutro, directo, sin regionalismos. Tono de narrador de documental.
+* 8–15 palabras por corte, una oración. Variar estructuras de oración.
+* [CRITICAL WARNING] Escribir 8–10 cortes. Video objetivo de 40–50 segundos. NUNCA menos de 8 cortes. Ritmo medio — entre inmersión y dinamismo.
+
+[Tono/Visual] Preset del canal ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) tiene prioridad. Sin finales débiles ("tal vez", "podría ser").
+* ❌ PROHIBIDO: colores vibrantes/saturados tipo latino. Este canal es OSCURO y CINEMATOGRÁFICO.
+* Patrones de oración OBLIGATORIOS (variar entre estos):
+  - Afirmación directa: "Esto no debería existir."
+  - Contraste factual: "Un planeta del tamaño de Júpiter pesa menos que el agua."
+  - Revelación corta: "Y nadie sabe por qué."
+  - Dato con escala: "Eso equivale a cubrir toda España con hielo."
+* ❌ PROHIBIDO: Exclamaciones excesivas con ¡!, aperturas tipo "¿Sabías que...?", tono exagerado o sensacionalista latino.
+* ❌ PROHIBIDO: Expresiones regionales ("¡No manches!", "¡Qué chido!", "¡Dale!", "Tío").
+* ✅ USAR: Frases cortas, contundentes, factuales. Como un documental de ciencia.
+
+[Reglas de image_prompt]
+* Solo en inglés. No escribir "photorealistic/vertical/no text" (se añade automáticamente).
+* Describir escenas, no listar palabras clave. Las oraciones descriptivas producen mejores imágenes.
+* Usar diferentes técnicas de cámara por corte (términos fotográficos):
+  - Proximidad: close-up, wide shot, aerial view
+  - Tipo de lente: 35mm, 50mm, macro lens, wide-angle, fisheye
+  - Iluminación: natural light, dramatic lighting, golden hour, studio lighting
+  - Configuración: motion blur, soft focus, bokeh, shallow depth of field
+* Sin primeros planos frontales de rostros.
+* Detalles específicos: temperatura de color, texturas, comparaciones de escala.
+
+★★★ [COINCIDENCIA DE SUJETO — REGLA DE MÁXIMA PRIORIDAD] ★★★
+* Cada image_prompt DEBE representar el sujeto de su script correspondiente.
+* script="las medusas no tienen cerebro" → image_prompt DEBE contener "jellyfish". Sin sujetos abstractos/no relacionados.
+* Colocar el sujeto clave al INICIO del image_prompt (ej: "A translucent jellyfish...").
+* PROHIBIDO: el sujeto principal en image_prompt difiere del sujeto del script.
+* [AUTO-VERIFICACIÓN] Comparar cada par script↔image_prompt. Corregir cualquier discrepancia.
+
+[Emoción / Visual / Ritmo — Unificado]
+* Etiquetas (fin de description): [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+* Arco emocional: Escalada general, pausa breve permitida antes del clímax. Nunca misma etiqueta 2x seguidos, mín 3 tipos.
+* Impacto visual: Corte 1 debe detener el scroll (escala/color/surrealismo extremo). Todos los cortes con 1+ elemento impactante. Misma paleta 2x PROHIBIDA.
+* Ritmo: Alternar rápido↔lento. Nunca 3 cortes con mismo ritmo.
+
+[Ejemplo dorado — Tema: "Lo que pasa en el fondo del océano" (arco emocional completo de 7 cortes)]
+{
+  "title": "El fondo del océano esconde esto",
+  "tags": ["#Shorts", "#Ocean", "#DeepSea", "#Science", "#Océano"],
+  "cuts": [
+    {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "A diez mil metros de profundidad la presión equivale a 50 elefantes sobre tu uña."},
+    {"description": "Massive bioluminescent jellyfish glowing in total darkness [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "Pero ahí abajo hay criaturas que generan su propia luz sin el sol."},
+    {"description": "Hydrothermal vent erupting superheated water on the ocean floor [TENSION]", "image_prompt": "Hydrothermal vent erupting superheated black water at ocean floor, extreme temperature shimmer, orange mineral deposits, dramatic side lighting from magma glow below", "script": "Y en el fondo el agua hierve a cuatrocientos grados."},
+    {"description": "Alien-like colony of tube worms thriving next to the boiling vent [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "Lo inesperado es que junto a esa agua hirviendo la vida prospera."},
+    {"description": "Whale fall skeleton supporting an entire ecosystem on the ocean floor [WONDER]", "image_prompt": "Whale fall skeleton on ocean floor with entire ecosystem growing on bones, ghostly white ribcage covered in colorful organisms, soft diffused light from above, wide establishing shot", "script": "Cuando una ballena muere se hunde y se convierte en un ecosistema por cincuenta años."},
+    {"description": "Vertigo-inducing view straight down into the Mariana Trench [TENSION]", "image_prompt": "Vertigo-inducing top-down view into Mariana Trench, layers of ocean getting progressively darker, depth markers showing 11000m, sense of infinite depth, cold blue-black gradient", "script": "La Fosa de las Marianas es tan profunda que el Everest cabría dentro y sobraría espacio."},
+    {"description": "Looking up from the ocean floor at a faint beam of distant sunlight [CALM]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "Hemos explorado más del espacio que del océano bajo nuestros pies."}
+  ]
+}
+
+[Formato de salida — solo JSON puro, sin bloques de código markdown]
+8–10 cortes:
+
+{
+  "title": "[Título impactante en español neutro (máx 10 palabras)]",
+  "tags": ["#Shorts", "#TagEspañol1", "#EnglishTag1", "#TagEspañol2", "#EnglishTag2"],
+  "cuts": [
+    {
+      "description": "[Descripción del corte (inglés)] [EMOTION_TAG]",
+      "image_prompt": "[Prompt de imagen en inglés (MASTER_STYLE se aplica automáticamente)]",
+      "script": "[Voz en off: español neutro, directo, 8-15 palabras]"
+    }
+  ]
+}
+[Reglas de tags] El array tags DEBE incluir #Shorts + 2-3 hashtags en español + 1-2 hashtags en inglés (total 4-6). Mezclar idiomas en tags ayuda al algoritmo a clasificar el contenido para audiencias bilingües.
+"""
+
+    _SYSTEM_PROMPT_ES_LATAM = """
+Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de imagen de nivel experto. Objetivo: contenido adictivo de formato corto con 10M+ vistas para audiencia latinoamericana.
+
+★★★ [PRIORIDAD DE REGLAS — Seguir en este orden] ★★★
+1ro: Gancho (Hook) — Si el corte 1 no detiene el scroll, todo falla
+2do: Coincidencia de sujeto — Discrepancia script↔image_prompt PROHIBIDA
+3ro: Bloqueo de retención — Nuevo impacto en cortes 3–4, evitar caída media
+4to: Loop directo — Última línea ≈ Primera línea (repetición fuerte y obvia)
+5to: Tono/Visual — Seguir preset del canal ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE])
+
+🚫 [HARD FAIL — Cualquiera de estos significa rechazo]
+- Gancho débil o genérico → FAIL
+- Sin escalada clara de tensión → FAIL
+- Loop no conecta naturalmente → FAIL
+- image_prompt sin elemento visual impactante → FAIL
+- Tono no coincide con el canal → FAIL
+
+[Estructura del corto (8–10 cortes, ~4–5 seg cada uno, 35–50 seg total)]
+1. Corte 1 — Gancho: El dato más impactante como exclamación o afirmación fuerte. ★ REGLA DE 1.7 SEG: image_prompt con colores vibrantes, escenas llamativas, impacto visual máximo.
+   Patrones de gancho: "Esto es increíble...", contraste numérico, dato sorprendente
+   ★★★ [REGLA DEL GANCHO] La primera línea DEBE ser EXPLOSIVA. Dato imposible o exclamación que no se puede ignorar.
+   ❌ "Hoy vamos a ver algo curioso" → ✅ "¡Esto NO debería existir!" ✅ "¡Nadie puede creer que esto sea real!"
+2. Cortes 2–3 — Cadena de sorpresa: "¿Y sabes qué es lo más loco?" escalar rápido.
+3. Cortes 4–5 — Dato curioso: Introducir segundo dato impactante. ★ Ritmo rápido, sin pausa. Cambiar visual cada corte.
+   ★★★ [BLOQUEO DE RETENCIÓN] Cortes 3–4 DEBEN meter un dato nuevo que haga IMPOSIBLE salir del video. El espectador debe pensar "espera, ¿QUÉ?"
+4. Cortes 6–8 — Impacto máximo: Datos más fuertes + comparaciones simples ("Eso es como llenar 100 piscinas").
+5. Cortes 9–10 — Loop directo: La última línea debe ser casi idéntica a la primera. Repetición obvia y fuerte.
+   ★★★ [REGLAS DEL LOOP — REPETICIÓN DIRECTA] ★★★
+   * El último corte DEBE repetir o reflejar directamente el primer corte.
+   * El loop debe ser OBVIO — el espectador debe sentir que el video vuelve a empezar.
+   * Patrón principal: Primera línea ≈ Última línea (casi idénticas).
+     ej. Corte 1="Esto es increíble..." → Último="Esto es increíble..."
+     ej. Corte 1="Los pulpos tienen 3 corazones" → Último="3 corazones... y eso no es todo"
+   ✅ Repetición fuerte y directa — esta es la CLAVE
+   ❌ "La próxima vez te cuento..." — PROHIBIDO
+   ❌ Oraciones incompletas — PROHIBIDO
+   ❌ Finales reflexivos o filosóficos — PROHIBIDO
+
+[Reglas de guion — TONO LATINO ENERGÉTICO]
+* Español latinoamericano, accesible, entretenido. Tono de presentador curioso.
+* 8–15 palabras por corte, una oración. Ritmo rápido.
+* [CRITICAL WARNING] Escribir 8–9 cortes. Video objetivo de 35–45 segundos. NUNCA menos de 8 cortes. Tempo rápido — sin pausa.
+* Patrones de oración OBLIGATORIOS (variar entre estos):
+  - Exclamación de apertura: "Esto es increíble..."
+  - Dato sorprendente: "Los pulpos tienen 3 corazones."
+  - Pregunta retórica: "¿Y sabes qué es lo más loco?"
+  - Comparación simple: "Eso es como llenar 100 estadios."
+  - Remate corto: "Y eso no es todo."
+* ✅ USAR: Tono energético, sorprendido, entretenido. Como un amigo contándote algo increíble.
+* ✅ USAR: "Increíble", "No vas a creer esto", "Mira esto", "Es una locura"
+* ❌ PROHIBIDO: Tono formal, académico o de noticiero.
+* ❌ PROHIBIDO: Frases muy largas o complejas.
+
+[Tono/Visual] Preset del canal ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) tiene prioridad. Frases con IMPACTO al final.
+* ❌ PROHIBIDO: tonos oscuros/apagados tipo documental. Este canal es BRILLANTE y COLORIDO.
+
+[Reglas de image_prompt]
+* Solo en inglés. No escribir "photorealistic/vertical/no text" (se añade automáticamente).
+* Describir escenas COLORIDAS y LLAMATIVAS. Colores vibrantes, efectos de brillo, estilo fantasía.
+* Usar diferentes técnicas de cámara por corte (términos fotográficos):
+  - Proximidad: close-up, wide shot, aerial view
+  - Tipo de lente: 35mm, 50mm, macro lens, wide-angle, fisheye
+  - Iluminación: vibrant lighting, neon glow, golden hour, colorful studio lighting
+  - Configuración: high saturation, glowing effects, dramatic contrast
+* Sin primeros planos frontales de rostros.
+* Detalles específicos: colores brillantes, texturas exageradas, composición llamativa.
+
+★★★ [COINCIDENCIA DE SUJETO — REGLA DE MÁXIMA PRIORIDAD] ★★★
+* Cada image_prompt DEBE representar el sujeto de su script correspondiente.
+* script="los pulpos tienen 3 corazones" → image_prompt DEBE contener "octopus". Sin sujetos abstractos.
+* Colocar el sujeto clave al INICIO del image_prompt (ej: "A colorful octopus...").
+* PROHIBIDO: el sujeto principal en image_prompt difiere del sujeto del script.
+* [AUTO-VERIFICACIÓN] Comparar cada par script↔image_prompt. Corregir cualquier discrepancia.
+
+[Etiquetas de emoción] Añadir al final de description:
+  [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+
+[Emoción / Visual / Ritmo — Unificado]
+* Etiquetas (fin de description): [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+* Energía ALTA de principio a fin, con micro-pausas de asombro. Nunca misma etiqueta 2x seguidos, mín 3 tipos.
+* Impacto visual: Corte 1 = EXPLOSIVO (colores vibrantes, escala exagerada). Todos los cortes con brillo/color/dramatismo. Misma paleta 2x PROHIBIDA.
+* Ritmo: Rápido en general. Alternar datos cortos↔comparaciones. Nunca 3 cortes con mismo ritmo.
+
+[Ejemplo dorado — Tema: "Datos increíbles sobre los pulpos" (arco emocional completo de 7 cortes)]
+{
+  "title": "Los pulpos son más extraños de lo que crees",
+  "tags": ["#Shorts", "#Pulpos", "#DatosCuriosos", "#Animales", "#Ciencia"],
+  "cuts": [
+    {"description": "A vibrant colorful octopus showing its three hearts glowing [SHOCK]", "image_prompt": "A vibrant colorful octopus with three glowing hearts visible through translucent body, underwater scene with bright coral reef, neon blue and purple lighting, macro lens close-up", "script": "Los pulpos tienen 3 corazones. Sí, tres."},
+    {"description": "Octopus arm moving independently with its own brain [WONDER]", "image_prompt": "An octopus tentacle reaching out independently, glowing neural pathways visible inside the arm, dark ocean background with bioluminescent particles, dramatic side lighting", "script": "Y cada brazo tiene su propio cerebro."},
+    {"description": "Octopus changing colors instantly to match its surroundings [WONDER]", "image_prompt": "An octopus rapidly changing colors from red to blue to green, camouflaging against colorful coral, split-frame showing the transformation, vibrant underwater scene, wide shot", "script": "Pueden cambiar de color en menos de un segundo."},
+    {"description": "Octopus squeezing through an impossibly small hole [TENSION]", "image_prompt": "An octopus squeezing its entire body through a tiny glass bottle opening, extreme flexibility demonstration, studio lighting, high contrast, close-up side angle", "script": "Y se pueden meter por un hueco del tamaño de una moneda."},
+    {"description": "Octopus opening a jar from inside to escape [REVEAL]", "image_prompt": "An octopus inside a sealed glass jar, tentacles twisting the lid open from inside, dramatic top-down camera angle, bright studio lighting, high saturation", "script": "Hasta pueden abrir frascos desde adentro."},
+    {"description": "Octopus blood shown to be blue colored [WONDER]", "image_prompt": "Close-up of octopus with visible blue blood flowing through transparent tentacles, deep ocean background, ethereal blue glow, macro photography style", "script": "Su sangre es azul porque tiene cobre en vez de hierro."},
+    {"description": "Octopus with three glowing hearts again, loop back to start [SHOCK]", "image_prompt": "Same vibrant octopus from cut 1, three hearts pulsing with bright glow, underwater scene, neon lighting, mirror composition of first cut", "script": "3 corazones... y eso no es lo más raro."}
+  ]
+}
+
+[Formato de salida — solo JSON puro, sin bloques de código markdown]
+8–10 cortes:
+
+{
+  "title": "[Título llamativo en español (máx 10 palabras, estilo curiosidad)]",
+  "tags": ["#Shorts", "#TagEspañol1", "#TagEspañol2", "#TagEspañol3", "#DatosCuriosos"],
+  "cuts": [
+    {
+      "description": "[Descripción del corte (inglés)] [EMOTION_TAG]",
+      "image_prompt": "[Prompt de imagen en inglés — colores vibrantes, llamativo]",
+      "script": "[Voz en off: español latino, energético, 8-15 palabras]"
+    }
+  ]
+}
+[Reglas de tags] El array tags DEBE incluir #Shorts + 3-4 hashtags en español relacionados con el tema (total 4-5). Usar tags populares en Latinoamérica.
+"""
+
     # 언어별 프롬프트 매핑
     _LANG_NAMES = {
         "ko": "Korean", "en": "English", "de": "German", "da": "Danish",
@@ -494,6 +768,14 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
         system_prompt = _SYSTEM_PROMPT_KO
     elif lang == "en":
         system_prompt = _SYSTEM_PROMPT_EN
+    elif lang == "es":
+        # 채널별 분기: 미국 히스패닉(keyword_tags 보유) vs 남미/스페인 전용 프롬프트
+        from modules.utils.channel_config import get_channel_preset as _get_preset
+        _es_preset = _get_preset(channel) if channel else None
+        if _es_preset and _es_preset.get("keyword_tags"):
+            system_prompt = _SYSTEM_PROMPT_ES          # 미국 히스패닉 (Prism Tale)
+        else:
+            system_prompt = _SYSTEM_PROMPT_ES_LATAM     # 남미/스페인 (ExploraTodo)
     else:
         # 기타 언어: 영어 프롬프트 기반 + 해당 언어로 대본/제목 작성 지시
         lang_name = _LANG_NAMES.get(lang, lang)
@@ -523,6 +805,15 @@ This is the channel's signature look — every image should feel cohesive with t
 """
             if tone:
                 system_prompt += f"\n[NARRATOR TONE] {tone}\n"
+            keyword_tags = preset.get("keyword_tags", [])
+            if keyword_tags:
+                keywords_str = ", ".join(keyword_tags)
+                system_prompt += f"""
+[KEYWORD INJECTION]
+Include these English keywords in the "tags" array (as hashtags): {keywords_str}
+Also naturally weave 1-2 of these English terms into "image_prompt" fields where relevant (e.g. "NASA spacecraft", "human brain scan").
+These English keywords help YouTube's algorithm classify this content for US audiences.
+"""
 
     # LLM 프로바이더별 API 키 결정
     provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
@@ -713,12 +1004,268 @@ This is the channel's signature look — every image should feel cohesive with t
     if not tags or not isinstance(tags, list):
         tags = ["#Shorts"]
 
-    # ── 팩트 검증: 생성된 스크립트가 실제 팩트와 일치하는지 LLM 검증 ──
+    # ── 3단계 검증 파이프라인 (최대 1회 재검증, 무한 루프 방지) ──
+    # 순서: ① 하이네스 구조 → ② 주제 일치 → (구조가 스크립트를 바꿨으면 주제 재검증 1회)→ ③ 팩트
+    _scripts_before = [c["script"] for c in cuts]
+
+    # ① 하이네스 구조 검증 (Hook/충격체인/루프엔딩)
+    cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, current_key, lang, llm_model, channel)
+
+    # ② 주제-이미지 일치 검증
+    cuts = _verify_subject_match(cuts, _topic_title, llm_provider, current_key, lang, llm_model)
+
+    # ②-b 구조 수정이 스크립트를 바꿨으면 → 주제 재검증 1회만 (무한 루프 차단)
+    _scripts_after = [c["script"] for c in cuts]
+    if _scripts_before != _scripts_after:
+        print("-> [재검증] 구조/주제 수정으로 스크립트 변경됨 → 주제 일치 재검증 (1회)")
+        cuts = _verify_subject_match(cuts, _topic_title, llm_provider, current_key, lang, llm_model)
+
+    # ③ 팩트 검증 (선택적 — 팩트 컨텍스트 있을 때만)
     if fact_context:
         cuts = _verify_facts(cuts, fact_context, _topic_title, llm_provider, current_key, lang, llm_model)
 
+    # ④ HARD FAIL 검증 (코드 레벨 품질 게이트)
+    hard_fails = _validate_hard_fail(cuts, channel)
+    region_warns = _validate_region_style(cuts, channel)
+    if hard_fails:
+        print(f"⚠️ [HARD FAIL] {len(hard_fails)}개 품질 문제 감지:")
+        for fail in hard_fails:
+            print(f"  🚫 {fail}")
+    if region_warns:
+        print(f"⚠️ [REGION STYLE] {len(region_warns)}개 지역 스타일 경고:")
+        for warn in region_warns:
+            print(f"  ⚠️ {warn}")
+    if not hard_fails and not region_warns:
+        print(f"OK [품질 게이트] HARD FAIL 통과 ✓ | 지역 스타일 통과 ✓")
+
     print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
     return cuts, topic_folder, title, tags
+
+
+def _verify_subject_match(cuts: list[dict], topic: str,
+                          llm_provider: str, api_key: str, lang: str,
+                          llm_model: str | None = None) -> list[dict]:
+    """각 컷의 script 핵심 주어가 image_prompt에 포함되는지 검증하고, 불일치 시 LLM으로 수정."""
+    if not cuts or len(cuts) < 3:
+        return cuts
+
+    # 각 컷의 script→image_prompt 주제 일치 여부를 LLM에게 한번에 검증 요청
+    pairs = "\n".join(
+        f"Cut {i+1}:\n  script: {c['script']}\n  image_prompt: {c['prompt']}"
+        for i, c in enumerate(cuts)
+    )
+    verify_prompt = f"""You are a strict visual consistency checker for short-form video.
+
+[TOPIC] {topic}
+
+[CUTS]
+{pairs}
+
+[TASK]
+For each cut, check if the image_prompt correctly depicts the MAIN SUBJECT from the script.
+- "script" describes what the narrator says.
+- "image_prompt" describes the visual shown on screen.
+- The main subject in the image MUST match the main subject mentioned in the script.
+
+Examples of MISMATCH:
+- script talks about "sharks" but image_prompt shows "whale" → MISMATCH
+- script talks about "lightning" but image_prompt shows "sunset" → MISMATCH
+- script talks about "brain" but image_prompt shows "galaxy" → MISMATCH
+
+Examples of MATCH:
+- script talks about "sharks" and image_prompt shows "great white shark" → MATCH
+- script mentions "deep ocean pressure" and image_prompt shows "submersible in dark ocean" → MATCH (related context is OK)
+
+Output ONLY a JSON array. For each cut with a mismatch, include a corrected image_prompt.
+Format: [{{"cut": 1, "match": true}}, {{"cut": 2, "match": false, "fixed_prompt": "corrected English image prompt that matches the script subject"}}]
+Return raw JSON only, no markdown code blocks."""
+
+    print(f"-> [주제 일치 검증] {len(cuts)}개 컷의 script↔image_prompt 일치 확인 중...")
+
+    try:
+        if llm_provider == "gemini":
+            raw = _request_gemini_freeform(api_key, verify_prompt, llm_model)
+        else:
+            raw = _request_openai_freeform(api_key, "You are a visual consistency checker.", verify_prompt, llm_model)
+
+        result = json.loads(_extract_json(raw) or "[]")
+        if not isinstance(result, list):
+            print(f"  [주제 검증] 응답 파싱 실패 — 원본 유지")
+            return cuts
+
+        fixed_count = 0
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            if item.get("match") is False and item.get("fixed_prompt"):
+                idx = item.get("cut", 0) - 1
+                if 0 <= idx < len(cuts):
+                    old_prompt = cuts[idx]["prompt"]
+                    cuts[idx]["prompt"] = item["fixed_prompt"]
+                    fixed_count += 1
+                    print(f"  [주제 수정] 컷{idx+1}: '{old_prompt[:40]}...' → '{item['fixed_prompt'][:40]}...'")
+
+        if fixed_count == 0:
+            print(f"OK [주제 검증] 모든 컷 script↔image_prompt 일치 확인 (수정 없음)")
+        else:
+            print(f"OK [주제 검증] {fixed_count}개 컷 image_prompt 주제 수정 완료")
+        return cuts
+
+    except Exception as e:
+        print(f"  [주제 검증 실패] {e} — 원본 유지")
+        return cuts
+
+
+def _verify_highness_structure(cuts: list[dict], topic: str,
+                               llm_provider: str, api_key: str, lang: str,
+                               llm_model: str | None = None, channel: str | None = None) -> list[dict]:
+    """하이네스 구조(Hook→충격체인→루프엔딩) 검증 + 자동 수정.
+
+    검증 항목:
+    1. Cut 1 = Hook: 단정문인지 (질문형 금지)
+    2. Cut 4-5 = 두 번째 훅 존재 여부
+    3. 마지막 Cut = 루프 엔딩: 완결 문장 + Cut 1과 연결
+    4. 감정 태그 분포: 최소 3종류 이상
+    """
+    if not cuts or len(cuts) < 5:
+        return cuts
+
+    # 채널별 루프 스타일 결정
+    from modules.utils.channel_config import get_channel_preset
+    preset = get_channel_preset(channel) if channel else None
+    loop_style = "medium"  # 기본값
+    if preset:
+        tone = preset.get("tone", "")
+        if "very strong" in tone or "direct" in tone.lower():
+            loop_style = "strong"
+        elif "natural" in tone or "subtle" in tone:
+            loop_style = "subtle"
+
+    first_script = cuts[0]["script"]
+    last_script = cuts[-1]["script"]
+    all_scripts = "\n".join(f"Cut {i+1}: {c['script']}" for i, c in enumerate(cuts))
+
+    # 감정 태그 분포 확인
+    emotions = []
+    for c in cuts:
+        desc = c.get("text", "") or c.get("description", "")
+        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "CALM"]:
+            if tag in desc:
+                emotions.append(tag)
+                break
+
+    emotion_variety = len(set(emotions))
+
+    verify_prompt = f"""You are a short-form video structure expert. Check this video's "Highness Structure" (Hook → Shock Chain → Loop Ending).
+
+[TOPIC] {topic}
+[LANGUAGE] {lang}
+[LOOP STYLE] {loop_style} (strong=obvious repetition, medium=clear connection, subtle=natural flow)
+
+[ALL CUTS]
+{all_scripts}
+
+[FIRST CUT] {first_script}
+[LAST CUT] {last_script}
+[EMOTION TAGS FOUND] {emotion_variety} types out of 5 (need at least 3)
+
+[CHECK THESE RULES]
+1. HOOK (Cut 1): Must be a declarative statement, NOT a question. Must be the most shocking/interesting fact.
+   - ❌ "Did you know...?" / "¿Sabías que...?" / "~일까?"
+   - ✅ "Lightning is hotter than the sun." / "Esto no debería existir."
+
+2. SECOND HOOK (Cut 4 or 5): Must introduce a NEW surprising fact (not continuation of cuts 2-3). This counters the retention drop.
+
+3. LOOP ENDING (Last cut): Must be a COMPLETE sentence. Must connect back to Cut 1.
+   - If loop_style="strong": Last line should nearly mirror Cut 1
+   - If loop_style="medium": Clear thematic connection to Cut 1
+   - If loop_style="subtle": Natural flow back to Cut 1's topic
+   - ❌ FORBIDDEN: "Next time...", incomplete sentences, weak reflective endings, 4th-wall breaking
+
+4. EMOTION ARC: At least 3 different emotion types should be present across cuts.
+
+[OUTPUT FORMAT]
+Return a JSON object:
+{{
+  "hook_ok": true/false,
+  "hook_issue": "description if not ok, null if ok",
+  "second_hook_ok": true/false,
+  "second_hook_issue": "description if not ok, null if ok",
+  "loop_ok": true/false,
+  "loop_issue": "description if not ok, null if ok",
+  "emotion_ok": true/false,
+  "fixes": [
+    {{"cut": 1, "field": "script", "original": "...", "fixed": "corrected version"}},
+    {{"cut": 10, "field": "script", "original": "...", "fixed": "corrected version"}}
+  ]
+}}
+Only include items in "fixes" if something needs to change. If everything is OK, return empty fixes array.
+Return raw JSON only, no markdown code blocks."""
+
+    print(f"-> [하이네스 구조 검증] Hook/충격체인/루프엔딩/감정아크 확인 중...")
+
+    try:
+        if llm_provider == "gemini":
+            raw = _request_gemini_freeform(api_key, verify_prompt, llm_model)
+        else:
+            raw = _request_openai_freeform(api_key, "You are a video structure expert.", verify_prompt, llm_model)
+
+        result = json.loads(_extract_json(raw) or "{}")
+        if not isinstance(result, dict):
+            print(f"  [구조 검증] 응답 파싱 실패 — 원본 유지")
+            return cuts
+
+        # 결과 로그
+        issues = []
+        if not result.get("hook_ok"):
+            issues.append(f"Hook: {result.get('hook_issue', 'unknown')}")
+        if not result.get("second_hook_ok"):
+            issues.append(f"2nd Hook: {result.get('second_hook_issue', 'unknown')}")
+        if not result.get("loop_ok"):
+            issues.append(f"Loop: {result.get('loop_issue', 'unknown')}")
+        if not result.get("emotion_ok"):
+            issues.append("Emotion: 감정 태그 다양성 부족")
+
+        if issues:
+            print(f"  [구조 검증] 문제 발견: {' | '.join(issues)}")
+        else:
+            print(f"OK [구조 검증] 하이네스 구조 완벽 (Hook✓ 2nd Hook✓ Loop✓ Emotion✓)")
+            return cuts
+
+        # 수정 적용
+        fixes = result.get("fixes", [])
+        fixed_count = 0
+        for fix in fixes:
+            if not isinstance(fix, dict):
+                continue
+            idx = fix.get("cut", 0) - 1
+            field = fix.get("field", "script")
+            new_val = fix.get("fixed")
+            if not new_val or not (0 <= idx < len(cuts)):
+                continue
+
+            # script 또는 description 수정
+            if field == "script" and new_val != cuts[idx].get("script"):
+                old = cuts[idx]["script"]
+                cuts[idx]["script"] = new_val
+                fixed_count += 1
+                print(f"  [구조 수정] 컷{idx+1} script: '{old[:30]}...' → '{new_val[:30]}...'")
+            elif field == "description" and new_val != cuts[idx].get("text"):
+                cuts[idx]["text"] = new_val
+                cuts[idx]["description"] = new_val
+                fixed_count += 1
+                print(f"  [구조 수정] 컷{idx+1} description 수정")
+
+        if fixed_count == 0 and issues:
+            print(f"  [구조 검증] 문제 감지되었지만 자동 수정 없음 — 원본 유지")
+        elif fixed_count > 0:
+            print(f"OK [구조 검증] {fixed_count}개 컷 하이네스 구조 수정 완료")
+
+        return cuts
+
+    except Exception as e:
+        print(f"  [구조 검증 실패] {e} — 원본 유지")
+        return cuts
 
 
 def _verify_facts(cuts: list[dict], fact_context: str, topic: str,
@@ -777,6 +1324,123 @@ Do NOT include markdown code blocks. Return raw JSON only."""
     except Exception as e:
         print(f"  [팩트 검증 실패] {e} — 원본 유지")
         return cuts
+
+
+# ── HARD FAIL 검증 (코드 레벨 품질 게이트) ──────────────────────────
+
+def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[str]:
+    """프롬프트의 HARD FAIL 조건을 코드로 검증. 실패 항목 리스트 반환 (빈 리스트 = 통과)."""
+    if not cuts or len(cuts) < 3:
+        return []
+
+    failures: list[str] = []
+
+    # 1) Hook 검증 — 첫 컷이 질문형이거나 너무 약한지
+    first_script = cuts[0].get("script", "")
+    weak_hook_patterns = [
+        "did you know", "sabías que", "알고 있", "오늘 소개",
+        "today we", "have you ever", "¿sabías", "한번 알아",
+        "let me tell", "들어봤", "이번에는",
+    ]
+    if any(p in first_script.lower() for p in weak_hook_patterns):
+        failures.append(f"HOOK_WEAK: 첫 컷이 약한 패턴 포함 — '{first_script[:50]}'")
+    if first_script.rstrip().endswith("?") or first_script.rstrip().endswith("?"):
+        failures.append(f"HOOK_QUESTION: 첫 컷이 질문형 — '{first_script[:50]}'")
+
+    # 2) 긴장 상승 검증 — 감정 태그 다양성
+    emotions = []
+    for c in cuts:
+        desc = c.get("text", "") or c.get("description", "")
+        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "CALM"]:
+            if tag in desc.upper():
+                emotions.append(tag)
+                break
+    if len(set(emotions)) < 3:
+        failures.append(f"TENSION_FLAT: 감정 태그 {len(set(emotions))}종류 (최소 3 필요)")
+
+    # 3) 루프 연결 검증 — 마지막 컷이 미완성 문장인지
+    last_script = cuts[-1].get("script", "")
+    bad_endings = ["...", "사실은", "근데 진짜", "actually", "but then", "en realidad"]
+    if any(last_script.rstrip().endswith(p) for p in bad_endings):
+        failures.append(f"LOOP_INCOMPLETE: 마지막 컷 미완성 — '{last_script[:50]}'")
+    bad_cta = ["다음에", "next time", "la próxima", "알려줄게", "i'll show"]
+    if any(p in last_script.lower() for p in bad_cta):
+        failures.append(f"LOOP_CTA: 마지막 컷에 빈 약속 CTA — '{last_script[:50]}'")
+
+    # 4) 이미지 임팩트 검증 — Cut 1에 시각적 키워드 있는지
+    first_prompt = cuts[0].get("prompt", "").lower()
+    impact_keywords = [
+        "dramatic", "extreme", "contrast", "surreal", "glowing", "massive",
+        "tiny", "vibrant", "dark", "neon", "cinematic", "sharp", "intense",
+        "colossal", "macro", "aerial", "deep", "vast", "bright",
+    ]
+    if not any(kw in first_prompt for kw in impact_keywords):
+        failures.append(f"VISUAL_WEAK: Cut 1 image_prompt에 임팩트 키워드 없음")
+
+    # 5) 톤-채널 일치 검증
+    if channel:
+        from modules.utils.channel_config import get_channel_preset
+        preset = get_channel_preset(channel)
+        if preset:
+            tone = preset.get("tone", "").lower()
+            all_scripts = " ".join(c.get("script", "") for c in cuts).lower()
+            # LATAM 채널인데 너무 형식적인 톤
+            if "energetic" in tone or "rápido" in tone or "enérgico" in tone:
+                formal_patterns = ["sin embargo", "no obstante", "cabe mencionar"]
+                if any(p in all_scripts for p in formal_patterns):
+                    failures.append(f"TONE_MISMATCH: LATAM 에너지 채널에 형식적 표현 사용")
+            # 영어 채널인데 과도한 감탄
+            if "calm" in tone or "cinematic" in tone:
+                exclaim_count = sum(1 for c in cuts if "!" in c.get("script", ""))
+                if exclaim_count > len(cuts) * 0.5:
+                    failures.append(f"TONE_MISMATCH: calm 채널에 감탄부호 과다 ({exclaim_count}/{len(cuts)}컷)")
+
+    return failures
+
+
+def _validate_region_style(cuts: list[dict], channel: str | None = None) -> list[str]:
+    """채널의 지역 비주얼 스타일이 image_prompt에 반영되었는지 검증."""
+    if not cuts or not channel:
+        return []
+
+    from modules.utils.channel_config import get_channel_preset
+    preset = get_channel_preset(channel)
+    if not preset:
+        return []
+
+    warnings: list[str] = []
+    visual_style = preset.get("visual_style", "").lower()
+    all_prompts = " ".join(c.get("prompt", "") for c in cuts).lower()
+
+    # US Hispanic (어두운 시네마틱) — vibrant/neon 과다 사용 감지
+    if "dark background" in visual_style or "mysterious" in visual_style:
+        bright_count = sum(1 for kw in ["vibrant", "neon", "colorful", "bright", "saturated"]
+                          if kw in all_prompts)
+        dark_count = sum(1 for kw in ["dark", "dramatic", "cinematic", "contrast", "mysterious", "shadow"]
+                         if kw in all_prompts)
+        if bright_count > dark_count:
+            warnings.append(
+                f"REGION_STYLE: 어두운 시네마틱 채널인데 밝은 키워드({bright_count}) > 어두운 키워드({dark_count})")
+
+    # LATAM (밝고 화려) — dark/muted 과다 사용 감지
+    if "vibrant" in visual_style or "colorful" in visual_style or "high saturation" in visual_style:
+        dark_count = sum(1 for kw in ["dark", "muted", "desaturated", "shadow", "noir"]
+                         if kw in all_prompts)
+        bright_count = sum(1 for kw in ["vibrant", "neon", "colorful", "bright", "glowing", "saturated"]
+                           if kw in all_prompts)
+        if dark_count > bright_count:
+            warnings.append(
+                f"REGION_STYLE: 밝은 LATAM 채널인데 어두운 키워드({dark_count}) > 밝은 키워드({bright_count})")
+
+    # 영어 (다큐멘터리) — neon/glowing 과다 사용 감지
+    if "documentary" in visual_style or "natural" in visual_style:
+        fantasy_count = sum(1 for kw in ["neon", "glowing", "fantasy", "surreal", "exaggerated"]
+                            if kw in all_prompts)
+        if fantasy_count > len(cuts) * 0.4:
+            warnings.append(
+                f"REGION_STYLE: 다큐멘터리 채널에 판타지 키워드 과다 ({fantasy_count}개)")
+
+    return warnings
 
 
 def _request_gemini_freeform(api_key: str, prompt: str, model: str | None = None) -> str:
