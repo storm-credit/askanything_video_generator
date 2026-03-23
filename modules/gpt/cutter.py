@@ -374,7 +374,6 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   - 렌즈 유형: 35mm, 50mm, macro lens, wide-angle, fisheye
   - 조명: natural light, dramatic lighting, golden hour, studio lighting
   - 카메라 설정: motion blur, soft focus, bokeh, shallow depth of field
-* 사람/가족/인물 사진 절대 금지. 과학/자연 주제에 사람이 등장하면 안 됨. "baby", "child", "person" 등 인물 키워드 대신 실제 생물/현상을 묘사하라.
 * 사람 얼굴 정면 클로즈업 금지.
 * 구체적 디테일: 색온도, 재질감, 스케일 비교.
 
@@ -481,7 +480,6 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
   - Lens type: 35mm, 50mm, macro lens, wide-angle, fisheye
   - Lighting: natural light, dramatic lighting, golden hour, studio lighting
   - Camera settings: motion blur, soft focus, bokeh, shallow depth of field
-* NO humans, families, or portraits. For science/nature topics, never show people. Use "baby" only for animal offspring, never human babies. Depict the actual organism/phenomenon.
 * No frontal face close-ups.
 * Specific details: color temperature, textures, scale comparisons.
 
