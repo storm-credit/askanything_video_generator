@@ -12,6 +12,33 @@ from modules.utils.models import get_model_chain, get_service_tag
 from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
+MAX_VISION_VERIFY_RETRIES = 1  # 이미지-프롬프트 불일치 시 재생성 횟수
+
+
+def _verify_image_matches_prompt(image_bytes: bytes, prompt: str, api_key: str) -> bool:
+    """Gemini Vision으로 생성된 이미지가 프롬프트와 일치하는지 검증."""
+    try:
+        from google import genai
+        from google.genai import types
+        import base64
+
+        # 프롬프트에서 핵심 피사체 추출 (첫 50자)
+        subject_hint = prompt.replace(MASTER_STYLE, "").strip()[:100]
+
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                f"Does this image match this description? '{subject_hint}'\nAnswer ONLY 'yes' or 'no'.",
+            ],
+            config={"http_options": types.HttpOptions(timeout=15_000)},
+        )
+        answer = (response.text or "").strip().lower()
+        return answer.startswith("yes")
+    except Exception as e:
+        print(f"  [Vision 검증] 스킵 (에러: {e})")
+        return True  # 검증 실패 시 통과 (이미지 생성 자체는 유지)
 
 
 def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None, model_override: str | None = None, gemini_api_keys: str | None = None, topic: str = "") -> str:
@@ -80,6 +107,19 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
 
                 if not image_bytes:
                     raise ValueError("이미지 생성 결과가 비어 있습니다.")
+
+                # Vision 검증: 생성된 이미지가 프롬프트와 일치하는지 확인
+                verify_key = get_google_key(service="gemini", exclude=tried_keys) or final_api_key
+                if not _verify_image_matches_prompt(image_bytes, enhanced_prompt, verify_key):
+                    if not hasattr(generate_image_imagen, '_vision_retries'):
+                        generate_image_imagen._vision_retries = {}
+                    retry_count = generate_image_imagen._vision_retries.get(index, 0)
+                    if retry_count < MAX_VISION_VERIFY_RETRIES:
+                        generate_image_imagen._vision_retries[index] = retry_count + 1
+                        print(f"  [Vision 불일치] 컷 {index+1} 이미지가 프롬프트와 불일치 → 재생성...")
+                        continue  # 같은 키로 재시도
+                    else:
+                        print(f"  [Vision 불일치] 컷 {index+1} 재생성 후에도 불일치 — 결과 유지")
 
                 image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
                 target_size = (1080, 1920)
