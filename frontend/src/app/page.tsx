@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film, FolderOpen, Download, Loader2, FlaskConical } from "lucide-react";
+import { CheckCircle2, AlertCircle, Settings, Brain, ImageIcon, Square, Globe, Upload, Youtube, X, ExternalLink, Video, Music, Instagram, Send, Tv, Mic, Type, MoveVertical, Zap, Crown, Film, FolderOpen, Download, Loader2, FlaskConical } from "lucide-react";
 import { API_BASE, KeyStatus, KeyUsageStats } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
@@ -1101,24 +1101,6 @@ export default function Home() {
         transition={{ duration: 0.8, ease: "easeOut" }}
         className="z-10 w-full max-w-2xl text-center space-y-8"
       >
-        <div className="space-y-4">
-          <motion.div
-            initial={{ scale: 0.95 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse" }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel text-sm text-gray-300"
-          >
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            <span>프리미엄 AI 비디오 스튜디오</span>
-          </motion.div>
-          <h1 className="text-5xl sm:text-7xl font-bold tracking-tight text-gradient">
-            당신의 상상을<br />영상으로.
-          </h1>
-          <p className="text-gray-400 text-lg sm:text-xl">
-            단 하나의 주제만 입력하세요. 기획, 디자인, 편집을 AI 전문가들이 알아서 완성합니다.
-          </p>
-        </div>
-
         <form onSubmit={handleGenerate} className="relative max-w-xl mx-auto mt-12 space-y-4">
           <div className="relative flex items-center">
             <input
