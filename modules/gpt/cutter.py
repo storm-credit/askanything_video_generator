@@ -496,7 +496,7 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 * Visual impact: Cut 1 must stop scrolling (extreme scale/color/surreal). All cuts need 1+ striking element. No same palette 2 cuts in a row.
 * Pacing: Alternate fast↔slow cuts. Never 3 cuts with same rhythm.
 
-[Golden Example — Topic: "What happens in the deep ocean" (full 8-cut emotional arc)]
+[Golden Example — Topic: "What happens in the deep ocean" (full 9-cut emotional arc)]
 {
   "title": "The Deep Sea Will Blow Your Mind",
   "tags": ["#Shorts", "#DeepSea", "#Ocean", "#Science"],
@@ -506,6 +506,7 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
     {"description": "Hydrothermal vent erupting superheated water on the ocean floor [TENSION]", "image_prompt": "Hydrothermal vent erupting superheated black water at ocean floor, extreme temperature shimmer, orange mineral deposits, dramatic side lighting from magma glow below", "script": "And at the very bottom water is boiling at 400 degrees."},
     {"description": "Alien-like colony of tube worms thriving next to the boiling vent [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "Here's the twist — life is actually thriving right next to that boiling water."},
     {"description": "Whale fall skeleton supporting an entire ecosystem on the ocean floor [WONDER]", "image_prompt": "Whale fall skeleton on ocean floor with entire ecosystem growing on bones, ghostly white ribcage covered in colorful organisms, soft diffused light from above, wide establishing shot", "script": "When a whale dies it sinks and becomes an ecosystem for 50 years."},
+    {"description": "Giant squid eye emerging from total darkness deep underwater [SHOCK]", "image_prompt": "Enormous giant squid eye the size of a dinner plate staring directly at camera from pitch-black deep ocean, bioluminescent specks around it, extreme macro close-up, eerie green-blue glow", "script": "Down there lives a creature with eyes the size of dinner plates."},
     {"description": "Vertigo-inducing view straight down into the Mariana Trench [TENSION]", "image_prompt": "Vertigo-inducing top-down view into Mariana Trench, layers of ocean getting progressively darker, depth markers showing 11000m, sense of infinite depth, cold blue-black gradient", "script": "The Mariana Trench is so deep you could drop Everest in and still have room."},
     {"description": "Looking up from the ocean floor at a faint beam of distant sunlight [WONDER]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "We've explored more of space than the ocean right beneath our feet."},
     {"description": "Submersible descending back into the abyss — mirrors Cut 1 composition [CALM]", "image_prompt": "Tiny submersible descending again into pitch-black deep ocean abyss, same dark indigo composition as cut 1, faint bioluminescent particles, extreme wide angle from below", "script": "And we've barely seen five percent of what's down there."}
@@ -1485,11 +1486,12 @@ def _validate_region_style(cuts: list[dict], channel: str | None = None) -> list
 def _request_gemini_freeform(api_key: str, prompt: str, model: str | None = None) -> str:
     """Gemini에 자유형 프롬프트 전송 (스키마 없음)."""
     from google import genai
+    from google.genai import types
     client = genai.Client(api_key=api_key)
     model_name = model or "gemini-2.5-flash"
     response = client.models.generate_content(
         model=model_name,
         contents=prompt,
-        config={"response_mime_type": "application/json"},
+        config={"response_mime_type": "application/json", "http_options": types.HttpOptions(timeout=60_000)},
     )
     return (response.text or "").strip()

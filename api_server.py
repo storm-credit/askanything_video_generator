@@ -1422,7 +1422,8 @@ async def render_endpoint(req: RenderRequest):
             yield {"data": f"ERROR|[렌더 오류] {safe_msg}\n"}
         finally:
             # 성공/실패 관계없이 세션 정리 (메모리 누수 방지)
-            _prepared_sessions.pop(req.sessionId, None)
+            with _session_lock:
+                _prepared_sessions.pop(req.sessionId, None)
 
     return EventSourceResponse(sse_generator())
 

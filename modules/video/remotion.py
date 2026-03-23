@@ -52,15 +52,15 @@ def _select_bgm(bgm_theme: str = "random", channel: str | None = None) -> str | 
     """채널별 BGM 우선 → brand/bgm/ 테마별 → brand/bgm.mp3 폴백."""
     import random
 
+    if bgm_theme == "none":
+        return None
+
     # 1) 채널 전용 BGM 우선: brand/channels/{channel}/bgm.mp3
     if channel:
         channel_bgm = os.path.join(BRAND_DIR, "channels", channel, BGM_FILE)
         if os.path.exists(channel_bgm):
             print(f"  [BGM] 채널 전용 배경음악: {channel}/{BGM_FILE}")
             return channel_bgm
-
-    if bgm_theme == "none":
-        return None
 
     # 2) 테마별 BGM: brand/bgm/epic.mp3, brand/bgm/calm.mp3 등
     bgm_dir = os.path.join(BRAND_DIR, "bgm")
