@@ -1195,11 +1195,12 @@ def _verify_highness_structure(cuts: list[dict], topic: str,
 [EMOTION TAGS FOUND] {emotion_variety} types out of 5 (need at least 3)
 
 [CHECK THESE RULES]
-1. HOOK (Cut 1): Must be a declarative statement, NOT a question. Must be the most shocking/interesting fact.
-   - ❌ "Did you know...?" / "¿Sabías que...?" / "~일까?"
-   - ✅ "Lightning is hotter than the sun." / "Esto no debería existir."
+1. HOOK (Cut 1): Must be a declarative statement, NOT a question. Must break common belief or present an impossible-sounding fact.
+   - ❌ "Did you know...?" / "¿Sabías que...?" / "~일까?" / "Today we'll talk about..."
+   - ❌ Weak/generic openers like "This is interesting" or "이건 흥미롭다"
+   - ✅ "Lightning is hotter than the sun." / "Esto no debería existir." / "이건 존재해선 안 되는 거야"
 
-2. SECOND HOOK (Cut 4 or 5): Must introduce a NEW surprising fact (not continuation of cuts 2-3). This counters the retention drop.
+2. SECOND HOOK / RETENTION LOCK (Cut 3-5): Must introduce a NEW surprising fact (not continuation of cuts 2-3). This counters the mid-video retention drop. The viewer must think "wait, WHAT?"
 
 3. LOOP ENDING (Last cut): Must be a COMPLETE sentence. Must connect back to Cut 1.
    - If loop_style="strong": Last line should nearly mirror Cut 1
@@ -1397,7 +1398,8 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
     impact_keywords = [
         "dramatic", "extreme", "contrast", "surreal", "glowing", "massive",
         "tiny", "vibrant", "dark", "neon", "cinematic", "sharp", "intense",
-        "colossal", "macro", "aerial", "deep", "vast", "bright",
+        "colossal", "macro", "aerial", "deep", "vast", "bright", "enormous",
+        "pitch-black", "bioluminescent", "mysterious", "shadow", "golden",
     ]
     if not any(kw in first_prompt for kw in impact_keywords):
         failures.append(f"VISUAL_WEAK: Cut 1 image_prompt에 임팩트 키워드 없음")
