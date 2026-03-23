@@ -105,7 +105,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
     for attempt in range(MAX_RETRIES):
         try:
             label = f"(시도 {attempt+1}/{MAX_RETRIES})" if attempt > 0 else ""
-            lang_label = "EN" if language == "en" else "KO"
+            lang_label = language.upper() if language else "KO"
             print(f"-> [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 내레이션 렌더링 중... [{lang_label}] {label}")
 
             response = requests.post(URL, json=data, headers=headers, timeout=30, stream=True)

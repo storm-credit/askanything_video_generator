@@ -55,7 +55,7 @@ def _sanitize_cuts(cuts_data: list[dict[str, Any]]) -> list[dict[str, str]]:
 def _clean_json_string(s: str) -> str:
     """LLM이 반환하는 흔한 JSON 오류를 자동 수정."""
     s = re.sub(r',(\s*[}\]])', r'\1', s)  # trailing comma 제거
-    s = s.replace('\n', ' ')  # 줄바꿈 → 공백 (문자열 내부 제외)
+    s = s.replace('\n', ' ')  # 줄바꿈 → 공백 (LLM JSON 복구용)
     return s
 
 
@@ -987,8 +987,18 @@ These English keywords help YouTube's algorithm classify this content for US aud
             retry_user = f"Topic: '{_safe_title}'." + retry_expansion
         else:
             retry_user = f"주제: '{_safe_title}'." + retry_expansion
+        _original_cuts = cuts[:]
         try:
-            cuts, title, tags = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
+            expanded_cuts, title, tags = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
+            # 기존 컷이 보존되었는지 검증: 원본 스크립트가 확장 결과에 포함되어야 함
+            original_scripts = {c["script"].strip()[:30] for c in _original_cuts}
+            expanded_scripts = {c["script"].strip()[:30] for c in expanded_cuts}
+            preserved = original_scripts & expanded_scripts
+            if len(preserved) >= len(original_scripts) * 0.7:
+                cuts = expanded_cuts
+                print(f"OK [컷 확장] {len(_original_cuts)}컷 → {len(cuts)}컷 (기존 {len(preserved)}/{len(original_scripts)}개 보존)")
+            else:
+                print(f"  [컷 확장 실패] 기존 컷 보존율 낮음 ({len(preserved)}/{len(original_scripts)}) — 원본 유지")
         except Exception as retry_err:
             err_str = str(retry_err)
             if llm_provider == "gemini" and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str):

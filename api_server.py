@@ -532,6 +532,15 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
 
+            # 채널 프리셋 fallback: 프론트엔드 기본값이면 채널 프리셋 값 적용
+            if req.channel:
+                _ch_preset = get_channel_preset(req.channel)
+                if _ch_preset:
+                    if req.ttsSpeed == 0.9 and _ch_preset.get("tts_speed"):
+                        req.ttsSpeed = _ch_preset["tts_speed"]
+                    if req.cameraStyle == "auto" and _ch_preset.get("camera_style"):
+                        req.cameraStyle = _ch_preset["camera_style"]
+
             # 비디오 엔진 변수 초기화 (아래에서 키 선택·사전 검증에 사용)
             active_video_engine = video_engine
 
