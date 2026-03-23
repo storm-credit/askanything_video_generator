@@ -59,8 +59,8 @@ def _clean_json_string(s: str) -> str:
     return s
 
 
-def _extract_json(text: str) -> dict:
-    """LLM 응답에서 JSON을 추출합니다. 마크다운 코드블록 래핑도 처리."""
+def _extract_json(text: str) -> dict | list | None:
+    """LLM 응답에서 JSON을 추출합니다. 마크다운 코드블록 래핑도 처리. 실패 시 None."""
     text = text.strip()
     match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
     if match:
@@ -68,18 +68,19 @@ def _extract_json(text: str) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # 자동 수정 후 재시도
-        return json.loads(_clean_json_string(text))
+        try:
+            return json.loads(_clean_json_string(text))
+        except json.JSONDecodeError:
+            return None
 
 
 def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str, list[str]]:
     """LLM 응답 텍스트에서 cuts 데이터, 제목, 태그를 파싱합니다."""
     if not content:
         raise ValueError("LLM 응답 content가 비어 있습니다.")
-    try:
-        data = _extract_json(content)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"LLM 응답이 올바른 JSON 형식이 아닙니다: {content[:200]}") from exc
+    data = _extract_json(content)
+    if not isinstance(data, dict):
+        raise ValueError(f"LLM 응답이 올바른 JSON 형식이 아닙니다: {content[:200]}")
     cuts = _sanitize_cuts(data.get("cuts", []))
     if not cuts:
         raise ValueError("LLM 응답에 유효한 cuts가 없습니다.")
@@ -388,7 +389,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 * 비주얼 임팩트: Cut 1은 극단적 크기/색/비현실 대비 필수. 모든 컷 강렬한 요소 1개 이상. 연속 같은 색감/구도 금지.
 * 템포: 빠른 컷↔느린 컷 교대. 3컷 연속 같은 리듬 금지.
 
-[골든 예시 — 주제: "심해에 들어가면 생기는 일" (7컷 완전한 감정 아크)]
+[골든 예시 — 주제: "심해에 들어가면 생기는 일" (8컷 완전한 감정 아크)]
 {
   "title": "심해에 들어가면 생기는 일",
   "tags": ["#Shorts", "#심해", "#바다", "#과학"],
@@ -399,7 +400,9 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     {"description": "열수구 주변에서 번성하는 괴생물체 군집 클로즈업 [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "근데 반전은 그 끓는 물 옆에서 생물이 번성하고 있다는 거야."},
     {"description": "심해저에 가라앉은 고래 뼈 위로 생태계가 형성된 장면 [WONDER]", "image_prompt": "Whale fall skeleton on ocean floor with entire ecosystem growing on bones, ghostly white ribcage covered in colorful organisms, soft diffused light from above, wide establishing shot", "script": "고래가 죽으면 바닥에 가라앉아서 50년간 생태계가 돼."},
     {"description": "심해 해구의 끝없는 깊이를 수직으로 내려다보는 장면 [TENSION]", "image_prompt": "Vertigo-inducing top-down view into Mariana Trench, layers of ocean getting progressively darker, depth markers showing 11000m, sense of infinite depth, cold blue-black gradient", "script": "마리아나 해구는 에베레스트를 통째로 집어넣어도 남아."},
-    {"description": "심해에서 올려다본 수면의 희미한 빛 한 줄기 [CALM]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "우주보다 덜 탐사된 곳이 바로 발밑 바다라는 거지."}
+    {"description": "심해에서 올려다본 수면의 희미한 빛 한 줄기 [WONDER]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "우주보다 덜 탐사된 곳이 바로 발밑 바다라는 거지."},
+    {"description": "심해 잠수정이 어둠 속으로 다시 내려가는 장면 — Cut 1과 유사 구도 [CALM]", "image_prompt": "Tiny submersible descending again into pitch-black deep ocean abyss, same composition as cut 1, dark indigo water, faint bioluminescent glow, extreme wide angle", "script": "근데 아직 심해의 5%도 못 봤다는 거 알아?"}
+  ]
   ]
 }
 
@@ -494,7 +497,7 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 * Visual impact: Cut 1 must stop scrolling (extreme scale/color/surreal). All cuts need 1+ striking element. No same palette 2 cuts in a row.
 * Pacing: Alternate fast↔slow cuts. Never 3 cuts with same rhythm.
 
-[Golden Example — Topic: "What happens in the deep ocean" (full 7-cut emotional arc)]
+[Golden Example — Topic: "What happens in the deep ocean" (full 8-cut emotional arc)]
 {
   "title": "The Deep Sea Will Blow Your Mind",
   "tags": ["#Shorts", "#DeepSea", "#Ocean", "#Science"],
@@ -505,12 +508,13 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
     {"description": "Alien-like colony of tube worms thriving next to the boiling vent [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "Here's the twist — life is actually thriving right next to that boiling water."},
     {"description": "Whale fall skeleton supporting an entire ecosystem on the ocean floor [WONDER]", "image_prompt": "Whale fall skeleton on ocean floor with entire ecosystem growing on bones, ghostly white ribcage covered in colorful organisms, soft diffused light from above, wide establishing shot", "script": "When a whale dies it sinks and becomes an ecosystem for 50 years."},
     {"description": "Vertigo-inducing view straight down into the Mariana Trench [TENSION]", "image_prompt": "Vertigo-inducing top-down view into Mariana Trench, layers of ocean getting progressively darker, depth markers showing 11000m, sense of infinite depth, cold blue-black gradient", "script": "The Mariana Trench is so deep you could drop Everest in and still have room."},
-    {"description": "Looking up from the ocean floor at a faint beam of distant sunlight [CALM]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "We've explored more of space than the ocean right beneath our feet."}
+    {"description": "Looking up from the ocean floor at a faint beam of distant sunlight [WONDER]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "We've explored more of space than the ocean right beneath our feet."},
+    {"description": "Submersible descending back into the abyss — mirrors Cut 1 composition [CALM]", "image_prompt": "Tiny submersible descending again into pitch-black deep ocean abyss, same dark indigo composition as cut 1, faint bioluminescent particles, extreme wide angle from below", "script": "And we've barely seen five percent of what's down there."}
   ]
 }
 
 [Output Format — pure JSON only, no markdown code blocks]
-8–10 cuts:
+9–10 cuts:
 
 {
   "title": "[Click-bait English title (max 8 words)]",
@@ -609,7 +613,7 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 * Impacto visual: Corte 1 debe detener el scroll (escala/color/surrealismo extremo). Todos los cortes con 1+ elemento impactante. Misma paleta 2x PROHIBIDA.
 * Ritmo: Alternar rápido↔lento. Nunca 3 cortes con mismo ritmo.
 
-[Ejemplo dorado — Tema: "Lo que pasa en el fondo del océano" (arco emocional completo de 7 cortes)]
+[Ejemplo dorado — Tema: "Lo que pasa en el fondo del océano" (arco emocional completo de 8 cortes)]
 {
   "title": "El fondo del océano esconde esto",
   "tags": ["#Shorts", "#Ocean", "#DeepSea", "#Science", "#Océano"],
@@ -620,7 +624,8 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
     {"description": "Alien-like colony of tube worms thriving next to the boiling vent [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "Lo inesperado es que junto a esa agua hirviendo la vida prospera."},
     {"description": "Whale fall skeleton supporting an entire ecosystem on the ocean floor [WONDER]", "image_prompt": "Whale fall skeleton on ocean floor with entire ecosystem growing on bones, ghostly white ribcage covered in colorful organisms, soft diffused light from above, wide establishing shot", "script": "Cuando una ballena muere se hunde y se convierte en un ecosistema por cincuenta años."},
     {"description": "Vertigo-inducing view straight down into the Mariana Trench [TENSION]", "image_prompt": "Vertigo-inducing top-down view into Mariana Trench, layers of ocean getting progressively darker, depth markers showing 11000m, sense of infinite depth, cold blue-black gradient", "script": "La Fosa de las Marianas es tan profunda que el Everest cabría dentro y sobraría espacio."},
-    {"description": "Looking up from the ocean floor at a faint beam of distant sunlight [CALM]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "Hemos explorado más del espacio que del océano bajo nuestros pies."}
+    {"description": "Looking up from the ocean floor at a faint beam of distant sunlight [WONDER]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "Hemos explorado más del espacio que del océano bajo nuestros pies."},
+    {"description": "Submersible descending back into the dark abyss — mirrors Cut 1 [CALM]", "image_prompt": "Tiny submersible descending into pitch-black ocean abyss, same dark composition as cut 1, dramatic lighting from below, mysterious atmosphere, high contrast", "script": "Y apenas hemos visto el cinco por ciento de lo que hay ahí abajo."}
   ]
 }
 
@@ -724,7 +729,7 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 * Impacto visual: Corte 1 = EXPLOSIVO (colores vibrantes, escala exagerada). Todos los cortes con brillo/color/dramatismo. Misma paleta 2x PROHIBIDA.
 * Ritmo: Rápido en general. Alternar datos cortos↔comparaciones. Nunca 3 cortes con mismo ritmo.
 
-[Ejemplo dorado — Tema: "Datos increíbles sobre los pulpos" (arco emocional completo de 7 cortes)]
+[Ejemplo dorado — Tema: "Datos increíbles sobre los pulpos" (arco emocional completo de 8 cortes)]
 {
   "title": "Los pulpos son más extraños de lo que crees",
   "tags": ["#Shorts", "#Pulpos", "#DatosCuriosos", "#Animales", "#Ciencia"],
@@ -735,6 +740,7 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
     {"description": "Octopus squeezing through an impossibly small hole [TENSION]", "image_prompt": "An octopus squeezing its entire body through a tiny glass bottle opening, extreme flexibility demonstration, studio lighting, high contrast, close-up side angle", "script": "Y se pueden meter por un hueco del tamaño de una moneda."},
     {"description": "Octopus opening a jar from inside to escape [REVEAL]", "image_prompt": "An octopus inside a sealed glass jar, tentacles twisting the lid open from inside, dramatic top-down camera angle, bright studio lighting, high saturation", "script": "Hasta pueden abrir frascos desde adentro."},
     {"description": "Octopus blood shown to be blue colored [WONDER]", "image_prompt": "Close-up of octopus with visible blue blood flowing through transparent tentacles, deep ocean background, ethereal blue glow, macro photography style", "script": "Su sangre es azul porque tiene cobre en vez de hierro."},
+    {"description": "Octopus using tools and solving puzzles in captivity [TENSION]", "image_prompt": "An octopus manipulating a complex puzzle box underwater, tentacles working multiple mechanisms simultaneously, vibrant aquarium lighting, close-up side angle", "script": "Y pueden resolver acertijos que algunos mamíferos no pueden."},
     {"description": "Octopus with three glowing hearts again, loop back to start [SHOCK]", "image_prompt": "Same vibrant octopus from cut 1, three hearts pulsing with bright glow, underwater scene, neon lighting, mirror composition of first cut", "script": "3 corazones... y eso no es lo más raro."}
   ]
 }
@@ -1024,19 +1030,28 @@ These English keywords help YouTube's algorithm classify this content for US aud
     if fact_context:
         cuts = _verify_facts(cuts, fact_context, _topic_title, llm_provider, current_key, lang, llm_model)
 
-    # ④ HARD FAIL 검증 (코드 레벨 품질 게이트)
+    # ④ HARD FAIL 검증 (코드 레벨 품질 게이트) — 실패 시 1회 구조 수정 재시도
     hard_fails = _validate_hard_fail(cuts, channel)
     region_warns = _validate_region_style(cuts, channel)
     if hard_fails:
         print(f"⚠️ [HARD FAIL] {len(hard_fails)}개 품질 문제 감지:")
         for fail in hard_fails:
-            print(f"  🚫 {fail}")
+            print(f"  - {fail}")
+        # HARD FAIL 감지 → 하이네스 구조 수정 1회 재시도
+        print("-> [HARD FAIL 수정] 구조 검증으로 자동 수정 시도 (1회)...")
+        cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, current_key, lang, llm_model, channel)
+        # 재검증
+        hard_fails_retry = _validate_hard_fail(cuts, channel)
+        if hard_fails_retry:
+            print(f"  [HARD FAIL] 수정 후에도 {len(hard_fails_retry)}개 남음 — 결과 유지 (수동 확인 권장)")
+        else:
+            print(f"OK [HARD FAIL] 자동 수정으로 모든 품질 문제 해결")
     if region_warns:
         print(f"⚠️ [REGION STYLE] {len(region_warns)}개 지역 스타일 경고:")
         for warn in region_warns:
-            print(f"  ⚠️ {warn}")
+            print(f"  - {warn}")
     if not hard_fails and not region_warns:
-        print(f"OK [품질 게이트] HARD FAIL 통과 ✓ | 지역 스타일 통과 ✓")
+        print(f"OK [품질 게이트] HARD FAIL 통과 | 지역 스타일 통과")
 
     print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
     return cuts, topic_folder, title, tags
@@ -1088,7 +1103,7 @@ Return raw JSON only, no markdown code blocks."""
         else:
             raw = _request_openai_freeform(api_key, "You are a visual consistency checker.", verify_prompt, llm_model)
 
-        result = json.loads(_extract_json(raw) or "[]")
+        result = _extract_json(raw) or []
         if not isinstance(result, list):
             print(f"  [주제 검증] 응답 파싱 실패 — 원본 유지")
             return cuts
@@ -1210,7 +1225,7 @@ Return raw JSON only, no markdown code blocks."""
         else:
             raw = _request_openai_freeform(api_key, "You are a video structure expert.", verify_prompt, llm_model)
 
-        result = json.loads(_extract_json(raw) or "{}")
+        result = _extract_json(raw) or {}
         if not isinstance(result, dict):
             print(f"  [구조 검증] 응답 파싱 실패 — 원본 유지")
             return cuts
@@ -1299,7 +1314,7 @@ Do NOT include markdown code blocks. Return raw JSON only."""
         else:
             raw = _request_openai_freeform(api_key, "You are a fact-checker.", verify_prompt, llm_model)
 
-        result = json.loads(_extract_json(raw) or "[]")
+        result = _extract_json(raw) or []
         if not isinstance(result, list):
             print(f"  [팩트 검증] 응답 파싱 실패 — 원본 유지")
             return cuts
