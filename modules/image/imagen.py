@@ -136,8 +136,8 @@ NANO_BANANA_MODELS = [
 ]
 
 
-def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_key: str | None = None, topic: str = "") -> str:
-    """Nano Banana (Gemini 네이티브 이미지 생성)로 이미지를 생성합니다. Imagen 폴백용."""
+def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_key: str | None = None, gemini_api_keys: str | None = None, topic: str = "") -> str:
+    """Nano Banana (Gemini 네이티브 이미지 생성)로 이미지를 생성합니다. Imagen 폴백용. 키 로테이션 지원."""
     from google import genai
     from google.genai import types
 
@@ -147,63 +147,84 @@ def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_k
     os.makedirs(image_dir, exist_ok=True)
     filename = os.path.join(image_dir, f"cut_{index:02}.png")
 
-    final_key = api_key or os.getenv("GEMINI_API_KEY")
-    if not final_key:
-        raise EnvironmentError("Gemini API 키가 없습니다.")
-
     last_error = None
     for model_name in NANO_BANANA_MODELS:
-        try:
-            print(f"  [Nano Banana] 컷 {index+1} {model_name}로 생성 중...")
-            client = genai.Client(api_key=final_key)
-            response = client.models.generate_content(
-                model=model_name,
-                contents=enhanced_prompt,
-                config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE"],
-                    image_config=types.ImageConfig(
-                        aspect_ratio="9:16",
-                    ),
-                ),
-            )
+        tried_keys: set[str] = set()
+        service_tag = f"nano_{model_name.split('-')[1]}"
 
-            # 이미지 파트 추출
-            image_bytes = None
-            for part in response.parts:
-                if part.inline_data is not None:
-                    image_bytes = part.inline_data.data
-                    break
+        for key_attempt in range(MAX_KEY_RETRIES):
+            # 키 로테이션: 이전 실패 키 제외하고 다음 키 선택
+            if key_attempt == 0:
+                final_key = api_key or get_google_key(service=service_tag, extra_keys=gemini_api_keys)
+            else:
+                final_key = get_google_key(service=service_tag, exclude=tried_keys, extra_keys=gemini_api_keys)
 
-            if not image_bytes:
-                raise ValueError(f"Nano Banana 응답에 이미지가 없습니다 ({model_name})")
+            if not final_key:
+                print(f"  [Nano Banana] {model_name} 사용 가능한 키 없음 → 다음 모델로")
+                break
 
-            # 저장
-            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-            target_size = (1080, 1920)
-            fitted = ImageOps.fit(image, target_size, method=Image.LANCZOS, centering=(0.5, 0.5))
+            tried_keys.add(final_key)
 
-            fd, tmp = tempfile.mkstemp(dir=image_dir, suffix=".tmp")
-            os.close(fd)
             try:
-                fitted.save(tmp, format="PNG")
-                os.replace(tmp, filename)
-            except Exception:
+                if key_attempt == 0:
+                    print(f"  [Nano Banana] 컷 {index+1} {model_name}로 생성 중...")
+                else:
+                    print(f"  [Nano Banana] 컷 {index+1} 다른 키로 재시도 ({key_attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_key)})")
+
+                client = genai.Client(api_key=final_key)
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=enhanced_prompt,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["IMAGE"],
+                        image_config=types.ImageConfig(
+                            aspect_ratio="9:16",
+                        ),
+                    ),
+                )
+
+                # 이미지 파트 추출
+                image_bytes = None
+                for part in response.parts:
+                    if part.inline_data is not None:
+                        image_bytes = part.inline_data.data
+                        break
+
+                if not image_bytes:
+                    raise ValueError(f"Nano Banana 응답에 이미지가 없습니다 ({model_name})")
+
+                # 저장
+                image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+                target_size = (1080, 1920)
+                fitted = ImageOps.fit(image, target_size, method=Image.LANCZOS, centering=(0.5, 0.5))
+
+                fd, tmp = tempfile.mkstemp(dir=image_dir, suffix=".tmp")
+                os.close(fd)
                 try:
-                    os.remove(tmp)
-                except OSError:
-                    pass
-                raise
+                    fitted.save(tmp, format="PNG")
+                    os.replace(tmp, filename)
+                except Exception:
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
+                    raise
 
-            save_to_cache(enhanced_prompt, filename)
-            print(f"  [Nano Banana] 컷 {index+1} 생성 완료 ({model_name})")
-            return filename
+                save_to_cache(enhanced_prompt, filename)
+                print(f"  [Nano Banana] 컷 {index+1} 생성 완료 ({model_name}, 키: {mask_key(final_key)})")
+                return filename
 
-        except Exception as e:
-            last_error = e
-            print(f"  [Nano Banana] {model_name} 실패: {e}")
-            continue
+            except Exception as e:
+                error_msg = str(e)
+                last_error = e
+                if is_key_rotation_error(error_msg):
+                    mark_key_exhausted(final_key, service_tag)
+                    print(f"  [Nano Banana 키 전환] 컷 {index+1}: {mask_key(final_key)} 차단 → 다른 키로")
+                    continue
+                print(f"  [Nano Banana] {model_name} 실패: {e}")
+                break  # 이 모델 포기 → 다음 모델로
 
-    raise RuntimeError(f"[Nano Banana] 컷 {index+1}: 모든 모델 실패 — {last_error}")
+    raise RuntimeError(f"[Nano Banana] 컷 {index+1}: 모든 모델·키 소진 — {last_error}")
 
 
 def _generate_imagen(api_key: str, prompt: str, model_name: str) -> bytes:

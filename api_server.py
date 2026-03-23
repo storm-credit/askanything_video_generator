@@ -657,7 +657,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                             print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
                             try:
                                 _nb_key = get_google_key(llm_key_override, service="nano_banana", extra_keys=gemini_keys_override)
-                                img_path = generate_image_nano_banana(cut["prompt"], i, topic_folder, _nb_key, topic=_topic)
+                                img_path = generate_image_nano_banana(cut["prompt"], i, topic_folder, _nb_key, gemini_api_keys=gemini_keys_override, topic=_topic)
                             except Exception as nb_exc:
                                 print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {nb_exc}")
                                 _dalle_fallback_key = api_key_override or os.getenv("OPENAI_API_KEY")
