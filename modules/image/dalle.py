@@ -35,14 +35,15 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
         print(f"[이미지 캐시] 히트 — 재생성 스킵 (컷 {index+1})")
         return filename
 
-    safety_retry_count = 0  # safety fallback stage tracker
+    safety_retry_count = 0  # safety fallback 단계 (별도 카운터 — network retry와 독립)
+    max_safety_retries = 2
+    max_network_retries = 3
+    network_attempt = 0
 
-    max_retries = 3
-    for attempt in range(max_retries):
+    print(f"-> [아트 디렉터] 컷 {index+1} 마스터 렌더링 중...")
+
+    while network_attempt < max_network_retries:
         try:
-            if attempt == 0:
-                print(f"-> [아트 디렉터] 컷 {index+1} 마스터 렌더링 중...")
-
             response = client.images.generate(
                 model="dall-e-3",
                 prompt=enhanced_prompt,
@@ -79,20 +80,22 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
 
         except Exception as e:
             error_msg = str(e)
-            if attempt < max_retries - 1:
-                if is_safety_error(error_msg):
-                    enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count, topic=topic)
-                    safety_retry_count += 1
-                    print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 대체 프롬프트로 재시도합니다... ({attempt+1}/{max_retries})")
-                    continue
-                elif '429' in error_msg or 'rate_limit' in error_msg.lower():
-                    wait = min(2 ** (attempt + 1), 30) + random.uniform(0, 2)
-                    print(f"  [DALL·E 429] 컷 {index+1} 속도 제한. {wait:.1f}초 후 재시도... ({attempt+1}/{max_retries})")
+            # Safety 에러: 별도 카운터로 프롬프트 교체 (network 카운터 소모 안 함)
+            if is_safety_error(error_msg) and safety_retry_count < max_safety_retries:
+                enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count, topic=topic)
+                safety_retry_count += 1
+                print(f"  [DALL·E 경고] 컷 {index+1} 정책 위반 감지. 대체 프롬프트로 재시도합니다... (safety {safety_retry_count}/{max_safety_retries})")
+                continue
+            # 429 에러: network 카운터 소모
+            network_attempt += 1
+            if network_attempt < max_network_retries:
+                if '429' in error_msg or 'rate_limit' in error_msg.lower():
+                    wait = min(2 ** network_attempt, 30) + random.uniform(0, 2)
+                    print(f"  [DALL·E 429] 컷 {index+1} 속도 제한. {wait:.1f}초 후 재시도... ({network_attempt}/{max_network_retries})")
                     time.sleep(wait)
-                    continue
                 else:
-                    print(f"  [DALL·E 경고] 컷 {index+1} 렌더링 실패. 3초 후 재시도합니다... ({attempt+1}/{max_retries}) | 사유: {e}")
+                    print(f"  [DALL·E 경고] 컷 {index+1} 렌더링 실패. 재시도... ({network_attempt}/{max_network_retries}) | 사유: {e}")
                     enhanced_prompt = MASTER_STYLE + prompt
-                time.sleep(min(2 ** (attempt + 1), 10) + random.uniform(0, 1))
+                    time.sleep(min(2 ** network_attempt, 10) + random.uniform(0, 1))
             else:
-                raise RuntimeError(f"[DALL·E 이미지 생성 최종 실패] index={index}, 3회 재시도 실패. 오류: {error_msg}")
+                raise RuntimeError(f"[DALL·E 이미지 생성 최종 실패] index={index}, {max_network_retries}회 재시도 실패. 오류: {error_msg}")

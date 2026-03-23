@@ -1416,13 +1416,13 @@ async def render_endpoint(req: RenderRequest):
                 yield {"data": f"[완료] 영상 렌더링 대성공! 📂 Downloads 폴더에 저장됨\n"}
             yield {"data": f"DONE|{relative_video_path}|\n"}
 
-            # 세션 정리
-            _prepared_sessions.pop(req.sessionId, None)
-
         except Exception as e:
             traceback.print_exc()
             safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(e)[:200])
             yield {"data": f"ERROR|[렌더 오류] {safe_msg}\n"}
+        finally:
+            # 성공/실패 관계없이 세션 정리 (메모리 누수 방지)
+            _prepared_sessions.pop(req.sessionId, None)
 
     return EventSourceResponse(sse_generator())
 

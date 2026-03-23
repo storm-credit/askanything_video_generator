@@ -361,7 +361,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 [대본 규칙]
 * 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
 * 한 컷 20~35자, 한 문장. 연속 동일 문장구조 금지.
-* [CRITICAL WARNING] 8~9컷으로 작성. 총 35~45초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지.
+* [CRITICAL WARNING] 8~10컷으로 작성. 총 35~45초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지.
 
 [톤/비주얼] 채널 프리셋([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) 최우선. 약한 마무리("~같아", "~일 수도") 금지.
 * 비속어 금지 (제목+대본): "미쳤/미친/ㅋㅋ/ㄹㅇ" → "놀라운/대박/소름" 사용.
@@ -1024,21 +1024,28 @@ These English keywords help YouTube's algorithm classify this content for US aud
     # 순서: ① 하이네스 구조 → ② 주제 일치 → (구조가 스크립트를 바꿨으면 주제 재검증 1회)→ ③ 팩트
     _scripts_before = [c["script"] for c in cuts]
 
+    # 검증용 키: Gemini는 fresh 키 사용 (생성 후 429 위험 회피)
+    def _verify_key():
+        if llm_provider == "gemini":
+            fresh = get_google_key(None, service="gemini", exclude=exhausted_keys)
+            return fresh or current_key
+        return current_key
+
     # ① 하이네스 구조 검증 (Hook/충격체인/루프엔딩)
-    cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, current_key, lang, llm_model, channel)
+    cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model, channel)
 
     # ② 주제-이미지 일치 검증
-    cuts = _verify_subject_match(cuts, _topic_title, llm_provider, current_key, lang, llm_model)
+    cuts = _verify_subject_match(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model)
 
     # ②-b 구조 수정이 스크립트를 바꿨으면 → 주제 재검증 1회만 (무한 루프 차단)
     _scripts_after = [c["script"] for c in cuts]
     if _scripts_before != _scripts_after:
         print("-> [재검증] 구조/주제 수정으로 스크립트 변경됨 → 주제 일치 재검증 (1회)")
-        cuts = _verify_subject_match(cuts, _topic_title, llm_provider, current_key, lang, llm_model)
+        cuts = _verify_subject_match(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model)
 
     # ③ 팩트 검증 (선택적 — 팩트 컨텍스트 있을 때만)
     if fact_context:
-        cuts = _verify_facts(cuts, fact_context, _topic_title, llm_provider, current_key, lang, llm_model)
+        cuts = _verify_facts(cuts, fact_context, _topic_title, llm_provider, _verify_key(), lang, llm_model)
 
     # ④ HARD FAIL 검증 (코드 레벨 품질 게이트) — 실패 시 1회 구조 수정 재시도
     hard_fails = _validate_hard_fail(cuts, channel)
@@ -1047,9 +1054,15 @@ These English keywords help YouTube's algorithm classify this content for US aud
         print(f"⚠️ [HARD FAIL] {len(hard_fails)}개 품질 문제 감지:")
         for fail in hard_fails:
             print(f"  - {fail}")
-        # HARD FAIL 감지 → 하이네스 구조 수정 1회 재시도
-        print("-> [HARD FAIL 수정] 구조 검증으로 자동 수정 시도 (1회)...")
-        cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, current_key, lang, llm_model, channel)
+        # HARD FAIL 유형별 수정 라우팅
+        has_visual_fail = any("VISUAL" in f for f in hard_fails)
+        has_structure_fail = any(k in "".join(hard_fails) for k in ["HOOK", "TENSION", "LOOP", "TONE"])
+        if has_structure_fail:
+            print("-> [HARD FAIL 수정] 구조 검증으로 자동 수정 시도 (1회)...")
+            cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model, channel)
+        if has_visual_fail:
+            print("-> [HARD FAIL 수정] 이미지 프롬프트 검증으로 자동 수정 시도 (1회)...")
+            cuts = _verify_subject_match(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model)
         # 재검증
         hard_fails_retry = _validate_hard_fail(cuts, channel)
         if hard_fails_retry:
@@ -1370,7 +1383,7 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
     ]
     if any(p in first_script.lower() for p in weak_hook_patterns):
         failures.append(f"HOOK_WEAK: 첫 컷이 약한 패턴 포함 — '{first_script[:50]}'")
-    if first_script.rstrip().endswith("?") or first_script.rstrip().endswith("?"):
+    if first_script.rstrip().endswith("?") or first_script.rstrip().endswith("？"):
         failures.append(f"HOOK_QUESTION: 첫 컷이 질문형 — '{first_script[:50]}'")
 
     # 2) 긴장 상승 검증 — 감정 태그 다양성
