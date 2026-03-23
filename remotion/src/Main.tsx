@@ -426,7 +426,12 @@ export const Main: React.FC<{
         </Sequence>
       )}
 
-      {/* 제목 오버레이 제거 — 이미지 임팩트 최우선, 텍스트 없는 첫 화면이 CTR↑ */}
+      {/* 제목 오버레이 — 첫 번째 컷 위에 표시 (컷 길이 초과 방지) */}
+      {title && cuts.length > 0 && (
+        <Sequence from={introFrames} durationInFrames={Math.min(TITLE_OVERLAY_FRAMES, cuts[0].duration_in_frames)}>
+          <TitleOverlay title={title} />
+        </Sequence>
+      )}
 
       {/* BGM 배경음악 — 전체 영상에 동적 볼륨으로 루프 (speech ducking) */}
       {bgmPath && (
