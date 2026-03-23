@@ -403,7 +403,6 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     {"description": "심해에서 올려다본 수면의 희미한 빛 한 줄기 [WONDER]", "image_prompt": "Looking straight up from deep ocean floor toward distant surface, single faint beam of sunlight barely penetrating, vast dark water column, lonely and sublime, low angle upward shot", "script": "우주보다 덜 탐사된 곳이 바로 발밑 바다라는 거지."},
     {"description": "심해 잠수정이 어둠 속으로 다시 내려가는 장면 — Cut 1과 유사 구도 [CALM]", "image_prompt": "Tiny submersible descending again into pitch-black deep ocean abyss, same composition as cut 1, dark indigo water, faint bioluminescent glow, extreme wide angle", "script": "근데 아직 심해의 5%도 못 봤다는 거 알아?"}
   ]
-  ]
 }
 
 [Output Format — 순수 JSON만 출력, 마크다운 코드블록 금지]
