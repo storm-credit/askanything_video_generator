@@ -48,17 +48,25 @@ def _validate_inputs(visual_paths: list[str], audio_paths: list[str], scripts: l
             raise FileNotFoundError(f"컷 {idx} audio 파일이 없습니다: {a}")
 
 
-def _select_bgm(bgm_theme: str = "random") -> str | None:
-    """brand/bgm/ 폴더에서 테마별 BGM 선택. 단일 brand/bgm.mp3도 호환."""
+def _select_bgm(bgm_theme: str = "random", channel: str | None = None) -> str | None:
+    """채널별 BGM 우선 → brand/bgm/ 테마별 → brand/bgm.mp3 폴백."""
     import random
-    bgm_dir = os.path.join(BRAND_DIR, "bgm")
-    single_bgm = os.path.join(BRAND_DIR, BGM_FILE)
+
+    # 1) 채널 전용 BGM 우선: brand/channels/{channel}/bgm.mp3
+    if channel:
+        channel_bgm = os.path.join(BRAND_DIR, "channels", channel, BGM_FILE)
+        if os.path.exists(channel_bgm):
+            print(f"  [BGM] 채널 전용 배경음악: {channel}/{BGM_FILE}")
+            return channel_bgm
 
     if bgm_theme == "none":
         return None
 
+    # 2) 테마별 BGM: brand/bgm/epic.mp3, brand/bgm/calm.mp3 등
+    bgm_dir = os.path.join(BRAND_DIR, "bgm")
+    single_bgm = os.path.join(BRAND_DIR, BGM_FILE)
+
     if os.path.isdir(bgm_dir):
-        # 테마별 파일: brand/bgm/epic.mp3, brand/bgm/calm.mp3 등
         available = {}
         for f in os.listdir(bgm_dir):
             if f.lower().endswith(('.mp3', '.wav', '.m4a')):
@@ -78,7 +86,7 @@ def _select_bgm(bgm_theme: str = "random") -> str | None:
 
         return chosen
 
-    # brand/bgm/ 폴더 없으면 단일 파일 폴백
+    # 3) 단일 파일 폴백: brand/bgm.mp3
     return single_bgm if os.path.exists(single_bgm) else None
 
 
@@ -256,7 +264,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     outro_available = outro_src is not None and os.path.exists(outro_src)
 
     # BGM 준비
-    bgm_source = _select_bgm(bgm_theme)
+    bgm_source = _select_bgm(bgm_theme, channel=channel)
     bgm_src_path = None
     if bgm_source and os.path.exists(bgm_source):
         bgm_dest = os.path.join("assets", BGM_FILE)
