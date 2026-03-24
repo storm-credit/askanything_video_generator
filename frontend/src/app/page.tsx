@@ -1307,7 +1307,7 @@ export default function Home() {
                           : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
                       }`}
                     >
-                      <span>{preset.flag}</span>
+                      <span className="text-[10px] font-bold uppercase opacity-60">{preset.language}</span>
                       <span>{preset.label}</span>
                     </button>
                   );

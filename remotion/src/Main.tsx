@@ -3,7 +3,6 @@ import React, { useCallback, useMemo } from 'react';
 import { Captions } from './Captions';
 
 const INTRO_DURATION_FRAMES = 24;  // 1초 @ 24fps
-const TITLE_OVERLAY_FRAMES = 60;  // 2.5초 @ 24fps (첫 컷 위 오버레이)
 const OUTRO_DURATION_FRAMES = 24;  // 1초 @ 24fps
 
 type WordProps = {
@@ -138,88 +137,6 @@ const BrandIntro: React.FC<{ src: string }> = ({ src }) => {
           transform: `scale(${scale})`,
         }}
       />
-    </AbsoluteFill>
-  );
-};
-
-// 제목 오버레이 (첫 번째 컷 위에 표시 — 투명 배경)
-const TitleOverlay: React.FC<{ title: string }> = ({ title }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  // 0→0.3초: 페이드인, 마지막 0.4초: 페이드아웃
-  const fadeIn = interpolate(frame, [0, fps * 0.3], [0, 1], { extrapolateRight: 'clamp' });
-  const fadeOut = interpolate(
-    frame,
-    [TITLE_OVERLAY_FRAMES - fps * 0.4, TITLE_OVERLAY_FRAMES],
-    [1, 0],
-    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-  );
-  const opacity = fadeIn * fadeOut;
-
-  // 살짝 위로 올라오는 애니메이션
-  const translateY = interpolate(frame, [0, fps * 0.5], [20, 0], { extrapolateRight: 'clamp' });
-
-  // 밑줄 확장 애니메이션 (0.2→0.8초)
-  const lineWidth = interpolate(frame, [fps * 0.2, fps * 0.8], [0, 100], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-
-  return (
-    <AbsoluteFill
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        opacity,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          transform: `translateY(${translateY}px)`,
-        }}
-      >
-        {/* 반투명 배경 박스 */}
-        <div
-          style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.55)',
-            borderRadius: 16,
-            padding: '24px 48px 20px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-          }}
-        >
-          <div
-            style={{
-              color: 'white',
-              fontSize: title.length > 10 ? 64 : 80,
-              fontWeight: 900,
-              fontFamily: 'sans-serif',
-              textAlign: 'center',
-              lineHeight: 1.3,
-              textShadow: '0 0 30px rgba(99, 102, 241, 0.7), 0 2px 8px rgba(0,0,0,0.8)',
-            }}
-          >
-            {title}
-          </div>
-          {/* 하단 장식 라인 */}
-          <div
-            style={{
-              marginTop: 20,
-              height: 3,
-              width: `${lineWidth}%`,
-              maxWidth: 360,
-              background: 'linear-gradient(90deg, transparent, #818cf8, #6366f1, #818cf8, transparent)',
-              borderRadius: 2,
-            }}
-          />
-        </div>
-      </div>
     </AbsoluteFill>
   );
 };
@@ -426,12 +343,6 @@ export const Main: React.FC<{
         </Sequence>
       )}
 
-      {/* 제목 오버레이 — 첫 번째 컷 위에 표시 (컷 길이 초과 방지) */}
-      {title && cuts.length > 0 && (
-        <Sequence from={introFrames} durationInFrames={Math.min(TITLE_OVERLAY_FRAMES, cuts[0].duration_in_frames)}>
-          <TitleOverlay title={title} />
-        </Sequence>
-      )}
 
       {/* BGM 배경음악 — 전체 영상에 동적 볼륨으로 루프 (speech ducking) */}
       {bgmPath && (
