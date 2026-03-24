@@ -179,6 +179,7 @@ const BGM_VOLUME = 0.25;  // TTS 대비 25% 볼륨 (fallback when no timestamps)
 const BGM_VOLUME_SPEECH = 0.15;  // Speech active: duck to 15%
 const BGM_VOLUME_SILENCE = 0.35; // No speech: raise to 35%
 const BGM_RAMP_FRAMES = 5;       // Smooth transition over 5 frames
+const BGM_INTRO_FRAMES = 12;     // 첫 0.5초(12f@24fps) BGM 풀 볼륨 인트로
 
 // Build global word timeline from all cuts with their absolute frame offsets
 function buildGlobalWordTimeline(
@@ -211,6 +212,11 @@ function getDynamicBgmVolume(
   timeline: GlobalWordSegment[],
 ): number {
   if (timeline.length === 0) return BGM_VOLUME;
+
+  // 첫 0.5초 인트로: BGM 풀 볼륨으로 시작 → 나레이션 전에 음악 존재감 확보
+  if (frame < BGM_INTRO_FRAMES) {
+    return BGM_VOLUME_SILENCE;
+  }
 
   // Binary search for speech segment containing frame
   let lo = 0, hi = timeline.length - 1;
