@@ -263,15 +263,12 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
     intro_available = intro_src is not None and os.path.exists(intro_src)
     outro_available = outro_src is not None and os.path.exists(outro_src)
 
-    # BGM 준비
+    # BGM 준비 — 채널별 원본 경로 직접 사용 (공유 assets/bgm.mp3 거치지 않음)
     bgm_source = _select_bgm(bgm_theme, channel=channel)
     bgm_src_path = None
     if bgm_source and os.path.exists(bgm_source):
-        bgm_dest = os.path.join("assets", BGM_FILE)
-        if not os.path.exists(bgm_dest) or os.path.getmtime(bgm_source) > os.path.getmtime(bgm_dest):
-            shutil.copy2(bgm_source, bgm_dest)
-        bgm_src_path = bgm_dest
-        print(f"-> [BGM] 배경음악 '{os.path.basename(bgm_source)}' 전체 영상에 적용")
+        bgm_src_path = os.path.abspath(bgm_source)
+        print(f"-> [BGM] 배경음악 '{os.path.basename(bgm_source)}' ({channel or 'default'}) 전체 영상에 적용")
 
     # Remotion 환경 검증
     remotion_dir = os.path.abspath("remotion")

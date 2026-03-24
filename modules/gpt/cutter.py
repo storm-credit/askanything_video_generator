@@ -332,7 +332,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 - image_prompt에 강렬한 시각 요소 없음 → FAIL
 - 톤이 채널 설정과 불일치 → FAIL
 
-[숏폼 구조 (8~10컷, 각 4~5초, 총 35~50초)]
+[숏폼 구조 (8~9컷, 각 4~5초, 총 35~42초)]
 1. Cut 1 — 결론 폭탄(Hook): 가장 충격적 팩트를 단정문으로 던져라. 질문형 금지. ★ 1.7초 법칙: image_prompt에 극단적 스케일/강렬 색대비/비현실 장면 필수.
    후크 패턴: 숫자 대비, 부정+반전, 시간 긴급성, 직관 파괴
    ★★★ [훅 필수 규칙] 첫 문장은 반드시 상식을 깨거나 "불가능해 보이는 사실"이어야 함.
@@ -361,7 +361,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 [대본 규칙]
 * 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
 * 한 컷 20~35자, 한 문장. 연속 동일 문장구조 금지.
-* [CRITICAL WARNING] 8~10컷으로 작성. 총 35~45초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지.
+* [CRITICAL WARNING] 8~9컷으로 작성. 총 35~42초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지.
 
 [톤/비주얼] 채널 프리셋([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) 최우선. 약한 마무리("~같아", "~일 수도") 금지.
 * 비속어 금지 (제목+대본): "미쳤/미친/ㅋㅋ/ㄹㅇ" → "놀라운/대박/소름" 사용.
@@ -439,7 +439,7 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 - Visual prompts lack striking element → FAIL
 - Tone does not match channel → FAIL
 
-[Short-form Structure (8–10 cuts, ~4–5 sec each, 35–50 sec total)]
+[Short-form Structure (8–9 cuts, ~4–5 sec each, 38–48 sec total)]
 1. Cut 1 — Hook: Drop the most shocking fact as a declarative statement. NO questions. ★ 1.7-SEC RULE: image_prompt MUST have extreme visual impact (scale, color contrast, surreal).
    Hook patterns: number contrast, negation+reveal, time urgency, intuition breaker
    ★★★ [HOOK MUST RULE] First line MUST break common belief or present an "impossible fact."
@@ -467,7 +467,7 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 
 [Script Rules]
 * Casual, conversational. 10–15 words per cut, one sentence. Vary sentence structures.
-* [CRITICAL WARNING] Write 9–10 cuts. Target 45–55 second video. NEVER less than 9 cuts. Prioritize immersion over speed.
+* [CRITICAL WARNING] Write 8–9 cuts. Target 38–48 second video. NEVER less than 8 cuts. Balance immersion with retention.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious."
 
 [Tone/Visual] Channel preset ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) takes priority. No weak trailing ("maybe", "kind of").
@@ -547,7 +547,7 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - image_prompt sin elemento visual impactante → FAIL
 - Tono no coincide con el canal → FAIL
 
-[Estructura del corto (8–10 cortes, ~4–5 seg cada uno, 35–50 seg total)]
+[Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 38–48 seg total)]
 1. Corte 1 — Gancho: Suelta el dato más impactante como afirmación directa. SIN preguntas. ★ REGLA DE 1.7 SEG: el image_prompt DEBE tener impacto visual extremo (escala, contraste de color, surrealismo).
    Patrones de gancho: contraste numérico, negación+revelación, urgencia temporal, destructor de intuición
    ★★★ [REGLA DEL GANCHO] La primera línea DEBE romper una creencia común o presentar un "hecho imposible."
@@ -576,7 +576,7 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 [Reglas de guion — TONO NEUTRO OBLIGATORIO]
 * Español neutro, directo, sin regionalismos. Tono de narrador de documental.
 * 8–15 palabras por corte, una oración. Variar estructuras de oración.
-* [CRITICAL WARNING] Escribir 8–10 cortes. Video objetivo de 40–50 segundos. NUNCA menos de 8 cortes. Ritmo medio — entre inmersión y dinamismo.
+* [CRITICAL WARNING] Escribir 8–9 cortes. Video objetivo de 38–48 segundos. NUNCA menos de 8 cortes. Ritmo medio — entre inmersión y dinamismo.
 
 [Tono/Visual] Preset del canal ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) tiene prioridad. Sin finales débiles ("tal vez", "podría ser").
 * ❌ PROHIBIDO: colores vibrantes/saturados tipo latino. Este canal es OSCURO y CINEMATOGRÁFICO.
@@ -663,7 +663,7 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - image_prompt sin elemento visual impactante → FAIL
 - Tono no coincide con el canal → FAIL
 
-[Estructura del corto (8–10 cortes, ~4–5 seg cada uno, 35–50 seg total)]
+[Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 35–42 seg total)]
 1. Corte 1 — Gancho: El dato más impactante como exclamación o afirmación fuerte. ★ REGLA DE 1.7 SEG: image_prompt con colores vibrantes, escenas llamativas, impacto visual máximo.
    Patrones de gancho: "Esto es increíble...", contraste numérico, dato sorprendente
    ★★★ [REGLA DEL GANCHO] La primera línea DEBE ser EXPLOSIVA. Dato imposible o exclamación que no se puede ignorar.
@@ -687,7 +687,7 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 [Reglas de guion — TONO LATINO ENERGÉTICO]
 * Español latinoamericano, accesible, entretenido. Tono de presentador curioso.
 * 8–15 palabras por corte, una oración. Ritmo rápido.
-* [CRITICAL WARNING] Escribir 8–9 cortes. Video objetivo de 35–45 segundos. NUNCA menos de 8 cortes. Tempo rápido — sin pausa.
+* [CRITICAL WARNING] Escribir 8–9 cortes. Video objetivo de 35–42 segundos. NUNCA menos de 8 cortes. Tempo rápido — sin pausa.
 * Patrones de oración OBLIGATORIOS (variar entre estos):
   - Exclamación de apertura: "Esto es increíble..."
   - Dato sorprendente: "Los pulpos tienen 3 corazones."

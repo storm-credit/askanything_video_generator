@@ -9,7 +9,7 @@ import threading
 import traceback
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -1236,6 +1236,69 @@ async def prepare_endpoint(req: PrepareRequest):
             yield {"data": f"ERROR|[준비 오류] {safe_msg}\n"}
 
     return EventSourceResponse(sse_generator())
+
+
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
+MAX_IMAGE_SIZE = 20 * 1024 * 1024  # 20MB
+
+
+@app.post("/api/replace-image")
+async def replace_image_endpoint(
+    sessionId: str = Form(...),
+    cutIndex: int = Form(...),
+    file: UploadFile = File(...),
+):
+    """미리보기 단계에서 특정 컷의 이미지를 사용자 파일로 교체."""
+    # 세션 확인
+    with _session_lock:
+        session = _prepared_sessions.get(sessionId)
+    if not session:
+        return JSONResponse(status_code=404, content={"error": "세션을 찾을 수 없습니다."})
+
+    image_paths = session.get("image_paths", [])
+    if cutIndex < 0 or cutIndex >= len(image_paths):
+        return JSONResponse(status_code=400, content={"error": f"잘못된 컷 인덱스: {cutIndex}"})
+
+    # 파일 타입 검증
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        return JSONResponse(status_code=400, content={"error": "PNG, JPG, WEBP 파일만 가능합니다."})
+
+    # 파일 읽기 + 크기 검증
+    data = await file.read()
+    if len(data) > MAX_IMAGE_SIZE:
+        return JSONResponse(status_code=400, content={"error": "파일 크기가 20MB를 초과합니다."})
+
+    # 1080x1920 리사이즈 + 저장
+    try:
+        from PIL import Image, ImageOps
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        fitted = ImageOps.fit(img, (1080, 1920), method=Image.LANCZOS, centering=(0.5, 0.5))
+
+        dest_path = image_paths[cutIndex]
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+
+        import tempfile
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(dest_path), suffix=".tmp")
+        os.close(fd)
+        try:
+            fitted.save(tmp, format="PNG")
+            os.replace(tmp, dest_path)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+
+        # 응답: 새 이미지 URL
+        rel = dest_path.replace("\\", "/")
+        idx = rel.find("assets/")
+        img_url = f"/{rel[idx:]}" if idx >= 0 else None
+        print(f"[이미지 교체] 컷 {cutIndex + 1} 사용자 이미지로 교체 완료")
+        return {"ok": True, "image_url": img_url}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"이미지 처리 실패: {str(e)}"})
 
 
 class RenderRequest(BaseModel):

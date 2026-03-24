@@ -16,6 +16,9 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "language": "ko",
         "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
         "tts_speed": 0.9,
+        "min_cuts": 8,
+        "max_cuts": 9,
+        "target_duration": "35-42",  # 초 — 빠른 템포, 완주율 우선
         "voice_settings": {
             "stability": 0.4,
             "similarity_boost": 0.8,
@@ -39,6 +42,9 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "language": "en",
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
         "tts_speed": 0.85,
+        "min_cuts": 8,
+        "max_cuts": 9,
+        "target_duration": "38-48",  # 초 — 몰입+완주 균형
         "voice_settings": {
             "stability": 0.65,
             "similarity_boost": 0.85,
@@ -62,6 +68,9 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
         "tts_speed": 0.95,
+        "min_cuts": 8,
+        "max_cuts": 9,
+        "target_duration": "35-42",  # 초 — 빠른 템포, KO와 유사 리듬
         "voice_settings": {
             "stability": 0.4,
             "similarity_boost": 0.8,
@@ -85,6 +94,9 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성 — 미국 히스패닉 타겟)
         "tts_speed": 0.9,
+        "min_cuts": 8,
+        "max_cuts": 9,
+        "target_duration": "38-48",  # 초 — 시네마틱 몰입, EN과 유사 리듬
         "voice_settings": {
             "stability": 0.55,
             "similarity_boost": 0.85,

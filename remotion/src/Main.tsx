@@ -175,9 +175,9 @@ const FadeIn: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
-const BGM_VOLUME = 0.15;  // TTS 대비 15% 볼륨 (fallback when no timestamps)
-const BGM_VOLUME_SPEECH = 0.08;  // Speech active: duck to 8%
-const BGM_VOLUME_SILENCE = 0.20; // No speech: raise to 20%
+const BGM_VOLUME = 0.25;  // TTS 대비 25% 볼륨 (fallback when no timestamps)
+const BGM_VOLUME_SPEECH = 0.15;  // Speech active: duck to 15%
+const BGM_VOLUME_SILENCE = 0.35; // No speech: raise to 35%
 const BGM_RAMP_FRAMES = 5;       // Smooth transition over 5 frames
 
 // Build global word timeline from all cuts with their absolute frame offsets

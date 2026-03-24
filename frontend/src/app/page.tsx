@@ -9,10 +9,10 @@ import { ProgressPanel } from "../components/ProgressPanel";
 
 // 채널 프리셋 정의
 const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number; cameraStyle: string }> = {
-  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 54, captionY: 35, cameraStyle: "dynamic" },
-  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "gentle" },
-  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 0.95, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "dynamic" },
-  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "dynamic" },
+  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 54, captionY: 35, cameraStyle: "auto" },
+  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "auto" },
+  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 0.95, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "auto" },
+  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "auto" },
 };
 
 // localStorage 유틸
@@ -182,6 +182,39 @@ export default function Home() {
   const [channelPreviews, setChannelPreviews] = useState<Record<string, PreviewData>>({});
   const [activePreviewTab, setActivePreviewTab] = useState<string>("");
   const [editedScriptsMap, setEditedScriptsMap] = useState<Record<string, Record<number, string>>>({});
+  const [replacingCut, setReplacingCut] = useState<number | null>(null); // 이미지 교체 중인 컷
+
+  // 이미지 교체 핸들러
+  const replaceImage = async (file: File, cutIndex: number, sessionId: string, channel?: string) => {
+    const ALLOWED = ["image/png", "image/jpeg", "image/webp"];
+    if (!ALLOWED.includes(file.type)) { alert("PNG, JPG, WEBP 파일만 가능합니다."); return; }
+    if (file.size > 20 * 1024 * 1024) { alert("파일 크기가 20MB를 초과합니다."); return; }
+    setReplacingCut(cutIndex);
+    try {
+      const fd = new FormData();
+      fd.append("sessionId", sessionId);
+      fd.append("cutIndex", String(cutIndex));
+      fd.append("file", file);
+      const res = await fetch(`${API_BASE}/api/replace-image`, { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error || "이미지 교체 실패"); return; }
+      // 미리보기 데이터 업데이트
+      const newUrl = json.image_url + `?t=${Date.now()}`;
+      if (channel) {
+        setChannelPreviews(prev => {
+          const cp = { ...prev };
+          if (cp[channel]) {
+            cp[channel] = { ...cp[channel], cuts: cp[channel].cuts.map(c => c.index === cutIndex ? { ...c, image_url: newUrl } : c) };
+          }
+          return cp;
+        });
+      } else {
+        setPreviewData(prev => prev ? { ...prev, cuts: prev.cuts.map(c => c.index === cutIndex ? { ...c, image_url: newUrl } : c) } : prev);
+      }
+    } catch (e) { alert("이미지 교체 중 오류 발생"); }
+    finally { setReplacingCut(null); }
+  };
+
   // 멀티채널 렌더 진행률
   const [renderResults, setRenderResults] = useState<Record<string, { progress: number; logs: string[]; status: 'rendering' | 'done' | 'error'; videoUrl?: string; errorMsg?: string }>>({});
   const [activeRenderTab, setActiveRenderTab] = useState<string>("");
@@ -1780,8 +1813,29 @@ export default function Home() {
                     transition={{ delay: i * 0.05, duration: 0.3 }}
                     className="group flex gap-3 bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] hover:border-white/[0.12] rounded-xl p-3 transition-all duration-200"
                   >
-                    {/* 썸네일 + 컷 번호 */}
-                    <div className="relative w-24 h-40 flex-shrink-0 rounded-lg overflow-hidden bg-black/40 group-hover:scale-[1.02] transition-transform duration-200">
+                    {/* 썸네일 + 컷 번호 + 이미지 교체 */}
+                    <div
+                      className={`relative w-24 h-40 flex-shrink-0 rounded-lg overflow-hidden bg-black/40 group-hover:scale-[1.02] transition-transform duration-200 cursor-pointer ${replacingCut === cut.index ? "opacity-50 animate-pulse" : ""}`}
+                      onClick={() => {
+                        const inp = document.createElement("input");
+                        inp.type = "file";
+                        inp.accept = "image/png,image/jpeg,image/webp";
+                        inp.onchange = (e) => {
+                          const f = (e.target as HTMLInputElement).files?.[0];
+                          if (f) replaceImage(f, cut.index, currentPreview!.sessionId, currentCh || undefined);
+                        };
+                        inp.click();
+                      }}
+                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-indigo-400"); }}
+                      onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-indigo-400"); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove("ring-2", "ring-indigo-400");
+                        const f = e.dataTransfer.files[0];
+                        if (f) replaceImage(f, cut.index, currentPreview!.sessionId, currentCh || undefined);
+                      }}
+                      title="클릭 또는 드래그하여 이미지 교체"
+                    >
                       {cut.image_url ? (
                         <img
                           src={`${API_BASE}${cut.image_url}`}
@@ -1793,6 +1847,10 @@ export default function Home() {
                           이미지 없음
                         </div>
                       )}
+                      {/* 호버 시 교체 안내 */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-[10px] text-white/80 text-center leading-tight">클릭/드래그<br/>이미지 교체</span>
+                      </div>
                       <div className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-indigo-600/90 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold text-white shadow-md">
                         {cut.index + 1}
                       </div>
