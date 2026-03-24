@@ -1301,6 +1301,89 @@ async def replace_image_endpoint(
         return JSONResponse(status_code=500, content={"error": f"이미지 처리 실패: {str(e)}"})
 
 
+class RegenerateImageRequest(BaseModel):
+    sessionId: str
+    cutIndex: int
+    model: str | None = None  # "standard", "fast", "ultra", "nano_banana", "dalle" — None이면 기본 체인
+
+
+@app.post("/api/regenerate-image")
+async def regenerate_image_endpoint(req: RegenerateImageRequest):
+    """특정 컷의 이미지를 재생성합니다. 모델 지정 가능."""
+    with _session_lock:
+        session = _prepared_sessions.get(req.sessionId)
+    if not session:
+        return JSONResponse(status_code=404, content={"error": "세션을 찾을 수 없습니다."})
+
+    cuts = session.get("cuts", [])
+    image_paths = session.get("image_paths", [])
+    if req.cutIndex < 0 or req.cutIndex >= len(cuts):
+        return JSONResponse(status_code=400, content={"error": f"잘못된 컷 인덱스: {req.cutIndex}"})
+
+    cut = cuts[req.cutIndex]
+    prompt = cut.get("prompt", cut.get("image_prompt", ""))
+    if not prompt:
+        return JSONResponse(status_code=400, content={"error": "이미지 프롬프트가 없습니다."})
+
+    topic_folder = session.get("topic_folder", "default_topic")
+    topic = session.get("topic", "")
+
+    # 이미지 캐시 무효화 — 같은 프롬프트로 재생성 시 캐시 히트 방지
+    from modules.image.imagen import MASTER_STYLE
+    from modules.utils.cache import invalidate_cache
+    try:
+        invalidate_cache(MASTER_STYLE + prompt)
+    except Exception:
+        pass  # 캐시 무효화 실패해도 진행
+
+    gemini_keys = os.getenv("GEMINI_API_KEY", "")
+
+    try:
+        new_path = None
+        model_name = req.model or "standard"
+
+        if model_name in ("standard", "fast", "ultra"):
+            model_map = {
+                "standard": "imagen-4.0-generate-001",
+                "fast": "imagen-4.0-fast-generate-001",
+                "ultra": "imagen-4.0-ultra-generate-001",
+            }
+            from modules.image.imagen import generate_image_imagen
+            new_path = generate_image_imagen(
+                prompt, req.cutIndex, topic_folder,
+                model_override=model_map[model_name],
+                gemini_api_keys=gemini_keys, topic=topic,
+            )
+        elif model_name == "nano_banana":
+            from modules.image.imagen import generate_image_nano_banana
+            new_path = generate_image_nano_banana(
+                prompt, req.cutIndex, topic_folder,
+                gemini_api_keys=gemini_keys, topic=topic,
+            )
+        elif model_name == "dalle":
+            from modules.image.dalle import generate_image_dalle
+            new_path = generate_image_dalle(prompt, req.cutIndex, topic_folder, topic=topic)
+        else:
+            return JSONResponse(status_code=400, content={"error": f"알 수 없는 모델: {model_name}"})
+
+        if new_path and os.path.exists(new_path):
+            # 세션 업데이트
+            with _session_lock:
+                if req.sessionId in _prepared_sessions:
+                    _prepared_sessions[req.sessionId]["image_paths"][req.cutIndex] = new_path
+
+            rel = new_path.replace("\\", "/")
+            idx = rel.find("assets/")
+            img_url = f"/{rel[idx:]}" if idx >= 0 else None
+            print(f"[이미지 재생성] 컷 {req.cutIndex + 1} {model_name}으로 재생성 완료")
+            return {"ok": True, "image_url": img_url, "model": model_name}
+        else:
+            return JSONResponse(status_code=500, content={"error": "이미지 생성 실패"})
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"재생성 실패: {str(e)}"})
+
+
 class RenderRequest(BaseModel):
     sessionId: str
     cuts: list[dict]  # 수정된 스크립트 포함: [{index, script}, ...]

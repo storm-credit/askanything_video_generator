@@ -9,10 +9,11 @@ Google AI 모델 체인 설정
   IMAGEN_MODEL, VEO_MODEL 등을 설정하면 체인이 비활성화되고 해당 모델만 사용.
 """
 
-# Imagen 모델 체인: Standard → Ultra (Fast 제거 — 품질 불량)
-# Fast 키 소진 시 Nano Banana → DALL-E로 직접 폴백
+# Imagen 모델 체인: Standard → Fast → Ultra → (Nano Banana) → DALL-E
+# Fast가 가성비 최적, Ultra는 무거운 폴백, Nano Banana는 imagen.py에서 별도 처리
 IMAGEN_MODELS = [
     {"id": "imagen-4.0-generate-001", "tag": "standard", "label": "Imagen 4"},
+    {"id": "imagen-4.0-fast-generate-001", "tag": "fast", "label": "Imagen 4 Fast"},
     {"id": "imagen-4.0-ultra-generate-001", "tag": "ultra", "label": "Imagen 4 Ultra"},
 ]
 

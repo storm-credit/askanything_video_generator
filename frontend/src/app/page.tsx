@@ -183,6 +183,34 @@ export default function Home() {
   const [activePreviewTab, setActivePreviewTab] = useState<string>("");
   const [editedScriptsMap, setEditedScriptsMap] = useState<Record<string, Record<number, string>>>({});
   const [replacingCut, setReplacingCut] = useState<number | null>(null); // 이미지 교체 중인 컷
+  const [regeneratingCut, setRegeneratingCut] = useState<number | null>(null); // 이미지 재생성 중인 컷
+
+  // 이미지 재생성 핸들러 (모델 선택 가능)
+  const regenerateImage = async (cutIndex: number, sessionId: string, model: string, channel?: string) => {
+    setRegeneratingCut(cutIndex);
+    try {
+      const res = await fetch(`${API_BASE}/api/regenerate-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, cutIndex, model }),
+      });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error || "이미지 재생성 실패"); return; }
+      const newUrl = json.image_url + `?t=${Date.now()}`;
+      if (channel) {
+        setChannelPreviews(prev => {
+          const cp = { ...prev };
+          if (cp[channel]) {
+            cp[channel] = { ...cp[channel], cuts: cp[channel].cuts.map(c => c.index === cutIndex ? { ...c, image_url: newUrl } : c) };
+          }
+          return cp;
+        });
+      } else {
+        setPreviewData(prev => prev ? { ...prev, cuts: prev.cuts.map(c => c.index === cutIndex ? { ...c, image_url: newUrl } : c) } : prev);
+      }
+    } catch (e) { alert("이미지 재생성 중 오류 발생"); }
+    finally { setRegeneratingCut(null); }
+  };
 
   // 이미지 교체 핸들러
   const replaceImage = async (file: File, cutIndex: number, sessionId: string, channel?: string) => {
@@ -1875,12 +1903,36 @@ export default function Home() {
                         rows={3}
                         className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-gray-200 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/30 transition-colors"
                       />
-                      <details className="group/prompt">
-                        <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-gray-400 transition-colors select-none">
-                          이미지 프롬프트 보기
-                        </summary>
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">{cut.prompt}</p>
-                      </details>
+                      <div className="flex items-center gap-1.5">
+                        <details className="group/prompt flex-1">
+                          <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-gray-400 transition-colors select-none">
+                            이미지 프롬프트 보기
+                          </summary>
+                          <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">{cut.prompt}</p>
+                        </details>
+                        {/* 이미지 재생성 버튼 */}
+                        <div className="relative flex-shrink-0">
+                          <select
+                            className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[9px] text-gray-400 cursor-pointer hover:bg-white/10 focus:outline-none appearance-none pr-4"
+                            defaultValue=""
+                            disabled={regeneratingCut === cut.index || replacingCut === cut.index}
+                            onChange={(e) => {
+                              const model = e.target.value;
+                              if (model && currentPreview) {
+                                regenerateImage(cut.index, currentPreview.sessionId, model, currentCh || undefined);
+                              }
+                              e.target.value = "";
+                            }}
+                          >
+                            <option value="" disabled>{regeneratingCut === cut.index ? "생성중..." : "재생성"}</option>
+                            <option value="standard">Standard</option>
+                            <option value="fast">Fast</option>
+                            <option value="ultra">Ultra</option>
+                            <option value="nano_banana">Nano Banana</option>
+                            <option value="dalle">DALL-E</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   </motion.div>
                 );

@@ -23,6 +23,17 @@ def get_cached_image(prompt: str) -> str | None:
     return None
 
 
+def invalidate_cache(prompt: str) -> None:
+    """Remove cached image for given prompt."""
+    h = hashlib.sha256(prompt.encode()).hexdigest()
+    cached = os.path.join(IMAGE_CACHE_DIR, f"{h}.png")
+    try:
+        if os.path.exists(cached):
+            os.remove(cached)
+    except OSError:
+        pass
+
+
 def save_to_cache(prompt: str, image_path: str) -> None:
     """Copy generated image to cache using atomic write (tmp + rename)."""
     if not image_path or not os.path.exists(image_path):
