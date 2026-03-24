@@ -920,7 +920,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # ── 자동 업로드: 채널 선택 시 publishMode에 따라 플랫폼 업로드 ──
             if req.channel and req.publishMode != "local":
-                from modules.utils.channel_config import get_channel_preset, get_upload_account
+                from modules.utils.channel_config import get_upload_account
                 upload_preset = get_channel_preset(req.channel)
                 upload_platforms = upload_preset.get("platforms", []) if upload_preset else []
                 abs_video_path = os.path.abspath(video_path)
