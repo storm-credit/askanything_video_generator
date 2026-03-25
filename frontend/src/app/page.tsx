@@ -730,7 +730,7 @@ export default function Home() {
           const blobUrl = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = blobUrl;
-          a.download = videoPath.split(/[\\/]/).pop() || "AskAnything_Shorts.mp4";
+          a.download = `${channel || "shorts"}_${(topic || "video").slice(0, 50)}.mp4`;
           document.body.appendChild(a);
           a.click();
           a.remove();
@@ -1577,7 +1577,7 @@ export default function Home() {
                                 const url = URL.createObjectURL(blob);
                                 const a = document.createElement("a");
                                 a.href = url;
-                                a.download = result.videoUrl!.split('/').pop() || "video.mp4";
+                                a.download = `${ch}_${(topic || "video").slice(0, 50)}.mp4`;
                                 document.body.appendChild(a); a.click(); a.remove();
                                 URL.revokeObjectURL(url);
                               } catch { window.open(result.videoUrl!, "_blank"); }
@@ -1987,7 +1987,8 @@ export default function Home() {
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
                       a.href = url;
-                      a.download = generatedVideoPath.split(/[\\/]/).pop() || "AskAnything_Shorts.mp4";
+                      const activeChName = selectedChannels.length === 1 ? selectedChannels[0] : (channel || "shorts");
+                      a.download = `${activeChName}_${(topic || "video").slice(0, 50)}.mp4`;
                       document.body.appendChild(a);
                       a.click();
                       a.remove();
