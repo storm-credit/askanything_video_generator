@@ -150,7 +150,7 @@ def create_auth_url(channel: str | None = None) -> str:
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="select_account",
+        prompt="consent select_account",
         state=state,
     )
     # state에 시크릿 경로 + PKCE code_verifier + 채널 프리셋 이름 저장
