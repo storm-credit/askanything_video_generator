@@ -1694,7 +1694,7 @@ export default function Home() {
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement("a");
                               a.href = url;
-                              a.download = result.videoUrl!.split('/').pop() || "video.mp4";
+                              a.download = `${activeRenderTab}_${(topic || "video").slice(0, 50)}.mp4`;
                               document.body.appendChild(a); a.click(); a.remove();
                               URL.revokeObjectURL(url);
                             } catch { window.open(result.videoUrl!, "_blank"); }
