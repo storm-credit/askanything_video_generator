@@ -2072,7 +2072,9 @@ export default function Home() {
             >
               {/* 헤더 + 플랫폼 탭 */}
               <div className="flex items-center justify-between">
-                <h3 className="text-lg text-white font-bold">업로드</h3>
+                <h3 className="text-lg text-white font-bold">
+                  업로드 — <span className="text-indigo-400">{(() => { const ch = selectedChannels.length === 1 ? selectedChannels[0] : channel; const p = ch ? CHANNEL_PRESETS[ch] : null; return p ? `${p.flag} ${p.label}` : ch || ""; })()}</span>
+                </h3>
                 <button
                   onClick={() => !uploading && setShowUploadModal(false)}
                   className="text-gray-400 hover:text-white transition-colors"
