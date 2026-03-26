@@ -218,8 +218,13 @@ export default function Home() {
       if (Object.keys(newPreviews).length === 1 && !Object.values(newPreviews)[0].channel) {
         setPreviewData(Object.values(newPreviews)[0]);
       } else {
-        setChannelPreviews(newPreviews);
-        setActivePreviewTab(Object.keys(newPreviews)[0]);
+        // 채널 순서 고정: askanything → wonderdrop → exploratodo → prismtale
+        const channelOrder = ["askanything", "wonderdrop", "exploratodo", "prismtale"];
+        const sorted: Record<string, PreviewData> = {};
+        for (const ch of channelOrder) { if (newPreviews[ch]) sorted[ch] = newPreviews[ch]; }
+        for (const ch of Object.keys(newPreviews)) { if (!sorted[ch]) sorted[ch] = newPreviews[ch]; }
+        setChannelPreviews(sorted);
+        setActivePreviewTab(Object.keys(sorted)[0]);
       }
       setTopic(lastTitle);
       setPreviewMode(true);
