@@ -846,17 +846,23 @@ These English keywords help YouTube's algorithm classify this content for US aud
     _safe_content = _sanitize_llm_input(_topic_content, max_len=1500) if _topic_content else ""
     if lang == "en":
         user_content = f"Topic: Create a short-form video plan about '{_safe_title}'."
+    elif lang == "es":
+        user_content = f"Tema: Crea un plan de video corto sobre '{_safe_title}'."
     else:
         user_content = f"주제: '{_safe_title}'에 대한 숏폼 기획안을 작성해주세요."
     # YouTube 원본 자막이 있으면 LLM 컨텍스트로 주입
     if _safe_content:
         if lang == "en":
             user_content += f"\n\n<transcript>\n{_safe_content}\n</transcript>\nReflect the key facts and themes from the transcript above in your new plan."
+        elif lang == "es":
+            user_content += f"\n\n<transcript>\n{_safe_content}\n</transcript>\nRefleja los hechos y temas clave de la transcripción anterior en tu nuevo plan."
         else:
             user_content += f"\n\n<transcript>\n{_safe_content}\n</transcript>\n위 자막의 핵심 팩트와 주제를 반영하여 새로운 기획안을 작성하세요."
     if fact_context:
         if lang == "en":
             user_content += f"\n\n{fact_context}\n[Fact-Check Instruction] Prioritize facts from the reference above over your training data. Do NOT invent statistics — use only verified numbers."
+        elif lang == "es":
+            user_content += f"\n\n{fact_context}\n[Verificación de datos] Prioriza los datos de la referencia anterior. NO inventes estadísticas — usa solo datos verificados."
         else:
             user_content += f"\n\n{fact_context}\n[팩트체크 지시] 위 검색 결과의 팩트를 우선 활용하세요. 통계나 수치를 지어내지 마세요 — 검증된 정보만 사용하세요."
 
@@ -941,6 +947,15 @@ These English keywords help YouTube's algorithm classify this content for US aud
                     current_key = next_key
                     continue
                 else:
+                    # Gemini 키 전부 소진 → GPT 자동 폴백
+                    gpt_key = os.getenv("OPENAI_API_KEY")
+                    if gpt_key:
+                        print(f"  [Gemini → GPT 폴백] Gemini 키 {len(exhausted_keys)}개 소진, GPT로 전환")
+                        llm_provider = "openai"
+                        current_key = gpt_key
+                        provider_label = "ChatGPT"
+                        max_key_attempts = attempt + 4  # 3회 더 시도
+                        continue
                     raise RuntimeError(f"[Gemini 할당량 초과] 등록된 모든 키({len(exhausted_keys)}개)의 쿼터가 소진되었습니다.") from e
             elif is_retryable:
                 # OpenAI/Claude 429: 지수 백오프 후 재시도
