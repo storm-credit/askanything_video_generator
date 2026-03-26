@@ -2110,22 +2110,22 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-            onClick={() => setShowSessionBrowser(false)}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 pointer-events-auto"
+            onMouseDown={() => setShowSessionBrowser(false)}
           >
             <motion.div
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-lg max-h-[70vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
+              className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col pointer-events-auto"
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center p-4 border-b border-gray-800">
                 <h2 className="text-lg font-bold">이전 세션 불러오기</h2>
                 <button onClick={() => setShowSessionBrowser(false)} className="text-gray-400 hover:text-white text-xl">&times;</button>
               </div>
+              <div className="overflow-y-auto p-4 space-y-2 flex-1">
               {(() => {
-                // 토픽별로 그룹핑 (채널 접미사 제거)
                 const grouped: Record<string, typeof savedSessions> = {};
                 for (const s of savedSessions) {
                   const base = s.folder.replace(/_(askanything|wonderdrop|exploratodo|prismtale)$/, "");
@@ -2134,35 +2134,32 @@ export default function Home() {
                 }
                 const groups = Object.entries(grouped);
                 if (groups.length === 0) return <p className="text-gray-500 text-center py-8">저장된 세션이 없습니다</p>;
-                return (
-                  <div className="space-y-2">
-                    {groups.slice(0, 50).map(([base, items]) => (
-                      <div key={base} className="rounded-xl bg-gray-800 border border-gray-700 p-3">
-                        <div className="font-medium text-sm truncate mb-2">{items[0].title}</div>
-                        <div className="flex flex-wrap gap-1">
-                          {items.map(s => (
-                            <button
-                              key={s.folder}
-                              onClick={() => restoreSession([s.folder])}
-                              className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-indigo-600 transition-colors"
-                            >
-                              {s.channel || "default"} ({s.image_count}장{s.has_video ? " ✓" : ""})
-                            </button>
-                          ))}
-                          {items.length > 1 && (
-                            <button
-                              onClick={() => restoreSession(items.map(s => s.folder))}
-                              className="text-xs px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 font-medium transition-colors"
-                            >
-                              전체 ({items.length}채널)
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                return groups.slice(0, 50).map(([base, items]) => (
+                  <div key={base} className="rounded-xl bg-gray-800 border border-gray-700 p-3">
+                    <div className="font-medium text-sm truncate mb-2">{items[0].title.replace(/_/g, " ")}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {items.map(s => (
+                        <button
+                          key={s.folder}
+                          onClick={() => restoreSession([s.folder])}
+                          className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-indigo-600 transition-colors cursor-pointer"
+                        >
+                          {s.channel || "default"} ({s.image_count}장{s.has_video ? " ✓" : ""})
+                        </button>
+                      ))}
+                      {items.length > 1 && (
+                        <button
+                          onClick={() => restoreSession(items.map(s => s.folder))}
+                          className="text-xs px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 font-medium transition-colors cursor-pointer"
+                        >
+                          전체 ({items.length}채널)
+                        </button>
+                      )}
+                    </div>
                   </div>
-                );
+                ));
               })()}
+              </div>
             </motion.div>
           </motion.div>
         )}
