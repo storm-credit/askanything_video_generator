@@ -1645,38 +1645,56 @@ import json
 
 @app.get("/api/sessions")
 async def list_sessions():
-    """assets/ 폴더에서 저장된 세션 목록 반환."""
+    """assets/ 폴더에서 이미지가 있는 세션 목록 반환."""
     sessions = []
-    found = _glob_mod.glob("assets/*/cuts.json")
-    print(f"[세션 목록] cuts.json 검색 결과: {len(found)}개 — {found}", flush=True)
-    for cuts_path in found:
-        folder = os.path.dirname(cuts_path)
+    for folder_path in _glob_mod.glob("assets/*/images"):
+        folder = os.path.dirname(folder_path)
         folder_name = os.path.basename(folder)
+        if folder_name in (".cache", "assets"):
+            continue
         try:
-            with open(cuts_path, encoding="utf-8") as f:
-                data = json.load(f)
-            cuts = data.get("cuts", [])
-            meta = data.get("metadata", {})
-            # 이미지 개수 확인
-            img_dir = os.path.join(folder, "images")
-            img_count = len(_glob_mod.glob(os.path.join(img_dir, "cut_*.png"))) if os.path.isdir(img_dir) else 0
-            # 비디오 존재 확인
+            img_count = len(_glob_mod.glob(os.path.join(folder_path, "cut_*.png")))
+            if img_count == 0:
+                continue
             vid_dir = os.path.join(folder, "video")
             has_video = bool(_glob_mod.glob(os.path.join(vid_dir, "*.mp4"))) if os.path.isdir(vid_dir) else False
+            has_audio = bool(_glob_mod.glob(os.path.join(folder, "audio", "cut_*.mp3"))) if os.path.isdir(os.path.join(folder, "audio")) else False
+            # cuts.json이 있으면 메타데이터 로드
+            cuts_path = os.path.join(folder, "cuts.json")
+            title = folder_name
+            cuts_count = img_count
+            channel = folder_name.rsplit("_", 1)[-1] if "_" in folder_name else ""
+            language = ""
+            created_at = ""
+            has_cuts = os.path.exists(cuts_path)
+            if has_cuts:
+                with open(cuts_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                title = data.get("title", folder_name)
+                cuts_count = len(data.get("cuts", []))
+                meta = data.get("metadata", {})
+                channel = meta.get("channel", channel)
+                language = meta.get("language", "")
+                created_at = meta.get("created_at", "")
+            # 생성 시간 없으면 폴더 수정 시간 사용
+            if not created_at:
+                mtime = os.path.getmtime(folder_path)
+                from datetime import datetime
+                created_at = datetime.fromtimestamp(mtime).isoformat()
             sessions.append({
                 "folder": folder_name,
-                "title": data.get("title", folder_name),
-                "cuts_count": len(cuts),
+                "title": title,
+                "cuts_count": cuts_count,
                 "image_count": img_count,
                 "has_video": has_video,
-                "channel": meta.get("channel", folder_name.rsplit("_", 1)[-1] if "_" in folder_name else ""),
-                "language": meta.get("language", ""),
-                "created_at": meta.get("created_at", ""),
+                "has_audio": has_audio,
+                "has_cuts": has_cuts,
+                "channel": channel,
+                "language": language,
+                "created_at": created_at,
             })
-        except Exception as _e:
-            print(f"[세션 목록] {folder_name} 로드 실패: {_e}", flush=True)
+        except Exception:
             continue
-    # 최신 순 정렬
     sessions.sort(key=lambda s: s.get("created_at", ""), reverse=True)
     return {"sessions": sessions}
 
@@ -1692,22 +1710,32 @@ async def load_session(req: LoadSessionRequest):
     topic_folder = os.path.join("assets", folder_name)
     cuts_path = os.path.join(topic_folder, "cuts.json")
 
-    if not os.path.exists(cuts_path):
-        raise HTTPException(status_code=404, detail="세션 데이터(cuts.json)가 없습니다")
+    # 이미지 파일 목록
+    img_dir = os.path.join(topic_folder, "images")
+    if not os.path.isdir(img_dir):
+        raise HTTPException(status_code=404, detail="이미지 폴더가 없습니다")
+    img_files = sorted(_glob_mod.glob(os.path.join(img_dir, "cut_*.png")))
+    if not img_files:
+        raise HTTPException(status_code=404, detail="이미지가 없습니다")
 
-    with open(cuts_path, encoding="utf-8") as f:
-        data = json.load(f)
+    # cuts.json이 있으면 메타데이터 로드, 없으면 이미지 기반 생성
+    if os.path.exists(cuts_path):
+        with open(cuts_path, encoding="utf-8") as f:
+            data = json.load(f)
+        cuts = data.get("cuts", [])
+        title = data.get("title", folder_name)
+        tags = data.get("tags", [])
+        meta = data.get("metadata", {})
+    else:
+        # cuts.json 없으면 이미지 수 기반으로 빈 컷 생성
+        cuts = [{"script": "", "prompt": "", "description": ""} for _ in img_files]
+        title = folder_name
+        tags = []
+        meta = {}
 
-    cuts = data.get("cuts", [])
-    title = data.get("title", folder_name)
-    tags = data.get("tags", [])
-    meta = data.get("metadata", {})
-
-    # 이미지 경로 복원
     image_paths = []
-    for i in range(len(cuts)):
-        img_path = os.path.join(topic_folder, "images", f"cut_{i:02d}.png")
-        image_paths.append(img_path if os.path.exists(img_path) else None)
+    for i in range(len(img_files)):
+        image_paths.append(img_files[i])
 
     # 세션 등록
     import uuid, time as _time
