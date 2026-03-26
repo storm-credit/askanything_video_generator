@@ -991,6 +991,12 @@ These English keywords help YouTube's algorithm classify this content for US aud
                 f"You MUST keep ALL existing cuts verbatim and add 2-4 NEW cuts between them to reinforce buildup/climax. "
                 f"Return the complete expanded array.\nExisting cuts: {existing_cuts_json}"
             )
+        elif lang == "es":
+            retry_expansion = (
+                f"\n\nSolo se generaron {len(cuts)} cortes. Expande a 7-10 cortes en total. "
+                f"DEBES mantener TODOS los cortes existentes tal cual y agregar 2-4 cortes NUEVOS entre ellos para reforzar el clímax. "
+                f"Devuelve el array completo expandido.\nCortes existentes: {existing_cuts_json}"
+            )
         else:
             retry_expansion = (
                 f"\n\n기존에 {len(cuts)}컷만 생성되었습니다. 총 8~10컷으로 확장하세요. "
@@ -1000,6 +1006,8 @@ These English keywords help YouTube's algorithm classify this content for US aud
         # 확장 재시도: 자막/팩트체크 컨텍스트 제외하고 토픽+기존 컷만 전달 (토큰 절약)
         if lang == "en":
             retry_user = f"Topic: '{_safe_title}'." + retry_expansion
+        elif lang == "es":
+            retry_user = f"Tema: '{_safe_title}'." + retry_expansion
         else:
             retry_user = f"주제: '{_safe_title}'." + retry_expansion
         _original_cuts = cuts[:]
