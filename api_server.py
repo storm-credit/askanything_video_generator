@@ -9,7 +9,7 @@ import threading
 import traceback
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI, Query, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -1666,7 +1666,7 @@ async def list_sessions():
             channel = folder_name.rsplit("_", 1)[-1] if "_" in folder_name else ""
             language = ""
             created_at = ""
-            has_cuts = os.path.exists(cuts_path)
+            has_cuts = os.path.exists(cuts_path) and os.path.getsize(cuts_path) > 2
             if has_cuts:
                 with open(cuts_path, encoding="utf-8") as f:
                     data = json.load(f)
