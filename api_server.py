@@ -1730,7 +1730,7 @@ async def load_session(req: LoadSessionRequest):
         # cuts.json 없으면 토픽 기반으로 스크립트 자동 생성
         topic_guess = folder_name.rsplit("_", 1)[0].replace("_", " ") if "_" in folder_name else folder_name
         channel_guess = folder_name.rsplit("_", 1)[-1] if "_" in folder_name else ""
-        lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "ko"}
+        lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
         lang = lang_map.get(channel_guess, "ko")
         try:
             from modules.gpt.cutter import generate_cuts
