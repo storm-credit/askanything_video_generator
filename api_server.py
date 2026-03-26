@@ -1727,29 +1727,14 @@ async def load_session(req: LoadSessionRequest):
         tags = data.get("tags", [])
         meta = data.get("metadata", {})
     else:
-        # cuts.json 없으면 토픽 기반으로 스크립트 자동 생성
+        # cuts.json 없으면 빈 스크립트로 즉시 로드 (LLM 호출 없이 빠르게)
         topic_guess = folder_name.rsplit("_", 1)[0].replace("_", " ") if "_" in folder_name else folder_name
         channel_guess = folder_name.rsplit("_", 1)[-1] if "_" in folder_name else ""
         lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
         lang = lang_map.get(channel_guess, "ko")
-        try:
-            from modules.gpt.cutter import generate_cuts
-            result = generate_cuts(topic_guess, lang=lang, channel=channel_guess)
-            if isinstance(result, tuple):
-                cuts_list, _, gen_title, gen_tags = result
-                cuts = cuts_list
-                title = gen_title
-                tags = gen_tags
-            else:
-                cuts = [{"script": "", "prompt": "", "description": ""} for _ in img_files]
-                title = folder_name
-                tags = []
-            print(f"[세션 복원] '{topic_guess}' 스크립트 {len(cuts)}개 자동 생성 완료")
-        except Exception as e:
-            print(f"[세션 복원] 스크립트 자동 생성 실패: {e}")
-            cuts = [{"script": "", "prompt": "", "description": ""} for _ in img_files]
-            title = folder_name
-            tags = []
+        cuts = [{"script": "", "prompt": "", "description": "", "index": i} for i, _ in enumerate(img_files)]
+        title = topic_guess
+        tags = []
         meta = {"topic": topic_guess, "channel": channel_guess, "language": lang}
         # 생성된 스크립트를 cuts.json에 저장 (다음 로드 시 재사용)
         try:
