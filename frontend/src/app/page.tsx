@@ -186,6 +186,7 @@ export default function Home() {
   const [regeneratingCut, setRegeneratingCut] = useState<number | null>(null); // 이미지 재생성 중인 컷
   const [showSessionBrowser, setShowSessionBrowser] = useState(false);
   const [savedSessions, setSavedSessions] = useState<Array<{folder: string; title: string; cuts_count: number; image_count: number; has_video: boolean; channel: string; language: string; created_at: string}>>([]);
+  const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
 
   // 저장된 세션 목록 불러오기
   const loadSessionList = async () => {
@@ -193,6 +194,7 @@ export default function Home() {
       const res = await fetch(`${API_BASE}/api/sessions`);
       const data = await res.json();
       setSavedSessions(data.sessions || []);
+      setSelectedFolders(new Set());
       setShowSessionBrowser(true);
     } catch { alert("세션 목록 로드 실패"); }
   };
@@ -1848,10 +1850,15 @@ export default function Home() {
                   const preset = CHANNEL_PRESETS[ch];
                   const isActive = ch === activePreviewTab;
                   return (
-                    <button key={ch} onClick={() => setActivePreviewTab(ch)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${isActive ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/30" : "text-gray-500 hover:text-gray-300 hover:bg-white/5"}`}>
-                      {preset?.flag} {preset?.label} <span className="text-[10px] opacity-60">({preview.cuts.length}컷)</span>
-                    </button>
+                    <div key={ch} className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${isActive ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/30" : "text-gray-500 hover:text-gray-300 hover:bg-white/5"}`}>
+                      <span onClick={() => setActivePreviewTab(ch)}>
+                        {preset?.flag} {preset?.label} <span className="text-[10px] opacity-60">({preview.cuts.length}컷)</span>
+                      </span>
+                      {Object.keys(channelPreviews).length > 1 && (
+                        <button onClick={() => { setChannelPreviews(prev => { const next = {...prev}; delete next[ch]; return next; }); if (isActive) setActivePreviewTab(Object.keys(channelPreviews).find(k => k !== ch) || ""); }}
+                          className="ml-1 text-gray-500 hover:text-red-400 text-[10px]">&times;</button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -2133,7 +2140,17 @@ export default function Home() {
             >
               <div className="flex justify-between items-center p-4 border-b border-gray-800">
                 <h2 className="text-lg font-bold">이전 세션 불러오기</h2>
-                <button onClick={() => setShowSessionBrowser(false)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+                <div className="flex items-center gap-2">
+                  {selectedFolders.size > 0 && (
+                    <button
+                      onClick={() => { restoreSession(Array.from(selectedFolders)); }}
+                      className="text-sm px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-medium"
+                    >
+                      불러오기 ({selectedFolders.size})
+                    </button>
+                  )}
+                  <button onClick={() => setShowSessionBrowser(false)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+                </div>
               </div>
               <div className="overflow-y-auto p-4 space-y-2 flex-1">
               {(() => {
@@ -2145,6 +2162,22 @@ export default function Home() {
                 }
                 const groups = Object.entries(grouped);
                 if (groups.length === 0) return <p className="text-gray-500 text-center py-8">저장된 세션이 없습니다</p>;
+                const toggleFolder = (folder: string) => {
+                  setSelectedFolders(prev => {
+                    const next = new Set(prev);
+                    if (next.has(folder)) next.delete(folder); else next.add(folder);
+                    return next;
+                  });
+                };
+                const toggleAll = (folders: string[]) => {
+                  setSelectedFolders(prev => {
+                    const next = new Set(prev);
+                    const allSelected = folders.every(f => next.has(f));
+                    if (allSelected) folders.forEach(f => next.delete(f));
+                    else folders.forEach(f => next.add(f));
+                    return next;
+                  });
+                };
                 return groups.slice(0, 50).map(([base, items]) => (
                   <div key={base} className="rounded-xl bg-gray-800 border border-gray-700 p-3">
                     <div className="font-medium text-sm truncate mb-2">{items[0].title.replace(/_/g, " ")}</div>
@@ -2152,18 +2185,18 @@ export default function Home() {
                       {items.map(s => (
                         <button
                           key={s.folder}
-                          onClick={() => restoreSession([s.folder])}
-                          className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-indigo-600 transition-colors cursor-pointer"
+                          onClick={() => toggleFolder(s.folder)}
+                          className={`text-xs px-2 py-1 rounded transition-colors cursor-pointer ${selectedFolders.has(s.folder) ? "bg-indigo-600 text-white" : "bg-gray-700 hover:bg-gray-600"}`}
                         >
                           {s.channel || "default"} ({s.image_count}장{s.has_video ? " ✓" : ""})
                         </button>
                       ))}
                       {items.length > 1 && (
                         <button
-                          onClick={() => restoreSession(items.map(s => s.folder))}
-                          className="text-xs px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 font-medium transition-colors cursor-pointer"
+                          onClick={() => toggleAll(items.map(s => s.folder))}
+                          className={`text-xs px-2 py-1 rounded font-medium transition-colors cursor-pointer ${items.every(s => selectedFolders.has(s.folder)) ? "bg-indigo-500 text-white" : "bg-gray-600 hover:bg-gray-500"}`}
                         >
-                          전체 ({items.length}채널)
+                          전체 ({items.length})
                         </button>
                       )}
                     </div>
