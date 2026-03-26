@@ -1727,11 +1727,40 @@ async def load_session(req: LoadSessionRequest):
         tags = data.get("tags", [])
         meta = data.get("metadata", {})
     else:
-        # cuts.json 없으면 이미지 수 기반으로 빈 컷 생성
-        cuts = [{"script": "", "prompt": "", "description": ""} for _ in img_files]
-        title = folder_name
-        tags = []
-        meta = {}
+        # cuts.json 없으면 토픽 기반으로 스크립트 자동 생성
+        topic_guess = folder_name.rsplit("_", 1)[0].replace("_", " ") if "_" in folder_name else folder_name
+        channel_guess = folder_name.rsplit("_", 1)[-1] if "_" in folder_name else ""
+        lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "ko"}
+        lang = lang_map.get(channel_guess, "ko")
+        try:
+            from modules.gpt.cutter import generate_cuts
+            result = generate_cuts(topic_guess, lang=lang, channel=channel_guess)
+            if isinstance(result, tuple):
+                cuts_list, _, gen_title, gen_tags = result
+                cuts = cuts_list
+                title = gen_title
+                tags = gen_tags
+            else:
+                cuts = [{"script": "", "prompt": "", "description": ""} for _ in img_files]
+                title = folder_name
+                tags = []
+            print(f"[세션 복원] '{topic_guess}' 스크립트 {len(cuts)}개 자동 생성 완료")
+        except Exception as e:
+            print(f"[세션 복원] 스크립트 자동 생성 실패: {e}")
+            cuts = [{"script": "", "prompt": "", "description": ""} for _ in img_files]
+            title = folder_name
+            tags = []
+        meta = {"topic": topic_guess, "channel": channel_guess, "language": lang}
+        # 생성된 스크립트를 cuts.json에 저장 (다음 로드 시 재사용)
+        try:
+            with open(cuts_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "cuts": cuts, "title": title, "tags": tags,
+                    "metadata": {**meta, "created_at": __import__("datetime").datetime.now().isoformat()}
+                }, f, ensure_ascii=False, indent=2)
+            print(f"[세션 복원] cuts.json 저장 완료: {cuts_path}")
+        except Exception:
+            pass
 
     image_paths = []
     for i in range(len(img_files)):
