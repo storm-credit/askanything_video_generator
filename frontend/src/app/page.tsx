@@ -184,6 +184,7 @@ export default function Home() {
   const [editedScriptsMap, setEditedScriptsMap] = useState<Record<string, Record<number, string>>>({});
   const [replacingCut, setReplacingCut] = useState<number | null>(null); // 이미지 교체 중인 컷
   const [regeneratingCut, setRegeneratingCut] = useState<number | null>(null); // 이미지 재생성 중인 컷
+  const [generatingScripts, setGeneratingScripts] = useState(false); // 스크립트 생성 중
   const [showSessionBrowser, setShowSessionBrowser] = useState(false);
   const [savedSessions, setSavedSessions] = useState<Array<{folder: string; title: string; cuts_count: number; image_count: number; has_video: boolean; channel: string; language: string; created_at: string}>>([]);
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
@@ -216,7 +217,7 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ folder }),
         });
-        if (!res.ok) continue;
+        if (!res.ok) { console.error(`세션 로드 실패 (${folder}):`, res.status, await res.text().catch(() => "")); continue; }
         const data = await res.json();
         const channel = data.channel || folder;
         newPreviews[channel] = { sessionId: data.sessionId, title: data.title, channel, cuts: data.cuts };
@@ -237,7 +238,7 @@ export default function Home() {
       setTopic(lastTitle);
       setPreviewMode(true);
       setShowSessionBrowser(false);
-    } catch { alert("세션 복원 중 오류"); }
+    } catch (e) { console.error("세션 복원 오류:", e); alert("세션 복원 중 오류: " + (e instanceof Error ? e.message : String(e))); }
   };
 
   // 이미지 재생성 핸들러 (모델 선택 가능)
@@ -994,6 +995,45 @@ export default function Home() {
       if (!isNaN(p)) setRenderResults(prev => ({ ...prev, [ch]: { ...prev[ch], progress: p } }));
     } else {
       setRenderResults(prev => ({ ...prev, [ch]: { ...prev[ch], logs: [...(prev[ch]?.logs || []).slice(-49), rawData] } }));
+    }
+  };
+
+  // 스크립트 생성 (불러온 세션에 스크립트 없을 때)
+  const handleGenerateScripts = async () => {
+    if (!activeRenderTab || !channelPreviews[activeRenderTab]) return;
+    const preview = channelPreviews[activeRenderTab];
+    // 폴더명 추출
+    const firstImg = preview.cuts[0]?.image_url || "";
+    const folderMatch = firstImg.match(/\/assets\/([^/]+)\//);
+    if (!folderMatch) return;
+    const folder = folderMatch[1];
+    const langMap: Record<string, string> = { askanything: "ko", wonderdrop: "en", exploratodo: "es", prismtale: "es" };
+    const lang = langMap[activeRenderTab] || "ko";
+
+    setGeneratingScripts(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions/generate-scripts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder, topic: topic || preview.title, lang, channel: activeRenderTab }),
+      });
+      const data = await res.json();
+      if (data.error) { alert(data.error); return; }
+      // 프리뷰 업데이트
+      const updatedCuts = preview.cuts.map((cut: any, i: number) => ({
+        ...cut,
+        script: data.cuts[i]?.script || cut.script,
+        prompt: data.cuts[i]?.prompt || cut.prompt,
+        description: data.cuts[i]?.description || cut.description,
+      }));
+      setChannelPreviews(prev => ({
+        ...prev,
+        [activeRenderTab]: { ...preview, title: data.title || preview.title, cuts: updatedCuts },
+      }));
+    } catch (e) {
+      alert("스크립트 생성 중 오류");
+    } finally {
+      setGeneratingScripts(false);
     }
   };
 
@@ -1879,6 +1919,15 @@ export default function Home() {
                 >
                   취소
                 </button>
+                {currentPreview.cuts.every((c: any) => !c.script) && (
+                  <button
+                    onClick={handleGenerateScripts}
+                    disabled={generatingScripts}
+                    className="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 text-white rounded-lg transition-colors"
+                  >
+                    {generatingScripts ? "스크립트 생성 중..." : "✍️ 스크립트 생성"}
+                  </button>
+                )}
                 <button
                   onClick={handleRender}
                   className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-indigo-500/25"

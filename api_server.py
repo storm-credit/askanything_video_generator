@@ -1783,6 +1783,65 @@ async def load_session(req: LoadSessionRequest):
     }
 
 
+class GenerateScriptsRequest(BaseModel):
+    folder: str = Field(..., min_length=1)
+    topic: str = ""
+    lang: str = "ko"
+    channel: str = ""
+    num_cuts: int = 8
+
+
+@app.post("/api/sessions/generate-scripts")
+async def generate_scripts(req: GenerateScriptsRequest):
+    """세션의 이미지에 맞는 스크립트를 LLM으로 생성합니다."""
+    folder_path = os.path.join("assets", req.folder)
+    if not os.path.isdir(folder_path):
+        return {"error": "폴더를 찾을 수 없습니다"}
+
+    topic = req.topic
+    if not topic:
+        # 폴더명에서 토픽 추출
+        name = req.folder
+        for suffix in ("_askanything", "_wonderdrop", "_exploratodo", "_prismtale"):
+            if name.endswith(suffix):
+                name = name[: -len(suffix)]
+                break
+        topic = name.replace("_", " ")
+
+    try:
+        from modules.gpt.cutter import generate_cuts
+        cuts_list, _folder, title, tags = generate_cuts(topic, lang=req.lang, channel=req.channel)
+
+        # 이미지 수에 맞춤
+        img_count = len(_glob_mod.glob(os.path.join(folder_path, "images", "cut_*.png")))
+        if img_count > 0:
+            cuts_list = cuts_list[:img_count]
+
+        # cuts.json 저장
+        cuts_path = os.path.join(folder_path, "cuts.json")
+        from datetime import datetime
+        with open(cuts_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "cuts": cuts_list, "title": title, "tags": tags,
+                "metadata": {"topic": topic, "channel": req.channel, "language": req.lang,
+                             "created_at": datetime.now().isoformat()}
+            }, f, ensure_ascii=False, indent=2)
+
+        # 프론트엔드용 응답
+        result_cuts = []
+        for i, cut in enumerate(cuts_list):
+            result_cuts.append({
+                "index": i,
+                "script": cut.get("script", cut.get("text", "")),
+                "prompt": cut.get("prompt", ""),
+                "description": cut.get("description", ""),
+            })
+
+        return {"title": title, "cuts": result_cuts, "tags": tags}
+    except Exception as e:
+        return {"error": f"스크립트 생성 실패: {str(e)}"}
+
+
 # ── YouTube 업로드 API ─────────────────────────────────────────────
 
 class YouTubeUploadRequest(BaseModel):
