@@ -1762,9 +1762,12 @@ async def load_session(req: LoadSessionRequest):
         except Exception:
             pass
 
-    image_paths = []
-    for i in range(len(img_files)):
-        image_paths.append(img_files[i])
+    image_paths = list(img_files)
+
+    # 이미지 수와 스크립트 수 맞추기 (작은 쪽에 맞춤)
+    n = min(len(image_paths), len(cuts))
+    image_paths = image_paths[:n]
+    cuts = cuts[:n]
 
     # 세션 등록
     import uuid, time as _time
