@@ -200,6 +200,12 @@ export default function Home() {
   // 세션 복원
   const restoreSession = async (folders: string[]) => {
     try {
+      // 기존 상태 초기화
+      setChannelPreviews({});
+      setPreviewData(null);
+      setEditedScripts({});
+      setEditedScriptsMap({});
+      setRegeneratingCut(null);
       const newPreviews: Record<string, PreviewData> = {};
       let lastTitle = "";
       for (const folder of folders) {
