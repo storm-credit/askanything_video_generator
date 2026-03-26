@@ -1719,7 +1719,7 @@ async def load_session(req: LoadSessionRequest):
         raise HTTPException(status_code=404, detail="이미지가 없습니다")
 
     # cuts.json이 있으면 메타데이터 로드, 없으면 이미지 기반 생성
-    if os.path.exists(cuts_path):
+    if os.path.exists(cuts_path) and os.path.getsize(cuts_path) > 2:
         with open(cuts_path, encoding="utf-8") as f:
             data = json.load(f)
         cuts = data.get("cuts", [])
