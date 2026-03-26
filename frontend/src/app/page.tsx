@@ -198,24 +198,31 @@ export default function Home() {
   };
 
   // 세션 복원
-  const restoreSession = async (folder: string) => {
+  const restoreSession = async (folders: string[]) => {
     try {
-      const res = await fetch(`${API_BASE}/api/sessions/load`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder }),
-      });
-      if (!res.ok) { alert("세션 복원 실패"); return; }
-      const data = await res.json();
-      // 미리보기 화면에 로드
-      const channel = data.channel || "";
-      if (channel) {
-        setChannelPreviews(prev => ({ ...prev, [channel]: { sessionId: data.sessionId, title: data.title, channel, cuts: data.cuts } }));
-        setActivePreviewTab(channel);
-      } else {
-        setPreviewData({ sessionId: data.sessionId, title: data.title, cuts: data.cuts });
+      const newPreviews: Record<string, PreviewData> = {};
+      let lastTitle = "";
+      for (const folder of folders) {
+        const res = await fetch(`${API_BASE}/api/sessions/load`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folder }),
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const channel = data.channel || folder;
+        newPreviews[channel] = { sessionId: data.sessionId, title: data.title, channel, cuts: data.cuts };
+        lastTitle = data.title;
       }
-      setTopic(data.title);
+      if (Object.keys(newPreviews).length === 0) { alert("세션 복원 실패"); return; }
+      if (Object.keys(newPreviews).length === 1 && !Object.values(newPreviews)[0].channel) {
+        setPreviewData(Object.values(newPreviews)[0]);
+      } else {
+        setChannelPreviews(newPreviews);
+        setActivePreviewTab(Object.keys(newPreviews)[0]);
+      }
+      setTopic(lastTitle);
+      setPreviewMode(true);
       setShowSessionBrowser(false);
     } catch { alert("세션 복원 중 오류"); }
   };
@@ -2117,27 +2124,45 @@ export default function Home() {
                 <h2 className="text-lg font-bold">이전 세션 불러오기</h2>
                 <button onClick={() => setShowSessionBrowser(false)} className="text-gray-400 hover:text-white text-xl">&times;</button>
               </div>
-              {savedSessions.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">저장된 세션이 없습니다</p>
-              ) : (
-                <div className="space-y-2">
-                  {savedSessions.map((s) => (
-                    <button
-                      key={s.folder}
-                      onClick={() => restoreSession(s.folder)}
-                      className="w-full text-left p-3 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors"
-                    >
-                      <div className="font-medium text-sm truncate">{s.title}</div>
-                      <div className="flex gap-2 mt-1 text-xs text-gray-400">
-                        {s.channel && <span className="bg-gray-700 px-2 py-0.5 rounded">{s.channel}</span>}
-                        <span>{s.cuts_count}컷</span>
-                        <span>{s.image_count}장</span>
-                        {s.has_video && <span className="text-green-400">영상 있음</span>}
+              {(() => {
+                // 토픽별로 그룹핑 (채널 접미사 제거)
+                const grouped: Record<string, typeof savedSessions> = {};
+                for (const s of savedSessions) {
+                  const base = s.folder.replace(/_(askanything|wonderdrop|exploratodo|prismtale)$/, "");
+                  if (!grouped[base]) grouped[base] = [];
+                  grouped[base].push(s);
+                }
+                const groups = Object.entries(grouped);
+                if (groups.length === 0) return <p className="text-gray-500 text-center py-8">저장된 세션이 없습니다</p>;
+                return (
+                  <div className="space-y-2">
+                    {groups.slice(0, 50).map(([base, items]) => (
+                      <div key={base} className="rounded-xl bg-gray-800 border border-gray-700 p-3">
+                        <div className="font-medium text-sm truncate mb-2">{items[0].title}</div>
+                        <div className="flex flex-wrap gap-1">
+                          {items.map(s => (
+                            <button
+                              key={s.folder}
+                              onClick={() => restoreSession([s.folder])}
+                              className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-indigo-600 transition-colors"
+                            >
+                              {s.channel || "default"} ({s.image_count}장{s.has_video ? " ✓" : ""})
+                            </button>
+                          ))}
+                          {items.length > 1 && (
+                            <button
+                              onClick={() => restoreSession(items.map(s => s.folder))}
+                              className="text-xs px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 font-medium transition-colors"
+                            >
+                              전체 ({items.length}채널)
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                );
+              })()}
             </motion.div>
           </motion.div>
         )}
