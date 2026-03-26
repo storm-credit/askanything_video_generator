@@ -184,6 +184,41 @@ export default function Home() {
   const [editedScriptsMap, setEditedScriptsMap] = useState<Record<string, Record<number, string>>>({});
   const [replacingCut, setReplacingCut] = useState<number | null>(null); // 이미지 교체 중인 컷
   const [regeneratingCut, setRegeneratingCut] = useState<number | null>(null); // 이미지 재생성 중인 컷
+  const [showSessionBrowser, setShowSessionBrowser] = useState(false);
+  const [savedSessions, setSavedSessions] = useState<Array<{folder: string; title: string; cuts_count: number; image_count: number; has_video: boolean; channel: string; language: string; created_at: string}>>([]);
+
+  // 저장된 세션 목록 불러오기
+  const loadSessionList = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions`);
+      const data = await res.json();
+      setSavedSessions(data.sessions || []);
+      setShowSessionBrowser(true);
+    } catch { alert("세션 목록 로드 실패"); }
+  };
+
+  // 세션 복원
+  const restoreSession = async (folder: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions/load`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder }),
+      });
+      if (!res.ok) { alert("세션 복원 실패"); return; }
+      const data = await res.json();
+      // 미리보기 화면에 로드
+      const channel = data.channel || "";
+      if (channel) {
+        setChannelPreviews(prev => ({ ...prev, [channel]: { sessionId: data.sessionId, title: data.title, channel, cuts: data.cuts } }));
+        setActivePreviewTab(channel);
+      } else {
+        setPreviewData({ sessionId: data.sessionId, title: data.title, cuts: data.cuts });
+      }
+      setTopic(data.title);
+      setShowSessionBrowser(false);
+    } catch { alert("세션 복원 중 오류"); }
+  };
 
   // 이미지 재생성 핸들러 (모델 선택 가능)
   const regenerateImage = async (cutIndex: number, sessionId: string, model: string, channel?: string) => {
@@ -194,9 +229,10 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, cutIndex, model }),
       });
-      const json = await res.json();
-      if (!res.ok) { alert(json.error || "이미지 재생성 실패"); return; }
-      const newUrl = json.image_url + `?t=${Date.now()}`;
+      let json: Record<string, unknown>;
+      try { json = await res.json(); } catch { json = { error: "서버 응답 파싱 실패" }; }
+      if (!res.ok) { alert((json.error as string) || "이미지 재생성 실패"); return; }
+      const newUrl = (json.image_url as string) + `?t=${Date.now()}`;
       if (channel) {
         setChannelPreviews(prev => {
           const cp = { ...prev };
@@ -208,7 +244,7 @@ export default function Home() {
       } else {
         setPreviewData(prev => prev ? { ...prev, cuts: prev.cuts.map(c => c.index === cutIndex ? { ...c, image_url: newUrl } : c) } : prev);
       }
-    } catch (e) { alert("이미지 재생성 중 오류 발생"); }
+    } catch { alert("이미지 재생성 중 오류 발생"); }
     finally { setRegeneratingCut(null); }
   };
 
@@ -1235,6 +1271,13 @@ export default function Home() {
               <div className="absolute right-2 flex gap-1">
                 <button
                   type="button"
+                  onClick={loadSessionList}
+                  className="bg-gray-700 text-gray-300 hover:bg-gray-600 font-semibold px-3 py-3 rounded-xl transition-colors text-sm"
+                >
+                  불러오기
+                </button>
+                <button
+                  type="button"
                   onClick={handlePrepare}
                   disabled={!topic.trim()}
                   className="bg-indigo-600 text-white hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
@@ -2049,6 +2092,53 @@ export default function Home() {
                 })()}
               </div>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 세션 불러오기 모달 */}
+      <AnimatePresence>
+        {showSessionBrowser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+            onClick={() => setShowSessionBrowser(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-lg max-h-[70vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold">이전 세션 불러오기</h2>
+                <button onClick={() => setShowSessionBrowser(false)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+              </div>
+              {savedSessions.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">저장된 세션이 없습니다</p>
+              ) : (
+                <div className="space-y-2">
+                  {savedSessions.map((s) => (
+                    <button
+                      key={s.folder}
+                      onClick={() => restoreSession(s.folder)}
+                      className="w-full text-left p-3 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors"
+                    >
+                      <div className="font-medium text-sm truncate">{s.title}</div>
+                      <div className="flex gap-2 mt-1 text-xs text-gray-400">
+                        {s.channel && <span className="bg-gray-700 px-2 py-0.5 rounded">{s.channel}</span>}
+                        <span>{s.cuts_count}컷</span>
+                        <span>{s.image_count}장</span>
+                        {s.has_video && <span className="text-green-400">영상 있음</span>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

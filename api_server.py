@@ -1209,6 +1209,25 @@ async def prepare_endpoint(req: PrepareRequest):
                     "_created": _time.time(),
                 }
 
+            # cuts.json 자동 저장 (세션 복원용)
+            cuts_json_path = os.path.join("assets", topic_folder, "cuts.json")
+            try:
+                os.makedirs(os.path.dirname(cuts_json_path), exist_ok=True)
+                with open(cuts_json_path, "w", encoding="utf-8") as _f:
+                    json.dump({
+                        "cuts": cuts,
+                        "title": video_title,
+                        "tags": video_tags,
+                        "metadata": {
+                            "topic": req.topic,
+                            "channel": req.channel or "",
+                            "language": req.language,
+                            "created_at": __import__("datetime").datetime.now().isoformat(),
+                        }
+                    }, _f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"[세션 저장] cuts.json 저장 실패: {e}")
+
             # 미리보기 데이터 전송
             preview_cuts = []
             for i, cut in enumerate(cuts):
@@ -1617,6 +1636,115 @@ async def upsert_channel(name: str, body: dict):
             **filtered,
         }
     return {"status": "ok", "channel": name}
+
+
+# ── 세션 복원 API ─────────────────────────────────────────────────
+
+import glob as _glob_mod
+import json
+
+@app.get("/api/sessions")
+async def list_sessions():
+    """assets/ 폴더에서 저장된 세션 목록 반환."""
+    sessions = []
+    found = _glob_mod.glob("assets/*/cuts.json")
+    print(f"[세션 목록] cuts.json 검색 결과: {len(found)}개 — {found}", flush=True)
+    for cuts_path in found:
+        folder = os.path.dirname(cuts_path)
+        folder_name = os.path.basename(folder)
+        try:
+            with open(cuts_path, encoding="utf-8") as f:
+                data = json.load(f)
+            cuts = data.get("cuts", [])
+            meta = data.get("metadata", {})
+            # 이미지 개수 확인
+            img_dir = os.path.join(folder, "images")
+            img_count = len(_glob_mod.glob(os.path.join(img_dir, "cut_*.png"))) if os.path.isdir(img_dir) else 0
+            # 비디오 존재 확인
+            vid_dir = os.path.join(folder, "video")
+            has_video = bool(_glob_mod.glob(os.path.join(vid_dir, "*.mp4"))) if os.path.isdir(vid_dir) else False
+            sessions.append({
+                "folder": folder_name,
+                "title": data.get("title", folder_name),
+                "cuts_count": len(cuts),
+                "image_count": img_count,
+                "has_video": has_video,
+                "channel": meta.get("channel", folder_name.rsplit("_", 1)[-1] if "_" in folder_name else ""),
+                "language": meta.get("language", ""),
+                "created_at": meta.get("created_at", ""),
+            })
+        except Exception as _e:
+            print(f"[세션 목록] {folder_name} 로드 실패: {_e}", flush=True)
+            continue
+    # 최신 순 정렬
+    sessions.sort(key=lambda s: s.get("created_at", ""), reverse=True)
+    return {"sessions": sessions}
+
+
+class LoadSessionRequest(BaseModel):
+    folder: str = Field(..., min_length=1)
+
+
+@app.post("/api/sessions/load")
+async def load_session(req: LoadSessionRequest):
+    """저장된 세션을 메모리에 복원하고 sessionId 반환."""
+    folder_name = os.path.basename(req.folder)  # path traversal 방지
+    topic_folder = os.path.join("assets", folder_name)
+    cuts_path = os.path.join(topic_folder, "cuts.json")
+
+    if not os.path.exists(cuts_path):
+        raise HTTPException(status_code=404, detail="세션 데이터(cuts.json)가 없습니다")
+
+    with open(cuts_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    cuts = data.get("cuts", [])
+    title = data.get("title", folder_name)
+    tags = data.get("tags", [])
+    meta = data.get("metadata", {})
+
+    # 이미지 경로 복원
+    image_paths = []
+    for i in range(len(cuts)):
+        img_path = os.path.join(topic_folder, "images", f"cut_{i:02d}.png")
+        image_paths.append(img_path if os.path.exists(img_path) else None)
+
+    # 세션 등록
+    import uuid, time as _time
+    session_id = uuid.uuid4().hex[:16]
+    _cleanup_sessions()
+    with _session_lock:
+        _prepared_sessions[session_id] = {
+            "sessionId": session_id,
+            "cuts": cuts,
+            "topic_folder": folder_name,
+            "title": title,
+            "tags": tags,
+            "image_paths": image_paths,
+            "topic": meta.get("topic", title),
+            "language": meta.get("language", "ko"),
+            "_created": _time.time(),
+        }
+
+    # 프론트엔드용 응답
+    preview_cuts = []
+    for i, cut in enumerate(cuts):
+        img_url = f"/assets/{folder_name}/images/cut_{i:02d}.png" if image_paths[i] else None
+        preview_cuts.append({
+            "index": i,
+            "script": cut.get("script", cut.get("text", "")),
+            "prompt": cut.get("prompt", ""),
+            "description": cut.get("description", ""),
+            "image_url": img_url,
+        })
+
+    return {
+        "sessionId": session_id,
+        "title": title,
+        "cuts": preview_cuts,
+        "channel": meta.get("channel", ""),
+        "tags": tags,
+    }
 
 
 # ── YouTube 업로드 API ─────────────────────────────────────────────
