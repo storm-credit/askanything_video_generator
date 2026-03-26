@@ -1736,16 +1736,7 @@ async def load_session(req: LoadSessionRequest):
         title = topic_guess
         tags = []
         meta = {"topic": topic_guess, "channel": channel_guess, "language": lang}
-        # 생성된 스크립트를 cuts.json에 저장 (다음 로드 시 재사용)
-        try:
-            with open(cuts_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "cuts": cuts, "title": title, "tags": tags,
-                    "metadata": {**meta, "created_at": __import__("datetime").datetime.now().isoformat()}
-                }, f, ensure_ascii=False, indent=2)
-            print(f"[세션 복원] cuts.json 저장 완료: {cuts_path}")
-        except Exception:
-            pass
+        # 빈 스크립트는 저장하지 않음 (나중에 스크립트 생성 후 저장)
 
     image_paths = list(img_files)
 
