@@ -996,7 +996,7 @@ export default function Home() {
   };
 
   const handleRender = async () => {
-    const isMultiPreview = Object.keys(channelPreviews).length >= 2;
+    const isMultiPreview = Object.keys(channelPreviews).length >= 1;
 
     if (!isMultiPreview && !previewData) return;
 
@@ -1824,7 +1824,7 @@ export default function Home() {
       {/* 미리보기 패널 */}
       <AnimatePresence>
         {previewMode && !isGenerating && (() => {
-          const isMultiPreview = Object.keys(channelPreviews).length >= 2;
+          const isMultiPreview = Object.keys(channelPreviews).length >= 1;
           const currentCh = isMultiPreview ? activePreviewTab : null;
           const currentPreview = isMultiPreview ? channelPreviews[activePreviewTab] : previewData;
           const currentScripts = isMultiPreview ? (editedScriptsMap[activePreviewTab] || {}) : editedScripts;
