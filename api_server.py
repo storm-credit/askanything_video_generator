@@ -1900,7 +1900,8 @@ async def generate_scripts(req: GenerateScriptsRequest):
 
     try:
         from modules.gpt.cutter import generate_cuts
-        cuts_list, _folder, title, tags = generate_cuts(topic, lang=req.lang, channel=req.channel)
+        # Gemini 우선, 실패 시 자동 폴백
+        cuts_list, _folder, title, tags = generate_cuts(topic, lang=req.lang, channel=req.channel, llm_provider="gemini")
 
         # 이미지 수에 맞춤
         img_count = len(_glob_mod.glob(os.path.join(folder_path, "images", "cut_*.png")))

@@ -133,16 +133,12 @@ def get_auth_status() -> dict:
             accounts = json.loads(accounts_path.read_text(encoding="utf-8"))
         except Exception:
             pass
-    connected_ids = {ch["id"] for ch in channels if ch["connected"]}
+    connected_ids = {ch["id"] for ch in channels if ch.get("connected")}
     channel_status = {}
     for preset_name in ["askanything", "wonderdrop", "exploratodo", "prismtale"]:
         mapped_id = accounts.get(preset_name, {}).get("youtube")
-        if mapped_id and mapped_id in connected_ids:
-            channel_status[preset_name] = True
-        else:
-            # client_secret은 있는지 확인
-            has_secret = (CLIENT_SECRETS_DIR / f"{preset_name}.json").exists()
-            channel_status[preset_name] = False
+        is_connected = bool(mapped_id and mapped_id in connected_ids)
+        channel_status[preset_name] = is_connected
 
     return {"connected": connected, "channels": channels, "channel_status": channel_status}
 
