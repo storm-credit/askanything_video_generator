@@ -2485,6 +2485,42 @@ async def batch_import_today():
     return await batch_import_day(file_path=path)
 
 
+@app.get("/api/batch/today-topics")
+async def batch_today_topics():
+    """오늘 Day 파일의 주제 목록만 반환합니다 (큐 등록 없이)."""
+    from modules.utils.obsidian_parser import find_today_file, parse_day_file
+    path = find_today_file()
+    if not path:
+        from datetime import datetime as _dt
+        today = _dt.now()
+        return {"success": False, "message": f"오늘({today.month}-{today.day}) Day 파일을 찾을 수 없습니다", "topics": []}
+    try:
+        jobs = parse_day_file(path)
+    except Exception as e:
+        return {"success": False, "message": f"파싱 오류: {e}", "topics": []}
+
+    # 주제별로 그룹핑 (같은 topic_group = 같은 주제)
+    topics = []
+    seen = set()
+    for job in jobs:
+        group = job.get("topic_group", job["topic"])
+        if group not in seen:
+            seen.add(group)
+            # 이 주제의 4채널 데이터 모으기
+            channels = {j["channel"]: {"title": j["title"], "description": j["description"], "hashtags": j["hashtags"]} for j in jobs if j.get("topic_group") == group}
+            topics.append({
+                "topic_group": group,
+                "channels": channels,
+            })
+
+    return {
+        "success": True,
+        "file": os.path.basename(path),
+        "topics": topics,
+        "total": len(topics),
+    }
+
+
 @app.get("/api/batch/day-files")
 async def batch_list_day_files():
     """볼트의 모든 Day 파일 목록을 반환합니다."""

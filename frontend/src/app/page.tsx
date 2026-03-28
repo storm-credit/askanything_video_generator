@@ -43,6 +43,11 @@ export default function Home() {
   const [cameraStyle, setCameraStyle] = useState(() => loadSetting("cameraStyle", "auto"));
   const [bgmTheme, setBgmTheme] = useState(() => loadSetting("bgmTheme", "random"));
 
+  // 오늘 할 일 모달
+  const [showTodayModal, setShowTodayModal] = useState(false);
+  const [todayTopics, setTodayTopics] = useState<any[]>([]);
+  const [todayFile, setTodayFile] = useState("");
+
   // YouTube URL 자동 감지 (토픽 입력란에서)
   const isYouTubeUrl = (text: string) => /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)/.test(text.trim());
   const detectedRefUrl = isYouTubeUrl(topic) ? topic.trim() : undefined;
@@ -1379,12 +1384,14 @@ export default function Home() {
                   type="button"
                   onClick={async () => {
                     try {
-                      const res = await fetch(`${API_BASE}/api/batch/import-today`, { method: "POST" });
+                      const res = await fetch(`${API_BASE}/api/batch/today-topics`);
                       const data = await res.json();
-                      if (data.success) {
-                        alert(`✅ ${data.message}\n\n${data.total_jobs}개 작업이 배치 큐에 등록되었습니다.`);
+                      if (data.success && data.topics?.length > 0) {
+                        setTodayTopics(data.topics);
+                        setTodayFile(data.file || "");
+                        setShowTodayModal(true);
                       } else {
-                        alert(`⚠️ ${data.message}`);
+                        alert(`⚠️ ${data.message || "오늘 주제를 찾을 수 없습니다"}`);
                       }
                     } catch (e) {
                       alert("오늘 할 일 불러오기 실패: 서버 연결을 확인하세요.");
@@ -2230,6 +2237,61 @@ export default function Home() {
               </div>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 오늘 할 일 모달 */}
+      <AnimatePresence>
+        {showTodayModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              onClick={() => setShowTodayModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-900 border border-white/10 rounded-2xl w-[90vw] max-w-md max-h-[60vh] overflow-hidden z-50 flex flex-col"
+            >
+              <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-white">📋 오늘 할 일 — {todayFile}</h2>
+                <button onClick={() => setShowTodayModal(false)} className="text-gray-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {todayTopics.map((t: any, i: number) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      // 주제를 검색창에 입력
+                      const topicName = t.topic_group?.replace(/^[^\s]+\s*/, "") || t.topic_group;
+                      setTopic(topicName);
+                      setShowTodayModal(false);
+                    }}
+                    className="w-full text-left px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-colors"
+                  >
+                    <p className="text-white font-medium text-sm">{t.topic_group}</p>
+                    <div className="flex gap-2 mt-1.5 flex-wrap">
+                      {Object.entries(t.channels || {}).map(([ch, data]: [string, any]) => (
+                        <span key={ch} className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-gray-400">
+                          {ch}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+                {todayTopics.length === 0 && (
+                  <p className="text-gray-500 text-center py-8">오늘 주제가 없습니다</p>
+                )}
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
