@@ -2395,6 +2395,107 @@ async def batch_flag_risky(job_id: int, notes: str = ""):
     return {"success": True, "message": f"작업 #{job_id} 위험 표시됨"}
 
 
+# ── 옵시디언 Day 파일 연계 API ───────────────────────────────────
+
+@app.post("/api/batch/import-day")
+async def batch_import_day(file_path: str = None, date: str = None):
+    """옵시디언 Day 파일을 파싱하여 batch 큐에 등록합니다.
+
+    Args:
+        file_path: Day 파일 직접 경로 (예: "Day 01 (3-25).md")
+        date: 날짜 문자열 (예: "2026-03-25") — file_path 없으면 날짜로 검색
+    """
+    from modules.utils.obsidian_parser import parse_day_file, find_day_file_by_date, DEFAULT_VAULT_PATH
+    from modules.utils.batch import add_job, update_job
+    import json as _json
+
+    # 파일 경로 결정
+    if file_path:
+        # 절대경로가 아니면 볼트 경로 기준으로
+        if not os.path.isabs(file_path):
+            file_path = os.path.join(DEFAULT_VAULT_PATH, file_path)
+    elif date:
+        from datetime import datetime as _dt
+        target = _dt.strptime(date, "%Y-%m-%d")
+        file_path = find_day_file_by_date(target)
+    else:
+        return {"success": False, "message": "file_path 또는 date를 입력해주세요"}
+
+    if not file_path or not os.path.exists(file_path):
+        return {"success": False, "message": f"파일을 찾을 수 없습니다: {file_path}"}
+
+    try:
+        jobs = parse_day_file(file_path)
+    except Exception as e:
+        return {"success": False, "message": f"파싱 오류: {e}"}
+
+    if not jobs:
+        return {"success": False, "message": "파싱된 주제가 없습니다"}
+
+    # batch 큐에 등록 (topic + channel 기준 중복 체크)
+    created_ids = []
+    skipped = 0
+    for job in jobs:
+        # 중복 체크: 같은 topic + channel이 이미 active 상태면 스킵
+        from modules.utils.batch import _get_conn, _lock
+        with _lock:
+            conn = _get_conn()
+            try:
+                dup = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM batch_jobs WHERE topic = ? AND channel = ? AND status IN ('pending', 'draft', 'running', 'reviewed', 'approved')",
+                    (job["topic"], job["channel"]),
+                ).fetchone()
+                if dup["cnt"] > 0:
+                    skipped += 1
+                    continue
+            finally:
+                conn.close()
+
+        job_id = add_job(
+            topic=job["topic"],
+            language=job["language"],
+            channel=job["channel"],
+        )
+        # Day 파일의 메타데이터를 draft에 저장
+        update_job(job_id,
+            draft_title=job["title"],
+            draft_tags=job.get("hashtags", ""),
+            review_notes=f"Imported from {job.get('source_file', 'Obsidian')}",
+        )
+        created_ids.append(job_id)
+
+    return {
+        "success": True,
+        "message": f"{os.path.basename(file_path)}에서 {len(created_ids)}개 작업 등록 (스킵: {skipped})",
+        "job_ids": created_ids,
+        "file": os.path.basename(file_path),
+        "total_jobs": len(created_ids),
+    }
+
+
+@app.post("/api/batch/import-today")
+async def batch_import_today():
+    """오늘 날짜의 Day 파일을 자동 감지하여 batch 큐에 등록합니다."""
+    from modules.utils.obsidian_parser import find_today_file
+    path = find_today_file()
+    if not path:
+        from datetime import datetime as _dt
+        today = _dt.now()
+        return {"success": False, "message": f"오늘({today.month}-{today.day}) Day 파일을 찾을 수 없습니다"}
+    return await batch_import_day(file_path=path)
+
+
+@app.get("/api/batch/day-files")
+async def batch_list_day_files():
+    """볼트의 모든 Day 파일 목록을 반환합니다."""
+    from modules.utils.obsidian_parser import list_day_files
+    files = list_day_files()
+    return {
+        "files": [os.path.basename(f) for f in files],
+        "total": len(files),
+    }
+
+
 # ── 플랫폼 통합 상태 API ─────────────────────────────────────────
 
 @app.get("/api/upload/platforms")

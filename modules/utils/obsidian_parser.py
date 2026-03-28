@@ -1,0 +1,175 @@
+"""옵시디언 Day 파일 파서 — Day 마크다운을 batch job 리스트로 변환
+
+Day 파일 구조:
+  ## 1. 🌌 주제명
+  ### askanything (ko)
+  - **제목**: ...
+  - **설명**: ...
+  - **해시태그**: ...
+  ### wonderdrop (en)
+  - **Title**: ...
+  ...
+
+파싱 결과: 주제별 4채널 → batch job dict 리스트
+"""
+import os
+import re
+import glob
+from datetime import datetime, timedelta
+from typing import Any
+
+
+# 채널 → 언어 매핑
+CHANNEL_LANG_MAP = {
+    "askanything": "ko",
+    "wonderdrop": "en",
+    "exploratodo": "es",
+    "prismtale": "es",
+}
+
+# Day 파일 기본 경로
+DEFAULT_VAULT_PATH = r"C:\Users\Storm Credit\Desktop\쇼츠\askanything"
+
+
+def _extract_field(lines: list[str], field_names: list[str]) -> str:
+    """라인 리스트에서 특정 필드 값을 추출합니다."""
+    for line in lines:
+        for name in field_names:
+            pattern = rf"^\s*-\s*\*\*{re.escape(name)}\*\*:\s*(.+)"
+            m = re.match(pattern, line)
+            if m:
+                return m.group(1).strip()
+    return ""
+
+
+def parse_day_file(file_path: str) -> list[dict[str, Any]]:
+    """Day 마크다운 파일을 파싱하여 batch job 리스트로 반환합니다.
+
+    Args:
+        file_path: Day XX (M-DD).md 파일 경로
+
+    Returns:
+        list of dicts, 각각 batch job 포맷:
+        {
+            "topic": str,          # 채널별 제목 (topic으로 사용)
+            "language": str,       # ko/en/es
+            "channel": str,        # askanything/wonderdrop/exploratodo/prismtale
+            "title": str,          # Day 파일의 제목
+            "description": str,    # Day 파일의 설명
+            "hashtags": str,       # Day 파일의 해시태그
+            "topic_group": str,    # 원본 주제명 (4채널 그룹핑용)
+            "day_file": str,       # 원본 파일명
+        }
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Day 파일을 찾을 수 없습니다: {file_path}")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    jobs = []
+    day_filename = os.path.basename(file_path)
+
+    # 주제별 섹션 분리: ## 1. ~ ## 2. ~ ...
+    topic_sections = re.split(r"(?=^## \d+\.)", content, flags=re.MULTILINE)
+
+    for section in topic_sections:
+        # 주제 헤더 추출
+        topic_match = re.match(r"^## (\d+)\.\s*(.+)", section)
+        if not topic_match:
+            continue
+
+        topic_num = topic_match.group(1)
+        topic_name = topic_match.group(2).strip()
+
+        # 뉴스 주제(5번)는 스킵 — "직접 입력" 플레이스홀더
+        if "직접 입력" in section or "Enter news" in section or "Ingresa tema" in section:
+            continue
+
+        # 채널별 섹션 분리
+        channel_sections = re.split(r"(?=^### )", section, flags=re.MULTILINE)
+
+        for ch_section in channel_sections:
+            # 채널 헤더 추출
+            ch_match = re.match(r"^### (\w+)\s*\((\w+)\)", ch_section)
+            if not ch_match:
+                continue
+
+            channel_name = ch_match.group(1).strip().lower()
+            # lang_hint = ch_match.group(2).strip()  # ko, en, es-LATAM 등
+
+            if channel_name not in CHANNEL_LANG_MAP:
+                continue
+
+            language = CHANNEL_LANG_MAP[channel_name]
+            lines = ch_section.split("\n")
+
+            # 필드 추출
+            title = _extract_field(lines, ["제목", "Title", "Título"])
+            description = _extract_field(lines, ["설명", "Description", "Descripción"])
+            hashtags = _extract_field(lines, ["해시태그", "Hashtags"])
+
+            if not title:
+                continue  # 제목 없으면 스킵
+
+            jobs.append({
+                "topic": title,  # 제목을 topic으로 사용
+                "language": language,
+                "channel": channel_name,
+                "title": title,
+                "description": description,
+                "hashtags": hashtags,
+                "topic_group": topic_name,
+                "day_file": day_filename,
+                "source_file": day_filename,
+                "source_section": f"Topic {topic_num}",
+                "source_channel_block": f"{channel_name} ({language})",
+                "imported_at": datetime.now().isoformat(),
+            })
+
+    return jobs
+
+
+def find_day_file_by_date(target_date: datetime | None = None,
+                          vault_path: str = DEFAULT_VAULT_PATH) -> str | None:
+    """날짜로 Day 파일을 찾습니다.
+
+    Args:
+        target_date: 찾을 날짜 (None이면 오늘)
+        vault_path: 옵시디언 볼트 경로
+
+    Returns:
+        파일 경로 또는 None
+    """
+    if target_date is None:
+        target_date = datetime.now()
+
+    # Day 파일명 패턴: Day XX (M-DD).md
+    month = target_date.month
+    day = target_date.day
+    date_pattern = f"({month}-{day})"
+
+    for f in glob.glob(os.path.join(vault_path, "Day *.md")):
+        if date_pattern in f:
+            return f
+
+    return None
+
+
+def find_today_file(vault_path: str = DEFAULT_VAULT_PATH) -> str | None:
+    """오늘 날짜의 Day 파일을 찾습니다."""
+    return find_day_file_by_date(datetime.now(), vault_path)
+
+
+def parse_today(vault_path: str = DEFAULT_VAULT_PATH) -> list[dict[str, Any]]:
+    """오늘의 Day 파일을 파싱합니다."""
+    path = find_today_file(vault_path)
+    if not path:
+        return []
+    return parse_day_file(path)
+
+
+def list_day_files(vault_path: str = DEFAULT_VAULT_PATH) -> list[str]:
+    """볼트의 모든 Day 파일 목록을 반환합니다."""
+    files = glob.glob(os.path.join(vault_path, "Day *.md"))
+    return sorted(files)
