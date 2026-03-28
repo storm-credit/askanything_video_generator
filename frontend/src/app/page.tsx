@@ -1763,9 +1763,13 @@ export default function Home() {
                               setGeneratedVideoPath(videoPath);
                               setGeneratedVideoUrl(result.videoUrl!);
                               setUploadChannel(ch);
-                              setUploadTitle(topic);
-                              setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
-                              if (p === "youtube") setUploadTags(topic);
+                              const chPreview = channelPreviews[ch];
+                              const genTitle = chPreview?.title || topic;
+                              const genScripts = (chPreview?.cuts || []).map((c: any) => c.script || "").filter(Boolean).join("\n");
+                              const genTags = (chPreview?.cuts?.[0] as any)?.tags?.join(", ") || topic;
+                              setUploadTitle(genTitle);
+                              setUploadDescription(genScripts || `AI가 생성한 숏폼 영상: ${genTitle}`);
+                              if (p === "youtube") setUploadTags(genTags);
                               setUploadResult(null);
                               setScheduleEnabled(false);
                               setScheduleDate("");
