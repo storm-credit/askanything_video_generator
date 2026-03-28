@@ -166,6 +166,7 @@ export default function Home() {
   const [scheduleDate, setScheduleDate] = useState("");
   // YouTube
   const [ytConnected, setYtConnected] = useState(false);
+  const [ytChannelStatus, setYtChannelStatus] = useState<Record<string, boolean>>({});
   const [ytChannels, setYtChannels] = useState<{ id: string; title: string; connected: boolean }[]>([]);
   const [ytSelectedChannel, setYtSelectedChannel] = useState<string>("");
   // TikTok
@@ -1142,6 +1143,14 @@ export default function Home() {
               setYtSelectedChannel(data.youtube.channels[0].id);
             }
           }
+          // 채널별 연동 상태 가져오기
+          try {
+            const ytStatusRes = await fetch(`${API_BASE}/api/youtube/status`);
+            if (ytStatusRes.ok) {
+              const ytStatusData = await ytStatusRes.json();
+              if (ytStatusData.channel_status) setYtChannelStatus(ytStatusData.channel_status);
+            }
+          } catch {}
         }
         // TikTok
         if (data.tiktok) {
@@ -2454,8 +2463,8 @@ export default function Home() {
                 ) : null;
               })()}
 
-              {/* 연동 안 된 경우 */}
-              {((uploadPlatform === "youtube" && !ytConnected) ||
+              {/* 연동 안 된 경우 (채널별 체크) */}
+              {((uploadPlatform === "youtube" && !(ytChannelStatus[uploadChannel] ?? ytConnected)) ||
                 (uploadPlatform === "tiktok" && !ttConnected) ||
                 (uploadPlatform === "instagram" && !igConnected)) ? (
                 <div className="space-y-4 text-center py-4">
