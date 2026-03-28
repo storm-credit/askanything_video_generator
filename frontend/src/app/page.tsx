@@ -1376,7 +1376,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={loadSessionList}
-                  className="bg-gray-700 text-gray-300 hover:bg-gray-600 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
+                  className="bg-blue-600 text-white hover:bg-blue-500 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
                 >
                   불러오기
                 </button>
@@ -1406,14 +1406,14 @@ export default function Home() {
                   type="button"
                   onClick={handlePrepare}
                   disabled={!topic.trim()}
-                  className="bg-indigo-600 text-white hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
+                  className="bg-purple-600 text-white hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
                 >
                   미리보기
                 </button>
                 <button
                   type="submit"
                   disabled={!topic.trim()}
-                  className="bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
+                  className="bg-orange-500 text-white hover:bg-orange-400 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
                 >
                   바로생성
                 </button>
