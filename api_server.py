@@ -187,7 +187,16 @@ class GenerateRequest(BaseModel):
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL (분석 후 스타일 반영)
     publishMode: str = "realtime"  # realtime(공개) / private(비공개) / scheduled(예약)
     scheduledTime: str | None = None  # ISO datetime (예약 모드 전용)
+    workflowMode: str = "fast"  # fast(즉시 렌더) / review(초안만 생성, 검수 후 렌더) / approved_only(승인된 것만 렌더)
     maxCuts: int | None = None  # 테스트 모드: 컷 수 제한 (예: 3)
+
+    @field_validator("workflowMode")
+    @classmethod
+    def valid_workflow_mode(cls, v: str) -> str:
+        allowed = {"fast", "review"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 workflowMode: {v}. 허용: {allowed}")
+        return v
 
     @field_validator("language")
     @classmethod
@@ -591,6 +600,42 @@ async def generate_video_endpoint(req: GenerateRequest):
             yield {"data": "PROG|30\n"}
             yield {"data": f"[기획 완료] 총 {len(cuts)}컷 기획 완료!\n"}
 
+            # ── workflowMode=review: 컷 생성 직후 끊고 초안 저장 ──
+            if req.workflowMode == "review":
+                from modules.utils.batch import add_job as _batch_add
+                _review_topic = _topic.split("\n\n[원본 영상 내용]")[0].strip()
+                _review_job_id = _batch_add(
+                    topic=_review_topic,
+                    language=language,
+                    camera_style=req.cameraStyle,
+                    bgm_theme=req.bgmTheme,
+                    llm_provider=llm_provider,
+                    video_engine=video_engine,
+                    image_engine=image_engine,
+                    channel=req.channel,
+                )
+                review_payload = {
+                    "job_id": _review_job_id,
+                    "topic": _review_topic,
+                    "title": video_title,
+                    "tags": video_tags,
+                    "cuts": cuts,
+                    "topic_folder": topic_folder,
+                    "status": "draft",
+                    "prompt_status": "draft",
+                    "fact_check_status": "pending",
+                    "workflow_mode": "review",
+                }
+                review_json_path = os.path.join("assets", topic_folder, "review_draft.json")
+                os.makedirs(os.path.dirname(review_json_path), exist_ok=True)
+                with open(review_json_path, "w", encoding="utf-8") as f:
+                    json.dump(review_payload, f, ensure_ascii=False, indent=2)
+                yield {"data": f"INFO|검수용 초안 생성 완료 (job_id={_review_job_id})\n"}
+                yield {"data": f"REVIEW_READY|{json.dumps(review_payload, ensure_ascii=False)}\n"}
+                yield {"data": "PROG|100\n"}
+                yield {"data": f"DONE|{topic_folder}\n"}
+                return
+
             # 취소 체크포인트 1: LLM 기획 후
             if _is_cancelled():
                 yield {"data": "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"}
@@ -820,6 +865,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 return
 
             yield {"data": "PROG|85\n"}
+
             platform_label = ", ".join(p.upper() for p in req.platforms)
             yield {"data": f"[렌더링 마스터] Remotion 렌더링 시작 — 플랫폼: {platform_label}\n"}
 
