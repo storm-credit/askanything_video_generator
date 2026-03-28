@@ -215,7 +215,7 @@ class GenerateRequest(BaseModel):
     @field_validator("imageEngine")
     @classmethod
     def valid_image_engine(cls, v: str) -> str:
-        allowed = {"dalle", "imagen"}
+        allowed = {"dalle", "imagen", "nano_banana"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 이미지 엔진: {v}. 허용: {allowed}")
         return v
@@ -380,11 +380,11 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
         # Whisper만 필요 — Gemini 기반 구성에서는 경고만 (자막 없이 진행 가능)
         print("  [경고] OPENAI_API_KEY 미설정 — Whisper 자막 타임스탬프 사용 불가")
 
-    # Imagen 사용 시 Google 키 필요
-    if image_engine == "imagen":
+    # Imagen / Nano Banana 사용 시 Google 키 필요
+    if image_engine in ("imagen", "nano_banana"):
         gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
         if not gemini_key:
-            errors.append("GEMINI_API_KEY (Imagen 4 이미지 생성에 필수)")
+            errors.append("GEMINI_API_KEY (이미지 생성에 필수)")
 
     # LLM 프로바이더별 키 검증
     if llm_provider == "gemini":
@@ -650,16 +650,29 @@ async def generate_video_endpoint(req: GenerateRequest):
                 with image_semaphore:
                     try:
                         cut_image_key = _get_image_key()
-                        img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=_topic) if image_engine == "imagen" else gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, topic=_topic)
-                    except Exception as exc:
-                        # Imagen 실패 → Nano Banana → DALL-E 폴백 체인
                         if image_engine == "imagen":
-                            print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
-                            try:
-                                _nb_key = get_google_key(llm_key_override, service="nano_banana", extra_keys=gemini_keys_override)
-                                img_path = generate_image_nano_banana(cut["prompt"], i, topic_folder, _nb_key, gemini_api_keys=gemini_keys_override, topic=_topic)
-                            except Exception as nb_exc:
-                                print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {nb_exc}")
+                            img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=_topic)
+                        elif image_engine == "nano_banana":
+                            img_path = generate_image_nano_banana(cut["prompt"], i, topic_folder, cut_image_key, gemini_api_keys=gemini_keys_override, topic=_topic)
+                        else:
+                            img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, topic=_topic)
+                    except Exception as exc:
+                        # Imagen/Nano Banana 실패 → 폴백 체인
+                        if image_engine in ("imagen", "nano_banana"):
+                            fallback_from = "Imagen" if image_engine == "imagen" else "Nano Banana"
+                            # Imagen → Nano Banana 폴백 (nano_banana 엔진이면 스킵)
+                            if image_engine == "imagen":
+                                print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
+                                try:
+                                    _nb_key = get_google_key(llm_key_override, service="nano_banana", extra_keys=gemini_keys_override)
+                                    img_path = generate_image_nano_banana(cut["prompt"], i, topic_folder, _nb_key, gemini_api_keys=gemini_keys_override, topic=_topic)
+                                except Exception as nb_exc:
+                                    print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {nb_exc}")
+                                    exc = nb_exc  # DALL-E 폴백으로 계속
+                            else:
+                                print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {exc}")
+                            # DALL-E 폴백
+                            if not img_path:
                                 _dalle_fallback_key = api_key_override or os.getenv("OPENAI_API_KEY")
                                 if _dalle_fallback_key:
                                     try:
@@ -670,7 +683,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                                         print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
                                 else:
                                     with errors_lock:
-                                        errors.append(f"이미지: Imagen+NanoBanana 실패, DALL-E 키 없음")
+                                        errors.append(f"이미지: {fallback_from} 실패, DALL-E 키 없음")
                         else:
                             with errors_lock:
                                 errors.append(f"이미지: {exc}")
@@ -1144,46 +1157,65 @@ async def prepare_endpoint(req: PrepareRequest):
             yield {"data": f"[기획 완료] {len(cuts)}컷 스크립트 생성!\n"}
 
             # 이미지 생성
-            gen_image_fn = generate_image_imagen if req.imageEngine == "imagen" else generate_image_dalle
-            image_label = "Imagen 4" if req.imageEngine == "imagen" else "DALL-E"
+            image_label = {"imagen": "Imagen 4", "nano_banana": "Nano Banana", "dalle": "DALL-E"}.get(req.imageEngine, req.imageEngine)
             yield {"data": f"[이미지] {image_label}로 이미지 생성 중...\n"}
 
             image_paths = []
             for i, cut in enumerate(cuts):
                 try:
-                    img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys) if req.imageEngine == "imagen" else req.apiKey
                     _topic = prep_topic
-                    img_path = await loop.run_in_executor(
-                        None, lambda idx=i, c=cut, k=img_key, t=_topic: gen_image_fn(c["prompt"], idx, topic_folder, k, topic=t) if req.imageEngine != "imagen" else generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys, topic=t)
-                    )
+                    if req.imageEngine == "imagen":
+                        img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys)
+                        img_path = await loop.run_in_executor(
+                            None, lambda idx=i, c=cut, k=img_key, t=_topic: generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys, topic=t)
+                        )
+                    elif req.imageEngine == "nano_banana":
+                        img_key = get_google_key(req.llmKey, service="nano_banana", extra_keys=_gemini_keys)
+                        img_path = await loop.run_in_executor(
+                            None, lambda idx=i, c=cut, k=img_key, t=_topic: generate_image_nano_banana(c["prompt"], idx, topic_folder, k, gemini_api_keys=_gemini_keys, topic=t)
+                        )
+                    else:
+                        img_key = req.apiKey
+                        img_path = await loop.run_in_executor(
+                            None, lambda idx=i, c=cut, k=img_key, t=_topic: generate_image_dalle(c["prompt"], idx, topic_folder, k, topic=t)
+                        )
                     image_paths.append(img_path)
                 except Exception as exc:
-                    # Imagen 실패 → Nano Banana → DALL-E 폴백 체인
-                    if req.imageEngine == "imagen":
-                        print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
-                        yield {"data": f"  -> 컷 {i+1} Imagen 실패, Nano Banana로 폴백\n"}
-                        try:
-                            _nb_key = get_google_key(req.llmKey, service="nano_banana", extra_keys=_gemini_keys)
-                            _topic2 = prep_topic
-                            img_path = await loop.run_in_executor(
-                                None, lambda idx=i, c=cut, k=_nb_key, t=_topic2: generate_image_nano_banana(c["prompt"], idx, topic_folder, k, topic=t)
-                            )
-                            image_paths.append(img_path)
-                        except Exception as nb_exc:
-                            print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {nb_exc}")
+                    # 폴백 체인
+                    if req.imageEngine in ("imagen", "nano_banana"):
+                        fallback_from = image_label
+                        # Imagen → Nano Banana 폴백
+                        if req.imageEngine == "imagen":
+                            print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
+                            yield {"data": f"  -> 컷 {i+1} Imagen 실패, Nano Banana로 폴백\n"}
+                            try:
+                                _nb_key = get_google_key(req.llmKey, service="nano_banana", extra_keys=_gemini_keys)
+                                _topic2 = prep_topic
+                                img_path = await loop.run_in_executor(
+                                    None, lambda idx=i, c=cut, k=_nb_key, t=_topic2: generate_image_nano_banana(c["prompt"], idx, topic_folder, k, topic=t)
+                                )
+                                image_paths.append(img_path)
+                                continue
+                            except Exception as nb_exc:
+                                print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {nb_exc}")
+                                yield {"data": f"  -> 컷 {i+1} Nano Banana 실패, DALL-E로 폴백\n"}
+                        else:
+                            print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {exc}")
                             yield {"data": f"  -> 컷 {i+1} Nano Banana 실패, DALL-E로 폴백\n"}
-                            _dalle_key = req.apiKey or os.getenv("OPENAI_API_KEY")
-                            if _dalle_key:
-                                try:
-                                    img_path = await loop.run_in_executor(
-                                        None, lambda idx=i, c=cut, k=_dalle_key, t=_topic2: generate_image_dalle(c["prompt"], idx, topic_folder, k, topic=t)
-                                    )
-                                    image_paths.append(img_path)
-                                except Exception as dalle_exc:
-                                    print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
-                                    image_paths.append(None)
-                            else:
+                        # DALL-E 폴백
+                        _dalle_key = req.apiKey or os.getenv("OPENAI_API_KEY")
+                        if _dalle_key:
+                            try:
+                                _topic2 = prep_topic
+                                img_path = await loop.run_in_executor(
+                                    None, lambda idx=i, c=cut, k=_dalle_key, t=_topic2: generate_image_dalle(c["prompt"], idx, topic_folder, k, topic=t)
+                                )
+                                image_paths.append(img_path)
+                            except Exception as dalle_exc:
+                                print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
                                 image_paths.append(None)
+                        else:
+                            image_paths.append(None)
                     else:
                         print(f"[컷 {i+1} 이미지 실패] {exc}")
                         image_paths.append(None)
@@ -1851,6 +1883,7 @@ class YouTubeUploadRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     privacy: str = Field("private", pattern="^(private|unlisted|public)$")
     channel_id: str | None = None
+    channel: str | None = Field(None, description="채널 프리셋 이름 (채널별 client_secret 선택용)")
     publish_at: str | None = Field(None, description="예약 공개 시간 (ISO 8601, e.g. 2026-03-20T15:00:00Z)")
 
 
@@ -1935,6 +1968,7 @@ class TikTokUploadRequest(BaseModel):
     title: str = Field(..., max_length=150)
     privacy_level: str = Field("SELF_ONLY", pattern="^(SELF_ONLY|MUTUAL_FOLLOW_FRIENDS|FOLLOWER_OF_CREATOR|PUBLIC_TO_EVERYONE)$")
     user_id: str | None = None
+    channel: str | None = Field(None, description="채널 프리셋 이름")
     schedule_time: int | None = Field(None, description="예약 발행 UTC Unix timestamp (15분~75일 이내)")
 
 
@@ -2012,6 +2046,7 @@ class InstagramUploadRequest(BaseModel):
     video_path: str = Field(..., description="업로드할 동영상 경로")
     caption: str = Field("", max_length=2200)
     account_id: str | None = None
+    channel: str | None = Field(None, description="채널 프리셋 이름")
     video_url: str | None = Field(None, description="공개 접근 가능한 영상 URL (로컬 파일 대신)")
 
 
@@ -2196,7 +2231,20 @@ async def batch_start():
                         word_ts_list.append(words)
                         scripts.append(cut["script"])
 
-                    # 렌더링
+                    # ── 렌더 전 가드: 승인 안 된 항목은 draft로 멈춤 ──
+                    # 배치 자동 실행 시: 생성 완료 후 draft 상태로 저장하고 렌더 건너뜀
+                    # 수동 승인(mark_approved) 후에만 렌더 진행
+                    _job_fresh = get_job(job_id)
+                    _prompt_st = (_job_fresh or {}).get("prompt_status", "draft")
+                    _fact_st = (_job_fresh or {}).get("fact_check_status", "pending")
+
+                    if _prompt_st != "approved" or _fact_st != "verified":
+                        # 생성은 완료됐지만 검수 미완 → draft 상태로 대기
+                        update_job(job_id, status="draft", completed_at=datetime.now().isoformat())
+                        print(f"[배치] 작업 #{job_id} 생성 완료 → 검수 대기 (prompt={_prompt_st}, fact={_fact_st})")
+                        continue  # 렌더 건너뛰고 다음 작업으로
+
+                    # 렌더링 (승인된 항목만 도달)
                     video_path = await loop.run_in_executor(
                         None, lambda: create_remotion_video(
                             visual_paths, audio_paths, scripts, word_ts_list, topic_folder,
@@ -2241,6 +2289,52 @@ async def batch_clear():
     from modules.utils.batch import clear_completed
     count = clear_completed()
     return {"cleared": count, "message": f"완료/실패 작업 {count}건 정리됨"}
+
+
+# ── 검수 워크플로우 API ──────────────────────────────────────────
+
+@app.post("/api/batch/job/{job_id}/approve")
+async def batch_approve(job_id: int):
+    """팩트체크 + 검수 완료된 작업을 최종 승인합니다."""
+    from modules.utils.batch import get_job, mark_approved
+    job = get_job(job_id)
+    if not job:
+        return {"success": False, "message": f"작업 #{job_id} 없음"}
+    mark_approved(job_id)
+    return {"success": True, "message": f"작업 #{job_id} 승인 완료 — 렌더 가능"}
+
+
+@app.post("/api/batch/job/{job_id}/verify")
+async def batch_verify(job_id: int):
+    """팩트체크 통과 표시."""
+    from modules.utils.batch import get_job, mark_verified
+    job = get_job(job_id)
+    if not job:
+        return {"success": False, "message": f"작업 #{job_id} 없음"}
+    mark_verified(job_id)
+    return {"success": True, "message": f"작업 #{job_id} 팩트체크 통과"}
+
+
+@app.post("/api/batch/job/{job_id}/review")
+async def batch_review(job_id: int, notes: str = ""):
+    """검토 완료 표시 (코멘트 포함 가능)."""
+    from modules.utils.batch import get_job, mark_reviewed
+    job = get_job(job_id)
+    if not job:
+        return {"success": False, "message": f"작업 #{job_id} 없음"}
+    mark_reviewed(job_id, notes=notes or None)
+    return {"success": True, "message": f"작업 #{job_id} 검토 완료"}
+
+
+@app.post("/api/batch/job/{job_id}/flag-risky")
+async def batch_flag_risky(job_id: int, notes: str = ""):
+    """팩트체크 위험 표시."""
+    from modules.utils.batch import get_job, mark_risky
+    job = get_job(job_id)
+    if not job:
+        return {"success": False, "message": f"작업 #{job_id} 없음"}
+    mark_risky(job_id, notes=notes or None)
+    return {"success": True, "message": f"작업 #{job_id} 위험 표시됨"}
 
 
 # ── 플랫폼 통합 상태 API ─────────────────────────────────────────

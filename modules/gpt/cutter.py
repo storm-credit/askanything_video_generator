@@ -331,6 +331,23 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 - 루프가 자연스럽게 연결되지 않음 → FAIL
 - image_prompt에 강렬한 시각 요소 없음 → FAIL
 - 톤이 채널 설정과 불일치 → FAIL
+- 검증 안 된 숫자를 단정형으로 서술 → FAIL
+- image_prompt가 script에 없는 정보를 추가 → FAIL
+
+🔬 [팩트 검증 규칙 — 채널 신뢰도 최우선]
+- 검증 안 된 숫자 단정 금지: "정확히 X배" → "약 X배", "추정 X배" 사용
+- "과학자들이 증명했다/밝혀졌다" 남발 금지 → "연구에 따르면", "~로 알려져 있다" 사용
+- 배타적 단정 금지: "유일한/최초의/절대/역사상 가장" → "거의 유일한/가장 ~중 하나" 사용
+- 인과관계 날조 금지: 상관관계를 인과관계로 바꾸지 말 것 ("A하면 B된다" → "A와 B는 관련이 있다")
+- 과장 수식어 제한: 근거 없는 "역사상 가장", "우주에서 제일" 사용 금지
+- image_prompt는 해당 컷 script의 내용만 시각화. script에 없는 피사체/정보 추가 절대 금지
+
+🎯 [첫 2초 훅 강제 규칙 — Cut 1 전용]
+- Cut 1 script: 반드시 15자 이내. 한 문장. 설명/도입 금지, 선언만.
+- Cut 1 image_prompt: 시각 정보 1개만 (하나의 피사체 + 하나의 극단적 요소). 복잡한 장면 금지.
+- Cut 1은 질문형 금지. 단정문/충격문/역설문 중 하나만 사용.
+- ❌ "이건 흥미로운 사실이에요" ❌ "오늘 알아볼 건..." ❌ "여러분 혹시..."
+- ✅ "블랙홀에 빠지면 몸이 늘어나요" ✅ "이건 존재하면 안 돼요" ✅ "이 행성엔 다이아몬드 비가 내려요"
 
 [숏폼 구조 (8~9컷, 각 4~5초, 총 35~42초)]
 1. Cut 1 — 결론 폭탄(Hook): 가장 충격적 팩트를 단정문으로 던져라. 질문형 금지. ★ 1.7초 법칙: image_prompt에 극단적 스케일/강렬 색대비/비현실 장면 필수.
@@ -438,6 +455,23 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 - Loop not naturally connected → FAIL
 - Visual prompts lack striking element → FAIL
 - Tone does not match channel → FAIL
+- Unverified numbers stated as definitive facts → FAIL
+- image_prompt adds information not present in script → FAIL
+
+🔬 [FACT VERIFICATION RULES — Channel credibility is paramount]
+- No definitive unverified numbers: "exactly 10x" → "roughly 10x", "an estimated 10x"
+- No overuse of "scientists proved/discovered": use "research suggests", "studies indicate"
+- No exclusive absolutes: "the only/first/absolute/most in history" → "one of the few/among the largest"
+- No causation from correlation: "doing A causes B" → "A is linked to B"
+- No unsupported superlatives: "the biggest in history", "the most extreme ever" without evidence
+- image_prompt must ONLY visualize what's in the script. Adding subjects/info not in the script is FORBIDDEN
+
+🎯 [FIRST 2-SECOND HOOK — Cut 1 mandatory rules]
+- Cut 1 script: MAX 8 words. One sentence. No introduction, no explanation — declaration only.
+- Cut 1 image_prompt: ONE visual subject + ONE extreme element. No complex multi-subject scenes.
+- Cut 1 must NOT be a question. Use declarative/shock/paradox statements only.
+- ❌ "This is an interesting fact" ❌ "Today we'll look at..." ❌ "Have you ever wondered..."
+- ✅ "A black hole stretches you like spaghetti" ✅ "This should not exist" ✅ "It rains diamonds on this planet"
 
 [Short-form Structure (8–9 cuts, ~4–5 sec each, 38–48 sec total)]
 1. Cut 1 — Hook: Drop the most shocking fact as a declarative statement. NO questions. ★ 1.7-SEC RULE: image_prompt MUST have extreme visual impact (scale, color contrast, surreal).
@@ -546,6 +580,23 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - Loop no conecta naturalmente → FAIL
 - image_prompt sin elemento visual impactante → FAIL
 - Tono no coincide con el canal → FAIL
+- Números no verificados presentados como hechos definitivos → FAIL
+- image_prompt añade información que no está en el script → FAIL
+
+🔬 [REGLAS DE VERIFICACIÓN — La credibilidad del canal es lo primero]
+- Números no verificados prohibidos en forma definitiva: "exactamente 10 veces" → "aproximadamente 10 veces"
+- No abusar de "los científicos demostraron/descubrieron": usar "según investigaciones", "estudios sugieren"
+- No absolutos exclusivos: "el único/el primero/el más de la historia" → "uno de los pocos/entre los más grandes"
+- No fabricar causalidad: "hacer A causa B" → "A está relacionado con B"
+- No superlativos sin evidencia: "el más grande de la historia", "lo más extremo" sin respaldo
+- image_prompt SOLO visualiza lo que dice el script. Añadir sujetos/información extra está PROHIBIDO
+
+🎯 [GANCHO DE 2 SEGUNDOS — Reglas obligatorias del Corte 1]
+- Script del Corte 1: MÁXIMO 10 palabras. Una oración. Sin introducción — solo declaración.
+- image_prompt del Corte 1: UN sujeto visual + UN elemento extremo. Sin escenas complejas.
+- Corte 1 NO puede ser pregunta. Solo afirmaciones/impacto/paradoja.
+- ❌ "Esto es un dato interesante" ❌ "Hoy vamos a ver..." ❌ "¿Alguna vez te preguntaste...?"
+- ✅ "Esto no debería existir" ✅ "Un agujero negro te estira como espagueti" ✅ "Llueven diamantes en este planeta"
 
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 38–48 seg total)]
 1. Corte 1 — Gancho: Suelta el dato más impactante como afirmación directa. SIN preguntas. ★ REGLA DE 1.7 SEG: el image_prompt DEBE tener impacto visual extremo (escala, contraste de color, surrealismo).
@@ -662,6 +713,23 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - Loop no conecta naturalmente → FAIL
 - image_prompt sin elemento visual impactante → FAIL
 - Tono no coincide con el canal → FAIL
+- Números no verificados presentados como hechos definitivos → FAIL
+- image_prompt añade información que no está en el script → FAIL
+
+🔬 [REGLAS DE VERIFICACIÓN — La credibilidad del canal es lo primero]
+- Números no verificados prohibidos en forma definitiva: "exactamente 10 veces" → "aproximadamente 10 veces"
+- No abusar de "los científicos demostraron": usar "según investigaciones", "estudios sugieren"
+- No absolutos exclusivos: "el único/el primero/el más de la historia" → "uno de los pocos/entre los más grandes"
+- No fabricar causalidad: "hacer A causa B" → "A está relacionado con B"
+- No superlativos sin evidencia: "el más grande de la historia" sin respaldo → prohibido
+- image_prompt SOLO visualiza lo que dice el script. Añadir sujetos/información extra está PROHIBIDO
+
+🎯 [GANCHO DE 2 SEGUNDOS — Reglas obligatorias del Corte 1]
+- Script del Corte 1: MÁXIMO 10 palabras. Una oración. Sin introducción — solo exclamación/afirmación.
+- image_prompt del Corte 1: UN sujeto visual + colores vibrantes + UN elemento extremo. Sin escenas complejas.
+- Corte 1 puede ser exclamación o afirmación fuerte, pero NO pregunta genérica.
+- ❌ "Hoy vamos a ver algo curioso" ❌ "¿Alguna vez te has preguntado...?"
+- ✅ "¡Esto NO debería existir!" ✅ "¡Llueven diamantes en este planeta!" ✅ "¡3 corazones! ¡Sí, tres!"
 
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 35–42 seg total)]
 1. Corte 1 — Gancho: El dato más impactante como exclamación o afirmación fuerte. ★ REGLA DE 1.7 SEG: image_prompt con colores vibrantes, escenas llamativas, impacto visual máximo.
