@@ -187,7 +187,7 @@ class GenerateRequest(BaseModel):
     referenceUrl: str | None = None  # YouTube 레퍼런스 URL (분석 후 스타일 반영)
     publishMode: str = "realtime"  # realtime(공개) / private(비공개) / scheduled(예약)
     scheduledTime: str | None = None  # ISO datetime (예약 모드 전용)
-    workflowMode: str = "fast"  # fast(즉시 렌더) / review(초안만 생성, 검수 후 렌더) / approved_only(승인된 것만 렌더)
+    workflowMode: str = "fast"  # fast(즉시 렌더) / review(초안만 생성, 검수 후 렌더)
     maxCuts: int | None = None  # 테스트 모드: 컷 수 제한 (예: 3)
 
     @field_validator("workflowMode")

@@ -349,6 +349,14 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 - ❌ "이건 흥미로운 사실이에요" ❌ "오늘 알아볼 건..." ❌ "여러분 혹시..."
 - ✅ "블랙홀에 빠지면 몸이 늘어나요" ✅ "이건 존재하면 안 돼요" ✅ "이 행성엔 다이아몬드 비가 내려요"
 
+📊 [채널 데이터 기반 — askanything 최적화]
+- 잘 되는 주제: 우주 괴현상, 이상한 행성, 공룡/고생물, 블랙홀, 극한 자연
+- 잘 되는 제목 패턴: "하루가 1년보다 긴 행성이 있다?" 같은 즉시 상상되는 역설형
+- ❌ 교과서형 제목 금지: "~의 원리", "~하는 이유", "~에 대해 알아보자" → FAIL
+- ❌ 설명형 도입 금지: "오늘은 ~를 소개합니다" → FAIL
+- ✅ 제목은 "듣기 전에 이미 궁금한가?"가 기준. 설명 없이 한 문장만 봐도 그림이 그려져야 함
+- 평균 조회율 100%+ 달성 영상 공통점: 루프 구조 강함, 빠른 템포, 역설/충격 훅
+
 [숏폼 구조 (8~9컷, 각 4~5초, 총 35~42초)]
 1. Cut 1 — 결론 폭탄(Hook): 가장 충격적 팩트를 단정문으로 던져라. 질문형 금지. ★ 1.7초 법칙: image_prompt에 극단적 스케일/강렬 색대비/비현실 장면 필수.
    후크 패턴: 숫자 대비, 부정+반전, 시간 긴급성, 직관 파괴
@@ -473,7 +481,15 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 - ❌ "This is an interesting fact" ❌ "Today we'll look at..." ❌ "Have you ever wondered..."
 - ✅ "A black hole stretches you like spaghetti" ✅ "This should not exist" ✅ "It rains diamonds on this planet"
 
-[Short-form Structure (8–9 cuts, ~4–5 sec each, 38–48 sec total)]
+📊 [CHANNEL DATA — wonderdrop optimization]
+- CTR 4.3% (good) but low viral ceiling — need sharper hooks to trigger feed expansion
+- Top performers: dinosaur discoveries, weird exoplanets, black holes, visual science
+- ❌ Explanatory "How/Why" titles perform worse: "How Do Whales Hold Their Breath" → weak
+- ✅ Declarative/visual titles perform best: "The Exoplanet That Smells Like Rotten Eggs" → strong
+- ❌ Videos over 45 seconds tend to underperform — keep it tight
+- ✅ Netflix-documentary visual style: clean, one subject centered, cinematic lighting
+
+[Short-form Structure (8–9 cuts, ~4–5 sec each, 35–45 sec total)]
 1. Cut 1 — Hook: Drop the most shocking fact as a declarative statement. NO questions. ★ 1.7-SEC RULE: image_prompt MUST have extreme visual impact (scale, color contrast, surreal).
    Hook patterns: number contrast, negation+reveal, time urgency, intuition breaker
    ★★★ [HOOK MUST RULE] First line MUST break common belief or present an "impossible fact."
@@ -597,6 +613,15 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - Corte 1 NO puede ser pregunta. Solo afirmaciones/impacto/paradoja.
 - ❌ "Esto es un dato interesante" ❌ "Hoy vamos a ver..." ❌ "¿Alguna vez te preguntaste...?"
 - ✅ "Esto no debería existir" ✅ "Un agujero negro te estira como espagueti" ✅ "Llueven diamantes en este planeta"
+
+📊 [DATOS DEL CANAL — prismtale optimización]
+- Canal estable: 1,000–1,800 views distribuidos uniformemente (sin dependencia de un solo hit)
+- Temas fuertes: pingüinos, miel 3000 años, cerebro, tiempo, Aurora, planetas, dinosaurios — MUY amplio
+- ✅ Tono oscuro y cinematográfico: sombras, misterio, iluminación teal/orange, fondos oscuros
+- ✅ Títulos que funcionan: afirmaciones intrigantes, no preguntas genéricas
+- ❌ Temas demasiado agresivos/exagerados (supervolcano=14 views, crows=1 view) → fracasan
+- ❌ No todo funciona "oscuro" — el tema debe tener misterio natural, no forzado
+- CTR 2.2% es bajo → mejorar packaging visual del primer corte
 
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 38–48 seg total)]
 1. Corte 1 — Gancho: Suelta el dato más impactante como afirmación directa. SIN preguntas. ★ REGLA DE 1.7 SEG: el image_prompt DEBE tener impacto visual extremo (escala, contraste de color, surrealismo).
@@ -730,6 +755,14 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - Corte 1 puede ser exclamación o afirmación fuerte, pero NO pregunta genérica.
 - ❌ "Hoy vamos a ver algo curioso" ❌ "¿Alguna vez te has preguntado...?"
 - ✅ "¡Esto NO debería existir!" ✅ "¡Llueven diamantes en este planeta!" ✅ "¡3 corazones! ¡Sí, tres!"
+
+📊 [DATOS DEL CANAL — exploratodo optimización]
+- Un video (HD 137010 b) generó 67% de todas las views — exoplanetas son el tema más fuerte
+- Temas fuertes: exoplanetas, Hubble/eventos espaciales, dinosaurios, criaturas marinas extrañas
+- ✅ Cuando el tema es espacio/exoplanetas: maximizar colores vibrantes, escala cósmica, efectos de brillo
+- ✅ Títulos que funcionan: "Descubren un planeta de tamaño terrestre", "¿Un exoplaneta que huele a huevo podrido?"
+- ❌ Cuidado con la exageración visual: colores brillantes NO justifican datos inventados
+- El canal depende de crear múltiples hits, no solo uno — mantener calidad consistente
 
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 35–42 seg total)]
 1. Corte 1 — Gancho: El dato más impactante como exclamación o afirmación fuerte. ★ REGLA DE 1.7 SEG: image_prompt con colores vibrantes, escenas llamativas, impacto visual máximo.
