@@ -2463,8 +2463,8 @@ export default function Home() {
                 ) : null;
               })()}
 
-              {/* 연동 안 된 경우 (채널별 체크) */}
-              {((uploadPlatform === "youtube" && !(ytChannelStatus[uploadChannel] ?? ytConnected)) ||
+              {/* 연동 안 된 경우 (채널별 체크 — channels 배열 기반) */}
+              {((uploadPlatform === "youtube" && !ytConnected) ||
                 (uploadPlatform === "tiktok" && !ttConnected) ||
                 (uploadPlatform === "instagram" && !igConnected)) ? (
                 <div className="space-y-4 text-center py-4">

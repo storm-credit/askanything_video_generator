@@ -131,14 +131,19 @@ def get_auth_status() -> dict:
     accounts = {}
     if accounts_path.exists():
         try:
-            accounts = json.loads(accounts_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+            raw = accounts_path.read_text(encoding="utf-8")
+            accounts = json.loads(raw)
+        except Exception as e:
+            print(f"[YT ERROR] channel_accounts.json 파싱 실패: {e}")
+    else:
+        print(f"[YT WARN] accounts_path 없음: {accounts_path}")
     connected_ids = {ch["id"] for ch in channels if ch.get("connected")}
+    print(f"[YT DEBUG] connected_ids={connected_ids}, accounts={accounts}")
     channel_status = {}
     for preset_name in ["askanything", "wonderdrop", "exploratodo", "prismtale"]:
         mapped_id = accounts.get(preset_name, {}).get("youtube")
         is_connected = bool(mapped_id and mapped_id in connected_ids)
+        print(f"[YT DEBUG] {preset_name}: mapped={mapped_id} in_set={mapped_id in connected_ids if mapped_id else 'N/A'} result={is_connected}")
         channel_status[preset_name] = is_connected
 
     return {"connected": connected, "channels": channels, "channel_status": channel_status}
