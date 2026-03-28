@@ -1202,6 +1202,21 @@ These English keywords help YouTube's algorithm classify this content for US aud
 
     print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
 
+    # ── 채널 금지 표현 필터링 ──
+    from modules.utils.channel_config import get_channel_preset
+    _ch_preset = get_channel_preset(channel) if channel else None
+    _forbidden = (_ch_preset or {}).get("forbidden_phrases", [])
+    if _forbidden and cuts:
+        for _ci, _cut in enumerate(cuts):
+            _scr = _cut.get("script", "")
+            for _fp in _forbidden:
+                if _fp.lower() in _scr.lower():
+                    _scr = re.sub(re.escape(_fp), "", _scr, flags=re.IGNORECASE).strip()
+                    _scr = re.sub(r"\s{2,}", " ", _scr)
+            if _scr != _cut.get("script", ""):
+                cuts[_ci]["script"] = _scr
+                print(f"[금지 표현] Cut {_ci+1} 필터링됨")
+
     # ── 문장 자연화 리라이트 ──
     _pre_polish_hook = cuts[0].get("script", "") if cuts else ""
     _pre_polish_mid = cuts[3].get("script", "") if len(cuts) > 3 else ""
@@ -1236,6 +1251,18 @@ These English keywords help YouTube's algorithm classify this content for US aud
         if _post_last and any(_post_last.rstrip().endswith(p) for p in _bad_endings):
             cuts[-1]["script"] = _pre_polish_last
             print(f"[재검사] 마지막 컷 루프 복원 — 미완성 문장 감지")
+
+    # ── polish 후 금지 표현 재필터링 ──
+    if _forbidden and cuts:
+        for _ci, _cut in enumerate(cuts):
+            _scr = _cut.get("script", "")
+            for _fp in _forbidden:
+                if _fp.lower() in _scr.lower():
+                    _scr = re.sub(re.escape(_fp), "", _scr, flags=re.IGNORECASE).strip()
+                    _scr = re.sub(r"\s{2,}", " ", _scr)
+            if _scr != _cut.get("script", ""):
+                cuts[_ci]["script"] = _scr
+                print(f"[금지 표현 재필터] Cut {_ci+1}")
 
     return cuts, topic_folder, title, tags
 
