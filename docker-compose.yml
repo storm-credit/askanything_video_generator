@@ -21,6 +21,7 @@ services:
       - ./youtube_tokens:/app/youtube_tokens
       - ./tiktok_tokens:/app/tiktok_tokens
       - ${DOWNLOAD_DIR:-C:/Users/Storm Credit/Downloads}:/app/downloads
+      - ${OBSIDIAN_VAULT:-C:/Users/Storm Credit/Desktop/쇼츠/askanything}:/app/obsidian
     restart: unless-stopped
 
   frontend:

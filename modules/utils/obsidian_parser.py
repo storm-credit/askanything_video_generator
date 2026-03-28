@@ -27,8 +27,10 @@ CHANNEL_LANG_MAP = {
     "prismtale": "es",
 }
 
-# Day 파일 기본 경로
-DEFAULT_VAULT_PATH = r"C:\Users\Storm Credit\Desktop\쇼츠\askanything"
+# Day 파일 기본 경로 (도커: /app/obsidian, 로컬: Windows 경로)
+DEFAULT_VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH", "/app/obsidian")
+if not os.path.exists(DEFAULT_VAULT_PATH):
+    DEFAULT_VAULT_PATH = r"C:\Users\Storm Credit\Desktop\쇼츠\askanything"
 
 
 def _extract_field(lines: list[str], field_names: list[str]) -> str:
