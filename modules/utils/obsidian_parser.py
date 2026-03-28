@@ -91,7 +91,7 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
 
         for ch_section in channel_sections:
             # 채널 헤더 추출
-            ch_match = re.match(r"^### (\w+)\s*\((\w+)\)", ch_section)
+            ch_match = re.match(r"^### (\w+)\s*\(([^)]+)\)", ch_section)
             if not ch_match:
                 continue
 
