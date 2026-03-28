@@ -602,7 +602,8 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # ── workflowMode=review: 컷 생성 직후 끊고 초안 저장 ──
             if req.workflowMode == "review":
-                from modules.utils.batch import add_job as _batch_add
+                from modules.utils.batch import add_job as _batch_add, update_job as _batch_update
+                from modules.utils.batch import _compute_hash as _batch_hash
                 _review_topic = _topic.split("\n\n[원본 영상 내용]")[0].strip()
                 _review_job_id = _batch_add(
                     topic=_review_topic,
@@ -613,6 +614,14 @@ async def generate_video_endpoint(req: GenerateRequest):
                     video_engine=video_engine,
                     image_engine=image_engine,
                     channel=req.channel,
+                )
+                # DB에 생성 결과 저장
+                _all_scripts = " ".join(c.get("script", "") for c in cuts)
+                _batch_update(_review_job_id,
+                    draft_title=video_title,
+                    draft_tags=json.dumps(video_tags, ensure_ascii=False),
+                    draft_cuts_json=json.dumps(cuts, ensure_ascii=False),
+                    script_hash=_batch_hash(_all_scripts),
                 )
                 review_payload = {
                     "job_id": _review_job_id,
@@ -625,6 +634,9 @@ async def generate_video_endpoint(req: GenerateRequest):
                     "prompt_status": "draft",
                     "fact_check_status": "pending",
                     "workflow_mode": "review",
+                    "script_version": 1,
+                    "prompt_version": 1,
+                    "script_hash": _batch_hash(_all_scripts),
                 }
                 review_json_path = os.path.join("assets", topic_folder, "review_draft.json")
                 os.makedirs(os.path.dirname(review_json_path), exist_ok=True)

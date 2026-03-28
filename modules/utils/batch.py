@@ -67,6 +67,9 @@ def _init_db():
     _ensure_column(conn, "batch_jobs", "approved_at", "approved_at TEXT")
     _ensure_column(conn, "batch_jobs", "channel_fit_score", "channel_fit_score INTEGER")
     _ensure_column(conn, "batch_jobs", "script_hash", "script_hash TEXT")
+    _ensure_column(conn, "batch_jobs", "draft_title", "draft_title TEXT")
+    _ensure_column(conn, "batch_jobs", "draft_tags", "draft_tags TEXT")
+    _ensure_column(conn, "batch_jobs", "draft_cuts_json", "draft_cuts_json TEXT")
 
     conn.commit()
     conn.close()
@@ -164,6 +167,7 @@ def update_job(job_id: int, **kwargs) -> None:
         "script_version", "prompt_version", "fact_check_status",
         "prompt_status", "stale_reason", "review_notes",
         "reviewed_at", "approved_at", "channel_fit_score", "script_hash",
+        "draft_title", "draft_tags", "draft_cuts_json",
     }
     invalid = set(kwargs.keys()) - ALLOWED_COLS
     if invalid:
@@ -248,8 +252,20 @@ def get_stats() -> dict:
 # ── 검수 워크플로우 헬퍼 ──────────────────────────────────
 
 def mark_stale(job_id: int, reason: str = "script_updated") -> None:
-    """스크립트 수정 시 프롬프트를 stale로 표시하고 팩트체크도 리셋합니다."""
+    """스크립트 수정 시 프롬프트를 stale로 표시하고 팩트체크도 리셋 + 이미지 캐시 무효화."""
     update_job(job_id, prompt_status="stale", stale_reason=reason, fact_check_status="pending")
+    # 이미지 캐시 무효화: draft_cuts_json에서 image_prompt 추출
+    job = get_job(job_id)
+    if job and job.get("draft_cuts_json"):
+        try:
+            from modules.utils.cache import invalidate_cache
+            cuts = json.loads(job["draft_cuts_json"])
+            for cut in cuts:
+                img_prompt = cut.get("image_prompt") or cut.get("prompt", "")
+                if img_prompt:
+                    invalidate_cache(img_prompt)
+        except Exception:
+            pass  # 캐시 무효화 실패해도 상태는 이미 stale
 
 
 def mark_reviewed(job_id: int, notes: str | None = None) -> None:

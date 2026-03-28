@@ -32,6 +32,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "camera_style": "dynamic",
         "visual_style": "high contrast, dramatic lighting, ultra detailed, vibrant colors, cinematic angle, bold composition, highly saturated",
         "tone": "궁금증 자극, 충격적 팩트, 한국식 친근한 반말. Loop: very strong — first and last lines should nearly mirror each other for obvious repetition",
+        "forbidden_phrases": ["미쳤", "미친", "ㅋㅋ", "ㄹㅇ", "레전드", "개쩔", "ㅎㄷㄷ", "갓", "존맛", "킹받"],
         "upload_accounts": {
             "youtube": None,   # askanything0725@gmail.com → OAuth 연동 후 자동 매핑
             "tiktok": None,
@@ -58,6 +59,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "camera_style": "gentle",
         "visual_style": "cinematic, realistic, natural lighting, documentary style, ultra detailed, depth of field, subtle colors, high realism",
         "tone": "calm, cinematic, documentary-style narration, confident, clear, slightly mysterious. Loop: natural and subtle — reconnect to the opening line smoothly without obvious repetition",
+        "forbidden_phrases": ["insane", "mind-blowing", "you won't believe", "literally dying", "no cap", "bro", "lowkey", "ngl"],
         "upload_accounts": {
             "youtube": None,
             "tiktok": None,
@@ -84,6 +86,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "camera_style": "dynamic",
         "visual_style": "bright colors, vibrant, exaggerated, glowing effects, eye catching, high saturation, dramatic, colorful",
         "tone": "energetic, curious, fast-paced, engaging, surprising, entertaining, quick rhythm. Loop: strong and direct — simple repetition, punchy endings that mirror the hook",
+        "forbidden_phrases": ["no manches", "qué chido", "dale", "tío", "mola", "flipar", "brutal tío"],
         "upload_accounts": {
             "youtube": None,
             "tiktok": None,
@@ -111,6 +114,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "visual_style": "cinematic, dramatic lighting, ultra detailed, high contrast focus, mysterious atmosphere, glowing elements, sharp subject, dark background",
         "tone": "neutral Spanish with US Hispanic feel, clear, intriguing, cinematic, controlled, slight emphasis on shocking words, avoid sounding playful. Loop: medium — reconnect naturally but more explicitly than English, less obvious than Latin",
         "keyword_tags": ["NASA", "Universe", "Science", "Brain", "Space", "Discovery"],
+        "forbidden_phrases": ["no mames", "qué onda", "chévere", "bacano", "tío", "mola", "guay"],
         "upload_accounts": {
             "youtube": None,
             "tiktok": None,

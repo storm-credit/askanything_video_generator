@@ -1203,6 +1203,9 @@ These English keywords help YouTube's algorithm classify this content for US aud
     print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
 
     # ── 문장 자연화 리라이트 ──
+    _pre_polish_hook = cuts[0].get("script", "") if cuts else ""
+    _pre_polish_mid = cuts[3].get("script", "") if len(cuts) > 3 else ""
+    _pre_polish_last = cuts[-1].get("script", "") if cuts else ""
     try:
         _polish_key = llm_key_override or api_key_override
         cuts, _polish_notes = polish_scripts(
@@ -1214,6 +1217,25 @@ These English keywords help YouTube's algorithm classify this content for US aud
             print(f"[문장 자연화] 적용됨")
     except Exception as _pe:
         print(f"[문장 자연화] 스킵 (원본 유지): {_pe}")
+
+    # ── polish 후 핵심 컷 재검사 (훅/리텐션/루프 약화 방지) ──
+    if cuts:
+        _post_hook = cuts[0].get("script", "")
+        _post_mid = cuts[3].get("script", "") if len(cuts) > 3 else ""
+        _post_last = cuts[-1].get("script", "")
+        # Cut 1 (훅): 약해졌으면 원본 복원
+        if _pre_polish_hook and _post_hook and len(_post_hook) > len(_pre_polish_hook) * 1.3:
+            cuts[0]["script"] = _pre_polish_hook
+            print(f"[재검사] Cut 1 훅 복원 — polish 후 너무 길어짐")
+        # Cut 4 (리텐션 락): 약해졌으면 원본 복원
+        if len(cuts) > 3 and _pre_polish_mid and _post_mid and len(_post_mid) > len(_pre_polish_mid) * 1.3:
+            cuts[3]["script"] = _pre_polish_mid
+            print(f"[재검사] Cut 4 리텐션 락 복원")
+        # 마지막 컷 (루프): 미완성 문장으로 바뀌었으면 원본 복원
+        _bad_endings = ["...", "사실은", "근데 진짜", "actually", "but then", "en realidad"]
+        if _post_last and any(_post_last.rstrip().endswith(p) for p in _bad_endings):
+            cuts[-1]["script"] = _pre_polish_last
+            print(f"[재검사] 마지막 컷 루프 복원 — 미완성 문장 감지")
 
     return cuts, topic_folder, title, tags
 
