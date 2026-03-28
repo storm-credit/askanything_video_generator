@@ -9,8 +9,9 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"]
-TOKENS_DIR = Path("youtube_tokens")
-CLIENT_SECRETS_DIR = Path("client_secrets")
+_BASE_DIR = Path(__file__).resolve().parent.parent.parent  # project root
+TOKENS_DIR = _BASE_DIR / "youtube_tokens"
+CLIENT_SECRETS_DIR = _BASE_DIR / "client_secrets"
 CLIENT_SECRET_PATH = Path(os.getenv("YOUTUBE_CLIENT_SECRET", "client_secret.json"))  # 기본 fallback
 REDIRECT_URI = os.getenv("YOUTUBE_REDIRECT_URI", f"http://localhost:{os.getenv('API_PORT', '8003')}/api/youtube/callback")
 
