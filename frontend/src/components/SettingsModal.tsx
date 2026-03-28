@@ -767,19 +767,20 @@ function KeySection({
 /* ─── YouTube 계정 연결 행 (연동 상태 자동 표시) ─── */
 function YouTubeAccountRow({ channelName, accountId, onUpdate }: { channelName: string; accountId?: string | null; onUpdate: (id: string) => void }) {
   const [ytChannels, setYtChannels] = useState<{ id: string; title: string; connected: boolean }[]>([]);
+  const [channelStatus, setChannelStatus] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/youtube/status`).then(r => r.json()).then(data => {
       if (data.channels) setYtChannels(data.channels);
+      if (data.channel_status) setChannelStatus(data.channel_status);
     }).catch(() => {});
   }, []);
 
-  // 연동된 채널 중 첫 번째를 자동 매핑 (accountId가 비어있을 때)
-  const connectedChannel = ytChannels.find(c => c.connected);
-  const displayId = accountId || connectedChannel?.id || "";
+  // 이 채널 프리셋이 실제로 연동됐는지 (channel_status 기준)
+  const isConnected = channelStatus[channelName] === true;
+  const displayId = accountId || "";
   const displayTitle = ytChannels.find(c => c.id === displayId)?.title;
-  const isConnected = ytChannels.some(c => c.id === displayId && c.connected);
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">

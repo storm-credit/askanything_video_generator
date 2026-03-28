@@ -118,14 +118,33 @@ def get_channels() -> list[dict]:
 
 
 def get_auth_status() -> dict:
-    """YouTube 연동 상태를 반환합니다."""
-    # 채널별 client_secret 또는 기본 client_secret 중 하나라도 있으면 OK
+    """YouTube 연동 상태를 반환합니다 (채널별 연동 상태 포함)."""
     has_any_secret = CLIENT_SECRET_PATH.exists() or (CLIENT_SECRETS_DIR.exists() and any(CLIENT_SECRETS_DIR.glob("*.json")))
     if not has_any_secret:
-        return {"connected": False, "reason": "client_secret 파일이 없습니다", "channels": []}
+        return {"connected": False, "reason": "client_secret 파일이 없습니다", "channels": [], "channel_status": {}}
     channels = get_channels()
     connected = any(ch["connected"] for ch in channels)
-    return {"connected": connected, "channels": channels}
+
+    # 채널 프리셋별 연동 상태 매핑
+    accounts_path = TOKENS_DIR / "channel_accounts.json"
+    accounts = {}
+    if accounts_path.exists():
+        try:
+            accounts = json.loads(accounts_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    connected_ids = {ch["id"] for ch in channels if ch["connected"]}
+    channel_status = {}
+    for preset_name in ["askanything", "wonderdrop", "exploratodo", "prismtale"]:
+        mapped_id = accounts.get(preset_name, {}).get("youtube")
+        if mapped_id and mapped_id in connected_ids:
+            channel_status[preset_name] = True
+        else:
+            # client_secret은 있는지 확인
+            has_secret = (CLIENT_SECRETS_DIR / f"{preset_name}.json").exists()
+            channel_status[preset_name] = False
+
+    return {"connected": connected, "channels": channels, "channel_status": channel_status}
 
 
 def create_auth_url(channel: str | None = None) -> str:
