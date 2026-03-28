@@ -156,6 +156,7 @@ export default function Home() {
   const [uploadPrivacy, setUploadPrivacy] = useState("private");
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{ success: boolean; url?: string; error?: string; scheduled_at?: string } | null>(null);
+  const [uploadChannel, setUploadChannel] = useState("");  // 업로드 모달에 전달할 채널 이름
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   // YouTube
@@ -414,6 +415,9 @@ export default function Home() {
     imagen: [
       { value: "", label: `Imagen 4 Standard (기본)${remainLabel("imagen-4.0-generate-001")}` },
       { value: "imagen-4.0-fast-generate-001", label: `Imagen 4 Fast${remainLabel("imagen-4.0-fast-generate-001")}` },
+    ],
+    nano_banana: [
+      { value: "", label: "Gemini Flash Image (기본)" },
     ],
     dalle: [
       { value: "", label: `DALL-E 3 (기본)${remainLabel("dall-e-3")}` },
@@ -926,10 +930,15 @@ export default function Home() {
         });
       }
     } catch (error) {
-      console.error(error);
-      setErrorMessage("[연결 실패] 백엔드 서버에 연결할 수 없습니다.");
+      if (abortController.signal.aborted) {
+        setLogs(prev => [...prev.slice(-99), "WARN:사용자에 의해 생성이 취소되었습니다."]);
+      } else {
+        console.error(error);
+        setErrorMessage("[연결 실패] 백엔드 서버에 연결할 수 없습니다.");
+      }
     } finally {
       setIsGenerating(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -1000,22 +1009,29 @@ export default function Home() {
 
   // 스크립트 생성 (불러온 세션에 스크립트 없을 때)
   const handleGenerateScripts = async () => {
-    if (!activeRenderTab || !channelPreviews[activeRenderTab]) return;
-    const preview = channelPreviews[activeRenderTab];
+    const tab = activePreviewTab || activeRenderTab;
+    if (!tab || !channelPreviews[tab]) {
+      console.error("handleGenerateScripts: no active tab", { activePreviewTab, activeRenderTab });
+      return;
+    }
+    const preview = channelPreviews[tab];
     // 폴더명 추출
     const firstImg = preview.cuts[0]?.image_url || "";
     const folderMatch = firstImg.match(/\/assets\/([^/]+)\//);
-    if (!folderMatch) return;
+    if (!folderMatch) {
+      console.error("handleGenerateScripts: no folderMatch from", firstImg);
+      return;
+    }
     const folder = folderMatch[1];
     const langMap: Record<string, string> = { askanything: "ko", wonderdrop: "en", exploratodo: "es", prismtale: "es" };
-    const lang = langMap[activeRenderTab] || "ko";
+    const lang = langMap[tab] || "ko";
 
     setGeneratingScripts(true);
     try {
       const res = await fetch(`${API_BASE}/api/sessions/generate-scripts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder, topic: topic || preview.title, lang, channel: activeRenderTab }),
+        body: JSON.stringify({ folder, topic: topic || preview.title, lang, channel: tab }),
       });
       const data = await res.json();
       if (data.error) { alert(data.error); return; }
@@ -1028,7 +1044,7 @@ export default function Home() {
       }));
       setChannelPreviews(prev => ({
         ...prev,
-        [activeRenderTab]: { ...preview, title: data.title || preview.title, cuts: updatedCuts },
+        [tab]: { ...preview, title: data.title || preview.title, cuts: updatedCuts },
       }));
     } catch (e) {
       alert("스크립트 생성 중 오류");
@@ -1094,10 +1110,15 @@ export default function Home() {
         await readSSE(response);
       }
     } catch (error) {
-      console.error(error);
-      setErrorMessage("[연결 실패] 렌더 서버에 연결할 수 없습니다.");
+      if (abortController.signal.aborted) {
+        setLogs(prev => [...prev.slice(-99), "WARN:사용자에 의해 렌더링이 취소되었습니다."]);
+      } else {
+        console.error(error);
+        setErrorMessage("[연결 실패] 렌더 서버에 연결할 수 없습니다.");
+      }
     } finally {
       setIsGenerating(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -1133,7 +1154,7 @@ export default function Home() {
   const handlePlatformAuth = async (platform: "youtube" | "tiktok" | "instagram") => {
     try {
       const body: Record<string, string> = {};
-      if (platform === "youtube" && channel) body.channel = channel;
+      if (uploadChannel) body.channel = uploadChannel;
       const res = await fetch(`${API_BASE}/api/${platform}/auth`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1179,13 +1200,25 @@ export default function Home() {
 
       if (uploadPlatform === "youtube") {
         endpoint = "/api/youtube/upload";
+        // description에서 #해시태그 자동 추출 + tags 입력란 합산
+        const hashtagsInDesc = (uploadDescription.match(/#[^\s#]+/g) || []).map(t => t.slice(1));
+        const manualTags = uploadTags.split(",").map(t => t.trim()).filter(Boolean);
+        const allTags = [...new Set([...hashtagsInDesc, ...manualTags])];
+        // description에 이미 해시태그가 있으면 그대로, 없으면 tags에서 추가
+        const hasHashtagsInDesc = /#[^\s#]+/.test(uploadDescription);
+        const extraHashtags = manualTags.filter(t => !hashtagsInDesc.includes(t));
+        const hashtagLine = extraHashtags.map(t => `#${t.replace(/\s+/g, "")}`).join(" ");
+        const finalDesc = hasHashtagsInDesc
+          ? (hashtagLine ? `${uploadDescription}\n${hashtagLine}` : uploadDescription)
+          : (hashtagLine ? `${uploadDescription}\n\n${hashtagLine}` : uploadDescription);
         body = {
           video_path: generatedVideoPath,
           title: uploadTitle || topic,
-          description: uploadDescription,
-          tags: uploadTags.split(",").map(t => t.trim()).filter(Boolean),
+          description: finalDesc,
+          tags: allTags,
           privacy: scheduleEnabled ? "private" : uploadPrivacy,
           channel_id: ytSelectedChannel || undefined,
+          channel: uploadChannel || undefined,
           ...(scheduleEnabled && scheduleDate ? { publish_at: new Date(scheduleDate).toISOString() } : {}),
         };
       } else if (uploadPlatform === "tiktok") {
@@ -1194,6 +1227,7 @@ export default function Home() {
           video_path: generatedVideoPath,
           title: uploadTitle || topic,
           privacy_level: ttPrivacy,
+          channel: uploadChannel || undefined,
           ...(scheduleEnabled && scheduleDate ? { schedule_time: Math.floor(new Date(scheduleDate).getTime() / 1000) } : {}),
         };
       } else {
@@ -1201,6 +1235,7 @@ export default function Home() {
         body = {
           video_path: generatedVideoPath,
           caption: `${uploadTitle || topic}\n\n${uploadDescription}`.trim(),
+          channel: uploadChannel || undefined,
         };
       }
 
@@ -1315,43 +1350,67 @@ export default function Home() {
               onChange={(e) => setTopic(e.target.value)}
               disabled={isGenerating}
               placeholder="주제 또는 YouTube URL — 예: 블랙홀에 떨어지면 어떻게 될까?"
-              className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-6 pr-32 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-lg backdrop-blur-md"
+              className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-6 pr-6 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-lg backdrop-blur-md"
             />
+          </div>
+
+          {/* 액션 버튼 행 */}
+          <div className="flex items-center justify-center gap-2 flex-wrap">
             {isGenerating ? (
               <button
                 type="button"
                 onClick={handleCancel}
                 aria-label="생성 취소"
-                className="absolute right-2 bg-red-600 text-white hover:bg-red-500 font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
+                className="bg-red-600 text-white hover:bg-red-500 font-semibold px-6 py-2.5 rounded-xl transition-colors flex items-center gap-2 text-sm"
               >
                 <Square className="w-4 h-4 fill-current" />
                 취소
               </button>
             ) : (
-              <div className="absolute right-2 flex gap-1">
+              <>
                 <button
                   type="button"
                   onClick={loadSessionList}
-                  className="bg-gray-700 text-gray-300 hover:bg-gray-600 font-semibold px-3 py-3 rounded-xl transition-colors text-sm"
+                  className="bg-gray-700 text-gray-300 hover:bg-gray-600 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
                 >
                   불러오기
                 </button>
                 <button
                   type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE}/api/batch/import-today`, { method: "POST" });
+                      const data = await res.json();
+                      if (data.success) {
+                        alert(`✅ ${data.message}\n\n${data.total_jobs}개 작업이 배치 큐에 등록되었습니다.`);
+                      } else {
+                        alert(`⚠️ ${data.message}`);
+                      }
+                    } catch (e) {
+                      alert("오늘 할 일 불러오기 실패: 서버 연결을 확인하세요.");
+                    }
+                  }}
+                  className="bg-emerald-600 text-white hover:bg-emerald-500 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  오늘 할 일
+                </button>
+                <button
+                  type="button"
                   onClick={handlePrepare}
                   disabled={!topic.trim()}
-                  className="bg-indigo-600 text-white hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
+                  className="bg-indigo-600 text-white hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
                 >
                   미리보기
                 </button>
                 <button
                   type="submit"
                   disabled={!topic.trim()}
-                  className="bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-3 rounded-xl transition-colors text-sm"
+                  className="bg-white text-black hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
                 >
                   바로생성
                 </button>
-              </div>
+              </>
             )}
           </div>
 
@@ -1505,6 +1564,7 @@ export default function Home() {
                   </div>
                   <select value={imageEngine} onChange={(e) => { setImageEngine(e.target.value); setImageModel(""); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="이미지 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                     <option value="imagen" className="bg-gray-900">Imagen</option>
+                    <option value="nano_banana" className="bg-gray-900">Nano Banana</option>
                     <option value="dalle" className="bg-gray-900">DALL-E</option>
                   </select>
                   {IMAGE_MODELS[imageEngine]?.length > 1 && (
@@ -1695,6 +1755,7 @@ export default function Home() {
                               const videoPath = decodeURIComponent(result.videoUrl!.replace(API_BASE, ''));
                               setGeneratedVideoPath(videoPath);
                               setGeneratedVideoUrl(result.videoUrl!);
+                              setUploadChannel(ch);
                               setUploadTitle(topic);
                               setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
                               if (p === "youtube") setUploadTags(topic);
@@ -1813,6 +1874,7 @@ export default function Home() {
                             const videoPath = decodeURIComponent(result.videoUrl!.replace(API_BASE, ''));
                             setGeneratedVideoPath(videoPath);
                             setGeneratedVideoUrl(result.videoUrl!);
+                            setUploadChannel(activeRenderTab);
                             setUploadTitle(topic);
                             setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
                             if (p === "youtube") setUploadTags(topic);
@@ -2127,6 +2189,7 @@ export default function Home() {
                   const preset = activeChannel ? CHANNEL_PRESETS[activeChannel] : null;
                   const channelPlatforms = preset ? preset.platforms : ["youtube", "tiktok", "reels"];
                   const openUpload = (p: "youtube" | "tiktok" | "instagram") => {
+                    setUploadChannel(activeChannel || "");
                     setUploadTitle(topic);
                     setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
                     if (p === "youtube") setUploadTags(topic);
@@ -2278,7 +2341,7 @@ export default function Home() {
               {/* 헤더 + 플랫폼 탭 */}
               <div className="flex items-center justify-between">
                 <h3 className="text-lg text-white font-bold">
-                  업로드 — <span className="text-indigo-400">{(() => { const ch = selectedChannels.length === 1 ? selectedChannels[0] : channel; const p = ch ? CHANNEL_PRESETS[ch] : null; return p ? `${p.flag} ${p.label}` : ch || ""; })()}</span>
+                  업로드 — <span className="text-indigo-400">{(() => { const p = uploadChannel ? CHANNEL_PRESETS[uploadChannel] : null; return p ? `${p.flag} ${p.label}` : uploadChannel || ""; })()}</span>
                 </h3>
                 <button
                   onClick={() => !uploading && setShowUploadModal(false)}
@@ -2290,8 +2353,7 @@ export default function Home() {
 
               {/* 플랫폼 선택 탭 — 채널 프리셋에 지정된 플랫폼만 표시 */}
               {(() => {
-                const activeChannel = selectedChannels.length === 1 ? selectedChannels[0] : channel;
-                const preset = activeChannel ? CHANNEL_PRESETS[activeChannel] : null;
+                const preset = uploadChannel ? CHANNEL_PRESETS[uploadChannel] : null;
                 const platformMap: Record<string, string> = { youtube: "youtube", tiktok: "tiktok", reels: "instagram" };
                 const availablePlatforms = preset
                   ? preset.platforms.map(p => platformMap[p] || p).filter((v, i, a) => a.indexOf(v) === i) as ("youtube" | "tiktok" | "instagram")[]
