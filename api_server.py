@@ -1036,8 +1036,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                                 lambda: yt_upload(
                                     video_path=abs_video_path,
                                     title=video_title,
-                                    description=f"#{req.channel}",
-                                    tags=[req.channel, language],
+                                    description="\n".join(s.strip() for s in scripts if s.strip()) + "\n\n" + " ".join(video_tags),
+                                    tags=[t.lstrip("#") for t in video_tags] + [req.channel, language],
                                     privacy=yt_privacy,
                                     channel_id=account_id,
                                     publish_at=yt_publish_at,
