@@ -1201,6 +1201,20 @@ These English keywords help YouTube's algorithm classify this content for US aud
         print(f"OK [품질 게이트] HARD FAIL 통과 | 지역 스타일 통과")
 
     print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
+
+    # ── 문장 자연화 리라이트 ──
+    try:
+        _polish_key = llm_key_override or api_key_override
+        cuts, _polish_notes = polish_scripts(
+            cuts=cuts, lang=lang, channel=channel,
+            llm_provider=llm_provider, api_key=_polish_key,
+            llm_model=llm_model,
+        )
+        if _polish_notes:
+            print(f"[문장 자연화] 적용됨")
+    except Exception as _pe:
+        print(f"[문장 자연화] 스킵 (원본 유지): {_pe}")
+
     return cuts, topic_folder, title, tags
 
 
@@ -1619,3 +1633,164 @@ def _request_gemini_freeform(api_key: str, prompt: str, model: str | None = None
         config={"response_mime_type": "application/json", "http_options": types.HttpOptions(timeout=60_000)},
     )
     return (response.text or "").strip()
+
+
+# ── 문장 자연화 리라이트 (Script Polisher) ─────────────────────────
+
+
+def _get_sentence_polish_prompt(lang: str, channel: str | None = None) -> str:
+    """채널별 문장 다듬기 프롬프트를 반환합니다."""
+    if channel == "askanything":
+        return """너는 한국어 쇼츠 대본 문장 다듬기 전문가다.
+목표:
+- 기존 의미는 유지한다.
+- 더 자연스럽고 입에 붙는 한국어 반말로 고친다.
+- 번역투, 설명체, 딱딱한 문장을 없앤다.
+- 너무 과한 유튜브 말투나 억지 밈 말투는 금지한다.
+- 각 문장은 짧고 강해야 하지만, 어색하면 안 된다.
+- 같은 어미, 같은 문장 구조 반복을 줄인다.
+- 훅은 더 세게 만들 수는 있어도 약하게 만들면 안 된다.
+
+반드시 지킬 것:
+- 컷 수는 유지
+- 각 컷은 한 문장 유지
+- 원래 정보 추가 금지
+- 검증 안 된 단정 표현 추가 금지
+- "미쳤다", "레전드", "ㄹㅇ", "ㅋㅋ" 같은 가벼운 표현 금지
+
+출력 형식: JSON만 출력
+{"rewritten_scripts": ["컷1", "컷2"], "notes": ["짧은 수정 메모"]}"""
+
+    if channel == "wonderdrop":
+        return """You are an English short-form script polisher for a science/documentary channel.
+
+Goal:
+- Keep the original meaning and factual caution.
+- Rewrite each line so it sounds natural, cinematic, and spoken aloud.
+- Remove stiff translation-like phrasing.
+- Keep the tone calm, clear, slightly mysterious, and documentary-like.
+- Avoid overhype, slang, childish delivery, or forced clickbait.
+
+Must keep:
+- Same number of cuts
+- One sentence per cut
+- Similar length per cut
+- No new facts
+- No stronger factual certainty than the original
+- Keep the hook strong
+
+Output JSON only:
+{"rewritten_scripts": ["Cut 1 line", "Cut 2 line"], "notes": ["brief fix notes"]}"""
+
+    if channel == "exploratodo":
+        return """Eres un editor de guiones cortos en español para un canal energético y visualmente impactante.
+
+Objetivo:
+- Mantener el significado original.
+- Hacer que cada línea suene natural, rápida y clara en español.
+- Evitar frases traducidas literalmente o construcciones torpes.
+- Mantener energía y sorpresa, pero sin sonar infantil ni exagerado.
+
+Reglas:
+- Mantener el mismo número de cortes
+- Una sola oración por corte
+- No agregar datos nuevos
+- No volver más categórico algo incierto
+- Mantener el gancho fuerte
+- Evitar regionalismos muy marcados
+
+Salida JSON:
+{"rewritten_scripts": ["línea 1", "línea 2"], "notes": ["cambios principales"]}"""
+
+    if channel == "prismtale":
+        return """Eres un pulidor de guiones breves para un canal de tono cinematográfico, misterioso y español neutro.
+
+Objetivo:
+- Mantener exactamente la idea original.
+- Reescribir cada línea para que suene natural, sobria e intrigante.
+- Eliminar frases rígidas, artificiales o demasiado promocionales.
+- Mantener un tono de documental breve, elegante y claro.
+
+Debes mantener:
+- mismo número de cortes
+- una oración por corte
+- longitud similar
+- sin añadir información nueva
+- sin aumentar la certeza factual
+- sin volverlo juguetón o exagerado
+
+Salida JSON:
+{"rewritten_scripts": ["línea 1", "línea 2"], "notes": ["ajustes principales"]}"""
+
+    # fallback by language
+    if lang == "ko":
+        return """너는 한국어 숏폼 대본 문장 교정자다. 의미는 유지하고, 더 자연스럽고 말하듯 들리게 고쳐라. 컷 수 유지, 한 컷 한 문장, 새 정보 추가 금지. JSON만 출력: {"rewritten_scripts":["문장1"],"notes":["메모"]}"""
+    if lang == "es":
+        return """Eres un corrector de guiones breves en español. Mantén el significado y haz que suene más natural al hablar. Mismo número de cortes, una oración por corte, sin datos nuevos. Salida JSON: {"rewritten_scripts":["línea 1"],"notes":["nota"]}"""
+    return """You are a short-form script polisher. Keep the meaning, make it sound natural when spoken, keep one sentence per cut, and add no new facts. Output JSON only: {"rewritten_scripts":["line 1"],"notes":["note"]}"""
+
+
+def _is_script_rewrite_safe(old: str, new: str) -> bool:
+    """리라이트가 안전한지 검사 (너무 길어지거나 짧아지면 거부)."""
+    old = (old or "").strip()
+    new = (new or "").strip()
+    if not old or not new:
+        return False
+    if len(new) > len(old) * 1.5:
+        return False
+    if len(new) < max(6, int(len(old) * 0.5)):
+        return False
+    return True
+
+
+def polish_scripts(cuts: list[dict[str, Any]], lang: str = "ko",
+                   channel: str | None = None,
+                   llm_provider: str = "gemini",
+                   api_key: str | None = None,
+                   llm_model: str | None = None) -> tuple[list[dict[str, Any]], list[str]]:
+    """생성된 컷의 script만 자연스럽게 다듬습니다. 구조/정보는 변경하지 않음."""
+    if not cuts:
+        return cuts, []
+
+    system_prompt = _get_sentence_polish_prompt(lang, channel)
+    payload = {"scripts": [c.get("script", "").strip() for c in cuts]}
+    user_content = json.dumps(payload, ensure_ascii=False)
+
+    try:
+        if llm_provider == "gemini":
+            content = _request_gemini(api_key, system_prompt, user_content, llm_model)
+        elif llm_provider == "claude":
+            content = _request_claude(api_key, system_prompt, user_content, llm_model)
+        else:
+            content = _request_openai_freeform(api_key, system_prompt, user_content, llm_model)
+
+        if not content:
+            return cuts, ["[polisher] LLM 응답 없음 — 원본 유지"]
+
+        data = json.loads(content) if isinstance(content, str) else content
+        if not isinstance(data, dict):
+            return cuts, ["[polisher] JSON 파싱 실패 — 원본 유지"]
+
+        rewritten = data.get("rewritten_scripts", [])
+        notes = data.get("notes", [])
+
+        if not isinstance(rewritten, list) or len(rewritten) != len(cuts):
+            return cuts, [f"[polisher] 컷 수 불일치 ({len(rewritten)} vs {len(cuts)}) — 원본 유지"]
+
+        # script만 교체 (안전 검사 통과한 것만), 나머지(description, image_prompt) 유지
+        applied = 0
+        for i, new_script in enumerate(rewritten):
+            if isinstance(new_script, str) and _is_script_rewrite_safe(cuts[i].get("script", ""), new_script):
+                cuts[i]["script"] = new_script.strip()
+                applied += 1
+
+        log_notes = notes if isinstance(notes, list) else []
+        print(f"[polisher] 다듬기 완료: {applied}/{len(cuts)}컷 적용")
+        if log_notes:
+            for n in log_notes[:3]:
+                print(f"  - {n}")
+        return cuts, log_notes
+
+    except Exception as e:
+        print(f"[polisher] 오류 — 원본 유지: {e}")
+        return cuts, [f"[polisher] 오류: {e}"]
