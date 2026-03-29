@@ -27,6 +27,19 @@ CHANNEL_LANG_MAP = {
     "prismtale": "es",
 }
 
+# 태그 → 대상 채널 매핑
+TAG_CHANNEL_MAP = {
+    "공통": ["askanything", "wonderdrop", "exploratodo", "prismtale"],
+    "KO전용": ["askanything"],
+    "EN전용": ["wonderdrop"],
+    "ES전용": ["exploratodo", "prismtale"],
+    "ES-US전용": ["prismtale"],
+    "ES-LATAM전용": ["exploratodo"],
+}
+
+# 태그 추출 정규식
+TAG_RE = re.compile(r"\[(공통|KO전용|EN전용|ES전용|ES-US전용|ES-LATAM전용)\]\s*$")
+
 # Day 파일 기본 경로 (도커: /app/obsidian, 로컬: Windows 경로)
 DEFAULT_VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH", "/app/obsidian")
 if not os.path.exists(DEFAULT_VAULT_PATH):
@@ -82,7 +95,13 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
             continue
 
         topic_num = topic_match.group(1)
-        topic_name = topic_match.group(2).strip()
+        topic_name_raw = topic_match.group(2).strip()
+
+        # 태그 추출: [공통], [KO전용] 등
+        tag_match = TAG_RE.search(topic_name_raw)
+        topic_tag = tag_match.group(1) if tag_match else "공통"
+        topic_name = TAG_RE.sub("", topic_name_raw).strip()
+        allowed_channels = TAG_CHANNEL_MAP.get(topic_tag, TAG_CHANNEL_MAP["공통"])
 
         # 뉴스 주제(5번)는 스킵 — "직접 입력" 플레이스홀더
         if "직접 입력" in section or "Enter news" in section or "Ingresa tema" in section:
@@ -101,6 +120,10 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
             # lang_hint = ch_match.group(2).strip()  # ko, en, es-LATAM 등
 
             if channel_name not in CHANNEL_LANG_MAP:
+                continue
+
+            # 태그 기반 채널 필터링
+            if channel_name not in allowed_channels:
                 continue
 
             language = CHANNEL_LANG_MAP[channel_name]
@@ -122,6 +145,7 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
                 "description": description,
                 "hashtags": hashtags,
                 "topic_group": topic_name,
+                "topic_tag": topic_tag,  # 공통/KO전용/EN전용/ES전용
                 "day_file": day_filename,
                 "source_file": day_filename,
                 "source_section": f"Topic {topic_num}",
@@ -169,6 +193,48 @@ def parse_today(vault_path: str = DEFAULT_VAULT_PATH) -> list[dict[str, Any]]:
     if not path:
         return []
     return parse_day_file(path)
+
+
+def get_today_topics(channel: str | None = None,
+                     vault_path: str = DEFAULT_VAULT_PATH) -> dict[str, Any]:
+    """오늘의 Day 파일에서 채널별 주제를 반환합니다.
+
+    Args:
+        channel: 특정 채널만 필터 (None이면 전체)
+        vault_path: 옵시디언 볼트 경로
+
+    Returns:
+        {"file": str, "topics": list[dict]} — 주제 그룹별 채널 데이터
+    """
+    path = find_today_file(vault_path)
+    if not path:
+        return {"file": None, "topics": []}
+
+    jobs = parse_day_file(path)
+
+    if channel:
+        jobs = [j for j in jobs if j["channel"] == channel]
+
+    # topic_group별로 그룹핑
+    groups: dict[str, dict] = {}
+    for j in jobs:
+        key = j["topic_group"]
+        if key not in groups:
+            groups[key] = {
+                "topic_group": key,
+                "topic_tag": j.get("topic_tag", "공통"),
+                "channels": {},
+            }
+        groups[key]["channels"][j["channel"]] = {
+            "title": j["title"],
+            "description": j["description"],
+            "hashtags": j["hashtags"],
+        }
+
+    return {
+        "file": os.path.basename(path),
+        "topics": list(groups.values()),
+    }
 
 
 def list_day_files(vault_path: str = DEFAULT_VAULT_PATH) -> list[str]:
