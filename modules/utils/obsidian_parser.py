@@ -47,11 +47,21 @@ if not os.path.exists(DEFAULT_VAULT_PATH):
 
 
 def _extract_field(lines: list[str], field_names: list[str]) -> str:
-    """라인 리스트에서 특정 필드 값을 추출합니다."""
+    """라인 리스트에서 특정 필드 값을 추출합니다.
+    두 가지 포맷 지원:
+      - **제목**: 값  (볼드 마크다운)
+      제목: 값         (플레인 텍스트)
+    """
     for line in lines:
         for name in field_names:
-            pattern = rf"^\s*-\s*\*\*{re.escape(name)}\*\*:\s*(.+)"
-            m = re.match(pattern, line)
+            # 포맷 1: - **필드명**: 값
+            pattern1 = rf"^\s*-\s*\*\*{re.escape(name)}\*\*:\s*(.+)"
+            m = re.match(pattern1, line)
+            if m:
+                return m.group(1).strip()
+            # 포맷 2: 필드명: 값 (볼드 없이)
+            pattern2 = rf"^\s*{re.escape(name)}:\s*(.+)"
+            m = re.match(pattern2, line)
             if m:
                 return m.group(1).strip()
     return ""
