@@ -1048,16 +1048,8 @@ These English keywords help YouTube's algorithm classify this content for US aud
                     current_key = next_key
                     continue
                 else:
-                    # Gemini 키 전부 소진 → GPT 자동 폴백
-                    gpt_key = os.getenv("OPENAI_API_KEY")
-                    if gpt_key:
-                        print(f"  [Gemini → GPT 폴백] Gemini 키 {len(exhausted_keys)}개 소진, GPT로 전환")
-                        llm_provider = "openai"
-                        current_key = gpt_key
-                        provider_label = "ChatGPT"
-                        max_key_attempts = attempt + 4  # 3회 더 시도
-                        continue
-                    raise RuntimeError(f"[Gemini 할당량 초과] 등록된 모든 키({len(exhausted_keys)}개)의 쿼터가 소진되었습니다.") from e
+                    # GPT 자동 폴백 비활성화 — Gemini만 사용
+                    raise RuntimeError(f"[Gemini 할당량 초과] 등록된 모든 키({len(exhausted_keys)}개)의 쿼터가 소진되었습니다. 지출 한도를 확인하세요.") from e
             elif is_retryable:
                 # OpenAI/Claude 429: 지수 백오프 후 재시도
                 wait = min(2 ** (attempt + 1), 30) + random.uniform(0, 2)
