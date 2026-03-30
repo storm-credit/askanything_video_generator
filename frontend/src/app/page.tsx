@@ -873,6 +873,70 @@ export default function Home() {
     e.preventDefault();
     if (!topic.trim()) return;
 
+    // ── Day 파일 스크립트가 있으면 API 호출 없이 바로 배정 ──
+    if (todayCuts) {
+      setIsGenerating(false);
+      setProgress(0);
+      setSuccessMessage(null);
+      setErrorMessage(null);
+      setLogs([]);
+      setPreviewData(null);
+      setEditedScripts({});
+      setChannelPreviews({});
+      setEditedScriptsMap({});
+      setRenderResults({});
+
+      const channels = selectedChannels.length >= 2 ? selectedChannels : (channel ? [channel] : ["default"]);
+
+      if (channels.length >= 2) {
+        // 멀티채널: todayCuts에서 각 채널 스크립트 배정
+        const previews: Record<string, PreviewData> = {};
+        for (const ch of channels) {
+          const chCuts = todayCuts[ch] || todayCuts[channels[0]] || [];
+          if (chCuts.length > 0) {
+            const data: PreviewData = {
+              folder: `${topic.replace(/\s+/g, '_')}_${ch}`,
+              title: topic,
+              cuts: chCuts.map((c: any, i: number) => ({
+                index: i,
+                script: c.script || "",
+                prompt: c.image_prompt || "",
+                image: "", // 이미지 없음
+              })),
+            };
+            previews[ch] = data;
+          }
+        }
+        setChannelPreviews(previews);
+        if (Object.keys(previews).length > 0) {
+          setActivePreviewTab(channels[0]);
+          setPreviewMode(true);
+        }
+        setLogs(["✅ Day 파일 스크립트 배정 완료 — 이미지는 별도 생성 필요"]);
+      } else {
+        // 싱글채널
+        const ch = channels[0];
+        const chCuts = todayCuts[ch] || Object.values(todayCuts)[0] || [];
+        if (chCuts.length > 0) {
+          const data: PreviewData = {
+            folder: `${topic.replace(/\s+/g, '_')}_${ch}`,
+            title: topic,
+            cuts: chCuts.map((c: any, i: number) => ({
+              index: i,
+              script: c.script || "",
+              prompt: c.image_prompt || "",
+              image: "",
+            })),
+          };
+          setPreviewData(data);
+          setPreviewMode(true);
+        }
+        setLogs(["✅ Day 파일 스크립트 배정 완료 — 이미지는 별도 생성 필요"]);
+      }
+      return;
+    }
+    // ── Day 파일 스크립트 없음 → 기존 API 호출 ──
+
     setIsGenerating(true);
     setProgress(0);
     setSuccessMessage(null);
@@ -1362,7 +1426,7 @@ export default function Home() {
             <input
               type="text"
               value={topic}
-              onChange={(e) => setTopic(e.target.value)}
+              onChange={(e) => { setTopic(e.target.value); setTodayCuts(null); }}
               disabled={isGenerating}
               placeholder="주제 또는 YouTube URL — 예: 블랙홀에 떨어지면 어떻게 될까?"
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-6 pr-6 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-lg backdrop-blur-md"
@@ -2286,12 +2350,16 @@ export default function Home() {
                       // 주제를 검색창에 입력
                       const topicName = t.topic_group?.replace(/^[^\s]+\s*/, "") || t.topic_group;
                       setTopic(topicName);
-                      // Day 파일 스크립트가 있으면 저장 (API 호출 없이 사용)
-                      if (t.cuts) {
-                        setTodayCuts(t.cuts);
-                      } else {
-                        setTodayCuts(null);
+                      // Day 파일 스크립트가 있으면 채널별로 저장 (API 호출 없이 사용)
+                      const channelCuts: Record<string, any[]> = {};
+                      if (t.channels) {
+                        for (const [ch, chData] of Object.entries(t.channels as Record<string, any>)) {
+                          if (chData.cuts && chData.cuts.length > 0) {
+                            channelCuts[ch] = chData.cuts;
+                          }
+                        }
                       }
+                      setTodayCuts(Object.keys(channelCuts).length > 0 ? channelCuts : null);
                       // 채널 자동 선택: 이 주제에 해당하는 채널들
                       const topicChannels = Object.keys(t.channels || {});
                       if (topicChannels.length > 0) {
