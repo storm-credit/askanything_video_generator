@@ -920,8 +920,9 @@ export default function Home() {
         const chCuts = todayCuts[ch] || Object.values(todayCuts)[0] || [];
         if (chCuts.length > 0) {
           const data: PreviewData = {
-            folder: `${topic.replace(/\s+/g, '_')}_${ch}`,
+            sessionId: `today_${topic.replace(/\s+/g, '_')}_${ch}`,
             title: topic,
+            channel: ch,
             cuts: chCuts.map((c: any, i: number) => ({
               index: i,
               script: c.script || "",
