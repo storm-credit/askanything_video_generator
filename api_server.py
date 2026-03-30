@@ -1504,8 +1504,10 @@ class RegisterDaySessionRequest(BaseModel):
 async def register_day_session(req: RegisterDaySessionRequest):
     """Day 파일 스크립트를 백엔드 세션으로 등록 (이미지 생성용)."""
     # topic_folder 생성 (assets/ 아래에)
-    topic_folder = os.path.join("assets", f"{req.topic.replace(' ', '_')}_{req.channel}")
-    os.makedirs(os.path.join(topic_folder, "images"), exist_ok=True)
+    folder_name = f"{req.topic.replace(' ', '_')}_{req.channel}"
+    topic_folder = folder_name  # Remotion/렌더가 assets/ 접두사를 자동 추가
+    full_path = os.path.join("assets", folder_name)
+    os.makedirs(os.path.join(full_path, "images"), exist_ok=True)
 
     # cuts 정규화
     normalized_cuts = []
@@ -1517,7 +1519,7 @@ async def register_day_session(req: RegisterDaySessionRequest):
         })
 
     # cuts.json 저장 (불러오기에서 스크립트 보이게)
-    cuts_path = os.path.join(topic_folder, "cuts.json")
+    cuts_path = os.path.join(full_path, "cuts.json")
     with open(cuts_path, "w", encoding="utf-8") as f:
         json.dump({
             "cuts": normalized_cuts,
@@ -1534,7 +1536,7 @@ async def register_day_session(req: RegisterDaySessionRequest):
     import glob as _glob_mod2
     image_paths = []
     for i in range(len(normalized_cuts)):
-        img_file = os.path.join(topic_folder, "images", f"cut_{i:02}.png")
+        img_file = os.path.join(full_path, "images", f"cut_{i:02}.png")
         if os.path.exists(img_file):
             image_paths.append(img_file)
         else:
