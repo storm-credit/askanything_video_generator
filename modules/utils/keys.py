@@ -31,9 +31,12 @@ _BLOCK_DURATION_BY_SERVICE = {
     "veo3": 2 * 60 * 60,        # Veo3: 2시간
     "veo3:standard": 2 * 60 * 60,
     "veo3:fast": 2 * 60 * 60,
-    "imagen": 60 * 60,           # Imagen: 1시간
-    "imagen:standard": 60 * 60,
-    "imagen:fast": 60 * 60,
+    "imagen": 24 * 60 * 60,     # Imagen: 24시간
+    "imagen:standard": 24 * 60 * 60,
+    "imagen:fast": 24 * 60 * 60,
+    "imagen:ultra": 24 * 60 * 60,
+    "imagen:nano-banana": 24 * 60 * 60,
+    "imagen:nano-banana-preview": 24 * 60 * 60,
     "gemini": 30 * 60,           # Gemini: 30분
 }
 

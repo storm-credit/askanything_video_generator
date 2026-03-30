@@ -15,6 +15,8 @@ IMAGEN_MODELS = [
     {"id": "imagen-4.0-generate-001", "tag": "standard", "label": "Imagen 4"},
     {"id": "imagen-4.0-fast-generate-001", "tag": "fast", "label": "Imagen 4 Fast"},
     {"id": "imagen-4.0-ultra-generate-001", "tag": "ultra", "label": "Imagen 4 Ultra"},
+    {"id": "gemini-2.0-flash-preview-image-generation", "tag": "nano-banana", "label": "Nano Banana"},
+    {"id": "gemini-2.5-flash-preview-image-generation", "tag": "nano-banana-preview", "label": "Nano Banana Preview"},
 ]
 
 # Veo 모델 체인: Standard (RPM 2) → Fast (RPM 2)
