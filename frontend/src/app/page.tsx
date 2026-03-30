@@ -901,7 +901,7 @@ export default function Home() {
                 index: i,
                 script: c.script || "",
                 prompt: c.image_prompt || "",
-                image: "", // 이미지 없음
+                image_url: null, // 이미지 없음 — 별도 생성 필요
               })),
             };
             previews[ch] = data;
