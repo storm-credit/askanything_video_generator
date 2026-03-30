@@ -2005,9 +2005,11 @@ export default function Home() {
                             setGeneratedVideoPath(videoPath);
                             setGeneratedVideoUrl(result.videoUrl!);
                             setUploadChannel(activeRenderTab);
-                            setUploadTitle(topic);
-                            setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
-                            if (p === "youtube") setUploadTags(topic);
+                            // Day 파일 메타데이터 우선 사용 (채널별 제목/설명/해시태그)
+                            const chMeta = todayMeta?.[activeRenderTab];
+                            setUploadTitle(chMeta?.title || topic);
+                            setUploadDescription(chMeta?.description || `AI가 생성한 숏폼 영상: ${topic}`);
+                            if (p === "youtube") setUploadTags(chMeta?.hashtags || topic);
                             setUploadResult(null);
                             setScheduleEnabled(false);
                             setScheduleDate("");
@@ -2378,9 +2380,10 @@ export default function Home() {
                   const channelPlatforms = preset ? preset.platforms : ["youtube", "tiktok", "reels"];
                   const openUpload = (p: "youtube" | "tiktok" | "instagram") => {
                     setUploadChannel(activeChannel || "");
-                    setUploadTitle(topic);
-                    setUploadDescription(`AI가 생성한 숏폼 영상: ${topic}`);
-                    if (p === "youtube") setUploadTags(topic);
+                    const chMeta2 = todayMeta?.[activeChannel || ""];
+                    setUploadTitle(chMeta2?.title || topic);
+                    setUploadDescription(chMeta2?.description || `AI가 생성한 숏폼 영상: ${topic}`);
+                    if (p === "youtube") setUploadTags(chMeta2?.hashtags || topic);
                     setUploadResult(null);
                     setScheduleEnabled(false);
                     setScheduleDate("");
