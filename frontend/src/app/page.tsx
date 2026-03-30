@@ -2105,42 +2105,57 @@ export default function Home() {
                 )}
                 <button
                   onClick={async () => {
-                    const sid = currentPreview?.sessionId;
-                    console.log("[전체 이미지] 클릭됨, sessionId:", sid);
-                    if (!sid) { alert("세션 ID가 없습니다"); return; }
-                    setLogs(prev => [...prev.slice(-99), `🖼️ 전체 이미지 생성 중... (${sid})`]);
-                    try {
-                      const res = await fetch(`${API_BASE}/api/batch-generate-images`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ sessionId: sid, model: "standard" }),
-                      });
-                      console.log("[전체 이미지] 응답 status:", res.status);
-                      const data = await res.json();
-                      console.log("[전체 이미지] 응답 데이터:", data);
-                      if (data.ok && data.results) {
-                        const updatedCuts = [...currentPreview.cuts];
-                        for (const r of data.results) {
-                          if (r.ok && r.image_url && updatedCuts[r.index]) {
-                            updatedCuts[r.index] = { ...updatedCuts[r.index], image_url: r.image_url };
+                    // 4채널 전부 이미지 생성
+                    const allChannels = Object.keys(channelPreviews);
+                    if (allChannels.length === 0 && currentPreview) {
+                      // 싱글채널
+                      allChannels.push(currentPreview.channel || "default");
+                    }
+                    const totalChannels = allChannels.length;
+                    let totalDone = 0;
+                    const totalImages = allChannels.reduce((sum, ch) => sum + (channelPreviews[ch]?.cuts?.length || currentPreview?.cuts?.length || 0), 0);
+
+                    setLogs([`🖼️ 전체 이미지 생성 시작 — ${totalChannels}채널 × ${Math.round(totalImages / totalChannels)}컷 = ${totalImages}장`]);
+                    setProgress(0);
+
+                    for (let ci = 0; ci < allChannels.length; ci++) {
+                      const ch = allChannels[ci];
+                      const preview = channelPreviews[ch] || currentPreview;
+                      if (!preview?.sessionId) continue;
+
+                      setLogs(prev => [...prev.slice(-99), `📸 [${ci + 1}/${totalChannels}] ${ch} 이미지 생성 중...`]);
+
+                      try {
+                        const res = await fetch(`${API_BASE}/api/batch-generate-images`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ sessionId: preview.sessionId, model: "standard" }),
+                        });
+                        const data = await res.json();
+
+                        if (data.ok && data.results) {
+                          const updatedCuts = [...preview.cuts];
+                          for (const r of data.results) {
+                            if (r.ok && r.image_url && updatedCuts[r.index]) {
+                              updatedCuts[r.index] = { ...updatedCuts[r.index], image_url: r.image_url };
+                            }
                           }
-                        }
-                        if (activePreviewTab && channelPreviews[activePreviewTab]) {
                           setChannelPreviews(prev => ({
                             ...prev,
-                            [activePreviewTab!]: { ...prev[activePreviewTab!], cuts: updatedCuts },
+                            [ch]: { ...prev[ch], cuts: updatedCuts },
                           }));
+                          totalDone += data.success || 0;
+                          setProgress(Math.round((totalDone / totalImages) * 100));
+                          setLogs(prev => [...prev.slice(-99), `✅ ${ch}: ${data.success}/${data.total}장 완료 (전체 ${totalDone}/${totalImages})`]);
                         } else {
-                          setPreviewData(prev => prev ? { ...prev, cuts: updatedCuts } : prev);
+                          setLogs(prev => [...prev.slice(-99), `❌ ${ch} 실패: ${data.error || "알 수 없는 오류"}`]);
                         }
-                        setLogs(prev => [...prev.slice(-99), `✅ 이미지 ${data.success}/${data.total}개 생성 완료`]);
-                      } else {
-                        setLogs(prev => [...prev.slice(-99), `❌ 이미지 생성 실패: ${data.error || JSON.stringify(data)}`]);
+                      } catch (err) {
+                        setLogs(prev => [...prev.slice(-99), `❌ ${ch} 에러: ${err}`]);
                       }
-                    } catch (err) {
-                      console.error("[전체 이미지] 에러:", err);
-                      setLogs(prev => [...prev.slice(-99), `❌ 이미지 생성 오류: ${err}`]);
                     }
+                    setProgress(100);
+                    setLogs(prev => [...prev.slice(-99), `🎉 전체 이미지 생성 완료! ${totalDone}/${totalImages}장`]);
                   }}
                   className="px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors"
                 >
