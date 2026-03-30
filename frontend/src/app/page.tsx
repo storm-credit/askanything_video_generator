@@ -886,7 +886,9 @@ export default function Home() {
       setEditedScriptsMap({});
       setRenderResults({});
 
-      const channels = selectedChannels.length >= 2 ? selectedChannels : (channel ? [channel] : ["default"]);
+      // todayCuts에서 직접 채널 목록 가져오기 (selectedChannels 타이밍 이슈 방지)
+      const cutsChannels = Object.keys(todayCuts);
+      const channels = cutsChannels.length >= 1 ? cutsChannels : (channel ? [channel] : ["default"]);
 
       if (channels.length >= 2) {
         // 멀티채널: todayCuts에서 각 채널 스크립트 배정
