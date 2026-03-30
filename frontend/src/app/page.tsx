@@ -915,7 +915,7 @@ export default function Home() {
         if (Object.keys(previews).length > 0) {
           setActivePreviewTab(channels[0]);
           setPreviewMode(true);
-          // 백엔드 세션 등록 (이미지 생성용)
+          // 백엔드 세션 등록 (이미지 생성용) + 기존 이미지 반영
           for (const [ch, pv] of Object.entries(previews)) {
             fetch(`${API_BASE}/api/register-day-session`, {
               method: "POST",
@@ -926,6 +926,20 @@ export default function Home() {
                 channel: ch,
                 cuts: pv.cuts.map((c: any) => ({ script: c.script, prompt: c.prompt })),
               }),
+            }).then(r => r.json()).then(data => {
+              if (data.image_urls) {
+                setChannelPreviews(prev => {
+                  const updated = { ...prev };
+                  if (updated[ch]) {
+                    const newCuts = updated[ch].cuts.map((c: any, i: number) => ({
+                      ...c,
+                      image_url: data.image_urls[i] || c.image_url,
+                    }));
+                    updated[ch] = { ...updated[ch], cuts: newCuts };
+                  }
+                  return updated;
+                });
+              }
             }).catch(() => {});
           }
         }
