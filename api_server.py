@@ -1530,16 +1530,33 @@ async def register_day_session(req: RegisterDaySessionRequest):
             }
         }, f, ensure_ascii=False, indent=2)
 
+    # 이미 생성된 이미지 파일 자동 탐지
+    import glob as _glob_mod2
+    image_paths = []
+    for i in range(len(normalized_cuts)):
+        img_file = os.path.join(topic_folder, "images", f"cut_{i:02}.png")
+        if os.path.exists(img_file):
+            image_paths.append(img_file)
+        else:
+            image_paths.append("")
+
+    # 언어 매핑
+    lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
+
     with _session_lock:
         _prepared_sessions[req.sessionId] = {
             "topic": req.topic,
+            "title": req.topic,
             "topic_folder": topic_folder,
             "channel": req.channel,
+            "language": lang_map.get(req.channel, "ko"),
             "cuts": normalized_cuts,
-            "image_paths": [""] * len(normalized_cuts),
+            "image_paths": image_paths,
+            "_created": time.time(),
         }
 
-    return {"ok": True, "sessionId": req.sessionId, "cuts_count": len(normalized_cuts)}
+    existing_count = sum(1 for p in image_paths if p)
+    return {"ok": True, "sessionId": req.sessionId, "cuts_count": len(normalized_cuts), "existing_images": existing_count}
 
 
 class BatchImageRequest(BaseModel):
