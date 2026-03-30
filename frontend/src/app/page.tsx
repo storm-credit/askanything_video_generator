@@ -2285,6 +2285,22 @@ export default function Home() {
                       // 주제를 검색창에 입력
                       const topicName = t.topic_group?.replace(/^[^\s]+\s*/, "") || t.topic_group;
                       setTopic(topicName);
+                      // 채널 자동 선택: 이 주제에 해당하는 채널들
+                      const topicChannels = Object.keys(t.channels || {});
+                      if (topicChannels.length > 0) {
+                        setSelectedChannels(topicChannels);
+                        // 단일 채널이면 channel도 설정
+                        if (topicChannels.length === 1) {
+                          setChannel(topicChannels[0]);
+                        }
+                        // 언어 자동 설정
+                        const langMap: Record<string, string> = { askanything: "ko", wonderdrop: "en", exploratodo: "es", prismtale: "es" };
+                        if (topicChannels.length === 1) {
+                          setLanguage(langMap[topicChannels[0]] || "ko");
+                        } else {
+                          setLanguage("auto");
+                        }
+                      }
                       setShowTodayModal(false);
                     }}
                     className="w-full text-left px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-colors"
