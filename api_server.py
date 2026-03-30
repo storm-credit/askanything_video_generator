@@ -1563,7 +1563,17 @@ async def register_day_session(req: RegisterDaySessionRequest):
         }
 
     existing_count = sum(1 for p in image_paths if p)
-    return {"ok": True, "sessionId": req.sessionId, "cuts_count": len(normalized_cuts), "existing_images": existing_count}
+    # 이미지 URL도 반환 (프론트에서 바로 표시)
+    image_urls = []
+    for p in image_paths:
+        if p:
+            rel = p.replace("\\", "/")
+            idx = rel.find("assets/")
+            image_urls.append(f"/{rel[idx:]}" if idx >= 0 else None)
+        else:
+            image_urls.append(None)
+    print(f"[Day 세션] {req.channel}: {existing_count}/{len(normalized_cuts)} 이미지 발견 (folder={folder_name})")
+    return {"ok": True, "sessionId": req.sessionId, "cuts_count": len(normalized_cuts), "existing_images": existing_count, "image_urls": image_urls}
 
 
 class BatchImageRequest(BaseModel):
