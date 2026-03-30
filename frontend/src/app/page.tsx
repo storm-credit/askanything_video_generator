@@ -895,7 +895,8 @@ export default function Home() {
           const chCuts = todayCuts[ch] || todayCuts[channels[0]] || [];
           if (chCuts.length > 0) {
             const data: PreviewData = {
-              folder: `${topic.replace(/\s+/g, '_')}_${ch}`,
+              sessionId: `today_${topic.replace(/\s+/g, '_')}_${ch}`,
+              channel: ch,
               title: topic,
               cuts: chCuts.map((c: any, i: number) => ({
                 index: i,
