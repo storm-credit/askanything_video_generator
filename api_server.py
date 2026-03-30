@@ -1503,8 +1503,8 @@ class RegisterDaySessionRequest(BaseModel):
 @app.post("/api/register-day-session")
 async def register_day_session(req: RegisterDaySessionRequest):
     """Day 파일 스크립트를 백엔드 세션으로 등록 (이미지 생성용)."""
-    # topic_folder 생성 (assets/ 아래에 직접)
-    topic_folder = f"{req.topic.replace(' ', '_')}_{req.channel}"
+    # topic_folder 생성 (assets/ 아래에)
+    topic_folder = os.path.join("assets", f"{req.topic.replace(' ', '_')}_{req.channel}")
     os.makedirs(os.path.join(topic_folder, "images"), exist_ok=True)
 
     # cuts 정규화
@@ -1515,6 +1515,20 @@ async def register_day_session(req: RegisterDaySessionRequest):
             "prompt": c.get("prompt", c.get("image_prompt", "")),
             "description": c.get("description", ""),
         })
+
+    # cuts.json 저장 (불러오기에서 스크립트 보이게)
+    cuts_path = os.path.join(topic_folder, "cuts.json")
+    with open(cuts_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "cuts": normalized_cuts,
+            "title": req.topic,
+            "tags": [],
+            "metadata": {
+                "topic": req.topic,
+                "channel": req.channel,
+                "source": "day_file",
+            }
+        }, f, ensure_ascii=False, indent=2)
 
     with _session_lock:
         _prepared_sessions[req.sessionId] = {
