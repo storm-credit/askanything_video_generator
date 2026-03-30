@@ -2103,48 +2103,49 @@ export default function Home() {
                     {generatingScripts ? "스크립트 생성 중..." : "✍️ 스크립트 생성"}
                   </button>
                 )}
-                {currentPreview.cuts.some((c: any) => !c.image_url) && (
-                  <button
-                    onClick={async () => {
-                      const sessionId = currentPreview.sessionId;
-                      setLogs(prev => [...prev.slice(-99), "🖼️ 전체 이미지 생성 중..."]);
-                      try {
-                        const res = await fetch(`${API_BASE}/api/batch-generate-images`, {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ sessionId, model: "standard" }),
-                        });
-                        const data = await res.json();
-                        if (data.ok && data.results) {
-                          // 이미지 URL 업데이트
-                          const updatedCuts = [...currentPreview.cuts];
-                          for (const r of data.results) {
-                            if (r.ok && r.image_url && updatedCuts[r.index]) {
-                              updatedCuts[r.index] = { ...updatedCuts[r.index], image_url: r.image_url };
-                            }
+                <button
+                  onClick={async () => {
+                    const sid = currentPreview?.sessionId;
+                    console.log("[전체 이미지] 클릭됨, sessionId:", sid);
+                    if (!sid) { alert("세션 ID가 없습니다"); return; }
+                    setLogs(prev => [...prev.slice(-99), `🖼️ 전체 이미지 생성 중... (${sid})`]);
+                    try {
+                      const res = await fetch(`${API_BASE}/api/batch-generate-images`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sessionId: sid, model: "standard" }),
+                      });
+                      console.log("[전체 이미지] 응답 status:", res.status);
+                      const data = await res.json();
+                      console.log("[전체 이미지] 응답 데이터:", data);
+                      if (data.ok && data.results) {
+                        const updatedCuts = [...currentPreview.cuts];
+                        for (const r of data.results) {
+                          if (r.ok && r.image_url && updatedCuts[r.index]) {
+                            updatedCuts[r.index] = { ...updatedCuts[r.index], image_url: r.image_url };
                           }
-                          // 현재 프리뷰 업데이트
-                          if (activePreviewTab && channelPreviews[activePreviewTab]) {
-                            setChannelPreviews(prev => ({
-                              ...prev,
-                              [activePreviewTab!]: { ...prev[activePreviewTab!], cuts: updatedCuts },
-                            }));
-                          } else {
-                            setPreviewData(prev => prev ? { ...prev, cuts: updatedCuts } : prev);
-                          }
-                          setLogs(prev => [...prev.slice(-99), `✅ 이미지 ${data.success}/${data.total}개 생성 완료`]);
-                        } else {
-                          setLogs(prev => [...prev.slice(-99), `❌ 이미지 생성 실패: ${data.error || "알 수 없는 오류"}`]);
                         }
-                      } catch (err) {
-                        setLogs(prev => [...prev.slice(-99), `❌ 이미지 생성 오류: ${err}`]);
+                        if (activePreviewTab && channelPreviews[activePreviewTab]) {
+                          setChannelPreviews(prev => ({
+                            ...prev,
+                            [activePreviewTab!]: { ...prev[activePreviewTab!], cuts: updatedCuts },
+                          }));
+                        } else {
+                          setPreviewData(prev => prev ? { ...prev, cuts: updatedCuts } : prev);
+                        }
+                        setLogs(prev => [...prev.slice(-99), `✅ 이미지 ${data.success}/${data.total}개 생성 완료`]);
+                      } else {
+                        setLogs(prev => [...prev.slice(-99), `❌ 이미지 생성 실패: ${data.error || JSON.stringify(data)}`]);
                       }
-                    }}
-                    className="px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors"
-                  >
-                    🖼️ 전체 이미지 생성
-                  </button>
-                )}
+                    } catch (err) {
+                      console.error("[전체 이미지] 에러:", err);
+                      setLogs(prev => [...prev.slice(-99), `❌ 이미지 생성 오류: ${err}`]);
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors"
+                >
+                  🖼️ 전체 이미지 생성
+                </button>
                 <button
                   onClick={handleRender}
                   className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-indigo-500/25"
