@@ -31,6 +31,7 @@ const saveSetting = (key: string, value: unknown) => {
 export default function Home() {
   const [topic, setTopic] = useState("");
   const [todayCuts, setTodayCuts] = useState<Record<string, any[]> | null>(null); // Day 파일 스크립트 저장
+  const [todayMeta, setTodayMeta] = useState<Record<string, {title: string, description: string, hashtags: string}> | null>(null); // Day 파일 메타데이터
   const [qualityPreset, setQualityPreset] = useState(() => loadSetting("qualityPreset", "best"));
   const [llmProvider, setLlmProvider] = useState(() => loadSetting("llmProvider", "gemini"));
   const [llmModel, setLlmModel] = useState(() => loadSetting("llmModel", ""));
@@ -1454,7 +1455,7 @@ export default function Home() {
             <input
               type="text"
               value={topic}
-              onChange={(e) => { setTopic(e.target.value); setTodayCuts(null); }}
+              onChange={(e) => { setTopic(e.target.value); setTodayCuts(null); setTodayMeta(null); }}
               disabled={isGenerating}
               placeholder="주제 또는 YouTube URL — 예: 블랙홀에 떨어지면 어떻게 될까?"
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-6 pr-6 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-lg backdrop-blur-md"
@@ -1866,11 +1867,13 @@ export default function Home() {
                               setGeneratedVideoUrl(result.videoUrl!);
                               setUploadChannel(ch);
                               const chPreview = channelPreviews[ch];
-                              const genTitle = chPreview?.title || topic;
-                              const genScripts = (chPreview?.cuts || []).map((c: any) => c.script || "").filter(Boolean).join("\n");
-                              const genTags = (chPreview?.cuts?.[0] as any)?.tags?.join(", ") || topic;
+                              // Day 파일 메타데이터가 있으면 우선 사용
+                              const meta = todayMeta?.[ch];
+                              const genTitle = meta?.title || chPreview?.title || topic;
+                              const genDesc = meta?.description || (chPreview?.cuts || []).map((c: any) => c.script || "").filter(Boolean).join("\n") || `AI가 생성한 숏폼 영상: ${genTitle}`;
+                              const genTags = meta?.hashtags || (chPreview?.cuts?.[0] as any)?.tags?.join(", ") || topic;
                               setUploadTitle(genTitle);
-                              setUploadDescription(genScripts || `AI가 생성한 숏폼 영상: ${genTitle}`);
+                              setUploadDescription(genDesc);
                               if (p === "youtube") setUploadTags(genTags);
                               setUploadResult(null);
                               setScheduleEnabled(false);
@@ -2446,6 +2449,18 @@ export default function Home() {
                         }
                       }
                       setTodayCuts(Object.keys(channelCuts).length > 0 ? channelCuts : null);
+                      // Day 파일 메타데이터 저장 (업로드 시 제목/설명/해시태그 사용)
+                      const channelMeta: Record<string, {title: string, description: string, hashtags: string}> = {};
+                      if (t.channels) {
+                        for (const [ch, chData] of Object.entries(t.channels as Record<string, any>)) {
+                          channelMeta[ch] = {
+                            title: chData.title || topicName,
+                            description: chData.description || "",
+                            hashtags: chData.hashtags || "",
+                          };
+                        }
+                      }
+                      setTodayMeta(Object.keys(channelMeta).length > 0 ? channelMeta : null);
                       // 채널 자동 선택: 이 주제에 해당하는 채널들
                       const topicChannels = Object.keys(t.channels || {});
                       if (topicChannels.length > 0) {
