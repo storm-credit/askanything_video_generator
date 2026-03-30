@@ -1535,10 +1535,15 @@ async def register_day_session(req: RegisterDaySessionRequest):
     # 이미 생성된 이미지 파일 자동 탐지
     import glob as _glob_mod2
     image_paths = []
+    # 이중 경로(assets/assets/)도 체크
+    alt_path = os.path.join("assets", full_path)
     for i in range(len(normalized_cuts)):
         img_file = os.path.join(full_path, "images", f"cut_{i:02}.png")
+        alt_file = os.path.join(alt_path, "images", f"cut_{i:02}.png")
         if os.path.exists(img_file):
             image_paths.append(img_file)
+        elif os.path.exists(alt_file):
+            image_paths.append(alt_file)
         else:
             image_paths.append("")
 
