@@ -1493,6 +1493,82 @@ async def regenerate_image_endpoint(req: RegenerateImageRequest):
         return JSONResponse(status_code=500, content={"error": f"재생성 실패: {str(e)}"})
 
 
+class BatchImageRequest(BaseModel):
+    sessionId: str
+    model: str = "standard"  # standard / fast / nano_banana / dalle
+
+
+@app.post("/api/batch-generate-images")
+async def batch_generate_images(req: BatchImageRequest):
+    """세션의 모든 컷 이미지를 일괄 생성합니다."""
+    with _session_lock:
+        session = _prepared_sessions.get(req.sessionId)
+    if not session:
+        return JSONResponse(status_code=404, content={"error": "세션을 찾을 수 없습니다."})
+
+    cuts = session.get("cuts", [])
+    topic_folder = session.get("topic_folder", "default_topic")
+    topic = session.get("topic", "")
+    gemini_keys = os.getenv("GEMINI_API_KEY", "")
+
+    results = []
+    model_name = req.model or "standard"
+    model_map = {
+        "standard": "imagen-4.0-generate-001",
+        "fast": "imagen-4.0-fast-generate-001",
+        "ultra": "imagen-4.0-ultra-generate-001",
+    }
+
+    for i, cut in enumerate(cuts):
+        prompt = cut.get("prompt", cut.get("image_prompt", ""))
+        if not prompt:
+            results.append({"index": i, "ok": False, "error": "프롬프트 없음"})
+            continue
+        try:
+            new_path = None
+            if model_name in ("standard", "fast", "ultra"):
+                from modules.image.imagen import generate_image_imagen
+                new_path = generate_image_imagen(
+                    prompt, i, topic_folder,
+                    model_override=model_map[model_name],
+                    gemini_api_keys=gemini_keys, topic=topic,
+                )
+            elif model_name == "nano_banana":
+                from modules.image.imagen import generate_image_nano_banana
+                new_path = generate_image_nano_banana(
+                    prompt, i, topic_folder,
+                    gemini_api_keys=gemini_keys, topic=topic,
+                )
+            elif model_name == "dalle":
+                from modules.image.dalle import generate_image_dalle
+                new_path = generate_image_dalle(prompt, i, topic_folder, topic=topic)
+
+            if new_path and os.path.exists(new_path):
+                with _session_lock:
+                    if req.sessionId in _prepared_sessions:
+                        if "image_paths" not in _prepared_sessions[req.sessionId]:
+                            _prepared_sessions[req.sessionId]["image_paths"] = [""] * len(cuts)
+                        _prepared_sessions[req.sessionId]["image_paths"][i] = new_path
+                rel = new_path.replace("\\", "/")
+                idx = rel.find("assets/")
+                img_url = f"/{rel[idx:]}" if idx >= 0 else None
+                results.append({"index": i, "ok": True, "image_url": img_url})
+                print(f"[일괄 이미지] 컷 {i+1}/{len(cuts)} 생성 완료")
+            else:
+                results.append({"index": i, "ok": False, "error": "생성 실패"})
+        except Exception as e:
+            results.append({"index": i, "ok": False, "error": str(e)})
+
+    success_count = sum(1 for r in results if r.get("ok"))
+    return {
+        "ok": True,
+        "total": len(cuts),
+        "success": success_count,
+        "failed": len(cuts) - success_count,
+        "results": results,
+    }
+
+
 class RenderRequest(BaseModel):
     sessionId: str
     cuts: list[dict]  # 수정된 스크립트 포함: [{index, script}, ...]
