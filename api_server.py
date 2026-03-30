@@ -1493,6 +1493,41 @@ async def regenerate_image_endpoint(req: RegenerateImageRequest):
         return JSONResponse(status_code=500, content={"error": f"재생성 실패: {str(e)}"})
 
 
+class RegisterDaySessionRequest(BaseModel):
+    sessionId: str
+    topic: str
+    channel: str = "askanything"
+    cuts: list[dict]  # [{script, image_prompt/prompt}, ...]
+
+
+@app.post("/api/register-day-session")
+async def register_day_session(req: RegisterDaySessionRequest):
+    """Day 파일 스크립트를 백엔드 세션으로 등록 (이미지 생성용)."""
+    # topic_folder 생성
+    topic_folder = os.path.join("assets", f"{req.topic.replace(' ', '_')}_{req.channel}")
+    os.makedirs(os.path.join(topic_folder, "images"), exist_ok=True)
+
+    # cuts 정규화
+    normalized_cuts = []
+    for c in req.cuts:
+        normalized_cuts.append({
+            "script": c.get("script", ""),
+            "prompt": c.get("prompt", c.get("image_prompt", "")),
+            "description": c.get("description", ""),
+        })
+
+    with _session_lock:
+        _prepared_sessions[req.sessionId] = {
+            "topic": req.topic,
+            "topic_folder": topic_folder,
+            "channel": req.channel,
+            "cuts": normalized_cuts,
+            "image_paths": [""] * len(normalized_cuts),
+        }
+
+    return {"ok": True, "sessionId": req.sessionId, "cuts_count": len(normalized_cuts)}
+
+
 class BatchImageRequest(BaseModel):
     sessionId: str
     model: str = "standard"  # standard / fast / nano_banana / dalle

@@ -914,8 +914,21 @@ export default function Home() {
         if (Object.keys(previews).length > 0) {
           setActivePreviewTab(channels[0]);
           setPreviewMode(true);
+          // 백엔드 세션 등록 (이미지 생성용)
+          for (const [ch, pv] of Object.entries(previews)) {
+            fetch(`${API_BASE}/api/register-day-session`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                sessionId: pv.sessionId,
+                topic: topic,
+                channel: ch,
+                cuts: pv.cuts.map((c: any) => ({ script: c.script, prompt: c.prompt })),
+              }),
+            }).catch(() => {});
+          }
         }
-        setLogs(["✅ Day 파일 스크립트 배정 완료 — 이미지는 별도 생성 필요"]);
+        setLogs(["✅ Day 파일 스크립트 배정 완료 — 이미지는 '전체 이미지 생성' 버튼으로 생성"]);
       } else {
         // 싱글채널
         const ch = channels[0];
@@ -934,8 +947,19 @@ export default function Home() {
           };
           setPreviewData(data);
           setPreviewMode(true);
+          // 백엔드 세션 등록
+          fetch(`${API_BASE}/api/register-day-session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sessionId: data.sessionId,
+              topic: topic,
+              channel: ch,
+              cuts: data.cuts.map((c: any) => ({ script: c.script, prompt: c.prompt })),
+            }),
+          }).catch(() => {});
         }
-        setLogs(["✅ Day 파일 스크립트 배정 완료 — 이미지는 별도 생성 필요"]);
+        setLogs(["✅ Day 파일 스크립트 배정 완료 — 이미지는 '전체 이미지 생성' 버튼으로 생성"]);
       }
       return;
     }
