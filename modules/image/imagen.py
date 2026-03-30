@@ -169,7 +169,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
     # Imagen 전체 소진 → Nano Banana 자동 폴백
     print(f"  [Imagen → Nano Banana 폴백] 컷 {index+1}: Imagen 모든 모델/키 소진, Nano Banana로 전환...")
     try:
-        return generate_image_nano_banana(prompt, index, topic_folder, api_key=api_key, gemini_api_keys=gemini_api_keys, topic=topic)
+        return generate_image_nano_banana(prompt, index, topic_folder, api_key=None, gemini_api_keys=gemini_api_keys, topic=topic)
     except Exception as nb_err:
         raise RuntimeError(f"[Imagen+NanoBanana] 컷 {index+1}: 모든 이미지 엔진 및 키 소진") from nb_err
 
