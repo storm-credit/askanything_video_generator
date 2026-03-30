@@ -1503,8 +1503,8 @@ class RegisterDaySessionRequest(BaseModel):
 @app.post("/api/register-day-session")
 async def register_day_session(req: RegisterDaySessionRequest):
     """Day 파일 스크립트를 백엔드 세션으로 등록 (이미지 생성용)."""
-    # topic_folder 생성
-    topic_folder = os.path.join("assets", f"{req.topic.replace(' ', '_')}_{req.channel}")
+    # topic_folder 생성 (assets/ 아래에 직접)
+    topic_folder = f"{req.topic.replace(' ', '_')}_{req.channel}"
     os.makedirs(os.path.join(topic_folder, "images"), exist_ok=True)
 
     # cuts 정규화
