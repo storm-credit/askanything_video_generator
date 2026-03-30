@@ -2749,12 +2749,23 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* YouTube 채널 선택 */}
-                  {uploadPlatform === "youtube" && ytChannels.length > 1 && (
+                  {/* YouTube 채널 선택 — uploadChannel에 따라 자동 매핑 */}
+                  {uploadPlatform === "youtube" && ytChannels.length > 0 && (
                     <div>
                       <label className="text-gray-400 text-xs mb-1 block">채널 선택</label>
                       <select
-                        value={ytSelectedChannel}
+                        value={(() => {
+                          // uploadChannel → YouTube 채널 ID 자동 매핑
+                          const channelNameMap: Record<string, string> = {
+                            askanything: "AskAnything",
+                            wonderdrop: "Wonder Drop",
+                            exploratodo: "ExploraTodo",
+                            prismtale: "Prism Tale",
+                          };
+                          const targetName = channelNameMap[uploadChannel] || "";
+                          const matched = ytChannels.find(c => c.title === targetName);
+                          return matched?.id || ytSelectedChannel;
+                        })()}
                         onChange={(e) => setYtSelectedChannel(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none cursor-pointer"
                       >
