@@ -1445,7 +1445,7 @@ async def regenerate_image_endpoint(req: RegenerateImageRequest):
     except Exception:
         pass  # 캐시 무효화 실패해도 진행
 
-    gemini_keys = os.getenv("GEMINI_API_KEY", "")
+    gemini_keys = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
 
     try:
         new_path = None
@@ -1558,7 +1558,7 @@ async def batch_generate_images(req: BatchImageRequest):
     cuts = session.get("cuts", [])
     topic_folder = session.get("topic_folder", "default_topic")
     topic = session.get("topic", "")
-    gemini_keys = os.getenv("GEMINI_API_KEY", "")
+    gemini_keys = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
 
     results = []
     model_name = req.model or "standard"
