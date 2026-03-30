@@ -30,6 +30,7 @@ const saveSetting = (key: string, value: unknown) => {
 
 export default function Home() {
   const [topic, setTopic] = useState("");
+  const [todayCuts, setTodayCuts] = useState<Record<string, any[]> | null>(null); // Day 파일 스크립트 저장
   const [qualityPreset, setQualityPreset] = useState(() => loadSetting("qualityPreset", "best"));
   const [llmProvider, setLlmProvider] = useState(() => loadSetting("llmProvider", "gemini"));
   const [llmModel, setLlmModel] = useState(() => loadSetting("llmModel", ""));
@@ -2285,6 +2286,12 @@ export default function Home() {
                       // 주제를 검색창에 입력
                       const topicName = t.topic_group?.replace(/^[^\s]+\s*/, "") || t.topic_group;
                       setTopic(topicName);
+                      // Day 파일 스크립트가 있으면 저장 (API 호출 없이 사용)
+                      if (t.cuts) {
+                        setTodayCuts(t.cuts);
+                      } else {
+                        setTodayCuts(null);
+                      }
                       // 채널 자동 선택: 이 주제에 해당하는 채널들
                       const topicChannels = Object.keys(t.channels || {});
                       if (topicChannels.length > 0) {

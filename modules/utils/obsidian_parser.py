@@ -46,6 +46,36 @@ if not os.path.exists(DEFAULT_VAULT_PATH):
     DEFAULT_VAULT_PATH = r"C:\Users\Storm Credit\Desktop\쇼츠\askanything"
 
 
+def _extract_cuts(lines: list[str]) -> list[dict[str, str]]:
+    """라인 리스트에서 8컷 스크립트+이미지 프롬프트를 추출합니다.
+    포맷: 컷1 / script: ... / image_prompt: ... 또는 Cut1 / Corte1
+    """
+    cuts = []
+    current_cut: dict[str, str] = {}
+    for line in lines:
+        stripped = line.strip()
+        # 컷 시작 감지: 컷1, Cut1, Corte1 등
+        if re.match(r"^(컷|Cut|Corte)\s*\d+", stripped, re.IGNORECASE):
+            if current_cut.get("script"):
+                cuts.append(current_cut)
+            current_cut = {}
+            continue
+        # script 라인
+        m = re.match(r"^script:\s*(.+)", stripped, re.IGNORECASE)
+        if m:
+            current_cut["script"] = m.group(1).strip()
+            continue
+        # image_prompt 라인
+        m = re.match(r"^image_prompt:\s*(.+)", stripped, re.IGNORECASE)
+        if m:
+            current_cut["image_prompt"] = m.group(1).strip()
+            continue
+    # 마지막 컷
+    if current_cut.get("script"):
+        cuts.append(current_cut)
+    return cuts
+
+
 def _extract_field(lines: list[str], field_names: list[str]) -> str:
     """라인 리스트에서 특정 필드 값을 추출합니다.
     두 가지 포맷 지원:
@@ -147,6 +177,9 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
             if not title:
                 continue  # 제목 없으면 스킵
 
+            # 8컷 스크립트+이미지 프롬프트 추출
+            cuts = _extract_cuts(lines)
+
             jobs.append({
                 "topic": title,  # 제목을 topic으로 사용
                 "language": language,
@@ -154,6 +187,7 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
                 "title": title,
                 "description": description,
                 "hashtags": hashtags,
+                "cuts": cuts,  # 8컷 스크립트+이미지 프롬프트
                 "topic_group": topic_name,
                 "topic_tag": topic_tag,  # 공통/KO전용/EN전용/ES전용
                 "day_file": day_filename,
@@ -239,6 +273,7 @@ def get_today_topics(channel: str | None = None,
             "title": j["title"],
             "description": j["description"],
             "hashtags": j["hashtags"],
+            "cuts": j.get("cuts", []),
         }
 
     return {
