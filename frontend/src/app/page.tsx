@@ -926,7 +926,7 @@ export default function Home() {
               index: i,
               script: c.script || "",
               prompt: c.image_prompt || "",
-              image: "",
+              image_url: null,
             })),
           };
           setPreviewData(data);
