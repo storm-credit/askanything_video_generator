@@ -1552,7 +1552,7 @@ async def register_day_session(req: RegisterDaySessionRequest):
             "language": lang_map.get(req.channel, "ko"),
             "cuts": normalized_cuts,
             "image_paths": image_paths,
-            "_created": time.time(),
+            "_created": __import__('time').time(),
         }
 
     existing_count = sum(1 for p in image_paths if p)
