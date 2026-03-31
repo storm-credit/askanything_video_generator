@@ -708,6 +708,23 @@ function KeySection({
               <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
               <span className="text-xs text-green-300 font-mono flex-1">{masked}</span>
               <span className="text-[10px] text-green-500/60">.env</span>
+              <button
+                onClick={async () => {
+                  if (!confirm(`이 키(${masked})를 .env에서 제거할까요?`)) return;
+                  try {
+                    await fetch(`${API_BASE}/api/settings/remove-env-key`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ keyType: config.id, maskedKey: masked }),
+                    });
+                    window.location.reload();
+                  } catch {}
+                }}
+                aria-label=".env 키 제거"
+                className="text-gray-500 hover:text-red-400 transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
             </div>
           ))}
         </div>

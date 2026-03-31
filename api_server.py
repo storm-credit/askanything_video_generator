@@ -2111,6 +2111,52 @@ class YouTubeUploadRequest(BaseModel):
     publish_at: str | None = Field(None, description="예약 공개 시간 (ISO 8601, e.g. 2026-03-20T15:00:00Z)")
 
 
+@app.post("/api/settings/remove-env-key")
+async def remove_env_key(req: dict):
+    """프론트엔드에서 .env 키 제거."""
+    key_type = req.get("keyType", "gemini")
+    masked = req.get("maskedKey", "")
+
+    env_var_map = {"gemini": "GEMINI_API_KEYS", "openai": "OPENAI_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY"}
+    env_var = env_var_map.get(key_type, "GEMINI_API_KEYS")
+
+    # .env 파일 읽기
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if not os.path.exists(env_path):
+        return {"ok": False, "error": ".env 파일 없음"}
+
+    with open(env_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    # 키 매칭 (마스킹된 키에서 앞뒤 일부로 매칭)
+    new_lines = []
+    removed = 0
+    for line in lines:
+        if line.startswith(f"{env_var}="):
+            keys = line.strip().split("=", 1)[1].split(",")
+            # 마스킹 패턴: "AIzaSyDq***wg" → 앞6자 + 끝2자
+            filtered = []
+            for k in keys:
+                k = k.strip()
+                key_masked = k[:6] + "***" + k[-2:] if len(k) > 8 else k
+                if key_masked == masked or masked in key_masked:
+                    removed += 1
+                    print(f"[키 제거] {key_masked} 제거됨")
+                else:
+                    filtered.append(k)
+            if filtered:
+                new_lines.append(f"{env_var}={','.join(filtered)}\n")
+            else:
+                new_lines.append(f"{env_var}=\n")
+        else:
+            new_lines.append(line)
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+    return {"ok": True, "removed": removed}
+
+
 @app.get("/api/health/quota")
 async def quota_health():
     """프로젝트 쿼터 상태 확인."""
