@@ -2111,6 +2111,54 @@ class YouTubeUploadRequest(BaseModel):
     publish_at: str | None = Field(None, description="예약 공개 시간 (ISO 8601, e.g. 2026-03-20T15:00:00Z)")
 
 
+@app.post("/api/settings/add-env-key")
+async def add_env_key(req: dict):
+    """프론트에서 키 추가 → .env에 저장."""
+    key_type = req.get("keyType", "gemini")
+    new_key = req.get("key", "").strip()
+    if not new_key:
+        return {"ok": False, "error": "키가 비어있음"}
+
+    env_var_map = {"gemini": "GEMINI_API_KEYS", "openai": "OPENAI_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY"}
+    env_var = env_var_map.get(key_type, "GEMINI_API_KEYS")
+
+    env_path = "/app/.env"
+    if not os.path.exists(env_path):
+        env_path = os.path.join(os.path.dirname(__file__), ".env")
+
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+    found = False
+    new_lines = []
+    for line in lines:
+        if line.startswith(f"{env_var}="):
+            existing = line.strip().split("=", 1)[1]
+            keys = [k.strip() for k in existing.split(",") if k.strip()]
+            if new_key not in keys:
+                keys.append(new_key)
+            new_lines.append(f"{env_var}={','.join(keys)}\n")
+            found = True
+        else:
+            new_lines.append(line)
+    if not found:
+        new_lines.append(f"{env_var}={new_key}\n")
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+    # 환경변수도 즉시 갱신
+    current = os.getenv(env_var, "")
+    if new_key not in current:
+        os.environ[env_var] = f"{current},{new_key}".strip(",")
+
+    masked = f"...{new_key[-4:]}"
+    print(f"[키 추가] {env_var}에 {masked} 추가됨")
+    return {"ok": True, "masked": masked}
+
+
 @app.post("/api/settings/remove-env-key")
 async def remove_env_key(req: dict):
     """프론트엔드에서 .env 키 제거."""

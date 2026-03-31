@@ -372,15 +372,24 @@ export default function Home() {
     }
   }, [isSettingsOpen, fetchKeyStatus, fetchKeyUsage, fetchModelLimits]);
 
-  const addKey = (configId: string) => {
+  const addKey = async (configId: string) => {
     const value = (inputValues[configId] || "").trim();
     if (!value) return;
+    // 브라우저 저장
     setSavedKeys((prev) => {
       const existing = prev[configId] || [];
       if (existing.includes(value)) return prev;
       return { ...prev, [configId]: [...existing, value] };
     });
     setInputValues((prev) => ({ ...prev, [configId]: "" }));
+    // .env에도 저장 (서버 백엔드에서 사용)
+    try {
+      await fetch(`${API_BASE}/api/settings/add-env-key`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyType: configId, key: value }),
+      });
+    } catch {}
   };
 
   const removeKey = (configId: string, index: number) => {
