@@ -704,7 +704,7 @@ function KeySection({
       {envMaskedKeys.length > 0 && (
         <div className="space-y-1 mb-2">
           {envMaskedKeys.map((masked, idx) => (
-            <div key={`env-${idx}`} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
+            <div key={`env-${idx}`} id={`env-key-${idx}`} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
               <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
               <span className="text-xs text-green-300 font-mono flex-1">{masked}</span>
               <span className="text-[10px] text-green-500/60">.env</span>
@@ -712,13 +712,22 @@ function KeySection({
                 onClick={async () => {
                   if (!confirm(`이 키(${masked})를 .env에서 제거할까요?`)) return;
                   try {
-                    await fetch(`${API_BASE}/api/settings/remove-env-key`, {
+                    const res = await fetch(`${API_BASE}/api/settings/remove-env-key`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ keyType: config.id, maskedKey: masked }),
                     });
-                    window.location.reload();
-                  } catch {}
+                    const data = await res.json();
+                    if (data.ok && data.removed > 0) {
+                      // 목록에서 제거 (페이지 새로고침 없이)
+                      const el = document.getElementById(`env-key-${idx}`);
+                      if (el) el.remove();
+                    } else {
+                      alert("키 제거 실패: 매칭되는 키를 찾을 수 없습니다");
+                    }
+                  } catch {
+                    alert("키 제거 중 오류 발생");
+                  }
                 }}
                 aria-label=".env 키 제거"
                 className="text-gray-500 hover:text-red-400 transition-colors"
