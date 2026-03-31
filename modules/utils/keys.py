@@ -1,13 +1,20 @@
 """
-Google API 키 로테이션 유틸리티 (v2)
+Google API 키 로테이션 유틸리티 (v3)
 
 3단계 상태 관리:
   🟢 active  — 정상 사용 가능
   🟡 warning — 과다 사용 (우선순위 하락, 사용은 가능)
-  🔴 blocked — 429 쿼터 초과 (서비스별 24시간 차단)
+  🔴 blocked — 429 쿼터 초과 (서비스별 차단)
 
 서비스별 독립 차단:
   Veo 3 쿼터 초과된 키도 Imagen에는 계속 사용 가능
+
+프로젝트 단위 차단:
+  할당량은 API 키가 아닌 프로젝트(Project) 단위로 계산됨
+  같은 프로젝트의 키는 하나가 차단되면 전부 차단 처리
+
+지수 백오프 + 지터:
+  429 발생 시 2^n + random(0,1) 초 대기 후 재시도
 
 자동 전환:
   get_google_key(service=..., exclude=...) 로 실패한 키 제외 후 다른 키 반환
@@ -17,6 +24,7 @@ import os
 import time
 import random
 import threading
+import hashlib
 from collections import defaultdict
 
 _usage_lock = threading.Lock()
@@ -51,6 +59,64 @@ _WARN_THRESHOLD = {
     "gemini": 50,    # Gemini: 키당 ~50회/일 → 넘으면 경고
 }
 _DEFAULT_WARN_THRESHOLD = 10
+
+# ── 프로젝트 그룹핑: 같은 프로젝트 키는 하나 차단 = 전부 차단 ──
+_project_groups: dict[str, str] = {}  # { api_key: project_id }
+
+def _get_project_id(api_key: str) -> str:
+    """키에서 프로젝트 ID 추출 (키 prefix 기반 추정)."""
+    if api_key in _project_groups:
+        return _project_groups[api_key]
+    # 키의 앞 12자를 프로젝트 그룹 ID로 사용 (같은 프로젝트면 접두사가 비슷)
+    # 실제로는 Google API에서 프로젝트 ID를 알 수 없으므로 키별 독립 관리
+    return api_key[:12]
+
+def register_project_group(api_keys: list[str], project_id: str):
+    """같은 프로젝트의 키들을 그룹으로 등록. 하나 차단되면 전부 차단."""
+    for key in api_keys:
+        _project_groups[key] = project_id
+
+def mark_project_exhausted(api_key: str, service: str):
+    """프로젝트 단위 차단 — 같은 프로젝트의 모든 키를 해당 서비스에서 차단."""
+    project_id = _get_project_id(api_key)
+    with _usage_lock:
+        for key, pid in _project_groups.items():
+            if pid == project_id:
+                svc = service or "_global"
+                _blocked_keys[key][svc] = time.time()
+        # 등록 안 된 키도 자기 자신은 차단
+        svc = service or "_global"
+        _blocked_keys[api_key][svc] = time.time()
+
+# ── 지수 백오프 + 지터 유틸리티 ──
+def exponential_backoff_wait(attempt: int, base: float = 2.0, max_wait: float = 60.0) -> float:
+    """지수 백오프 + 랜덤 지터. 대기 시간(초) 반환."""
+    wait = min(base ** attempt + random.uniform(0, 1), max_wait)
+    return wait
+
+# ── RPM 제한 추적 ──
+_rpm_tracker: dict[str, list[float]] = defaultdict(list)  # { api_key: [timestamp, ...] }
+_RPM_LIMITS = {
+    "gemini": 5,       # Gemini 무료: 5 RPM
+    "imagen": 10,      # Imagen: ~10 RPM
+    "nano_banana": 5,  # Nano Banana: ~5 RPM
+}
+
+def check_rpm_available(api_key: str, service: str = "") -> bool:
+    """RPM 한도 내인지 확인. False면 잠시 대기 필요."""
+    with _usage_lock:
+        now = time.time()
+        key = f"{api_key}:{service}"
+        # 60초 이전 기록 제거
+        _rpm_tracker[key] = [t for t in _rpm_tracker[key] if now - t < 60]
+        limit = _RPM_LIMITS.get(service.split(":")[0], 15)
+        return len(_rpm_tracker[key]) < limit
+
+def record_rpm_usage(api_key: str, service: str = ""):
+    """RPM 사용 기록."""
+    with _usage_lock:
+        key = f"{api_key}:{service}"
+        _rpm_tracker[key].append(time.time())
 
 
 # ═══════════════════════ 상태 조회 ═══════════════════════
@@ -114,13 +180,27 @@ def _get_key_state_unlocked(key: str, service: str = None) -> str:
 # ═══════════════════════ 차단/기록 ═══════════════════════
 
 def mark_key_exhausted(api_key: str, service: str = ""):
-    """429 에러로 키를 해당 서비스에 대해 24시간 차단합니다."""
+    """429 에러로 키를 해당 서비스에 대해 차단합니다.
+
+    프로젝트 단위: 같은 프로젝트 키가 등록되어 있으면 전부 차단.
+    할당량은 프로젝트 단위이므로 키만 바꿔도 소용없음.
+    """
     if not api_key:
         return
     svc = service or "_global"
+    project_id = _get_project_id(api_key)
     with _usage_lock:
         _blocked_keys[api_key][svc] = time.time()
-        print(f"[키 로테이션] {mask_key(api_key)} ({service}) → 429 쿼터 초과. 24시간 차단. (다른 서비스는 사용 가능)")
+        # 같은 프로젝트의 다른 키도 차단
+        blocked_siblings = 0
+        for key, pid in _project_groups.items():
+            if pid == project_id and key != api_key:
+                _blocked_keys[key][svc] = time.time()
+                blocked_siblings += 1
+        if blocked_siblings > 0:
+            print(f"[키 로테이션] {mask_key(api_key)} ({service}) → 429 쿼터 초과. 같은 프로젝트 키 {blocked_siblings}개도 차단.")
+        else:
+            print(f"[키 로테이션] {mask_key(api_key)} ({service}) → 429 쿼터 초과. 차단됨.")
 
 
 def record_key_usage(api_key: str, service: str, count: int = 1):
