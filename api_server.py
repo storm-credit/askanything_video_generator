@@ -37,6 +37,26 @@ from modules.utils.channel_config import get_channel_preset, get_channel_names
 
 @asynccontextmanager
 async def _lifespan(app):
+    # ── 프로젝트 그룹 등록 (키 로테이션 시 같은 프로젝트 키 묶어서 차단) ──
+    from modules.utils.keys import register_project_group
+    keys = os.getenv("GEMINI_API_KEYS", "").split(",")
+    keys = [k.strip() for k in keys if k.strip()]
+    # 각 키를 개별 프로젝트로 등록 (대부분 다른 계정/프로젝트)
+    # 같은 프로젝트 키는 수동으로 그룹핑
+    _PROJECT_GROUPS = {
+        "default_gemini": ["AIzaSyDVfIF9PWmooLibIcTOoAS1MoefDwSqUOg", "AIzaSyAB9O1pITPFKJcDrCQvL70ehLAPJBI50og"],
+    }
+    for project_id, group_keys in _PROJECT_GROUPS.items():
+        matched = [k for k in keys if k in group_keys]
+        if matched:
+            register_project_group(matched, project_id)
+            print(f"[프로젝트 그룹] {project_id}: {len(matched)}개 키 등록")
+    # 나머지 키는 각각 개별 프로젝트로 등록
+    grouped = set(k for gk in _PROJECT_GROUPS.values() for k in gk)
+    for k in keys:
+        if k not in grouped:
+            register_project_group([k], f"proj_{k[:8]}")
+    print(f"[키 초기화] 총 {len(keys)}개 키, {len(_PROJECT_GROUPS)}개 프로젝트 그룹")
     yield
     _cut_executor.shutdown(wait=False)
 
