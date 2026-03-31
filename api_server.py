@@ -37,26 +37,12 @@ from modules.utils.channel_config import get_channel_preset, get_channel_names
 
 @asynccontextmanager
 async def _lifespan(app):
-    # ── 프로젝트 그룹 등록 (키 로테이션 시 같은 프로젝트 키 묶어서 차단) ──
-    from modules.utils.keys import register_project_group
-    keys = os.getenv("GEMINI_API_KEYS", "").split(",")
-    keys = [k.strip() for k in keys if k.strip()]
-    # 각 키를 개별 프로젝트로 등록 (대부분 다른 계정/프로젝트)
-    # 같은 프로젝트 키는 수동으로 그룹핑
-    _PROJECT_GROUPS = {
-        "default_gemini": ["AIzaSyDVfIF9PWmooLibIcTOoAS1MoefDwSqUOg", "AIzaSyAB9O1pITPFKJcDrCQvL70ehLAPJBI50og"],
-    }
-    for project_id, group_keys in _PROJECT_GROUPS.items():
-        matched = [k for k in keys if k in group_keys]
-        if matched:
-            register_project_group(matched, project_id)
-            print(f"[프로젝트 그룹] {project_id}: {len(matched)}개 키 등록")
-    # 나머지 키는 각각 개별 프로젝트로 등록
-    grouped = set(k for gk in _PROJECT_GROUPS.values() for k in gk)
-    for k in keys:
-        if k not in grouped:
-            register_project_group([k], f"proj_{k[:8]}")
-    print(f"[키 초기화] 총 {len(keys)}개 키, {len(_PROJECT_GROUPS)}개 프로젝트 그룹")
+    # ── ProjectQuotaManager 초기화 ──
+    from modules.utils.project_quota import quota_manager, load_project_key_map
+    project_map = {k: v for k, v in load_project_key_map().items() if any(ki.get("key") for ki in v)}
+    quota_manager.register_projects(project_map)
+    total_keys = sum(len(v) for v in project_map.values())
+    print(f"[QuotaManager] {len(project_map)}개 프로젝트, {total_keys}개 키 등록")
     yield
     _cut_executor.shutdown(wait=False)
 
@@ -2123,6 +2109,24 @@ class YouTubeUploadRequest(BaseModel):
     channel_id: str | None = None
     channel: str | None = Field(None, description="채널 프리셋 이름 (채널별 client_secret 선택용)")
     publish_at: str | None = Field(None, description="예약 공개 시간 (ISO 8601, e.g. 2026-03-20T15:00:00Z)")
+
+
+@app.get("/api/health/quota")
+async def quota_health():
+    """프로젝트 쿼터 상태 확인."""
+    from modules.utils.project_quota import quota_manager
+    return {
+        "project_count": len(quota_manager.projects),
+        "projects": quota_manager.get_status(),
+    }
+
+
+@app.post("/api/admin/quota/reset/{project_name}")
+async def reset_project_quota(project_name: str):
+    """수동 프로젝트 차단 해제."""
+    from modules.utils.project_quota import quota_manager
+    quota_manager.reset_project(project_name)
+    return {"ok": True, "project": project_name}
 
 
 @app.get("/api/youtube/status")
