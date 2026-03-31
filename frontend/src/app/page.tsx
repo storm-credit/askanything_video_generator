@@ -1348,7 +1348,11 @@ export default function Home() {
           description: finalDesc,
           tags: allTags,
           privacy: scheduleEnabled ? "private" : uploadPrivacy,
-          channel_id: ytSelectedChannel || undefined,
+          // uploadChannel에서 맞는 YouTube 채널 ID 자동 매핑
+          channel_id: (() => {
+            const matched = ytChannels.find((ch: any) => ch.title?.toLowerCase().replace(/\s/g, '') === (uploadChannel || '').toLowerCase().replace(/\s/g, ''));
+            return matched?.id || ytSelectedChannel || undefined;
+          })(),
           channel: uploadChannel || undefined,
           ...(scheduleEnabled && scheduleDate ? { publish_at: new Date(scheduleDate).toISOString() } : {}),
         };
