@@ -10,8 +10,10 @@ from modules.utils.constants import MASTER_STYLE, is_key_rotation_error
 from modules.utils.cache import get_cached_image, save_to_cache
 from modules.utils.models import get_model_chain, get_service_tag
 from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
+from modules.utils.project_quota import quota_manager
 
-MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
+MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수
+MAX_PROJECT_RETRIES = 5  # 프로젝트 전환 최대 횟수
 MAX_VISION_VERIFY_RETRIES = 1  # 이미지-프롬프트 불일치 시 재생성 횟수
 
 
@@ -39,6 +41,42 @@ def _verify_image_matches_prompt(image_bytes: bytes, prompt: str, api_key: str) 
     except Exception as e:
         print(f"  [Vision 검증] 스킵 (에러: {e})")
         return True  # 검증 실패 시 통과 (이미지 생성 자체는 유지)
+
+
+def generate_image_with_quota(prompt: str, index: int, topic_folder: str = "default_topic",
+                              model_override: str | None = None, topic: str = "") -> str:
+    """QuotaManager 기반 이미지 생성 — 프로젝트 단위 관리.
+
+    기존 generate_image_imagen()을 감싸서 프로젝트 선택 → 생성 → 결과 보고.
+    다른 모듈에서 이걸 import해서 쓰면 됨.
+    """
+    last_error = None
+    for attempt in range(MAX_PROJECT_RETRIES):
+        try:
+            project_name, api_key, key_alias = quota_manager.acquire()
+            print(f"[QuotaManager] 컷 {index+1} project={project_name} key={key_alias}")
+
+            result = generate_image_imagen(
+                prompt, index, topic_folder,
+                api_key=api_key, model_override=model_override, topic=topic,
+            )
+            quota_manager.mark_success(project_name)
+            return result
+
+        except Exception as e:
+            last_error = e
+            error_text = str(e).lower()
+            print(f"[QuotaManager] 컷 {index+1} 실패 project={project_name} error={error_text[:150]}")
+
+            if "429" in error_text or "resource_exhausted" in error_text:
+                quota_manager.mark_rate_limited(project_name=project_name, reason=error_text, mode="auto")
+            elif "paid plan" in error_text or "upgrade your account" in error_text:
+                quota_manager.mark_paid_only(project_name)
+            else:
+                quota_manager.mark_error(project_name=project_name, reason=error_text)
+                raise  # 429/유료 외 에러는 재시도 안 함
+
+    raise last_error or RuntimeError(f"[QuotaManager] 컷 {index+1}: 모든 프로젝트 소진")
 
 
 def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None, model_override: str | None = None, gemini_api_keys: str | None = None, topic: str = "") -> str:
