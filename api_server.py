@@ -2120,8 +2120,14 @@ async def remove_env_key(req: dict):
     env_var_map = {"gemini": "GEMINI_API_KEYS", "openai": "OPENAI_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY"}
     env_var = env_var_map.get(key_type, "GEMINI_API_KEYS")
 
-    # .env 파일 읽기
+    # .env 파일 읽기 (도커 볼륨 마운트 경로 또는 로컬)
     env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if not os.path.exists(env_path):
+        # 도커 환경: 볼륨 마운트된 경로 시도
+        for p in ["/app/.env", os.path.join(os.getcwd(), ".env")]:
+            if os.path.exists(p):
+                env_path = p
+                break
     if not os.path.exists(env_path):
         return {"ok": False, "error": ".env 파일 없음"}
 

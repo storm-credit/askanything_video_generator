@@ -22,6 +22,7 @@ services:
       - ./tiktok_tokens:/app/tiktok_tokens
       - ${DOWNLOAD_DIR:-C:/Users/Storm Credit/Downloads}:/app/downloads
       - ${OBSIDIAN_VAULT:-C:/Users/Storm Credit/Desktop/쇼츠/askanything}:/app/obsidian
+      - ./.env:/app/.env
     restart: unless-stopped
 
   frontend:
