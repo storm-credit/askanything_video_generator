@@ -5,7 +5,7 @@ import time
 from PIL import Image, ImageOps
 import io
 
-from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
+from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key, check_rpm_available, record_rpm_usage, exponential_backoff_wait
 from modules.utils.constants import MASTER_STYLE, is_key_rotation_error
 from modules.utils.cache import get_cached_image, save_to_cache
 from modules.utils.models import get_model_chain, get_service_tag
@@ -94,6 +94,12 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
 
             tried_keys.add(final_api_key)
 
+            # RPM 체크 — 한도 초과 시 잠시 대기
+            if not check_rpm_available(final_api_key, service_tag):
+                wait = exponential_backoff_wait(key_attempt, base=1.5, max_wait=10)
+                print(f"  [{model_label}] 컷 {index+1} RPM 한도 근접, {wait:.1f}초 대기...")
+                time.sleep(wait)
+
             if key_attempt > 0:
                 print(f"  [{model_label}] 컷 {index+1} 다른 키로 재시도 (시도 {key_attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_api_key)})")
 
@@ -141,6 +147,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                     raise
 
                 record_key_usage(final_api_key, service_tag)
+                record_rpm_usage(final_api_key, service_tag)
                 save_to_cache(cache_key_prompt, filename)
                 print(f"OK [아트 디렉터] 컷 {index+1} {model_label} 렌더링 완료!")
                 return filename
@@ -150,8 +157,11 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 # 429/503/유료전용 → 키 차단 후 다른 키로 전환
                 if is_key_rotation_error(error_msg):
                     mark_key_exhausted(final_api_key, service_tag)
-                    print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → 다른 키로 전환...")
-                    key_attempt += 1  # 키 전환만 카운터 증가
+                    # 지수 백오프: 다음 키 시도 전 잠시 대기
+                    backoff = exponential_backoff_wait(key_attempt, base=2.0, max_wait=30)
+                    print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → {backoff:.1f}초 대기 후 다른 키로...")
+                    time.sleep(backoff)
+                    key_attempt += 1
                     continue
                 if is_safety_error(error_msg) and safety_retry_count < 3:
                     enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count, topic=topic)
