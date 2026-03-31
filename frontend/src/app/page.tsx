@@ -2135,7 +2135,7 @@ export default function Home() {
                     const totalImages = allChannels.reduce((sum, ch) => sum + (channelPreviews[ch]?.cuts?.length || currentPreview?.cuts?.length || 0), 0);
 
                     setLogs([`🖼️ 전체 이미지 생성 시작 — ${totalChannels}채널 × ${Math.round(totalImages / totalChannels)}컷 = ${totalImages}장`]);
-                    setProgress(0);
+                    setProgress(1); // 1%로 시작해서 진행률 바 표시
 
                     for (let ci = 0; ci < allChannels.length; ci++) {
                       const ch = allChannels[ci];
@@ -2187,6 +2187,26 @@ export default function Home() {
                   확인 — 영상 만들기
                 </button>
               </div>
+              {/* 이미지 생성 진행률 바 */}
+              {progress > 0 && progress < 100 && (
+                <div className="mt-2 px-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs text-amber-400 font-medium">🖼️ 이미지 생성 중...</span>
+                    <span className="text-xs text-gray-400">{progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div className="bg-amber-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                  </div>
+                  {logs.length > 0 && (
+                    <p className="text-[10px] text-gray-500 mt-1 truncate">{logs[logs.length - 1]}</p>
+                  )}
+                </div>
+              )}
+              {progress >= 100 && (
+                <div className="mt-2 px-2">
+                  <p className="text-xs text-green-400">✅ 이미지 생성 완료!</p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
