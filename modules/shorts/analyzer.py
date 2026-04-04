@@ -206,7 +206,8 @@ Return ONLY this JSON:
         key = llm_key or get_google_key(None, service="gemini")
         if not key:
             raise RuntimeError("Gemini API 키가 없습니다.")
-        client = genai.Client(api_key=key)
+        from modules.utils.gemini_client import create_gemini_client
+        client = create_gemini_client(api_key=key)
         model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         resp = client.models.generate_content(
             model=model,

@@ -49,6 +49,14 @@ export default function Home() {
   const [showTodayModal, setShowTodayModal] = useState(false);
   const [todayTopics, setTodayTopics] = useState<any[]>([]);
   const [todayFile, setTodayFile] = useState("");
+  const [todayDate, setTodayDate] = useState<string | null>(null);
+  const [todayPrevDate, setTodayPrevDate] = useState<string | null>(null);
+  const [todayNextDate, setTodayNextDate] = useState<string | null>(null);
+
+  // 성과 대시보드
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [dashboardData, setDashboardData] = useState<Record<string, any>>({});
+  const [dashboardLoading, setDashboardLoading] = useState(false);
 
   // YouTube URL 자동 감지 (토픽 입력란에서)
   const isYouTubeUrl = (text: string) => /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)/.test(text.trim());
@@ -183,7 +191,7 @@ export default function Home() {
     sessionId: string;
     title: string;
     channel?: string;
-    cuts: { index: number; script: string; prompt: string; description?: string; image_url: string | null }[];
+    cuts: { index: number; script: string; prompt: string; description?: string; image_url: string | null; ab_variants?: string[] }[];
   };
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [editedScripts, setEditedScripts] = useState<Record<number, string>>({});
@@ -883,6 +891,12 @@ export default function Home() {
     e.preventDefault();
     if (!topic.trim()) return;
 
+    // ── 이미 생성된 미리보기가 있으면 다시 호출하지 않고 표시만 ──
+    if (Object.keys(channelPreviews).length > 0 || previewData) {
+      setPreviewMode(true);
+      return;
+    }
+
     // ── Day 파일 스크립트가 있으면 API 호출 없이 바로 배정 ──
     if (todayCuts) {
       setIsGenerating(false);
@@ -1416,15 +1430,33 @@ export default function Home() {
   return (
     <main className="min-h-screen relative flex flex-col items-center justify-center p-6 sm:p-24 bg-black overflow-hidden">
 
-      {/* 우측 상단 설정 버튼 */}
-      <button
-        onClick={() => setIsSettingsOpen(true)}
-        className={`absolute top-6 right-6 z-50 w-11 h-11 rounded-full border backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:scale-110 ${iconStyle}`}
-        title="API 키 설정"
-        aria-label="API 키 설정"
-      >
-        <Settings className="w-5 h-5" />
-      </button>
+      {/* 우측 상단 버튼들 */}
+      <div className="absolute top-6 right-6 z-50 flex gap-2">
+        <button
+          onClick={async () => {
+            setShowDashboard(true);
+            setDashboardLoading(true);
+            try {
+              const res = await fetch(`${API_BASE}/api/stats/all?refresh=true`);
+              const data = await res.json();
+              if (data.success) setDashboardData(data.channels || {});
+            } catch {}
+            setDashboardLoading(false);
+          }}
+          className={`w-11 h-11 rounded-full border backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:scale-110 ${iconStyle}`}
+          title="성과 대시보드"
+        >
+          <span className="text-lg">📊</span>
+        </button>
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          className={`w-11 h-11 rounded-full border backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:scale-110 ${iconStyle}`}
+          title="API 키 설정"
+          aria-label="API 키 설정"
+        >
+          <Settings className="w-5 h-5" />
+        </button>
+      </div>
 
       {/* 설정 모달 */}
       <AnimatePresence>
@@ -1519,6 +1551,9 @@ export default function Home() {
                       if (data.success && data.topics?.length > 0) {
                         setTodayTopics(data.topics);
                         setTodayFile(data.file || "");
+                        setTodayDate(data.current_date || null);
+                        setTodayPrevDate(data.prev_date || null);
+                        setTodayNextDate(data.next_date || null);
                         setShowTodayModal(true);
                       } else {
                         alert(`⚠️ ${data.message || "오늘 주제를 찾을 수 없습니다"}`);
@@ -2290,6 +2325,36 @@ export default function Home() {
                         </div>
                       )}
                     </div>
+                    {/* 컷1 A/B 변형 선택 */}
+                    {cut.index === 0 && cut.ab_variants && cut.ab_variants.length > 0 && (
+                      <div className="flex gap-1 mt-1">
+                        <span className="text-[9px] text-gray-500 self-center mr-1">A/B:</span>
+                        {cut.ab_variants.map((varUrl: string, vi: number) => (
+                          <button
+                            key={vi}
+                            type="button"
+                            onClick={() => {
+                              // A/B 이미지 선택 → 컷1 이미지 교체
+                              const oldUrl = cut.image_url;
+                              if (currentCh && channelPreviews[currentCh]) {
+                                setChannelPreviews(prev => {
+                                  const cp = { ...prev };
+                                  if (cp[currentCh!]) {
+                                    cp[currentCh!] = { ...cp[currentCh!], cuts: cp[currentCh!].cuts.map(c =>
+                                      c.index === 0 ? { ...c, image_url: varUrl, ab_variants: [...(c.ab_variants || []).filter(v => v !== varUrl), ...(oldUrl ? [oldUrl] : [])] } : c
+                                    )};
+                                  }
+                                  return cp;
+                                });
+                              }
+                            }}
+                            className="w-12 h-16 rounded border border-white/20 overflow-hidden hover:border-emerald-400 transition-colors"
+                          >
+                            <img src={`${API_BASE}${varUrl}`} alt={`변형 ${vi + 1}`} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {/* 스크립트 편집 */}
                     <div className="flex-1 flex flex-col gap-1.5 min-w-0">
@@ -2475,7 +2540,45 @@ export default function Home() {
               className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-900 border border-white/10 rounded-2xl w-[90vw] max-w-md max-h-[60vh] overflow-hidden z-50 flex flex-col"
             >
               <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-white">📋 오늘 할 일 — {todayFile}</h2>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={async () => {
+                      if (!todayPrevDate) return;
+                      try {
+                        const res = await fetch(`${API_BASE}/api/batch/today-topics?date=${todayPrevDate}`);
+                        const data = await res.json();
+                        if (data.success) {
+                          setTodayTopics(data.topics);
+                          setTodayFile(data.file || "");
+                          setTodayDate(data.current_date || null);
+                          setTodayPrevDate(data.prev_date || null);
+                          setTodayNextDate(data.next_date || null);
+                        }
+                      } catch {}
+                    }}
+                    disabled={!todayPrevDate}
+                    className={`text-lg font-bold ${todayPrevDate ? 'text-white hover:text-emerald-400 cursor-pointer' : 'text-gray-600 cursor-not-allowed'}`}
+                  >‹</button>
+                  <h2 className="text-lg font-bold text-white">📋 {todayFile?.replace('.md', '')}</h2>
+                  <button
+                    onClick={async () => {
+                      if (!todayNextDate) return;
+                      try {
+                        const res = await fetch(`${API_BASE}/api/batch/today-topics?date=${todayNextDate}`);
+                        const data = await res.json();
+                        if (data.success) {
+                          setTodayTopics(data.topics);
+                          setTodayFile(data.file || "");
+                          setTodayDate(data.current_date || null);
+                          setTodayPrevDate(data.prev_date || null);
+                          setTodayNextDate(data.next_date || null);
+                        }
+                      } catch {}
+                    }}
+                    disabled={!todayNextDate}
+                    className={`text-lg font-bold ${todayNextDate ? 'text-white hover:text-emerald-400 cursor-pointer' : 'text-gray-600 cursor-not-allowed'}`}
+                  >›</button>
+                </div>
                 <button onClick={() => setShowTodayModal(false)} className="text-gray-400 hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
@@ -2489,16 +2592,9 @@ export default function Home() {
                       // 주제를 검색창에 입력
                       const topicName = t.topic_group?.replace(/^[^\s]+\s*/, "") || t.topic_group;
                       setTopic(topicName);
-                      // Day 파일 스크립트가 있으면 채널별로 저장 (API 호출 없이 사용)
-                      const channelCuts: Record<string, any[]> = {};
-                      if (t.channels) {
-                        for (const [ch, chData] of Object.entries(t.channels as Record<string, any>)) {
-                          if (chData.cuts && chData.cuts.length > 0) {
-                            channelCuts[ch] = chData.cuts;
-                          }
-                        }
-                      }
-                      setTodayCuts(Object.keys(channelCuts).length > 0 ? channelCuts : null);
+                      // cutter.py가 스크립트를 생성하도록 todayCuts는 항상 null
+                      // (Day 파일 스크립트가 있어도 무시 — cutter.py 품질이 더 높음)
+                      setTodayCuts(null);
                       // Day 파일 메타데이터 저장 (업로드 시 제목/설명/해시태그 사용)
                       const channelMeta: Record<string, {title: string, description: string, hashtags: string}> = {};
                       if (t.channels) {
@@ -2529,15 +2625,21 @@ export default function Home() {
                       }
                       setShowTodayModal(false);
                     }}
-                    className="w-full text-left px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-colors"
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${t.is_completed ? 'bg-emerald-500/10 border-emerald-500/30 opacity-60' : 'bg-white/5 border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30'}`}
                   >
-                    <p className="text-white font-medium text-sm">{t.topic_group}</p>
+                    <div className="flex items-center gap-2">
+                      {t.is_completed && <span className="text-emerald-400 text-sm">✓</span>}
+                      <p className={`font-medium text-sm ${t.is_completed ? 'text-gray-400 line-through' : 'text-white'}`}>{t.topic_group}</p>
+                    </div>
                     <div className="flex gap-2 mt-1.5 flex-wrap">
-                      {Object.entries(t.channels || {}).map(([ch, data]: [string, any]) => (
-                        <span key={ch} className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-gray-400">
-                          {ch}
-                        </span>
-                      ))}
+                      {Object.entries(t.channels || {}).map(([ch, data]: [string, any]) => {
+                        const done = (t.completed_channels || []).includes(ch);
+                        return (
+                          <span key={ch} className={`text-[10px] px-2 py-0.5 rounded-full ${done ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/10 text-gray-400'}`}>
+                            {done ? '✓ ' : ''}{ch}
+                          </span>
+                        );
+                      })}
                     </div>
                   </button>
                 ))}
@@ -2955,6 +3057,66 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+      {/* 성과 대시보드 모달 */}
+      <AnimatePresence>
+        {showDashboard && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" onClick={() => setShowDashboard(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-900 border border-white/10 rounded-2xl w-[90vw] max-w-2xl max-h-[80vh] overflow-hidden z-50 flex flex-col">
+              <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-white">📊 채널 성과 대시보드</h2>
+                <button onClick={() => setShowDashboard(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {dashboardLoading ? (
+                  <p className="text-gray-400 text-center py-8">데이터 수집 중...</p>
+                ) : Object.keys(dashboardData).length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">연결된 채널이 없습니다</p>
+                ) : (
+                  Object.entries(dashboardData).map(([ch, data]: [string, any]) => {
+                    const s = data?.summary || {};
+                    const top5 = s.top_5 || [];
+                    return (
+                      <div key={ch} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-white font-bold text-sm">{ch}</h3>
+                          <span className="text-[10px] text-gray-500">{s.total_videos || 0}개 영상</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 mb-3">
+                          <div className="bg-white/5 rounded-lg p-2 text-center">
+                            <p className="text-[10px] text-gray-500">총 조회</p>
+                            <p className="text-white font-bold text-sm">{(s.total_views || 0).toLocaleString()}</p>
+                          </div>
+                          <div className="bg-white/5 rounded-lg p-2 text-center">
+                            <p className="text-[10px] text-gray-500">평균 조회</p>
+                            <p className="text-white font-bold text-sm">{(s.avg_views || 0).toLocaleString()}</p>
+                          </div>
+                          <div className="bg-white/5 rounded-lg p-2 text-center">
+                            <p className="text-[10px] text-gray-500">최근 7일</p>
+                            <p className="text-emerald-400 font-bold text-sm">{(s.recent_7d_views || 0).toLocaleString()}</p>
+                          </div>
+                        </div>
+                        {top5.length > 0 && (
+                          <div>
+                            <p className="text-[10px] text-gray-500 mb-1">Top 5</p>
+                            {top5.map((v: any, i: number) => (
+                              <div key={i} className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
+                                <span className="text-[11px] text-gray-300 truncate flex-1 mr-2">{i + 1}. {v.title}</span>
+                                <span className="text-[11px] text-white font-medium whitespace-nowrap">{(v.views || 0).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
     </main>
   );
 }

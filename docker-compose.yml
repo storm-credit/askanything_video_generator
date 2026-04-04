@@ -18,11 +18,13 @@ services:
       - ./assets:/app/assets
       - ./brand:/app/brand
       - ./client_secrets:/app/client_secrets
+      - ./client_secret.json:/app/client_secret.json:ro
       - ./youtube_tokens:/app/youtube_tokens
       - ./tiktok_tokens:/app/tiktok_tokens
       - ${DOWNLOAD_DIR:-C:/Users/Storm Credit/Downloads}:/app/downloads
       - ${OBSIDIAN_VAULT:-C:/Users/Storm Credit/Desktop/쇼츠/askanything}:/app/obsidian
       - ./.env:/app/.env
+      - ./vertex-sa-key.json:/app/vertex-sa-key.json:ro
     restart: unless-stopped
 
   frontend:

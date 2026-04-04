@@ -232,7 +232,8 @@ def _analyze_video_gemini(video_id: str) -> str:
             import google.genai as genai
             from modules.utils.keys import get_google_key
             key = get_google_key(None, service="gemini") or gemini_key
-            client = genai.Client(api_key=key)
+            from modules.utils.gemini_client import create_gemini_client
+            client = create_gemini_client(api_key=key)
 
             # 파일 업로드 + 처리 대기
             uploaded = client.files.upload(file=video_path)

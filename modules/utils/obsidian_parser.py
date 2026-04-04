@@ -150,52 +150,83 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
         # 채널별 섹션 분리
         channel_sections = re.split(r"(?=^### )", section, flags=re.MULTILINE)
 
-        for ch_section in channel_sections:
-            # 채널 헤더 추출
-            ch_match = re.match(r"^### (\w+)\s*\(([^)]+)\)", ch_section)
-            if not ch_match:
-                continue
+        has_channel_sections = any(
+            re.match(r"^### (\w+)\s*\(([^)]+)\)", cs) for cs in channel_sections
+        )
 
-            channel_name = ch_match.group(1).strip().lower()
-            # lang_hint = ch_match.group(2).strip()  # ko, en, es-LATAM 등
+        if has_channel_sections:
+            # 풀 Day 파일: 채널별 스크립트+이미지 포함
+            for ch_section in channel_sections:
+                ch_match = re.match(r"^### (\w+)\s*\(([^)]+)\)", ch_section)
+                if not ch_match:
+                    continue
 
-            if channel_name not in CHANNEL_LANG_MAP:
-                continue
+                channel_name = ch_match.group(1).strip().lower()
 
-            # 태그 기반 채널 필터링
-            if channel_name not in allowed_channels:
-                continue
+                if channel_name not in CHANNEL_LANG_MAP:
+                    continue
 
-            language = CHANNEL_LANG_MAP[channel_name]
-            lines = ch_section.split("\n")
+                if channel_name not in allowed_channels:
+                    continue
 
-            # 필드 추출
-            title = _extract_field(lines, ["제목", "Title", "Título"])
-            description = _extract_field(lines, ["설명", "Description", "Descripción"])
-            hashtags = _extract_field(lines, ["해시태그", "Hashtags"])
+                language = CHANNEL_LANG_MAP[channel_name]
+                lines = ch_section.split("\n")
 
-            if not title:
-                continue  # 제목 없으면 스킵
+                title = _extract_field(lines, ["제목", "Title", "Título", "Titulo"])
+                description = _extract_field(lines, ["설명", "Description", "Descripción", "Descripcion"])
+                hashtags = _extract_field(lines, ["해시태그", "Hashtags"])
 
-            # 8컷 스크립트+이미지 프롬프트 추출
-            cuts = _extract_cuts(lines)
+                if not title:
+                    continue
 
-            jobs.append({
-                "topic": title,  # 제목을 topic으로 사용
-                "language": language,
-                "channel": channel_name,
-                "title": title,
-                "description": description,
-                "hashtags": hashtags,
-                "cuts": cuts,  # 8컷 스크립트+이미지 프롬프트
-                "topic_group": topic_name,
-                "topic_tag": topic_tag,  # 공통/KO전용/EN전용/ES전용
-                "day_file": day_filename,
-                "source_file": day_filename,
-                "source_section": f"Topic {topic_num}",
-                "source_channel_block": f"{channel_name} ({language})",
-                "imported_at": datetime.now().isoformat(),
-            })
+                cuts = _extract_cuts(lines)
+
+                jobs.append({
+                    "topic": title,
+                    "language": language,
+                    "channel": channel_name,
+                    "title": title,
+                    "description": description,
+                    "hashtags": hashtags,
+                    "cuts": cuts,
+                    "topic_group": topic_name,
+                    "topic_tag": topic_tag,
+                    "day_file": day_filename,
+                    "source_file": day_filename,
+                    "source_section": f"Topic {topic_num}",
+                    "source_channel_block": f"{channel_name} ({language})",
+                    "imported_at": datetime.now().isoformat(),
+                })
+        else:
+            # 주제 전용 Day 파일 (v6): 채널 섹션 없음, 주제명+훅만 있음
+            # → 태그 기반으로 대상 채널 자동 배정, 스크립트는 cutter.py가 생성
+            lines = section.split("\n")
+            # "핵심 훅" 추출
+            hook = ""
+            for line in lines:
+                m = re.match(r">\s*핵심 훅:\s*(.+)", line)
+                if m:
+                    hook = m.group(1).strip()
+                    break
+
+            for channel_name in allowed_channels:
+                language = CHANNEL_LANG_MAP[channel_name]
+                jobs.append({
+                    "topic": topic_name,  # 주제명을 topic으로
+                    "language": language,
+                    "channel": channel_name,
+                    "title": topic_name,
+                    "description": hook,
+                    "hashtags": "",
+                    "cuts": [],  # 스크립트 없음 → cutter.py가 생성
+                    "topic_group": topic_name,
+                    "topic_tag": topic_tag,
+                    "day_file": day_filename,
+                    "source_file": day_filename,
+                    "source_section": f"Topic {topic_num}",
+                    "source_channel_block": f"auto ({topic_tag})",
+                    "imported_at": datetime.now().isoformat(),
+                })
 
     return jobs
 
@@ -240,17 +271,22 @@ def parse_today(vault_path: str = DEFAULT_VAULT_PATH) -> list[dict[str, Any]]:
 
 
 def get_today_topics(channel: str | None = None,
-                     vault_path: str = DEFAULT_VAULT_PATH) -> dict[str, Any]:
-    """오늘의 Day 파일에서 채널별 주제를 반환합니다.
+                     vault_path: str = DEFAULT_VAULT_PATH,
+                     target_date: Any = None) -> dict[str, Any]:
+    """Day 파일에서 채널별 주제를 반환합니다.
 
     Args:
         channel: 특정 채널만 필터 (None이면 전체)
         vault_path: 옵시디언 볼트 경로
+        target_date: 특정 날짜 (None이면 오늘)
 
     Returns:
         {"file": str, "topics": list[dict]} — 주제 그룹별 채널 데이터
     """
-    path = find_today_file(vault_path)
+    if target_date:
+        path = find_day_file_by_date(target_date, vault_path)
+    else:
+        path = find_today_file(vault_path)
     if not path:
         return {"file": None, "topics": []}
 

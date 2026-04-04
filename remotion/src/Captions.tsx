@@ -100,6 +100,47 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
     return activePhrase ? activePhrase.words : [];
   }, [phrases, currentTime]);
 
+  // 한국어 감지: CJK 문자 포함 여부
+  const isCJK = useMemo(() => {
+    return wordTimestamps.some(w => /[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/.test(w.word));
+  }, [wordTimestamps]);
+
+  // 한국어: 검은 배경 박스 + 굵은 흰 글씨 스타일 (쇼츠 트렌드)
+  if (isCJK) {
+    const phraseText = visibleWords.map(w => w.word).join(' ');
+    if (!phraseText) return null;
+
+    return (
+      <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: `${captionY}%` }}>
+        <div style={{
+          display: 'inline-flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '10px 20px',
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          borderRadius: '12px',
+          maxWidth: '88%',
+          textAlign: 'center',
+        }}>
+          <span style={{
+            fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+            fontWeight: 900,
+            fontSize: `${captionSize}px`,
+            color: '#FFFFFF',
+            textShadow: '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 0px 2px 0px #000, 0px -2px 0px #000, 2px 0px 0px #000, -2px 0px 0px #000',
+            WebkitTextStroke: '2px #000000',
+            paintOrder: 'stroke fill',
+            lineHeight: '1.4',
+            letterSpacing: '-0.5px',
+          }}>
+            {phraseText}
+          </span>
+        </div>
+      </AbsoluteFill>
+    );
+  }
+
+  // 영어/스페인어: 기존 단어별 하이라이트 스타일 유지
   return (
     <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: `${captionY}%` }}>
       <div style={{
@@ -137,11 +178,12 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
           const emphasisG = parseInt(emphasisColor.slice(3, 5), 16);
           const emphasisB = parseInt(emphasisColor.slice(5, 7), 16);
 
+          const solidOutline = '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 0px 2px 0px #000, 0px -2px 0px #000, 2px 0px 0px #000, -2px 0px 0px #000';
           const textShadow = isEmphasized
-            ? `0px 2px 16px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.6), 0px 0px 8px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.4), 0px 2px 12px rgba(0, 0, 0, 0.9)`
+            ? `${solidOutline}, 0px 0px 12px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.6)`
             : isActive
-              ? highlightGlow
-              : '0px 2px 8px rgba(0, 0, 0, 0.8)';
+              ? `${solidOutline}, 0px 0px 8px ${highlightColor}4D`
+              : solidOutline;
 
           const scale = isEmphasized ? 1.15 : 1;
 

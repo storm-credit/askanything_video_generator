@@ -28,3 +28,5 @@ remotion/public/
 
 # Claude Code local settings
 .claude/settings.local.json
+vertex-sa-key.json
+youtube_tokens/

@@ -584,7 +584,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             # Gemini 프로바이더일 때 키 로테이션 적용
             llm_key_for_request = get_google_key(llm_key_override, extra_keys=gemini_keys_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
-            cuts, topic_folder, video_title, video_tags = await loop.run_in_executor(
+            cuts, topic_folder, video_title, video_tags, video_desc = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
                     _topic,
@@ -710,6 +710,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 # 이미지 생성 (세마포어로 동시성 제한)
                 img_path = None
+                ab_variants = []
                 with image_semaphore:
                     try:
                         cut_image_key = _get_image_key()
@@ -751,6 +752,25 @@ async def generate_video_endpoint(req: GenerateRequest):
                             with errors_lock:
                                 errors.append(f"이미지: {exc}")
                             print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
+
+                # 컷1 A/B 테스트: 첫 컷 이미지 추가 2장 생성 (조회율 최적화)
+                if i == 0 and img_path:
+                    ab_variants = []
+                    for variant_idx in range(2):
+                        try:
+                            variant_key = _get_image_key()
+                            variant_filename_idx = 100 + variant_idx  # cut_100.png, cut_101.png
+                            if image_engine == "imagen":
+                                v_path = gen_image_fn(cut["prompt"], variant_filename_idx, topic_folder, variant_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=_topic)
+                            elif image_engine == "nano_banana":
+                                v_path = generate_image_nano_banana(cut["prompt"], variant_filename_idx, topic_folder, variant_key, gemini_api_keys=gemini_keys_override, topic=_topic)
+                            else:
+                                v_path = gen_image_fn(cut["prompt"], variant_filename_idx, topic_folder, variant_key, topic=_topic)
+                            if v_path:
+                                ab_variants.append(v_path)
+                                print(f"  [A/B 테스트] 컷1 변형 {variant_idx + 1} 생성 완료")
+                        except Exception as ab_exc:
+                            print(f"  [A/B 테스트] 컷1 변형 {variant_idx + 1} 실패 (무시): {ab_exc}")
 
                 # 비디오 변환과 TTS를 threading으로 병렬 실행 (데드락 방지: 직접 스레드 사용)
                 video_result = [None]  # mutable container for thread result
@@ -827,20 +847,23 @@ async def generate_video_endpoint(req: GenerateRequest):
 
                 final_visual_path = video_result[0] if video_result[0] else img_path
                 words = whisper_result[0] or []
-                return i, final_visual_path, tts_result[0], words, errors
+                return i, final_visual_path, tts_result[0], words, errors, ab_variants if i == 0 else []
 
             tasks = [loop.run_in_executor(_cut_executor, process_cut, i, cut) for i, cut in enumerate(cuts)]
             completed_count = 0
 
             all_cut_errors: dict[int, list[str]] = {}
+            cut1_ab_variants: list[str] = []
 
             for future in asyncio.as_completed(tasks):
-                i, final_visual_path, aud_path, words, errors = await future
+                i, final_visual_path, aud_path, words, errors, ab_vars = await future
                 visual_paths[i] = final_visual_path
                 audio_paths[i] = aud_path
                 word_timestamps_list[i] = words
                 if errors:
                     all_cut_errors[i + 1] = errors
+                if i == 0 and ab_vars:
+                    cut1_ab_variants = ab_vars
 
                 completed_count += 1
                 prog = 30 + int(50 * (completed_count / len(cuts)))
@@ -942,15 +965,15 @@ async def generate_video_endpoint(req: GenerateRequest):
                 abs_output = os.path.realpath(output_path)
                 safe_base = os.path.realpath("assets")
                 home_dir = os.path.realpath(os.path.expanduser("~"))
-                try:
-                    _P(abs_output).relative_to(safe_base)
-                    path_ok = True
-                except ValueError:
+                dl_dir = os.path.realpath(os.environ.get("DOWNLOAD_DIR", os.path.join(home_dir, "Downloads")))
+                path_ok = False
+                for base in [safe_base, home_dir, dl_dir]:
                     try:
-                        _P(abs_output).relative_to(home_dir)
+                        _P(abs_output).relative_to(base)
                         path_ok = True
+                        break
                     except ValueError:
-                        path_ok = False
+                        continue
                 if not path_ok:
                     yield {"data": "ERROR|[보안 오류] 지정 경로가 허용 범위(assets/ 또는 홈 디렉토리)를 벗어납니다.\n"}
                 else:
@@ -1202,7 +1225,7 @@ async def prepare_endpoint(req: PrepareRequest):
 
             yield {"data": f"[기획] '{prep_topic.split(chr(10))[0]}' 스크립트 생성 중...\n"}
 
-            cuts, topic_folder, video_title, video_tags = await loop.run_in_executor(
+            cuts, topic_folder, video_title, video_tags, video_desc = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
                     prep_topic, api_key_override=req.apiKey, lang=req.language,
@@ -1294,14 +1317,31 @@ async def prepare_endpoint(req: PrepareRequest):
             _cleanup_sessions()
             session_id = _uuid.uuid4().hex
             with _session_lock:
+                _ab = []
+                try:
+                    _ab = cut1_ab_variants
+                except NameError:
+                    pass
+                _vdesc = ""
+                try:
+                    _vdesc = video_desc
+                except NameError:
+                    pass
+                _vtags = []
+                try:
+                    _vtags = video_tags
+                except NameError:
+                    pass
                 _prepared_sessions[session_id] = {
                     "cuts": cuts,
                     "topic_folder": topic_folder,
                     "title": video_title,
+                    "description": _vdesc,
+                    "tags": _vtags,
                     "image_paths": image_paths,
                     "topic": req.topic,
                     "language": req.language,
-                    # API 키는 세션에 저장하지 않음 (보안) — 렌더 요청 시 재전달 필요
+                    "cut1_ab_variants": _ab,
                     "_created": _time.time(),
                 }
 
@@ -1333,17 +1373,32 @@ async def prepare_endpoint(req: PrepareRequest):
                     idx = rel.find("assets/")
                     if idx >= 0:
                         img_url = f"/{rel[idx:]}"
-                preview_cuts.append({
+                cut_data: dict = {
                     "index": i,
                     "script": cut["script"],
                     "prompt": cut.get("prompt", ""),
                     "description": cut.get("description", ""),
                     "image_url": img_url,
-                })
+                }
+                # 컷1 A/B 변형 이미지 URL
+                if i == 0 and _ab:
+                    ab_urls = []
+                    for vp in _ab:
+                        if vp and os.path.exists(vp):
+                            vrel = vp.replace("\\", "/")
+                            vidx = vrel.find("assets/")
+                            if vidx >= 0:
+                                ab_urls.append(f"/{vrel[vidx:]}")
+                    if ab_urls:
+                        cut_data["ab_variants"] = ab_urls
+                preview_cuts.append(cut_data)
 
             import json
             yield {"data": "PROG|100\n"}
-            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'cuts': preview_cuts}, ensure_ascii=False)}\n"}
+            _tags_str = " ".join(_vtags) if '_vtags' in dir() else ""
+            _desc_str = _vdesc if '_vdesc' in dir() else ""
+            _upload_desc = f"{_desc_str}\n\n{_tags_str}".strip() if _desc_str else _tags_str
+            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'description': _upload_desc, 'tags': _vtags if '_vtags' in dir() else [], 'cuts': preview_cuts}, ensure_ascii=False)}\n"}
 
         except Exception as e:
             traceback.print_exc()
@@ -2066,7 +2121,7 @@ async def generate_scripts(req: GenerateScriptsRequest):
     try:
         from modules.gpt.cutter import generate_cuts
         # Gemini 우선, 실패 시 자동 폴백
-        cuts_list, _folder, title, tags = generate_cuts(topic, lang=req.lang, channel=req.channel, llm_provider="gemini")
+        cuts_list, _folder, title, tags, _desc = generate_cuts(topic, lang=req.lang, channel=req.channel, llm_provider="gemini")
 
         # 이미지 수에 맞춤
         img_count = len(_glob_mod.glob(os.path.join(folder_path, "images", "cut_*.png")))
@@ -2188,12 +2243,28 @@ async def remove_env_key(req: dict):
     for line in lines:
         if line.startswith(f"{env_var}="):
             keys = line.strip().split("=", 1)[1].split(",")
-            # 마스킹 패턴: "AIzaSyDq***wg" → 앞6자 + 끝2자
+            # 마스킹 패턴 유연 매칭: 프론트가 보내는 형식에 관계없이 앞/뒤 글자로 매칭
             filtered = []
             for k in keys:
                 k = k.strip()
-                key_masked = k[:6] + "***" + k[-2:] if len(k) > 8 else k
-                if key_masked == masked or masked in key_masked:
+                if not k:
+                    continue
+                # 여러 마스킹 길이로 매칭 시도 (앞6~10 + 뒤2~4)
+                matched = False
+                for prefix_len in range(6, min(len(k), 12)):
+                    for suffix_len in range(2, min(len(k) - prefix_len, 5)):
+                        candidate = k[:prefix_len] + "***" + k[-suffix_len:]
+                        if candidate == masked:
+                            matched = True
+                            break
+                    if matched:
+                        break
+                # 추가: "AIza ... R7ko" 같은 공백 포함 형식도 매칭
+                if not matched and "..." in masked:
+                    parts = masked.replace(" ", "").split("...")
+                    if len(parts) == 2 and k.startswith(parts[0]) and k.endswith(parts[1]):
+                        matched = True
+                if matched:
                     removed += 1
                     print(f"[키 제거] {key_masked} 제거됨")
                 else:
@@ -2533,7 +2604,7 @@ async def batch_start():
                     for _attempt in range(max(count_google_keys(), 1)):
                         llm_key = get_google_key(None, service="gemini", exclude=_excluded) if job["llm_provider"] == "gemini" else None
                         try:
-                            cuts, topic_folder, title, _tags = await loop.run_in_executor(
+                            cuts, topic_folder, title, _tags, _desc = await loop.run_in_executor(
                                 None, lambda k=llm_key: generate_cuts(job["topic"], lang=job["language"], llm_provider=job["llm_provider"], llm_key_override=k)
                             )
                             break
@@ -2757,6 +2828,36 @@ async def batch_import_day(file_path: str = None, date: str = None):
     }
 
 
+@app.get("/api/stats/channel/{channel}")
+async def get_channel_stats(channel: str, refresh: bool = False):
+    """채널 영상 통계 조회. refresh=true면 YouTube에서 새로 가져옴."""
+    from modules.utils.youtube_stats import fetch_channel_stats, get_cached_stats
+    if not refresh:
+        cached = get_cached_stats(channel)
+        if cached:
+            return {"success": True, **cached}
+    stats = fetch_channel_stats(channel)
+    if not stats.get("videos"):
+        return {"success": False, "message": f"{channel} 채널 통계 수집 실패", "channel": channel}
+    return {"success": True, **stats}
+
+
+@app.get("/api/stats/all")
+async def get_all_channel_stats(refresh: bool = False):
+    """모든 채널 통계 한번에 조회."""
+    from modules.utils.youtube_stats import fetch_all_channels_stats, get_cached_stats, _load_channel_ids
+    channels = _load_channel_ids()
+    results = {}
+    for ch in channels:
+        if not refresh:
+            cached = get_cached_stats(ch)
+            if cached:
+                results[ch] = cached
+                continue
+        results[ch] = fetch_all_channels_stats().get(ch, {})
+    return {"success": True, "channels": results}
+
+
 @app.post("/api/batch/import-today")
 async def batch_import_today():
     """오늘 날짜의 Day 파일을 자동 감지하여 batch 큐에 등록합니다."""
@@ -2770,24 +2871,77 @@ async def batch_import_today():
 
 
 @app.get("/api/batch/today-topics")
-async def batch_today_topics(channel: str | None = None):
-    """오늘 Day 파일의 주제 목록을 반환합니다 (큐 등록 없이).
+async def batch_today_topics(channel: str | None = None, date: str | None = None):
+    """Day 파일의 주제 목록을 반환합니다. 완료 상태 + Day 네비게이션 포함.
 
     Args:
-        channel: 특정 채널만 필터 (예: askanything, wonderdrop). None이면 전체.
+        channel: 특정 채널만 필터. None이면 전체.
+        date: YYYY-MM-DD 형식. None이면 오늘.
     """
-    from modules.utils.obsidian_parser import get_today_topics
-    result = get_today_topics(channel=channel)
+    from modules.utils.obsidian_parser import get_today_topics, find_day_file_by_date, list_day_files
+    from datetime import datetime as _dt, timedelta
+
+    # 날짜 파싱
+    if date:
+        try:
+            target_date = _dt.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            target_date = _dt.now()
+    else:
+        target_date = _dt.now()
+
+    result = get_today_topics(channel=channel, target_date=target_date)
     if not result.get("file"):
-        from datetime import datetime as _dt
-        today = _dt.now()
-        return {"success": False, "message": f"오늘({today.month}-{today.day}) Day 파일을 찾을 수 없습니다", "topics": []}
+        return {"success": False, "message": f"{target_date.month}-{target_date.day} Day 파일을 찾을 수 없습니다", "topics": [], "current_date": target_date.strftime("%Y-%m-%d")}
+
+    # 완료 상태 체크: assets/{topic_slug}_{channel}/ 폴더 존재 여부
+    for topic in result["topics"]:
+        topic_name = topic.get("topic_group", "")
+        # 슬러그 생성 (특수문자 제거)
+        slug = re.sub(r"[^\w\s-]", "", topic_name, flags=re.UNICODE).strip()
+        slug = re.sub(r"\s+", "_", slug).strip("_")
+        completed_channels = []
+        for ch in topic.get("channels", {}):
+            folder = f"{slug}_{ch}"
+            folder_path = os.path.join("assets", folder)
+            # 이미지가 있으면 완료로 판단
+            img_dir = os.path.join(folder_path, "images")
+            if os.path.isdir(img_dir) and len(os.listdir(img_dir)) > 0:
+                completed_channels.append(ch)
+        topic["completed_channels"] = completed_channels
+        topic["is_completed"] = len(completed_channels) >= len(topic.get("channels", {})) and len(completed_channels) > 0
+
+    # 이전/다음 Day 파일 찾기
+    day_files = sorted(list_day_files())
+    current_file = result["file"]
+    current_idx = -1
+    for i, f in enumerate(day_files):
+        if os.path.basename(f) == current_file:
+            current_idx = i
+            break
+
+    prev_date = None
+    next_date = None
+    if current_idx > 0:
+        # 이전 파일에서 날짜 추출: Day XX (M-DD).md
+        prev_name = os.path.basename(day_files[current_idx - 1])
+        m = re.search(r"\((\d+)-(\d+)\)", prev_name)
+        if m:
+            prev_date = f"{target_date.year}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
+    if current_idx >= 0 and current_idx < len(day_files) - 1:
+        next_name = os.path.basename(day_files[current_idx + 1])
+        m = re.search(r"\((\d+)-(\d+)\)", next_name)
+        if m:
+            next_date = f"{target_date.year}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
 
     return {
         "success": True,
         "file": result["file"],
         "topics": result["topics"],
         "total": len(result["topics"]),
+        "current_date": target_date.strftime("%Y-%m-%d"),
+        "prev_date": prev_date,
+        "next_date": next_date,
     }
 
 

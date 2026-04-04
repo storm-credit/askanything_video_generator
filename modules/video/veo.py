@@ -82,7 +82,8 @@ def generate_video_veo(
                 break  # 이 모델에 사용 가능한 키 없음 → 다음 모델로
 
             tried_keys.add(final_key)
-            client = genai.Client(api_key=final_key)
+            from modules.utils.gemini_client import create_gemini_client
+            client = create_gemini_client(api_key=final_key)
 
             if attempt > 0:
                 print(f"-> [{model_label}] 컷 {index+1} 다른 키로 재시도 중... (시도 {attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_key)})")

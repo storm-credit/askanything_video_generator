@@ -74,8 +74,8 @@ def _extract_json(text: str) -> dict | list | None:
             return None
 
 
-def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str, list[str]]:
-    """LLM 응답 텍스트에서 cuts 데이터, 제목, 태그를 파싱합니다."""
+def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str, list[str], str]:
+    """LLM 응답 텍스트에서 cuts 데이터, 제목, 태그, 설명을 파싱합니다."""
     if not content:
         raise ValueError("LLM 응답 content가 비어 있습니다.")
     data = _extract_json(content)
@@ -85,8 +85,9 @@ def _parse_cuts(content: str) -> tuple[list[dict[str, str]], str, list[str]]:
     if not cuts:
         raise ValueError("LLM 응답에 유효한 cuts가 없습니다.")
     title = data.get("title", "").strip()
-    tags = data.get("tags", ["#Shorts"])
-    return cuts, title, tags
+    tags = data.get("tags", [])
+    description = data.get("description", "").strip()
+    return cuts, title, tags, description
 
 
 _CUTS_JSON_SCHEMA = {
@@ -98,6 +99,7 @@ _CUTS_JSON_SCHEMA = {
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
+                "description": {"type": "string"},
                 "tags": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -116,7 +118,7 @@ _CUTS_JSON_SCHEMA = {
                     },
                 },
             },
-            "required": ["title", "tags", "cuts"],
+            "required": ["title", "description", "tags", "cuts"],
             "additionalProperties": False,
         },
     },
@@ -126,6 +128,7 @@ _GEMINI_RESPONSE_SCHEMA = {
     "type": "OBJECT",
     "properties": {
         "title": {"type": "STRING"},
+        "description": {"type": "STRING"},
         "tags": {
             "type": "ARRAY",
             "items": {"type": "STRING"},
@@ -143,7 +146,7 @@ _GEMINI_RESPONSE_SCHEMA = {
             },
         },
     },
-    "required": ["title", "tags", "cuts"],
+    "required": ["title", "description", "tags", "cuts"],
 }
 
 
@@ -191,10 +194,10 @@ _GEMINI_CACHE_MAX = 20
 
 def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
     """Google Gemini API로 기획안을 생성합니다 (google-genai SDK). 시스템 프롬프트 캐싱 지원."""
-    from google import genai
     from google.genai import types
+    from modules.utils.gemini_client import create_gemini_client, get_backend_label
     model_name = model_override or os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
-    client = genai.Client(api_key=api_key)
+    client = create_gemini_client(api_key=api_key)
 
     # Context Caching: 시스템 프롬프트를 캐시하여 토큰 비용 절감
     # 캐시 키에 프롬프트 해시 포함 (lang/channel 변경 시 잘못된 캐시 사용 방지)
@@ -283,8 +286,8 @@ def _request_claude(api_key: str, system_prompt: str, user_content: str, model_o
     return (response.content[0].text or "").strip()
 
 
-def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> tuple[list[dict[str, str]], str, list[str]]:
-    """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다. (cuts, title, tags) 반환."""
+def _request_cuts(provider: str, api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> tuple[list[dict[str, str]], str, list[str], str]:
+    """지정된 LLM 프로바이더로 컷 데이터를 요청하고 파싱합니다. (cuts, title, tags, description) 반환."""
     if provider == "gemini":
         content = _request_gemini(api_key, system_prompt, user_content, model_override)
     elif provider == "claude":
@@ -435,7 +438,8 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 {
   "title": "[자극적이고 클릭을 부르는 한국어 제목 (15자 이내, ~하면 생기는 일, ~의 비밀 등)]",
-  "tags": ["#Shorts", "#주제관련태그1", "#주제관련태그2", "#주제관련태그3"],
+  "description": "[쇼츠 설명: 1~2문장, 호기심 유발, 교과서 금지]",
+  "tags": ["#주제관련태그1", "#주제관련태그2", "#주제관련태그3", "#주제관련태그4"],
   "cuts": [
     {
       "description": "[컷 묘사 (한국어)] [감정태그]",
@@ -568,7 +572,8 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 
 {
   "title": "[Click-bait English title (max 8 words)]",
-  "tags": ["#Shorts", "#TopicTag1", "#TopicTag2", "#TopicTag3"],
+  "description": "[Shorts description: 1-2 sentences, curiosity-driven, no textbook]",
+  "tags": ["#TopicTag1", "#TopicTag2", "#TopicTag3", "#TopicTag4"],
   "cuts": [
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
@@ -710,7 +715,8 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 
 {
   "title": "[Título impactante en español neutro (máx 10 palabras)]",
-  "tags": ["#Shorts", "#TagEspañol1", "#EnglishTag1", "#TagEspañol2", "#EnglishTag2"],
+  "description": "[Descripción para Shorts: 1-2 oraciones, curiosidad, no académico]",
+  "tags": ["#TagEspañol1", "#EnglishTag1", "#TagEspañol2", "#EnglishTag2"],
   "cuts": [
     {
       "description": "[Descripción del corte (inglés)] [EMOTION_TAG]",
@@ -851,7 +857,8 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 
 {
   "title": "[Título llamativo en español (máx 10 palabras, estilo curiosidad)]",
-  "tags": ["#Shorts", "#TagEspañol1", "#TagEspañol2", "#TagEspañol3", "#DatosCuriosos"],
+  "description": "[Descripción para Shorts: 1-2 oraciones, energético, curiosidad]",
+  "tags": ["#TagEspañol1", "#TagEspañol2", "#TagEspañol3", "#DatosCuriosos"],
   "cuts": [
     {
       "description": "[Descripción del corte (inglés)] [EMOTION_TAG]",
@@ -926,8 +933,9 @@ These English keywords help YouTube's algorithm classify this content for US aud
     provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
 
     if llm_provider == "gemini":
-        final_api_key = llm_key_override or os.getenv("GEMINI_API_KEY")
-        if not final_api_key:
+        final_api_key = llm_key_override or os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEYS", "").split(",")[0].strip()
+        # Vertex AI 서비스 계정 모드에서는 API 키 없이도 동작
+        if not final_api_key and os.getenv("GEMINI_BACKEND", "ai_studio") != "vertex_ai":
             raise EnvironmentError("Gemini API 키가 제공되지 않았습니다. .env에 GEMINI_API_KEY를 설정하세요.")
     elif llm_provider == "claude":
         final_api_key = llm_key_override or os.getenv("ANTHROPIC_API_KEY")
@@ -1019,7 +1027,7 @@ These English keywords help YouTube's algorithm classify this content for US aud
     parse_failures = 0  # JSON 파싱 실패 카운터 (429 카운터와 분리)
     for attempt in range(max_key_attempts):
         try:
-            cuts, title, tags = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
+            cuts, title, tags, video_description = _request_cuts(llm_provider, current_key, system_prompt, user_content, model_override=llm_model)
             break  # 성공
         except ValueError as ve:
             # JSON 파싱 실패 — 최대 2회 재시도 (429 카운터와 별개)
@@ -1105,7 +1113,7 @@ These English keywords help YouTube's algorithm classify this content for US aud
             retry_user = f"주제: '{_safe_title}'." + retry_expansion
         _original_cuts = cuts[:]
         try:
-            expanded_cuts, title, tags = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
+            expanded_cuts, title, tags, _ = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
             # 기존 컷이 보존되었는지 검증: 원본 스크립트가 확장 결과에 포함되어야 함
             original_scripts = {c["script"].strip()[:30] for c in _original_cuts}
             expanded_scripts = {c["script"].strip()[:30] for c in expanded_cuts}
@@ -1256,7 +1264,7 @@ These English keywords help YouTube's algorithm classify this content for US aud
                 cuts[_ci]["script"] = _scr
                 print(f"[금지 표현 재필터] Cut {_ci+1}")
 
-    return cuts, topic_folder, title, tags
+    return cuts, topic_folder, title, tags, video_description
 
 
 def _verify_subject_match(cuts: list[dict], topic: str,
@@ -1664,9 +1672,9 @@ def _validate_region_style(cuts: list[dict], channel: str | None = None) -> list
 
 def _request_gemini_freeform(api_key: str, prompt: str, model: str | None = None) -> str:
     """Gemini에 자유형 프롬프트 전송 (스키마 없음)."""
-    from google import genai
     from google.genai import types
-    client = genai.Client(api_key=api_key)
+    from modules.utils.gemini_client import create_gemini_client
+    client = create_gemini_client(api_key=api_key)
     model_name = model or "gemini-2.5-flash"
     response = client.models.generate_content(
         model=model_name,

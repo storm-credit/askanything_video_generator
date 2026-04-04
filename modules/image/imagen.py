@@ -20,14 +20,14 @@ MAX_VISION_VERIFY_RETRIES = 1  # 이미지-프롬프트 불일치 시 재생성 
 def _verify_image_matches_prompt(image_bytes: bytes, prompt: str, api_key: str) -> bool:
     """Gemini Vision으로 생성된 이미지가 프롬프트와 일치하는지 검증."""
     try:
-        from google import genai
         from google.genai import types
+        from modules.utils.gemini_client import create_gemini_client
         import base64
 
         # 프롬프트에서 핵심 피사체 추출 (첫 50자)
         subject_hint = prompt.replace(MASTER_STYLE, "").strip()[:100]
 
-        client = genai.Client(api_key=api_key)
+        client = create_gemini_client(api_key=api_key)
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=[
@@ -231,8 +231,8 @@ NANO_BANANA_MODELS = [
 
 def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_key: str | None = None, gemini_api_keys: str | None = None, topic: str = "") -> str:
     """Nano Banana (Gemini 네이티브 이미지 생성)로 이미지를 생성합니다. Imagen 폴백용. 키 로테이션 지원."""
-    from google import genai
     from google.genai import types
+    from modules.utils.gemini_client import create_gemini_client
 
     enhanced_prompt = MASTER_STYLE + prompt
 
@@ -264,7 +264,7 @@ def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_k
                 else:
                     print(f"  [Nano Banana] 컷 {index+1} 다른 키로 재시도 ({key_attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_key)})")
 
-                client = genai.Client(api_key=final_key)
+                client = create_gemini_client(api_key=final_key)
                 response = client.models.generate_content(
                     model=model_name,
                     contents=enhanced_prompt,
@@ -322,11 +322,11 @@ def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_k
 
 def _generate_imagen(api_key: str, prompt: str, model_name: str) -> bytes:
     """google-genai SDK로 Imagen 이미지를 생성합니다."""
-    from google import genai
     from google.genai import types
+    from modules.utils.gemini_client import create_gemini_client
 
     safety_level = os.getenv("IMAGEN_SAFETY_FILTER", "BLOCK_LOW_AND_ABOVE")
-    client = genai.Client(api_key=api_key)
+    client = create_gemini_client(api_key=api_key)
     response = client.models.generate_images(
         model=model_name,
         prompt=prompt,
