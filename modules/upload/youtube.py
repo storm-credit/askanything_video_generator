@@ -251,6 +251,7 @@ def upload_video(
     status_body: dict = {
         "privacyStatus": "private" if publish_at else privacy,
         "selfDeclaredMadeForKids": False,
+        "containsSyntheticMedia": True,  # AI 생성/변경 콘텐츠 자동 선언
     }
     if publish_at:
         status_body["publishAt"] = publish_at

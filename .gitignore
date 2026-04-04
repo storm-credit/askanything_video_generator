@@ -30,3 +30,6 @@ remotion/public/
 .claude/settings.local.json
 vertex-sa-key.json
 youtube_tokens/
+vertex-sa-key-wonderdrop.json
+vertex-sa-key-exploratodo.json
+vertex-sa-key-prismtale.json

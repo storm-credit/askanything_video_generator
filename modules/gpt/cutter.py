@@ -188,12 +188,21 @@ def _request_openai_freeform(api_key: str, system_prompt: str, user_content: str
     return (response.choices[0].message.content or "").strip()
 
 
+_last_gemini_request_time = 0.0  # RPM 제어용 전역 타임스탬프
 _gemini_cache: OrderedDict[str, object] = OrderedDict()  # LRU: 접근 시 move_to_end, 초과 시 popitem(last=False)
 _gemini_cache_lock = threading.Lock()
 _GEMINI_CACHE_MAX = 20
 
 def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
     """Google Gemini API로 기획안을 생성합니다 (google-genai SDK). 시스템 프롬프트 캐싱 지원."""
+    global _last_gemini_request_time
+    import time as _time
+    # RPM 제어: 최소 15초 간격
+    elapsed = _time.time() - _last_gemini_request_time
+    if elapsed < 15:
+        _time.sleep(15 - elapsed)
+    _last_gemini_request_time = _time.time()
+
     from google.genai import types
     from modules.utils.gemini_client import create_gemini_client, get_backend_label
     model_name = model_override or os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
@@ -352,9 +361,12 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 - ❌ "이건 흥미로운 사실이에요" ❌ "오늘 알아볼 건..." ❌ "여러분 혹시..."
 - ✅ "블랙홀에 빠지면 몸이 늘어나요" ✅ "이건 존재하면 안 돼요" ✅ "이 행성엔 다이아몬드 비가 내려요"
 
-📊 [채널 데이터 기반 — askanything 최적화]
-- 잘 되는 주제: 우주 괴현상, 이상한 행성, 공룡/고생물, 블랙홀, 극한 자연
+📊 [채널 데이터 기반 — askanything 최적화] (2026-04-04 기준)
+- 총 11.5만 조회, 평균 2,314 (50영상)
+- 잘 되는 주제: 우주행성(평균 3.2K+), 공룡/고생물(히트시 폭발 — 소드 드래곤 12.8K), 지구/자연(2.4K+)
+- 신규 히트: "북해 충돌 흔적" 4.6K, "썩은 달걀 외계행성" 4.2K
 - 잘 되는 제목 패턴: "하루가 1년보다 긴 행성이 있다?" 같은 즉시 상상되는 역설형
+- ⚠️ 인체/심리형 주제 약세 (평균 1.2K, 4채널 공통 저조) — 후순위로 배정
 - ❌ 교과서형 제목 금지: "~의 원리", "~하는 이유", "~에 대해 알아보자" → FAIL
 - ❌ 설명형 도입 금지: "오늘은 ~를 소개합니다" → FAIL
 - ✅ 제목은 "듣기 전에 이미 궁금한가?"가 기준. 설명 없이 한 문장만 봐도 그림이 그려져야 함
@@ -485,9 +497,11 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 - ❌ "This is an interesting fact" ❌ "Today we'll look at..." ❌ "Have you ever wondered..."
 - ✅ "A black hole stretches you like spaghetti" ✅ "This should not exist" ✅ "It rains diamonds on this planet"
 
-📊 [CHANNEL DATA — wonderdrop optimization]
-- CTR 4.3% (good) but low viral ceiling — need sharper hooks to trigger feed expansion
-- Top performers: dinosaur discoveries, weird exoplanets, black holes, visual science
+📊 [CHANNEL DATA — wonderdrop optimization] (2026-04-04 data)
+- Total 27.7K views, avg 555 per video (50 videos) — lowest of 4 channels
+- Top performers: "Sword Dragon" 1.3K, "Moon Moving Away" 1.3K, "Honey Egyptian Tombs" 1.2K, "Lightning vs Sun" 1.2K
+- Strong categories: dinosaur/fossil (avg 750+), space/astronomy (avg 650+), history facts (avg 600+)
+- ⚠️ Human body/psychology topics extremely weak (under 100 views in EN) — AVOID
 - ❌ Explanatory "How/Why" titles perform worse: "How Do Whales Hold Their Breath" → weak
 - ✅ Declarative/visual titles perform best: "The Exoplanet That Smells Like Rotten Eggs" → strong
 - ❌ Videos over 45 seconds tend to underperform — keep it tight
@@ -619,14 +633,17 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - ❌ "Esto es un dato interesante" ❌ "Hoy vamos a ver..." ❌ "¿Alguna vez te preguntaste...?"
 - ✅ "Esto no debería existir" ✅ "Un agujero negro te estira como espagueti" ✅ "Llueven diamantes en este planeta"
 
-📊 [DATOS DEL CANAL — prismtale optimización]
-- Canal estable: 1,000–1,800 views distribuidos uniformemente (sin dependencia de un solo hit)
-- Temas fuertes: pingüinos, miel 3000 años, cerebro, tiempo, Aurora, planetas, dinosaurios — MUY amplio
+📊 [DATOS DEL CANAL — prismtale optimización] (datos 2026-04-04)
+- Total 70,642 views, promedio 1,859 (38 videos) — CRECIMIENTO MÁS RÁPIDO: 4,111 views/día últimos 7 días
+- Top: "cráter oculto bajo el mar" 15.9K, "T-Rex dientes" 4.1K, "Pingüinos Antártida" 3.9K
+- Temas fuertes: misterio/oculto, océano profundo, dinosaurios, planetas extremos
 - ✅ Tono oscuro y cinematográfico: sombras, misterio, iluminación teal/orange, fondos oscuros
-- ✅ Títulos que funcionan: afirmaciones intrigantes, no preguntas genéricas
+- ✅ Frame "oculto/misterio/secreto" domina — usarlo activamente
+- ✅ Alta tasa de likes en temas de animales + dinosaurios (buen engagement)
+- ⚠️ Temas de cuerpo humano/psicología son débiles en TODOS los canales — evitar
 - ❌ Temas demasiado agresivos/exagerados (supervolcano=14 views, crows=1 view) → fracasan
 - ❌ No todo funciona "oscuro" — el tema debe tener misterio natural, no forzado
-- CTR 2.2% es bajo → mejorar packaging visual del primer corte
+- Canal en rápido crecimiento — mantener frecuencia de subida es CRUCIAL
 
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 38–48 seg total)]
 1. Corte 1 — Gancho: Suelta el dato más impactante como afirmación directa. SIN preguntas. ★ REGLA DE 1.7 SEG: el image_prompt DEBE tener impacto visual extremo (escala, contraste de color, surrealismo).
@@ -762,13 +779,16 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - ❌ "Hoy vamos a ver algo curioso" ❌ "¿Alguna vez te has preguntado...?"
 - ✅ "¡Esto NO debería existir!" ✅ "¡Llueven diamantes en este planeta!" ✅ "¡3 corazones! ¡Sí, tres!"
 
-📊 [DATOS DEL CANAL — exploratodo optimización]
-- Un video (HD 137010 b) generó 67% de todas las views — exoplanetas son el tema más fuerte
-- Temas fuertes: exoplanetas, Hubble/eventos espaciales, dinosaurios, criaturas marinas extrañas
-- ✅ Cuando el tema es espacio/exoplanetas: maximizar colores vibrantes, escala cósmica, efectos de brillo
-- ✅ Títulos que funcionan: "Descubren un planeta de tamaño terrestre", "¿Un exoplaneta que huele a huevo podrido?"
+📊 [DATOS DEL CANAL — exploratodo optimización] (datos 2026-04-04)
+- Total 272,808 views, promedio 5,456 (50 videos) — el canal con más views totales
+- HD 137010 b = 173K (64% de todas las views) — dependencia de un solo hit sigue siendo el problema principal
+- Nuevos hits: "Hubble cometa" 9.8K, "Dragón Espada" 9.7K, "Ballenas" 8.9K (tema animal MUY fuerte en ES)
+- Temas fuertes: exoplanetas, Hubble/eventos espaciales, dinosaurios, criaturas marinas, animales
+- ✅ Títulos "Descubren..." (descubrimiento) son los MÁS fuertes en ES-LATAM
+- ✅ Preguntas "¿Cómo...?" también funcionan consistentemente (2K+)
+- ⚠️ Temas de cuerpo humano/psicología son débiles en TODOS los canales — evitar
 - ❌ Cuidado con la exageración visual: colores brillantes NO justifican datos inventados
-- El canal depende de crear múltiples hits, no solo uno — mantener calidad consistente
+- ESTRATEGIA: diversificar hits — necesita múltiples videos de 5K+ en vez de depender de uno solo
 
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 35–42 seg total)]
 1. Corte 1 — Gancho: El dato más impactante como exclamación o afirmación fuerte. ★ REGLA DE 1.7 SEG: image_prompt con colores vibrantes, escenas llamativas, impacto visual máximo.
@@ -1470,9 +1490,16 @@ Return raw JSON only, no markdown code blocks."""
             if not new_val or not (0 <= idx < len(cuts)):
                 continue
 
-            # script 또는 description 수정
+            # script 또는 description 수정 (글자수 보호: 수정 후 더 짧아지면 거부)
             if field == "script" and new_val != cuts[idx].get("script"):
                 old = cuts[idx]["script"]
+                # 한국어: 수정 후 20자 미만이면 거부, 영어/스페인어: 8단어 미만이면 거부
+                if len(new_val) < len(old) * 0.7:
+                    print(f"  [구조 수정 거부] 컷{idx+1} 글자수 30%+ 감소 ({len(old)}→{len(new_val)}) — 원본 유지")
+                    continue
+                if len(new_val) < 15:
+                    print(f"  [구조 수정 거부] 컷{idx+1} 수정 후 15자 미만 ({len(new_val)}자) — 원본 유지")
+                    continue
                 cuts[idx]["script"] = new_val
                 fixed_count += 1
                 print(f"  [구조 수정] 컷{idx+1} script: '{old[:30]}...' → '{new_val[:30]}...'")
@@ -1671,7 +1698,15 @@ def _validate_region_style(cuts: list[dict], channel: str | None = None) -> list
 
 
 def _request_gemini_freeform(api_key: str, prompt: str, model: str | None = None) -> str:
-    """Gemini에 자유형 프롬프트 전송 (스키마 없음)."""
+    """Gemini에 자유형 프롬프트 전송 (스키마 없음). RPM 제어 포함."""
+    global _last_gemini_request_time
+    import time as _time
+    # RPM 제어: 최소 15초 간격 (분당 4회 이하)
+    elapsed = _time.time() - _last_gemini_request_time
+    if elapsed < 15:
+        _time.sleep(15 - elapsed)
+    _last_gemini_request_time = _time.time()
+
     from google.genai import types
     from modules.utils.gemini_client import create_gemini_client
     client = create_gemini_client(api_key=api_key)

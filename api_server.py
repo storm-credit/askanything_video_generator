@@ -490,6 +490,10 @@ async def generate_video_endpoint(req: GenerateRequest):
     gemini_keys_override = req.geminiKeys or None
 
     async def sse_generator():
+        # A/B 변형 + 메타데이터 안전 초기화
+        cut1_ab_variants: list = []
+        video_desc = ""
+        video_tags: list = []
         # 새 작업 등록 (요청별 이벤트로 격리, 자동 취소 없음)
         import time as _t
         cancel_event = threading.Event()
@@ -1207,6 +1211,10 @@ async def prepare_endpoint(req: PrepareRequest):
     """1단계: LLM 스크립트 + 이미지 생성만 수행. TTS/렌더는 하지 않음."""
 
     async def sse_generator():
+      # A/B 변형 + 메타데이터 안전 초기화
+      cut1_ab_variants: list = []
+      video_desc = ""
+      video_tags: list = []
       async with _generate_semaphore:
         # 프론트엔드 멀티키: 파라미터로 직접 전달 (os.environ 비사용)
         _gemini_keys = req.geminiKeys or None
@@ -1317,31 +1325,16 @@ async def prepare_endpoint(req: PrepareRequest):
             _cleanup_sessions()
             session_id = _uuid.uuid4().hex
             with _session_lock:
-                _ab = []
-                try:
-                    _ab = cut1_ab_variants
-                except NameError:
-                    pass
-                _vdesc = ""
-                try:
-                    _vdesc = video_desc
-                except NameError:
-                    pass
-                _vtags = []
-                try:
-                    _vtags = video_tags
-                except NameError:
-                    pass
                 _prepared_sessions[session_id] = {
                     "cuts": cuts,
                     "topic_folder": topic_folder,
                     "title": video_title,
-                    "description": _vdesc,
-                    "tags": _vtags,
+                    "description": video_desc,
+                    "tags": video_tags,
                     "image_paths": image_paths,
                     "topic": req.topic,
                     "language": req.language,
-                    "cut1_ab_variants": _ab,
+                    "cut1_ab_variants": cut1_ab_variants,
                     "_created": _time.time(),
                 }
 
@@ -1381,9 +1374,9 @@ async def prepare_endpoint(req: PrepareRequest):
                     "image_url": img_url,
                 }
                 # 컷1 A/B 변형 이미지 URL
-                if i == 0 and _ab:
+                if i == 0 and cut1_ab_variants:
                     ab_urls = []
-                    for vp in _ab:
+                    for vp in cut1_ab_variants:
                         if vp and os.path.exists(vp):
                             vrel = vp.replace("\\", "/")
                             vidx = vrel.find("assets/")
@@ -1395,10 +1388,9 @@ async def prepare_endpoint(req: PrepareRequest):
 
             import json
             yield {"data": "PROG|100\n"}
-            _tags_str = " ".join(_vtags) if '_vtags' in dir() else ""
-            _desc_str = _vdesc if '_vdesc' in dir() else ""
-            _upload_desc = f"{_desc_str}\n\n{_tags_str}".strip() if _desc_str else _tags_str
-            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'description': _upload_desc, 'tags': _vtags if '_vtags' in dir() else [], 'cuts': preview_cuts}, ensure_ascii=False)}\n"}
+            _tags_str = " ".join(video_tags)
+            _upload_desc = f"{video_desc}\n\n{_tags_str}".strip() if video_desc else _tags_str
+            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'description': _upload_desc, 'tags': video_tags, 'cuts': preview_cuts}, ensure_ascii=False)}\n"}
 
         except Exception as e:
             traceback.print_exc()
@@ -2826,6 +2818,41 @@ async def batch_import_day(file_path: str = None, date: str = None):
         "file": os.path.basename(file_path),
         "total_jobs": len(created_ids),
     }
+
+
+# ── 자동 배포 스케줄러 ──
+
+@app.get("/api/scheduler/preview")
+async def scheduler_preview(date: str | None = None):
+    """스케줄 미리보기 — 영상 생성 없이 시간 배정만."""
+    from modules.scheduler.auto_deploy import preview_schedule
+    from datetime import datetime as _dt
+    target = _dt.strptime(date, "%Y-%m-%d") if date else None
+    return preview_schedule(target)
+
+
+@app.get("/api/scheduler/status")
+async def scheduler_status():
+    """현재 배포 진행 상태."""
+    from modules.scheduler.auto_deploy import get_status
+    return get_status()
+
+
+@app.post("/api/scheduler/run")
+async def scheduler_run(date: str | None = None, dry_run: bool = False, max_per_channel: int | None = None):
+    """자동 배포 실행. dry_run=true면 스케줄만 계산."""
+    from modules.scheduler.auto_deploy import run_auto_deploy
+    from datetime import datetime as _dt
+    import asyncio
+    target = _dt.strptime(date, "%Y-%m-%d") if date else None
+
+    if dry_run:
+        result = await run_auto_deploy(target, dry_run=True, max_per_channel=max_per_channel)
+        return result
+
+    # 비동기 실행 (즉시 응답, 백그라운드에서 진행)
+    asyncio.create_task(run_auto_deploy(target, max_per_channel=max_per_channel))
+    return {"success": True, "message": "자동 배포 시작됨. /api/scheduler/status로 진행 상태 확인"}
 
 
 @app.get("/api/stats/channel/{channel}")

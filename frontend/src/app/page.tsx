@@ -1347,7 +1347,7 @@ export default function Home() {
         endpoint = "/api/youtube/upload";
         // description에서 #해시태그 자동 추출 + tags 입력란 합산
         const hashtagsInDesc = (uploadDescription.match(/#[^\s#]+/g) || []).map(t => t.slice(1));
-        const manualTags = uploadTags.split(",").map(t => t.trim()).filter(Boolean);
+        const manualTags = uploadTags.split(/[,\s]+/).map(t => t.replace(/^#/, "").trim()).filter(Boolean);
         const allTags = [...new Set([...hashtagsInDesc, ...manualTags])];
         // description에 이미 해시태그가 있으면 그대로, 없으면 tags에서 추가
         const hasHashtagsInDesc = /#[^\s#]+/.test(uploadDescription);

@@ -277,9 +277,10 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         return None
 
     # topic_folder는 "assets/폴더명" 또는 "폴더명" 형태 허용
+    # 유니코드(한글) + 콤마/괄호 등 특수문자 포함 폴더도 허용 (경로 이탈만 차단)
     folder_name = os.path.basename(topic_folder) if '/' in topic_folder or '\\' in topic_folder else topic_folder
-    if not re.match(r'^[\w\-]+$', folder_name):
-        print(f"[Remotion 보안 오류] topic_folder에 허용되지 않는 문자가 포함됨: {folder_name}")
+    if not folder_name or '..' in folder_name:
+        print(f"[Remotion 보안 오류] topic_folder가 비어 있거나 경로 이탈 시도: {folder_name}")
         return None
 
     camera = camera_style if camera_style in ("auto", "dynamic", "gentle", "static") else "dynamic"

@@ -25,6 +25,9 @@ services:
       - ${OBSIDIAN_VAULT:-C:/Users/Storm Credit/Desktop/쇼츠/askanything}:/app/obsidian
       - ./.env:/app/.env
       - ./vertex-sa-key.json:/app/vertex-sa-key.json:ro
+      - ./vertex-sa-key-wonderdrop.json:/app/vertex-sa-key-wonderdrop.json:ro
+      - ./vertex-sa-key-exploratodo.json:/app/vertex-sa-key-exploratodo.json:ro
+      - ./vertex-sa-key-prismtale.json:/app/vertex-sa-key-prismtale.json:ro
     restart: unless-stopped
 
   frontend:
