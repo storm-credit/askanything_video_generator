@@ -115,7 +115,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
     const highlightColor = getEmotionColor(emotion);
 
     return (
-      <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '42%' }}>
+      <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '47%' }}>
         <div style={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -170,7 +170,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
 
   // 영어/스페인어: 단어별 하이라이트 + 크기 강화
   return (
-    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '40%' }}>
+    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '47%' }}>
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -209,9 +209,9 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
 
           const solidOutline = '4px 4px 0px #000, -4px -4px 0px #000, 4px -4px 0px #000, -4px 4px 0px #000, 0px 4px 0px #000, 0px -4px 0px #000, 4px 0px 0px #000, -4px 0px 0px #000, 0px 0px 8px rgba(0,0,0,0.7)';
           const textShadow = isEmphasized
-            ? `${solidOutline}, 0px 0px 12px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.6)`
+            ? `${solidOutline}, 0px 0px 16px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.7), 0px 0px 32px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.3)`
             : isActive
-              ? `${solidOutline}, 0px 0px 8px ${highlightColor}4D`
+              ? `${solidOutline}, 0px 0px 12px ${highlightColor}80, 0px 0px 24px ${highlightColor}40`
               : solidOutline;
 
           // 팝업 스케일: 활성 단어 1.12, 강조 단어 1.18
