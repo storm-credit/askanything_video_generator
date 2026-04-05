@@ -107,45 +107,70 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
     return wordTimestamps.some(w => /[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/.test(w.word));
   }, [wordTimestamps]);
 
-  // 한국어: 큰 글씨 + 두꺼운 외곽선 + 배경 없음 (100만 쇼츠 스타일)
+  // 한국어: 카라오케 스타일 — 핵심 단어 노란색 + 팝업 애니메이션 (2025 트렌드)
   if (isCJK) {
-    const phraseText = visibleWords.map(w => w.word).join(' ');
-    if (!phraseText) return null;
+    if (visibleWords.length === 0) return null;
 
-    // 기본 54px → 80px로 강제 (프론트 설정보다 쇼츠 가독성 우선)
-    const cjkSize = Math.max(captionSize, 80);
+    const cjkSize = Math.max(captionSize, 95);  // 95px (100만 쇼츠 기준 90~110px)
+    const highlightColor = getEmotionColor(emotion);
 
     return (
-      <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: `${captionY}%` }}>
+      <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '42%' }}>
         <div style={{
-          display: 'inline-flex',
+          display: 'flex',
+          flexWrap: 'wrap',
           justifyContent: 'center',
           alignItems: 'center',
-          padding: '8px 16px',
           maxWidth: '92%',
+          gap: '6px',
           textAlign: 'center',
         }}>
-          <span style={{
-            fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
-            fontWeight: 900,
-            fontSize: `${cjkSize}px`,
-            color: '#FFFFFF',
-            textShadow: '3px 3px 0px #000, -3px -3px 0px #000, 3px -3px 0px #000, -3px 3px 0px #000, 0px 3px 0px #000, 0px -3px 0px #000, 3px 0px 0px #000, -3px 0px 0px #000, 4px 4px 0px #000, -4px -4px 0px #000',
-            WebkitTextStroke: '3px #000000',
-            paintOrder: 'stroke fill',
-            lineHeight: '1.3',
-            letterSpacing: '-1px',
-          }}>
-            {phraseText}
-          </span>
+          {visibleWords.map((w) => {
+            const isActive = currentTime >= w.start && currentTime <= w.end;
+            const isEmphasized = isActive && w.emphasis;
+
+            // 카라오케: 현재 단어 = 노란색, 강조 단어 = 감정 색상, 나머지 = 흰색
+            const color = isEmphasized
+              ? highlightColor
+              : isActive
+                ? '#FFE600'  // 노란색 카라오케 하이라이트
+                : '#FFFFFF';
+
+            // 팝업 애니메이션: 현재 단어 살짝 커짐
+            const scale = isActive ? 1.12 : 1;
+            const opacity = currentTime >= w.start - 0.3 ? 1 : 0;
+
+            return (
+              <span
+                key={w.index}
+                style={{
+                  fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
+                  fontWeight: 900,
+                  fontSize: `${cjkSize}px`,
+                  color: color,
+                  textShadow: '3px 3px 0px #000, -3px -3px 0px #000, 3px -3px 0px #000, -3px 3px 0px #000, 0px 3px 0px #000, 0px -3px 0px #000, 3px 0px 0px #000, -3px 0px 0px #000',
+                  WebkitTextStroke: '3px #000000',
+                  paintOrder: 'stroke fill',
+                  lineHeight: '1.3',
+                  letterSpacing: '-1px',
+                  display: 'inline-block',
+                  transform: `scale(${scale})`,
+                  opacity,
+                  transition: 'transform 0.12s ease-out',
+                }}
+              >
+                {w.word}
+              </span>
+            );
+          })}
         </div>
       </AbsoluteFill>
     );
   }
 
-  // 영어/스페인어: 기존 단어별 하이라이트 스타일 유지
+  // 영어/스페인어: 단어별 하이라이트 + 크기 강화
   return (
-    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: `${captionY}%` }}>
+    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '40%' }}>
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -190,8 +215,8 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
 
           const scale = isEmphasized ? 1.15 : 1;
 
-          // 영어/ES: 최소 72px 강제
-          const latinSize = Math.max(captionSize, 72);
+          // 영어/ES: 최소 90px 강제 (2025 트렌드)
+          const latinSize = Math.max(captionSize, 90);
 
           return (
             <span
