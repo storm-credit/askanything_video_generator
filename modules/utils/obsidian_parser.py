@@ -236,14 +236,17 @@ def find_day_file_by_date(target_date: datetime | None = None,
     """날짜로 Day 파일을 찾습니다.
 
     Args:
-        target_date: 찾을 날짜 (None이면 오늘)
+        target_date: 찾을 날짜 (None이면 오늘 KST)
         vault_path: 옵시디언 볼트 경로
 
     Returns:
         파일 경로 또는 None
     """
     if target_date is None:
-        target_date = datetime.now()
+        # Docker UTC → KST 보정 (UTC+9)
+        from datetime import timezone, timedelta
+        KST = timezone(timedelta(hours=9))
+        target_date = datetime.now(KST)
 
     # Day 파일명 패턴: Day XX (M-DD).md
     month = target_date.month
@@ -258,8 +261,8 @@ def find_day_file_by_date(target_date: datetime | None = None,
 
 
 def find_today_file(vault_path: str = DEFAULT_VAULT_PATH) -> str | None:
-    """오늘 날짜의 Day 파일을 찾습니다."""
-    return find_day_file_by_date(datetime.now(), vault_path)
+    """오늘 날짜의 Day 파일을 찾습니다 (KST 기준)."""
+    return find_day_file_by_date(None, vault_path)  # None이면 KST 자동
 
 
 def parse_today(vault_path: str = DEFAULT_VAULT_PATH) -> list[dict[str, Any]]:
