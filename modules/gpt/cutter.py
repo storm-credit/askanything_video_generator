@@ -361,6 +361,18 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 - ❌ "이건 흥미로운 사실이에요" ❌ "오늘 알아볼 건..." ❌ "여러분 혹시..."
 - ✅ "블랙홀에 빠지면 몸이 늘어나요" ✅ "이건 존재하면 안 돼요" ✅ "이 행성엔 다이아몬드 비가 내려요"
 
+★★★ [Cut 1 image_prompt — 스크롤 멈추기 필수 규칙] ★★★
+- Cut 1 이미지가 쇼츠 피드에서 스크롤을 멈추지 못하면 모든 것이 실패한다.
+- 반드시 다음 중 2가지 이상 포함:
+  (1) 극단적 스케일 대비 — 거대 vs 극소, 행성 vs 사람
+  (2) 강렬한 색 대비 — 빨강/주황 vs 검정, 네온 vs 암흑
+  (3) 비현실적 장면 — 존재할 수 없는 광경, 초현실
+  (4) 시선 집중 구도 — 중앙 피사체 + 극단적 원근감
+- ❌ 평범한 풍경, 설명적 다이어그램, 텍스트 포함 이미지
+- ✅ "A planet so close it fills the entire sky above a tiny human silhouette"
+- ✅ "A single glowing jellyfish in pitch-black ocean, extreme contrast"
+- Cut 1 image_prompt의 첫 구절은 반드시 가장 충격적인 시각 요소로 시작
+
 📊 [채널 데이터 기반 — askanything 최적화] (2026-04-04 기준)
 - 총 11.5만 조회, 평균 2,314 (50영상)
 - 잘 되는 주제: 우주행성(평균 3.2K+), 공룡/고생물(히트시 폭발 — 소드 드래곤 12.8K), 지구/자연(2.4K+)
@@ -497,6 +509,18 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 - ❌ "This is an interesting fact" ❌ "Today we'll look at..." ❌ "Have you ever wondered..."
 - ✅ "A black hole stretches you like spaghetti" ✅ "This should not exist" ✅ "It rains diamonds on this planet"
 
+★★★ [Cut 1 image_prompt — SCROLL-STOPPING MANDATORY] ★★★
+- Cut 1 image is the ONLY chance to stop the scroll in the Shorts feed. If it fails, nothing else matters.
+- MUST include at least 2 of these:
+  (1) Extreme scale contrast — giant vs tiny, planet vs human
+  (2) Intense color contrast — red/orange vs black, neon vs darkness
+  (3) Surreal/impossible scene — something that should not exist
+  (4) Eye-locking composition — centered subject + extreme perspective
+- ❌ Generic landscapes, diagrams, text-heavy images
+- ✅ "A planet so close it fills the entire sky above a tiny human silhouette"
+- ✅ "A single glowing jellyfish in pitch-black ocean, extreme contrast"
+- Cut 1 image_prompt MUST start with the most visually shocking element
+
 📊 [CHANNEL DATA — wonderdrop optimization] (2026-04-04 data)
 - Total 27.7K views, avg 555 per video (50 videos) — lowest of 4 channels
 - Top performers: "Sword Dragon" 1.3K, "Moon Moving Away" 1.3K, "Honey Egyptian Tombs" 1.2K, "Lightning vs Sun" 1.2K
@@ -632,6 +656,16 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - Corte 1 NO puede ser pregunta. Solo afirmaciones/impacto/paradoja.
 - ❌ "Esto es un dato interesante" ❌ "Hoy vamos a ver..." ❌ "¿Alguna vez te preguntaste...?"
 - ✅ "Esto no debería existir" ✅ "Un agujero negro te estira como espagueti" ✅ "Llueven diamantes en este planeta"
+
+★★★ [Corte 1 image_prompt — DETENER EL SCROLL ES OBLIGATORIO] ★★★
+- El Corte 1 es la ÚNICA oportunidad para detener el scroll. Si falla, todo falla.
+- DEBE incluir al menos 2 de estos:
+  (1) Contraste de escala extremo — gigante vs diminuto
+  (2) Contraste de color intenso — rojo/naranja vs negro, neón vs oscuridad
+  (3) Escena surrealista/imposible — algo que no debería existir
+  (4) Composición hipnótica — sujeto centrado + perspectiva extrema
+- ❌ Paisajes genéricos, diagramas, imágenes con texto
+- Cut 1 image_prompt DEBE comenzar con el elemento visual más impactante
 
 📊 [DATOS DEL CANAL — prismtale optimización] (datos 2026-04-04)
 - Total 70,642 views, promedio 1,859 (38 videos) — CRECIMIENTO MÁS RÁPIDO: 4,111 views/día últimos 7 días
@@ -778,6 +812,15 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - Corte 1 puede ser exclamación o afirmación fuerte, pero NO pregunta genérica.
 - ❌ "Hoy vamos a ver algo curioso" ❌ "¿Alguna vez te has preguntado...?"
 - ✅ "¡Esto NO debería existir!" ✅ "¡Llueven diamantes en este planeta!" ✅ "¡3 corazones! ¡Sí, tres!"
+
+★★★ [Corte 1 image_prompt — DETENER EL SCROLL ES OBLIGATORIO] ★★★
+- DEBE incluir al menos 2 de estos:
+  (1) Contraste de escala extremo — gigante vs diminuto
+  (2) Colores VIBRANTES y EXPLOSIVOS — máximo impacto visual
+  (3) Escena imposible/surrealista — algo que no puede existir
+  (4) Composición centrada + perspectiva extrema
+- ❌ Paisajes genéricos, diagramas, imágenes con texto
+- Cut 1 image_prompt DEBE comenzar con el elemento visual más explosivo
 
 📊 [DATOS DEL CANAL — exploratodo optimización] (datos 2026-04-04)
 - Total 272,808 views, promedio 5,456 (50 videos) — el canal con más views totales
@@ -1220,6 +1263,13 @@ These English keywords help YouTube's algorithm classify this content for US aud
     if not hard_fails and not region_warns:
         print(f"OK [품질 게이트] HARD FAIL 통과 | 지역 스타일 통과")
 
+    # ── 비주얼 디렉터: image_prompt 전문 리라이트 (컷1 특별 강화) ──
+    try:
+        _vd_key = _verify_key()
+        cuts = _enhance_image_prompts(cuts, _topic_title, lang, _vd_key, channel)
+    except Exception as _vd_err:
+        print(f"[비주얼 디렉터] 스킵 (원본 유지): {_vd_err}")
+
     print(f"OK [기획 전문가] 기획안 완성! ({len(cuts)}컷, {provider_label}) 제목: {title} | 태그: {', '.join(tags)}")
 
     # ── 채널 금지 표현 필터링 ──
@@ -1650,6 +1700,89 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                     failures.append(f"TONE_MISMATCH: calm 채널에 감탄부호 과다 ({exclaim_count}/{len(cuts)}컷)")
 
     return failures
+
+
+def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str, channel: str | None = None) -> list[dict]:
+    """비주얼 디렉터 — image_prompt 전문 리라이트. 컷1은 스크롤 멈추기 특별 강화."""
+    if not cuts or not api_key:
+        return cuts
+
+    print("-> [비주얼 디렉터] image_prompt 최적화 중...")
+
+    # 채널별 비주얼 스타일
+    style_map = {
+        "askanything": "cinematic realism, dramatic lighting, high contrast",
+        "wonderdrop": "cinematic documentary realism, clean composition, natural lighting",
+        "exploratodo": "vivid colorful cinematic realism, energetic contrast, bold composition",
+        "prismtale": "moody cinematic realism, low-key lighting, mysterious atmosphere",
+    }
+    channel_style = style_map.get(channel, "cinematic realism, dramatic lighting")
+
+    scripts_and_prompts = []
+    for i, cut in enumerate(cuts):
+        scripts_and_prompts.append({
+            "cut": i + 1,
+            "script": cut.get("script", ""),
+            "current_prompt": cut.get("prompt", ""),
+        })
+
+    prompt = f"""You are a world-class visual director for viral YouTube Shorts. Your ONLY job is to rewrite image_prompts to maximize scroll-stopping power.
+
+Topic: {topic}
+Channel style: {channel_style}
+Language: {lang}
+
+RULES:
+- Cut 1 is the MOST IMPORTANT. It MUST stop the scroll. Include at least 2: extreme scale contrast, intense color contrast, surreal/impossible scene, eye-locking composition.
+- Every image_prompt must START with the main subject from the script.
+- Describe SCENES, not keywords. Full sentences produce better images.
+- Each cut must use a DIFFERENT camera technique (close-up, wide shot, aerial, macro, etc.)
+- NO text, NO watermark in any prompt.
+- 40-60 words per prompt.
+- Output ONLY a JSON array of objects: [{{"cut": 1, "image_prompt": "..."}}, ...]
+
+Current cuts:
+{json.dumps(scripts_and_prompts, ensure_ascii=False)}
+
+Rewrite ALL image_prompts. Make Cut 1 DRAMATICALLY more visually striking than the rest."""
+
+    try:
+        raw = _request_gemini_freeform(api_key, prompt, "gemini-2.5-flash")
+        result = _extract_json(raw)
+
+        if not isinstance(result, list):
+            print(f"  [비주얼 디렉터] 응답 파싱 실패 — 원본 유지")
+            return cuts
+
+        enhanced_count = 0
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            idx = item.get("cut", 0) - 1
+            new_prompt = item.get("image_prompt", "")
+            if not new_prompt or not (0 <= idx < len(cuts)):
+                continue
+
+            # 길이 검증: 너무 짧거나 길면 스킵
+            if len(new_prompt) < 20 or len(new_prompt) > 500:
+                continue
+
+            old_prompt = cuts[idx].get("prompt", "")
+            cuts[idx]["prompt"] = new_prompt
+            enhanced_count += 1
+
+            if idx == 0:
+                print(f"  [비주얼 디렉터] 컷1 image_prompt 강화 완료")
+
+        if enhanced_count > 0:
+            print(f"OK [비주얼 디렉터] {enhanced_count}개 컷 image_prompt 최적화 완료")
+        else:
+            print(f"  [비주얼 디렉터] 변경 없음 — 원본 유지")
+
+    except Exception as e:
+        print(f"  [비주얼 디렉터] 에러 — 원본 유지: {e}")
+
+    return cuts
 
 
 def _validate_region_style(cuts: list[dict], channel: str | None = None) -> list[str]:

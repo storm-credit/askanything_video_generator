@@ -226,6 +226,10 @@ export default function Home() {
       setEditedScripts({});
       setEditedScriptsMap({});
       setRegeneratingCut(null);
+      setRenderResults({});
+      setSuccessMessage(null);
+      setErrorMessage(null);
+      setProgress(0);
       const newPreviews: Record<string, PreviewData> = {};
       let lastTitle = "";
       for (const folder of folders) {
@@ -771,6 +775,10 @@ export default function Home() {
     setSuccessMessage(null);
     setErrorMessage(null);
     setChannelResults({});
+    setRenderResults({});
+    setChannelPreviews({});
+    setPreviewData(null);
+    setProgress(0);
 
     const promises = selectedChannels.map(ch => generateForChannel(ch));
     await Promise.allSettled(promises);
