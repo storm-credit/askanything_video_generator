@@ -64,7 +64,7 @@ const isEmphasisWord = (word: string): boolean => {
   return false;
 };
 
-export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: number; captionY?: number; emotion?: string }> = ({ wordTimestamps, captionSize = 48, captionY = 28, emotion }) => {
+export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: number; captionY?: number; emotion?: string; channel?: string }> = ({ wordTimestamps, captionSize = 48, captionY = 28, emotion, channel }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
@@ -122,7 +122,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
           justifyContent: 'center',
           alignItems: 'center',
           maxWidth: '92%',
-          gap: '6px',
+          gap: '12px 14px',
           textAlign: 'center',
         }}>
           {visibleWords.map((w) => {
@@ -177,8 +177,9 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
         justifyContent: 'center',
         alignItems: 'center',
         width: '88%',
-        gap: '8px',
-        textAlign: 'center'
+        gap: '14px 16px',
+        textAlign: 'center',
+        lineHeight: '1.4',
       }}>
         {visibleWords.map((w) => {
           const isActive = currentTime >= w.start && currentTime <= w.end;
@@ -197,7 +198,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
             ? emphasisColor
             : isActive
               ? highlightColor
-              : 'rgba(255, 255, 255, 0.6)';
+              : 'rgba(255, 255, 255, 0.75)';
 
           const highlightGlow = `0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 6px ${highlightColor}4D`;
 
@@ -206,28 +207,29 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
           const emphasisG = parseInt(emphasisColor.slice(3, 5), 16);
           const emphasisB = parseInt(emphasisColor.slice(5, 7), 16);
 
-          const solidOutline = '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 0px 2px 0px #000, 0px -2px 0px #000, 2px 0px 0px #000, -2px 0px 0px #000';
+          const solidOutline = '4px 4px 0px #000, -4px -4px 0px #000, 4px -4px 0px #000, -4px 4px 0px #000, 0px 4px 0px #000, 0px -4px 0px #000, 4px 0px 0px #000, -4px 0px 0px #000, 0px 0px 8px rgba(0,0,0,0.7)';
           const textShadow = isEmphasized
             ? `${solidOutline}, 0px 0px 12px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.6)`
             : isActive
               ? `${solidOutline}, 0px 0px 8px ${highlightColor}4D`
               : solidOutline;
 
-          const scale = isEmphasized ? 1.15 : 1;
+          // 팝업 스케일: 활성 단어 1.12, 강조 단어 1.18
+          const scale = isEmphasized ? 1.18 : isActive ? 1.1 : 1;
 
-          // 영어/ES: 최소 90px 강제 (2025 트렌드)
-          const latinSize = Math.max(captionSize, 90);
+          // 영어/ES: 최소 100px 강제 (ES 전문가 권장 95~110px)
+          const latinSize = Math.max(captionSize, 100);
 
           return (
             <span
               key={w.index}
               style={{
-                fontFamily: 'Inter, sans-serif',
-                fontWeight: isEmphasized ? 900 : 800,
+                fontFamily: "'Montserrat', 'Inter', sans-serif",
+                fontWeight: 900,
                 fontSize: `${latinSize}px`,
                 color: color,
                 textShadow: textShadow,
-                WebkitTextStroke: '2.5px #000000',
+                WebkitTextStroke: '5px #000000',
                 paintOrder: 'stroke fill',
                 lineHeight: '1.3',
                 display: 'inline-block',
