@@ -2987,6 +2987,46 @@ export default function Home() {
                             max={uploadPlatform === "tiktok" ? new Date(Date.now() + 75 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16) : undefined}
                             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                           />
+                          {/* 채널별 추천 시간 5개 */}
+                          {uploadPlatform === "youtube" && (() => {
+                            const windows: Record<string, {start: number, end: number, label: string}> = {
+                              askanything: {start: 18, end: 22, label: "KST"},
+                              wonderdrop: {start: 6, end: 10, label: "KST (=EST 17~21시)"},
+                              exploratodo: {start: 9, end: 13, label: "KST (=CST 19~23시)"},
+                              prismtale: {start: 7, end: 11, label: "KST (=EST 18~22시)"},
+                            };
+                            const w = windows[uploadChannel] || windows.askanything;
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            const slots = [];
+                            for (let h = w.start; h < w.end; h++) {
+                              const d = new Date(tomorrow);
+                              d.setHours(h, 0, 0, 0);
+                              slots.push(d);
+                            }
+                            // 추가: 30분 슬롯
+                            const halfSlot = new Date(tomorrow);
+                            halfSlot.setHours(w.start, 30, 0, 0);
+                            slots.splice(1, 0, halfSlot);
+                            return (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                <span className="text-[10px] text-gray-500 w-full">추천 시간 ({w.label}):</span>
+                                {slots.slice(0, 5).map((slot, i) => (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => {
+                                      const iso = new Date(slot.getTime() - slot.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                                      setScheduleDate(iso);
+                                    }}
+                                    className={`px-2.5 py-1 rounded-lg text-xs transition-colors ${scheduleDate && new Date(scheduleDate).getHours() === slot.getHours() && new Date(scheduleDate).getMinutes() === slot.getMinutes() ? 'bg-indigo-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}
+                                  >
+                                    {slot.getHours().toString().padStart(2, '0')}:{slot.getMinutes().toString().padStart(2, '0')}
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })()}
                           <p className="text-gray-500 text-xs mt-1">
                             {uploadPlatform === "youtube"
                               ? "비공개로 업로드 후 예약 시간에 자동 공개됩니다."
