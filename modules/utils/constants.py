@@ -11,7 +11,9 @@ MASTER_STYLE = (
     "Professional photograph, photorealistic, 4K HDR, highly detailed, "
     "sharp focus, controlled lighting, "
     "vertical 9:16 composition, "
-    "family-friendly. NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS. "
+    "family-friendly. "
+    "NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS, NO LOGO, "
+    "NO diagrams, NO infographic, NO cartoon, NO anime, NO illustration. "
 )
 
 

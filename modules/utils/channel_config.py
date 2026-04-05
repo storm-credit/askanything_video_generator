@@ -15,14 +15,14 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "askanything": {
         "language": "ko",
         "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
-        "tts_speed": 0.9,
+        "tts_speed": 1.0,  # 0.9→1.0 (한국어는 0.9가 느리게 들림)
         "min_cuts": 8,
         "max_cuts": 9,
         "target_duration": "35-42",  # 초 — 빠른 템포, 완주율 우선
         "voice_settings": {
-            "stability": 0.4,
-            "similarity_boost": 0.8,
-            "style": 0.65,
+            "stability": 0.35,  # 0.4→0.35 (더 다이나믹)
+            "similarity_boost": 0.82,
+            "style": 0.35,  # 0.65→0.35 (과장 제거, 신뢰도 향상)
             "use_speaker_boost": True,
         },
         "bgm_theme": "random",
@@ -69,14 +69,14 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "exploratodo": {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
-        "tts_speed": 0.95,
+        "tts_speed": 1.0,  # 0.95→1.0 (스페인어는 빠른 언어)
         "min_cuts": 8,
         "max_cuts": 9,
         "target_duration": "35-42",  # 초 — 빠른 템포, KO와 유사 리듬
         "voice_settings": {
             "stability": 0.4,
-            "similarity_boost": 0.8,
-            "style": 0.6,
+            "similarity_boost": 0.82,
+            "style": 0.3,  # 0.6→0.3 (과장 제거)
             "use_speaker_boost": True,
         },
         "bgm_theme": "random",
@@ -103,7 +103,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_settings": {
             "stability": 0.55,
             "similarity_boost": 0.85,
-            "style": 0.35,
+            "style": 0.25,  # 0.35→0.25
             "use_speaker_boost": True,
         },
         "bgm_theme": "random",

@@ -355,7 +355,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 - image_prompt는 해당 컷 script의 내용만 시각화. script에 없는 피사체/정보 추가 절대 금지
 
 🎯 [첫 2초 훅 강제 규칙 — Cut 1 전용]
-- Cut 1 script: 반드시 15자 이내. 한 문장. 설명/도입 금지, 선언만.
+- Cut 1 script: 반드시 12자 이내. 한 문장. 설명/도입 금지, 선언만. 숫자 포함 권장. 현재형 동사 사용.
 - Cut 1 image_prompt: 시각 정보 1개만 (하나의 피사체 + 하나의 극단적 요소). 복잡한 장면 금지.
 - Cut 1은 질문형 금지. 단정문/충격문/역설문 중 하나만 사용.
 - ❌ "이건 흥미로운 사실이에요" ❌ "오늘 알아볼 건..." ❌ "여러분 혹시..."
@@ -1267,6 +1267,8 @@ These English keywords help YouTube's algorithm classify this content for US aud
     try:
         _vd_key = _verify_key()
         cuts = _enhance_image_prompts(cuts, _topic_title, lang, _vd_key, channel)
+        # 비주얼 디렉터 후 주제 일치 재검증 (공룡 같은 무관 피사체 방지)
+        cuts = _verify_subject_match(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model)
     except Exception as _vd_err:
         print(f"[비주얼 디렉터] 스킵 (원본 유지): {_vd_err}")
 
@@ -1729,12 +1731,14 @@ Channel style: {channel_style}
 Language: {lang}
 
 RULES:
+- CRITICAL: Do NOT introduce ANY subject not present in the script. The main subject in each script line MUST be the main subject in the image_prompt. Adding unrelated subjects (dinosaurs, animals, people) that are not in the script = FAIL.
 - Cut 1 is the MOST IMPORTANT. It MUST stop the scroll. Include at least 2: extreme scale contrast, intense color contrast, surreal/impossible scene, eye-locking composition.
 - Every image_prompt must START with the main subject from the script.
 - Describe SCENES, not keywords. Full sentences produce better images.
 - Each cut must use a DIFFERENT camera technique (close-up, wide shot, aerial, macro, etc.)
-- NO text, NO watermark in any prompt.
-- 40-60 words per prompt.
+- 9:16 vertical composition: place subject in upper or lower 1/3, leave top 15% and bottom 20% clear for subtitles.
+- Negative constraints: NO text, NO watermark, NO logo, NO diagrams, NO infographic, NO cartoon, NO anime, NO illustration.
+- 40-60 words per prompt (Cut 1 may use up to 65 words).
 - Output ONLY a JSON array of objects: [{{"cut": 1, "image_prompt": "..."}}, ...]
 
 Current cuts:
