@@ -34,7 +34,7 @@ def _split_yt_topic(topic: str) -> tuple[str, str]:
     return topic, ""
 
 
-_VALID_EMOTIONS = {"[SHOCK]", "[WONDER]", "[TENSION]", "[REVEAL]", "[CALM]"}
+_VALID_EMOTIONS = {"[SHOCK]", "[WONDER]", "[TENSION]", "[REVEAL]", "[URGENCY]", "[DISBELIEF]", "[IDENTITY]"}
 
 def _sanitize_cuts(cuts_data: list[dict[str, Any]]) -> list[dict[str, str]]:
     cuts = []
@@ -384,15 +384,27 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 - ✅ 제목은 "듣기 전에 이미 궁금한가?"가 기준. 설명 없이 한 문장만 봐도 그림이 그려져야 함
 - 평균 조회율 100%+ 달성 영상 공통점: 루프 구조 강함, 빠른 템포, 역설/충격 훅
 
-[숏폼 구조 (8~9컷, 각 4~5초, 총 35~42초)]
+[숏폼 구조 — 3가지 패턴 중 주제에 가장 맞는 것을 자동 선택]
+
+★ 패턴 A: 하이네스형 (정보/팩트/우주/과학) ← 기본값
+  Hook → 충격 확장 → 리텐션 락 → 클라이맥스 → 루프
+★ 패턴 B: 역방향 공개형 (역사/발견/미스터리)
+  결과 먼저 → "어떻게?" → 역추적 → 원점 복귀 + 루프
+★ 패턴 C: 갈등-해결형 (동물/자연/생존)
+  상황 제시 → 문제 → 시도/실패 → 반전 → 해결 + 루프
+
+주제 유형에 맞는 패턴을 선택하되, 확신이 없으면 패턴 A를 사용.
+
+[패턴 A: 하이네스 구조 (8~9컷, 각 4~5초, 총 35~42초)]
 1. Cut 1 — 결론 폭탄(Hook): 가장 충격적 팩트를 단정문으로 던져라. 질문형 금지. ★ 1.7초 법칙: image_prompt에 극단적 스케일/강렬 색대비/비현실 장면 필수.
    후크 패턴: 숫자 대비, 부정+반전, 시간 긴급성, 직관 파괴
    ★★★ [훅 필수 규칙] 첫 문장은 반드시 상식을 깨거나 "불가능해 보이는 사실"이어야 함.
    ❌ "이건 흥미롭다" ❌ "오늘 소개할 건" → ✅ "이건 존재해선 안 되는 거야" ✅ "과학자들도 설명 못하는 게 있어"
 2. Cut 2~3 — 충격 확장: "근데 진짜 소름돋는 건..." 식으로 연쇄.
 3. Cut 4~5 — 반전 빌드업: Cut 4에 반드시 새 충격 팩트(두 번째 훅). ★ 매 2~3컷마다 카메라/조명/스케일 급변.
-   ★★★ [리텐션 락] Cut 3~4에서 반드시 새 충격 요소 투입. 중간 이탈 방지 — "여기서 빠지면 안 되는 이유"를 제시.
+   ★★★ [리텐션 락 — 컷3 또는 컷4에 반드시 배치] "근데 이게 다가 아니야", "여기서 끝이 아니야" 같은 패턴 브레이크 필수. 이탈이 가장 많은 7~12초 구간 방어.
 4. Cut 6~8 — 클라이맥스: 가장 강력한 팩트+직관적 비유 ("지구 100개를 한 줄로 세운 것과 같아").
+   ★ Cut 7~8에 소프트 CTA 옵션: "이거 아는 사람?" "2편에서 더 알려줄게" 같은 참여 유도 (선택).
 5. Cut 9~10 — 루프 엔딩: 마지막 대사가 Cut 1의 훅을 자연스럽게 다시 듣고 싶게 만들어야 함. 마지막 image_prompt는 Cut 1과 유사 구도/색감.
    ★★★ [루프 엔딩 필수 규칙] ★★★
    * 마지막 컷은 반드시 완결된 문장. 미완성 문장("...사실은", "...인데") 절대 금지.
@@ -436,7 +448,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 * [자가 검증] script와 image_prompt의 피사체가 다르면 반드시 수정.
 
 [감정/비주얼/템포 — 통합 규칙]
-* 감정 태그 (description 끝에 추가): [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+* 감정 태그 (description 끝에 추가): [SHOCK] [WONDER] [TENSION] [REVEAL] [URGENCY] [DISBELIEF] [IDENTITY]
 * 감정 곡선: 전체 상승, 클라이맥스 직전 이완 1컷 허용. 2컷 연속 같은 태그 금지, 최소 3종류 사용.
 * 비주얼 임팩트: Cut 1은 극단적 크기/색/비현실 대비 필수. 모든 컷 강렬한 요소 1개 이상. 연속 같은 색감/구도 금지.
 * 템포: 빠른 컷↔느린 컷 교대. 3컷 연속 같은 리듬 금지.
@@ -531,7 +543,18 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 - ❌ Videos over 45 seconds tend to underperform — keep it tight
 - ✅ Netflix-documentary visual style: clean, one subject centered, cinematic lighting
 
-[Short-form Structure (8–9 cuts, ~4–5 sec each, 35–45 sec total)]
+[Structure Patterns — auto-select the best fit for the topic]
+
+★ Pattern A: Haynes (facts/science/space) ← default
+  Hook → Shock chain → Retention lock → Climax → Loop
+★ Pattern B: Reverse Reveal (history/discovery/mystery)
+  Result first → "How?" → Backtrack → Return to origin + Loop
+★ Pattern C: Conflict-Resolution (animals/nature/survival)
+  Situation → Problem → Attempts → Twist → Resolution + Loop
+
+Pick the pattern that fits the topic best. Default to Pattern A if unsure.
+
+[Pattern A: Haynes Structure (8–9 cuts, ~4–5 sec each, 35–45 sec total)]
 1. Cut 1 — Hook: Drop the most shocking fact as a declarative statement. NO questions. ★ 1.7-SEC RULE: image_prompt MUST have extreme visual impact (scale, color contrast, surreal).
    Hook patterns: number contrast, negation+reveal, time urgency, intuition breaker
    ★★★ [HOOK MUST RULE] First line MUST break common belief or present an "impossible fact."
@@ -583,7 +606,7 @@ You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer.
 * [SELF-CHECK] Compare each script↔image_prompt pair. Fix any subject mismatch.
 
 [Emotion / Visual / Pacing — Unified]
-* Emotion tags (end of description): [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+* Emotion tags (end of description): [SHOCK] [WONDER] [TENSION] [REVEAL] [URGENCY] [DISBELIEF] [IDENTITY]
 * Emotional arc: Overall escalation, one brief release allowed before climax. No same tag 2x in a row, min 3 types.
 * Visual impact: Cut 1 must stop scrolling (extreme scale/color/surreal). All cuts need 1+ striking element. No same palette 2 cuts in a row.
 * Pacing: Alternate fast↔slow cuts. Never 3 cuts with same rhythm.
@@ -740,7 +763,7 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 * [AUTO-VERIFICACIÓN] Comparar cada par script↔image_prompt. Corregir cualquier discrepancia.
 
 [Emoción / Visual / Ritmo — Unificado]
-* Etiquetas (fin de description): [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+* Etiquetas (fin de description): [SHOCK] [WONDER] [TENSION] [REVEAL] [URGENCY] [DISBELIEF] [IDENTITY]
 * Arco emocional: Escalada general, pausa breve permitida antes del clímax. Nunca misma etiqueta 2x seguidos, mín 3 tipos.
 * Impacto visual: Corte 1 debe detener el scroll (escala/color/surrealismo extremo). Todos los cortes con 1+ elemento impactante. Misma paleta 2x PROHIBIDA.
 * Ritmo: Alternar rápido↔lento. Nunca 3 cortes con mismo ritmo.
@@ -891,10 +914,10 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 * [AUTO-VERIFICACIÓN] Comparar cada par script↔image_prompt. Corregir cualquier discrepancia.
 
 [Etiquetas de emoción] Añadir al final de description:
-  [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+  [SHOCK] [WONDER] [TENSION] [REVEAL] [URGENCY] [DISBELIEF] [IDENTITY]
 
 [Emoción / Visual / Ritmo — Unificado]
-* Etiquetas (fin de description): [SHOCK] [WONDER] [TENSION] [REVEAL] [CALM]
+* Etiquetas (fin de description): [SHOCK] [WONDER] [TENSION] [REVEAL] [URGENCY] [DISBELIEF] [IDENTITY]
 * Energía ALTA de principio a fin, con micro-pausas de asombro. Nunca misma etiqueta 2x seguidos, mín 3 tipos.
 * Impacto visual: Corte 1 = EXPLOSIVO (colores vibrantes, escala exagerada). Todos los cortes con brillo/color/dramatismo. Misma paleta 2x PROHIBIDA.
 * Ritmo: Rápido en general. Alternar datos cortos↔comparaciones. Nunca 3 cortes con mismo ritmo.
@@ -1446,7 +1469,7 @@ def _verify_highness_structure(cuts: list[dict], topic: str,
     emotions = []
     for c in cuts:
         desc = c.get("text", "") or c.get("description", "")
-        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "CALM"]:
+        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY"]:
             if tag in desc:
                 emotions.append(tag)
                 break
@@ -1656,7 +1679,7 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
     emotions = []
     for c in cuts:
         desc = c.get("text", "") or c.get("description", "")
-        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "CALM"]:
+        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY"]:
             if tag in desc.upper():
                 emotions.append(tag)
                 break

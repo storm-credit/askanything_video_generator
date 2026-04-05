@@ -25,7 +25,7 @@ const EN_STOPWORDS = new Set([
   'getting', 'looking', 'turning', 'making', 'having', 'being', 'going',
 ]);
 
-type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
+type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY';
 
 // 감정별 하이라이트 색상 (활성 단어 + 강조 단어 공용)
 const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
@@ -33,7 +33,9 @@ const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
   WONDER: '#FFB800',
   TENSION: '#FF6600',
   REVEAL: '#00CC66',
-  CALM: '#5BB8E8',
+  URGENCY: '#FF1744',    // 긴급 — 강렬한 빨강
+  DISBELIEF: '#E040FB',  // 불신 — 보라
+  IDENTITY: '#00E5FF',   // 정체성 — 시안
 };
 
 const getEmotionColor = (emotion?: string): string => {
