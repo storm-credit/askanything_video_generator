@@ -1767,6 +1767,14 @@ RULES:
 Current cuts:
 {json.dumps(scripts_and_prompts, ensure_ascii=False)}
 
+IMPORTANT — Color Continuity:
+- All cuts in the same episode MUST share a consistent dominant color palette.
+- Space topics: consistent deep blue-black color space throughout
+- Dinosaur/prehistoric: consistent warm amber-green jungle palette
+- Ocean/deep sea: consistent dark teal-blue underwater palette
+- Earth/geology: consistent warm earth tones throughout
+- Pick ONE dominant hue and maintain it across all cuts.
+
 Rewrite ALL image_prompts. Make Cut 1 DRAMATICALLY more visually striking than the rest."""
 
     try:

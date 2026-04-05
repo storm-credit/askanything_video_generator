@@ -757,22 +757,32 @@ async def generate_video_endpoint(req: GenerateRequest):
                                 errors.append(f"이미지: {exc}")
                             print(f"[컷 {i+1} 이미지 생성 실패] {exc}")
 
-                # 컷1 A/B 테스트: 첫 컷 이미지 추가 2장 생성 (조회율 최적화)
+                # 컷1 A/B 테스트: 구조화된 3가지 구도 변형 (조회율 최적화)
+                # A(원본): 기본 프롬프트 그대로
+                # B: 클로즈업 중심 (extreme scale 강조)
+                # C: 와이드 + 스케일 비교 (콘텍스트 강조)
                 if i == 0 and img_path:
                     ab_variants = []
-                    for variant_idx in range(2):
+                    original_prompt = cut["prompt"]
+                    variant_suffixes = [
+                        ", extreme close-up shot, macro perspective, filling the entire frame, shallow depth of field",
+                        ", ultra wide establishing shot, tiny human silhouette for scale comparison, dramatic deep perspective",
+                    ]
+                    for variant_idx, suffix in enumerate(variant_suffixes):
                         try:
                             variant_key = _get_image_key()
-                            variant_filename_idx = 100 + variant_idx  # cut_100.png, cut_101.png
+                            variant_filename_idx = 100 + variant_idx
+                            variant_prompt = original_prompt.rstrip(". ,") + suffix
                             if image_engine == "imagen":
-                                v_path = gen_image_fn(cut["prompt"], variant_filename_idx, topic_folder, variant_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=_topic)
+                                v_path = gen_image_fn(variant_prompt, variant_filename_idx, topic_folder, variant_key, model_override=image_model_override, gemini_api_keys=gemini_keys_override, topic=_topic)
                             elif image_engine == "nano_banana":
-                                v_path = generate_image_nano_banana(cut["prompt"], variant_filename_idx, topic_folder, variant_key, gemini_api_keys=gemini_keys_override, topic=_topic)
+                                v_path = generate_image_nano_banana(variant_prompt, variant_filename_idx, topic_folder, variant_key, gemini_api_keys=gemini_keys_override, topic=_topic)
                             else:
-                                v_path = gen_image_fn(cut["prompt"], variant_filename_idx, topic_folder, variant_key, topic=_topic)
+                                v_path = gen_image_fn(variant_prompt, variant_filename_idx, topic_folder, variant_key, topic=_topic)
                             if v_path:
                                 ab_variants.append(v_path)
-                                print(f"  [A/B 테스트] 컷1 변형 {variant_idx + 1} 생성 완료")
+                                label = "클로즈업" if variant_idx == 0 else "와이드+스케일"
+                                print(f"  [A/B 테스트] 컷1 변형 {label} 생성 완료")
                         except Exception as ab_exc:
                             print(f"  [A/B 테스트] 컷1 변형 {variant_idx + 1} 실패 (무시): {ab_exc}")
 

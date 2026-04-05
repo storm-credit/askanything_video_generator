@@ -30,7 +30,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "caption_size": 58,
         "caption_y": 38,
         "camera_style": "dynamic",
-        "visual_style": "high contrast, dramatic lighting, ultra detailed, vibrant colors, cinematic angle, bold composition, highly saturated",
+        "visual_style": "high contrast, rim lighting from below, single key light, deep shadow fill ratio 70:30, ultra detailed, vibrant colors, cinematic angle, bold composition, highly saturated",
         "tone": "궁금증 자극, 충격적 팩트, 한국식 친근한 반말. Loop: very strong — first and last lines should nearly mirror each other for obvious repetition",
         "forbidden_phrases": ["미쳤", "미친", "ㅋㅋ", "ㄹㅇ", "레전드", "개쩔", "ㅎㄷㄷ", "갓", "존맛", "킹받"],
         "upload_accounts": {
@@ -57,7 +57,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "caption_size": 54,
         "caption_y": 38,
         "camera_style": "gentle",
-        "visual_style": "cinematic, realistic, natural lighting, documentary style, ultra detailed, depth of field, subtle colors, high realism",
+        "visual_style": "cinematic, realistic, overcast daylight, lens flare allowed, clean mid-range exposure, documentary style, ultra detailed, depth of field, subtle colors, high realism",
         "tone": "calm, cinematic, documentary-style narration, confident, clear, slightly mysterious. Loop: natural and subtle — reconnect to the opening line smoothly without obvious repetition",
         "forbidden_phrases": ["insane", "mind-blowing", "you won't believe", "literally dying", "no cap", "bro", "lowkey", "ngl"],
         "upload_accounts": {
@@ -84,7 +84,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "caption_size": 54,
         "caption_y": 38,
         "camera_style": "dynamic",
-        "visual_style": "bright colors, vibrant, exaggerated, glowing effects, eye catching, high saturation, dramatic, colorful",
+        "visual_style": "bright colors, vibrant, golden hour warm tones, high saturation +20%, teal-orange color grade, exaggerated, glowing effects, eye catching, dramatic, colorful",
         "tone": "energetic, curious, fast-paced, engaging, surprising, entertaining, quick rhythm. Loop: strong and direct — simple repetition, punchy endings that mirror the hook",
         "forbidden_phrases": ["no manches", "qué chido", "dale", "tío", "mola", "flipar", "brutal tío"],
         "upload_accounts": {
@@ -111,7 +111,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "caption_size": 54,
         "caption_y": 38,
         "camera_style": "dynamic",
-        "visual_style": "cinematic, dramatic lighting, ultra detailed, high contrast focus, mysterious atmosphere, glowing elements, sharp subject, dark background",
+        "visual_style": "cinematic, single motivated practical light source, 80% frame in shadow, ultra detailed, high contrast focus, mysterious atmosphere, glowing elements, sharp subject, dark background",
         "tone": "neutral Spanish with US Hispanic feel, clear, intriguing, cinematic, controlled, slight emphasis on shocking words, avoid sounding playful. Loop: medium — reconnect naturally but more explicitly than English, less obvious than Latin",
         "keyword_tags": ["NASA", "Universe", "Science", "Brain", "Space", "Discovery"],
         "forbidden_phrases": ["no mames", "qué onda", "chévere", "bacano", "tío", "mola", "guay"],
