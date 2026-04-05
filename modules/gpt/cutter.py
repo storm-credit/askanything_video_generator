@@ -1709,14 +1709,10 @@ def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str
 
     print("-> [비주얼 디렉터] image_prompt 최적화 중...")
 
-    # 채널별 비주얼 스타일
-    style_map = {
-        "askanything": "cinematic realism, dramatic lighting, high contrast",
-        "wonderdrop": "cinematic documentary realism, clean composition, natural lighting",
-        "exploratodo": "vivid colorful cinematic realism, energetic contrast, bold composition",
-        "prismtale": "moody cinematic realism, low-key lighting, mysterious atmosphere",
-    }
-    channel_style = style_map.get(channel, "cinematic realism, dramatic lighting")
+    # 채널별 비주얼 스타일 (channel_config.py에서 가져옴 — 데이터 일원화)
+    from modules.utils.channel_config import get_channel_preset
+    _preset = get_channel_preset(channel) if channel else None
+    channel_style = (_preset or {}).get("visual_style", "cinematic realism, dramatic lighting")
 
     scripts_and_prompts = []
     for i, cut in enumerate(cuts):
