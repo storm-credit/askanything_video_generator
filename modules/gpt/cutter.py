@@ -424,7 +424,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [대본 규칙]
 * 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
-* 한 컷 20~35자, 한 문장. 연속 동일 문장구조 금지.
+* 한 컷 25~40자 필수 (4~5초 분량). 25자 미만은 FAIL — 너무 짧으면 시청 시간이 줄어 알고리즘에 불리. 한 문장. 연속 동일 문장구조 금지.
 * [CRITICAL WARNING] 8~9컷으로 작성. 총 35~42초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지.
 
 [톤/비주얼] 채널 프리셋([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) 최우선. 약한 마무리("~같아", "~일 수도") 금지.
@@ -480,7 +480,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     {
       "description": "[컷 묘사 (한국어)] [감정태그]",
       "image_prompt": "[영어 이미지 프롬프트 (MASTER_STYLE 자동 적용됨)]",
-      "script": "[성우 대본: 구어체 반말, 20~35자]"
+      "script": "[성우 대본: 구어체 반말, 25~40자 필수. 25자 미만 FAIL]"
     }
   ]
 }
@@ -581,7 +581,7 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
    ❌ "I already told you at the beginning" — meta 4th-wall breaking FORBIDDEN
 
 [Script Rules]
-* Casual, conversational. 10–15 words per cut, one sentence. Vary sentence structures.
+* Casual, conversational. 12–18 words per cut mandatory (4-5 sec each). Under 10 words = FAIL. One sentence. Vary sentence structures.
 * [CRITICAL WARNING] Write 8–9 cuts. Target 38–48 second video. NEVER less than 8 cuts. Balance immersion with retention.
 * Use exclamations: "Insane, right?", "No way.", "Dead serious."
 
@@ -639,7 +639,7 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
       "image_prompt": "[English image prompt (MASTER_STYLE auto-applied)]",
-      "script": "[Voice-over: casual, 8-15 words max]"
+      "script": "[Voice-over: casual, 12-18 words mandatory. Under 10 = FAIL]"
     }
   ]
 }
@@ -1639,9 +1639,17 @@ Do NOT include markdown code blocks. Return raw JSON only."""
             idx = item.get("cut", 0) - 1
             if 0 <= idx < len(cuts) and item.get("verified"):
                 old_script = cuts[idx]["script"]
-                cuts[idx]["script"] = item["verified"]
+                new_script = item["verified"]
+                # 글자수 보호: 수정 후 30%+ 줄어들면 거부
+                if len(new_script) < len(old_script) * 0.7:
+                    print(f"  [팩트 수정 거부] 컷{idx+1} 글자수 30%+ 감소 ({len(old_script)}→{len(new_script)}) — 원본 유지")
+                    continue
+                if len(new_script) < 15:
+                    print(f"  [팩트 수정 거부] 컷{idx+1} 15자 미만 ({len(new_script)}자) — 원본 유지")
+                    continue
+                cuts[idx]["script"] = new_script
                 changed_count += 1
-                print(f"  [팩트 수정] 컷{idx+1}: '{old_script[:30]}...' → '{item['verified'][:30]}...' ({item.get('reason', '')})")
+                print(f"  [팩트 수정] 컷{idx+1}: '{old_script[:30]}...' → '{new_script[:30]}...' ({item.get('reason', '')})")
 
         if changed_count == 0:
             print(f"OK [팩트 검증] 모든 스크립트 팩트 확인 완료 (수정 없음)")

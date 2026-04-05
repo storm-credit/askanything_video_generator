@@ -15,6 +15,7 @@ services:
     volumes:
       - ./api_server.py:/app/api_server.py
       - ./modules:/app/modules
+      - ./remotion/src:/app/remotion/src
       - ./assets:/app/assets
       - ./brand:/app/brand
       - ./client_secrets:/app/client_secrets
