@@ -2918,14 +2918,16 @@ async def batch_today_topics(channel: str | None = None, date: str | None = None
     from modules.utils.obsidian_parser import get_today_topics, find_day_file_by_date, list_day_files
     from datetime import datetime as _dt, timedelta
 
-    # 날짜 파싱
+    # 날짜 파싱 (KST 기준)
+    from datetime import timezone
+    KST = timezone(timedelta(hours=9))
     if date:
         try:
             target_date = _dt.strptime(date, "%Y-%m-%d")
         except ValueError:
-            target_date = _dt.now()
+            target_date = _dt.now(KST)
     else:
-        target_date = _dt.now()
+        target_date = _dt.now(KST)
 
     result = get_today_topics(channel=channel, target_date=target_date)
     if not result.get("file"):
