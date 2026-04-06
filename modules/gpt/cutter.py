@@ -34,7 +34,7 @@ def _split_yt_topic(topic: str) -> tuple[str, str]:
     return topic, ""
 
 
-_VALID_EMOTIONS = {"[SHOCK]", "[WONDER]", "[TENSION]", "[REVEAL]", "[URGENCY]", "[DISBELIEF]", "[IDENTITY]"}
+_VALID_EMOTIONS = {"[SHOCK]", "[WONDER]", "[TENSION]", "[REVEAL]", "[URGENCY]", "[DISBELIEF]", "[IDENTITY]", "[CALM]"}
 
 def _sanitize_cuts(cuts_data: list[dict[str, Any]]) -> list[dict[str, str]]:
     cuts = []
@@ -423,12 +423,32 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
    ❌ "처음에 이미 말했어" 같은 메타적 4th wall 깨기 금지
 
 [대본 규칙]
-* 반말 구어체. "~거든", "~잖아", "~인 거야" 사용. "~입니다/합니다" 금지.
-* 한 컷 25~40자 필수 (4~5초 분량). 25자 미만은 FAIL — 너무 짧으면 시청 시간이 줄어 알고리즘에 불리. 한 문장. 연속 동일 문장구조 금지.
+* 반말 구어체. 감정 태그별 어미 패턴:
+  [SHOCK/REVEAL] "~야", "~이야", "~거야" (단정형 → TTS 강한 확신 톤)
+  [WONDER]       "~거든", "~라는 거지", "~잖아" (대화체 → 자연스러운 상승 억양)
+  [TENSION]      "~있거든", "~인데" (미완결 긴장감)
+  [IDENTITY]     "~알아?", "~알지?" (청자 직접 호명)
+  금지 어미: "~있어"/"~해" 단독 문장 끝, "~입니다/합니다/~습니다" 존댓말
+* 한 컷 25~40자 필수 (4~5초 분량). 25자 미만은 FAIL. 한 문장. 연속 동일 문장구조 금지.
 * [CRITICAL WARNING] 8~9컷으로 작성. 총 35~42초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지.
 
+[Qwen3-TTS 최적화 규칙]
+* 감정 태그가 TTS 음성 톤을 직접 바꾼다. 태그와 내용 불일치 절대 금지.
+  ❌ script="고래가 죽으면 생태계가 돼" + [SHOCK] → 태그 오배치
+  ✅ script="고래가 죽으면 생태계가 돼" + [WONDER]
+* 감정 부사("소름돋는/충격적인/놀라운") 남발 금지. TTS가 톤으로 표현하니 팩트로 충격 줘라.
+  ❌ "소름돋는 사실이 있어" → ✅ "그 물질이 금보다 독성이 강해"
+  감정 부사 컷당 최대 1개. 0개가 더 좋다.
+* 구두점 TTS 규칙:
+  마침표(.) → 완전 정지. 컷당 1개만.
+  쉼표(,) → 짧은 박자. [TENSION][REVEAL]에서 핵심 직전 배치.
+  느낌표(!) → [SHOCK] 컷에서 금지 (이중 과잉). [WONDER][URGENCY]에만 1개.
+  줄임표(...) → 사용 금지 (TTS에서 끊김/무음 발생).
+  하이픈(—) → [REVEAL] 컷에서만 1개. "근데 반전은—그게 독이야."
+* (pause), [silence] 같은 지시어 script에 삽입 금지. TTS가 텍스트로 읽어버림.
+
 [톤/비주얼] 채널 프리셋([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) 최우선. 약한 마무리("~같아", "~일 수도") 금지.
-* 비속어 금지 (제목+대본): "미쳤/미친/ㅋㅋ/ㄹㅇ" → "놀라운/대박/소름" 사용.
+* 비속어 금지: "미쳤/미친/ㅋㅋ/ㄹㅇ" 금지.
 
 [이미지 프롬프트 규칙]
 * 영어 전용. "photorealistic/vertical/no text" 쓰지 마라 (자동 추가됨).

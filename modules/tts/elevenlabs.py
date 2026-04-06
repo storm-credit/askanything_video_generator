@@ -60,6 +60,7 @@ EMOTION_VOICE_DESC = {
     "URGENCY": "urgent, pressing, time-critical, fast",
     "DISBELIEF": "incredulous, disbelief, questioning tone",
     "IDENTITY": "proud, personal, intimate warm connection",
+    "CALM": "calm, reflective, gentle, soft delivery",
 }
 
 # ── 채널 → Qwen3 기본 voice_desc ──

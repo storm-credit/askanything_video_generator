@@ -810,7 +810,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                         # 감정 태그 추출 (description에서)
                         _cut_emotion = None
                         _cut_desc = cut.get("description", cut.get("text", ""))
-                        for _etag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY"]:
+                        for _etag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY", "CALM"]:
                             if f"[{_etag}]" in _cut_desc:
                                 _cut_emotion = _etag
                                 break
