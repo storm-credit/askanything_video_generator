@@ -1078,6 +1078,15 @@ This is the channel's signature look — every image should feel cohesive with t
 """
             if tone:
                 system_prompt += f"\n[NARRATOR TONE] {tone}\n"
+            # 채널별 컷 수/초 동적 주입 (하드코딩 오버라이드)
+            _min_c = preset.get("min_cuts", 8)
+            _max_c = preset.get("max_cuts", 10)
+            _dur = preset.get("target_duration", "35-45")
+            system_prompt += f"""
+[CHANNEL DURATION OVERRIDE]
+This channel requires {_min_c}-{_max_c} cuts and {_dur} seconds total video duration.
+This OVERRIDES any other cut/duration instructions above. Adjust words-per-cut accordingly.
+"""
             keyword_tags = preset.get("keyword_tags", [])
             if keyword_tags:
                 keywords_str = ", ".join(keyword_tags)
@@ -1290,10 +1299,16 @@ These English keywords help YouTube's algorithm classify this content for US aud
             else:
                 raise
 
-    if len(cuts) > 10:
-        cuts = cuts[:10]
-    if len(cuts) < 7:
-        print(f"⚠️ [검증 경고] 컷 수 {len(cuts)}개로 부족하지만 진행합니다 (요구: 7~10).")
+    # 채널별 min/max_cuts 적용
+    from modules.utils.channel_config import get_channel_preset as _get_cuts_preset
+    _cuts_preset = _get_cuts_preset(channel) if channel else None
+    _cfg_max = (_cuts_preset or {}).get("max_cuts", 10)
+    _cfg_min = (_cuts_preset or {}).get("min_cuts", 8)
+    if len(cuts) > _cfg_max:
+        cuts = cuts[:_cfg_max]
+        print(f"[컷 수 조정] {_cfg_max}컷으로 잘라냄 (채널 max_cuts)")
+    if len(cuts) < _cfg_min:
+        print(f"⚠️ [검증 경고] 컷 수 {len(cuts)}개 (채널 최소 {_cfg_min}) — 부족하지만 진행")
 
     # title이 비어있으면 제목을 폴백으로 사용 (자막 포함 방지)
     if not title:
