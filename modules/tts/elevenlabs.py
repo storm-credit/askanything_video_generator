@@ -71,7 +71,7 @@ CHANNEL_VOICE_DESC = {
     "prismtale": "Deep male voice, neutral Spanish, dark cinematic tone, mysterious, slow controlled delivery",
 }
 
-QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://localhost:8010")
+QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
 
 
 def _generate_qwen3(text: str, output_path: str, language: str = "ko",
