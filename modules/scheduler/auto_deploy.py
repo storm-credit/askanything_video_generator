@@ -218,7 +218,14 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 for i, cut in enumerate(cuts):
                     script = cut.get("script", "")
                     scripts.append(script)
-                    aud = generate_tts(script, i, topic_folder, language=lang)
+                    # 감정 태그 추출
+                    _desc = cut.get("description", cut.get("text", ""))
+                    _emo = None
+                    for _et in ["SHOCK","WONDER","TENSION","REVEAL","URGENCY","DISBELIEF","IDENTITY","CALM"]:
+                        if f"[{_et}]" in _desc:
+                            _emo = _et
+                            break
+                    aud = generate_tts(script, i, topic_folder, language=lang, emotion=_emo, channel=channel)
                     audio_paths.append(aud)
                     if aud:
                         words = get_word_timestamps(aud)
