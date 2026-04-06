@@ -42,10 +42,10 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "wonderdrop": {
         "language": "en",
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
-        "tts_speed": 1.05,  # Qwen3 보정
+        "tts_speed": 1.1,  # 1.05→1.1 (EN 쇼츠 경쟁 시장 — 더 빠른 페이싱)
         "min_cuts": 8,
-        "max_cuts": 10,  # 35-45초 → 최대 10컷
-        "target_duration": "35-45",  # 실제 탑 28-41초, 업계 35-50초
+        "max_cuts": 10,
+        "target_duration": "35-43",  # 실제 탑 28-41초, 스위트스팟 35-43초
         "voice_settings": {
             "stability": 0.45,  # 0.65→0.45 (단조로움 제거, 감정 표현력↑)
             "similarity_boost": 0.85,
@@ -58,7 +58,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "caption_y": 38,
         "camera_style": "dynamic",  # gentle→dynamic (시네마틱 유지하되 에너지 추가)
         "visual_style": "cinematic, high contrast, dark background with bright subject, one strong accent color, dramatic rim lighting, ultra detailed, depth of field, lens flare, high realism",
-        "tone": "cinematic documentary narration, fascinated and engaged (not detached), confident, clear, quietly intense. Loop: natural and subtle — reconnect to the opening line smoothly without obvious repetition",
+        "tone": "confident authority narrator, compelling and clear, like revealing a secret the viewer needs to know. NOT calm/detached — engaged and forward-driving. Loop: natural callback — last line makes Cut 1 feel like the answer.",
         "forbidden_phrases": ["insane", "mind-blowing", "you won't believe", "literally dying", "no cap", "bro", "lowkey", "ngl"],
         "upload_accounts": {
             "youtube": None,

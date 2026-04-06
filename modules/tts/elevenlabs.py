@@ -66,7 +66,7 @@ EMOTION_VOICE_DESC = {
 # ── 채널 → Qwen3 기본 voice_desc ──
 CHANNEL_VOICE_DESC = {
     "askanything": "Fast-talking Korean male narrator, rapid-fire delivery, high energy, punchy and direct like viral YouTube Shorts, emphasize numbers, cut endings short",
-    "wonderdrop": "Deep calm male voice, cinematic documentary narrator, confident, Netflix documentary feel",
+    "wonderdrop": "Confident male narrator, steady authority, clear and compelling delivery, like a science documentary host revealing something incredible, never monotone",
     "exploratodo": "Energetic young male voice, Latin American Spanish, excited and fast-paced, like a friend telling something incredible",
     "prismtale": "Deep male voice, neutral Spanish, dark cinematic tone, mysterious, steady controlled delivery, never drag endings",
 }

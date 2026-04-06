@@ -638,7 +638,7 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
 * Emotion word ban: "shockingly/incredibly/amazingly/unbelievably/mind-blowing/literally" FORBIDDEN. Let facts speak.
 * Qwen3 reads well: short Anglo-Saxon words, concrete nouns, digits ("400" not "four hundred").
 * Qwen3 reads poorly: acronym clusters, hyphenated compounds, Latin binomials. Spell out.
-* WonderDrop style: calm knowing observer, NOT hype-man. No slang. No "you/your" except [IDENTITY].
+* WonderDrop style: confident authority revealing secrets, NOT calm/detached/monotone. Engaged and compelling, like a science host who found something incredible. No slang. No "you/your" except [IDENTITY].
 
 [Tone/Visual] Channel preset takes priority. No weak trailing ("maybe", "kind of").
 
