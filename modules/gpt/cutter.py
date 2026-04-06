@@ -400,6 +400,8 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
    후크 패턴: 숫자 대비, 부정+반전, 시간 긴급성, 직관 파괴
    ★★★ [훅 필수 규칙] 첫 문장은 반드시 상식을 깨거나 "불가능해 보이는 사실"이어야 함.
    ❌ "이건 흥미롭다" ❌ "오늘 소개할 건" → ✅ "이건 존재해선 안 되는 거야" ✅ "과학자들도 설명 못하는 게 있어"
+   ❌ 금지 훅 패턴: "~란 사실", "사실은...", "알고 보면", "~라는 게 있어" → 전부 약한 도입. 바로 팩트를 던져라.
+   ★ Cut 1에서 숫자 사용 시 문장 앞에 배치 (예: "50마리 코끼리가 손톱 위에" ✅ / "손톱 위에 코끼리 50마리" ❌)
 2. Cut 2~3 — 충격 확장: "근데 진짜 소름돋는 건..." 식으로 연쇄.
 3. Cut 4~5 — 반전 빌드업: Cut 4에 반드시 새 충격 팩트(두 번째 훅). ★ 매 2~3컷마다 카메라/조명/스케일 급변.
    ★★★ [리텐션 락 — 컷3 또는 컷4에 반드시 배치] "근데 이게 다가 아니야", "여기서 끝이 아니야" 같은 패턴 브레이크 필수. 이탈이 가장 많은 7~12초 구간 방어.
@@ -464,6 +466,12 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 * 사람 얼굴 정면 클로즈업 금지.
 * 구체적 디테일: 색온도, 재질감, 스케일 비교.
 
+* [9:16 세로 구도 필수]
+  - 피사체를 세로로 배치 (탑, 해구, 나무 등 수직 요소 우선)
+  - 상단 1/3에 핵심 피사체 배치 (하단 20%는 자막 영역)
+  - "wide panoramic landscape" 같은 가로 구도 금지
+  - "text", "labels", "numbers overlay", "depth markers" 등 텍스트 유발 표현 금지
+
 ★★★ [주제 일치 — 최우선 규칙] ★★★
 * 모든 image_prompt는 해당 컷 script의 핵심 피사체를 반드시 포함해야 한다.
 * script="해파리는 뇌가 없다" → image_prompt에 반드시 "jellyfish" 포함. 무관한 피사체 절대 금지.
@@ -475,13 +483,16 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 * 감정 곡선: 전체 상승, 클라이맥스 직전 이완 1컷 허용. 2컷 연속 같은 태그 금지, 최소 3종류 사용.
 * 비주얼 임팩트: Cut 1은 극단적 크기/색/비현실 대비 필수. 모든 컷 강렬한 요소 1개 이상. 연속 같은 색감/구도 금지.
 * 템포: 빠른 컷↔느린 컷 교대. 3컷 연속 같은 리듬 금지.
+* [정보 나열 금지] 3컷 연속 새 팩트 투입 금지. 반드시 중간에 비유/감각 전환 컷 삽입.
+  ❌ 컷3="400도 물" → 컷4="생물 번성" → 컷5="고래 뼈" (3연속 신규 팩트)
+  ✅ 컷3="400도 물" → 컷4="생물 번성" → 컷5="그 깊이가 어느 정도냐면..." (비유 전환)
 
 [골든 예시 — 주제: "심해에 들어가면 생기는 일" (8컷 완전한 감정 아크)]
 {
   "title": "심해에 들어가면 생기는 일",
   "tags": ["#Shorts", "#심해", "#바다", "#과학"],
   "cuts": [
-    {"description": "칠흑같은 심해에서 거대한 압력이 잠수정을 짓누르는 장면 [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "심해 만 미터에선 손톱 위에 코끼리 50마리가 올라탄 압력이야."},
+    {"description": "칠흑같은 심해에서 거대한 압력이 잠수정을 짓누르는 장면 [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "50마리 코끼리가 손톱 위에."},
     {"description": "심해의 발광 해파리가 어둠 속에서 빛나는 환상적 장면 [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "근데 거기엔 빛 없이도 스스로 빛나는 생물이 살아."},
     {"description": "심해 열수구에서 끓는 물이 분출되는 장면 [TENSION]", "image_prompt": "Hydrothermal vent erupting superheated black water at ocean floor, extreme temperature shimmer, orange mineral deposits, dramatic side lighting from magma glow below", "script": "그리고 바닥에선 400도짜리 물이 끓고 있거든."},
     {"description": "열수구 주변에서 번성하는 괴생물체 군집 클로즈업 [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "근데 반전은 그 끓는 물 옆에서 생물이 번성하고 있다는 거야."},
@@ -608,7 +619,8 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
 * NEVER start with academic phrases: "According to research", "Scientists discovered", "Studies show", "Researchers found" → Drop the fact directly.
   ❌ "According to NASA, this planet has diamond rain" → ✅ "This planet rains diamonds."
   ❌ "Researchers discovered that..." → ✅ "This creature hasn't aged in 200 years."
-* [CRITICAL WARNING] 8-10 cuts. Target 35-45 seconds. NEVER less than 8 cuts. Longer Shorts get more views — don't rush.
+* [CRITICAL WARNING] 8-10 cuts. Target 35-45 seconds. NEVER less than 8 cuts. Sweet spot is 35-43 seconds.
+* USE can't/won't/doesn't. AVOID would've/could've (Qwen3 garbles these).
 * Sentence endings by emotion tag (voice_desc carries tone — do NOT over-write):
   [SHOCK]     Short declarative punch: "...and it's only getting worse."
   [WONDER]    Quiet revelation: "...and science still can't explain why."
@@ -641,6 +653,12 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
 * No frontal face close-ups.
 * Specific details: color temperature, textures, scale comparisons.
 
+* [9:16 VERTICAL COMPOSITION — MANDATORY]
+  - Compose for vertical frame: prioritize tall/vertical elements
+  - Place key subject in upper 2/3 (bottom 20% reserved for captions)
+  - NEVER use "wide panoramic landscape" — always "tall vertical composition"
+  - NEVER include "text", "labels", "numbers overlay", "depth markers" in prompts
+
 ★★★ [SUBJECT MATCH — HIGHEST PRIORITY] ★★★
 * Every image_prompt MUST depict the subject in its corresponding script.
 * script="jellyfish have no brain" → image_prompt MUST contain "jellyfish". No abstract/unrelated subjects.
@@ -653,13 +671,16 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
 * Emotional arc: Overall escalation, one brief release allowed before climax. No same tag 2x in a row, min 3 types.
 * Visual impact: Cut 1 must stop scrolling (extreme scale/color/surreal). All cuts need 1+ striking element. No same palette 2 cuts in a row.
 * Pacing: Alternate fast↔slow cuts. Never 3 cuts with same rhythm.
+* [NO FACT DUMPS] Never introduce 3+ new facts in consecutive cuts. Insert a comparison/metaphor/scale cut between fact-heavy cuts.
+  ❌ Cut3="400°C water" → Cut4="life thrives" → Cut5="whale bones" (3 consecutive new facts)
+  ✅ Cut3="400°C water" → Cut4="life thrives" → Cut5="Picture this depth — it's like..." (metaphor break)
 
 [Golden Example — Topic: "What happens in the deep ocean" (full 9-cut emotional arc)]
 {
   "title": "The Deep Sea Will Blow Your Mind",
   "tags": ["#Shorts", "#DeepSea", "#Ocean", "#Science"],
   "cuts": [
-    {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "At the bottom of the ocean the pressure is like 50 elephants standing on your fingernail."},
+    {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "Ocean pressure equals fifty elephants on your fingernail."},
     {"description": "Massive bioluminescent jellyfish glowing in total darkness [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "But down there creatures make their own light with zero sunlight."},
     {"description": "Hydrothermal vent erupting superheated water on the ocean floor [TENSION]", "image_prompt": "Hydrothermal vent erupting superheated black water at ocean floor, extreme temperature shimmer, orange mineral deposits, dramatic side lighting from magma glow below", "script": "And at the very bottom water is boiling at 400 degrees."},
     {"description": "Alien-like colony of tube worms thriving next to the boiling vent [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "Here's the twist — life is actually thriving right next to that boiling water."},
@@ -795,7 +816,7 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
   [DISBELIEF]: afirmación simple. "Sin embargo," al inicio del siguiente corte.
   [IDENTITY]: voz pasiva o tercera persona. Distancia narrativa.
   [CALM]: oraciones largas, fluidas, con comas. Cierre o transición.
-* Evitar signos de exclamación. Impacto con afirmaciones, no emoción explícita.
+* PROHIBIDO signos de exclamación. Impacto con afirmaciones, no emoción explícita.
 * Prohibido: "increíble/impresionante/¡atención!/no lo vas a creer". TTS maneja el tono.
 * Permitido: "extraño", "inexplicable", "silencioso", "oscuro", "olvidado", "profundo".
 * Pausas: punto seguido o punto y aparte, nunca coma excesiva.
@@ -815,6 +836,12 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 * Sin primeros planos frontales de rostros.
 * Detalles específicos: temperatura de color, texturas, comparaciones de escala.
 
+* [9:16 COMPOSICIÓN VERTICAL — OBLIGATORIO]
+  - Componer para formato vertical: priorizar elementos altos/verticales
+  - Colocar sujeto clave en los 2/3 superiores (20% inferior reservado para subtítulos)
+  - NUNCA usar "wide panoramic landscape" — siempre "tall vertical composition"
+  - NUNCA incluir "text", "labels", "numbers overlay", "depth markers" en prompts
+
 ★★★ [COINCIDENCIA DE SUJETO — REGLA DE MÁXIMA PRIORIDAD] ★★★
 * Cada image_prompt DEBE representar el sujeto de su script correspondiente.
 * script="las medusas no tienen cerebro" → image_prompt DEBE contener "jellyfish". Sin sujetos abstractos/no relacionados.
@@ -827,13 +854,16 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 * Arco emocional: Escalada general, pausa breve permitida antes del clímax. Nunca misma etiqueta 2x seguidos, mín 3 tipos.
 * Impacto visual: Corte 1 debe detener el scroll (escala/color/surrealismo extremo). Todos los cortes con 1+ elemento impactante. Misma paleta 2x PROHIBIDA.
 * Ritmo: Alternar rápido↔lento. Nunca 3 cortes con mismo ritmo.
+* [PROHIBIDO LISTAR DATOS] Nunca 3+ datos nuevos en cortes consecutivos. Insertar comparación/metáfora entre cortes de datos.
+  ❌ Corte3="agua a 400°C" → Corte4="vida prospera" → Corte5="huesos de ballena"
+  ✅ Corte3="agua a 400°C" → Corte4="vida prospera" → Corte5="Imagina esa profundidad..." (pausa de metáfora)
 
 [Ejemplo dorado — Tema: "Lo que pasa en el fondo del océano" (arco emocional completo de 8 cortes)]
 {
   "title": "El fondo del océano esconde esto",
   "tags": ["#Shorts", "#Ocean", "#DeepSea", "#Science", "#Océano"],
   "cuts": [
-    {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "A diez mil metros de profundidad la presión equivale a 50 elefantes sobre tu uña."},
+    {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "La presión del abismo equivale a 50 elefantes sobre tu uña."},
     {"description": "Massive bioluminescent jellyfish glowing in total darkness [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "Pero ahí abajo hay criaturas que generan su propia luz sin el sol."},
     {"description": "Hydrothermal vent erupting superheated water on the ocean floor [TENSION]", "image_prompt": "Hydrothermal vent erupting superheated black water at ocean floor, extreme temperature shimmer, orange mineral deposits, dramatic side lighting from magma glow below", "script": "Y en el fondo el agua hierve a cuatrocientos grados."},
     {"description": "Alien-like colony of tube worms thriving next to the boiling vent [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "Lo inesperado es que junto a esa agua hirviendo la vida prospera."},
@@ -948,6 +978,13 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
    ❌ Oraciones incompletas — PROHIBIDO
    ❌ Finales reflexivos o filosóficos — PROHIBIDO
 
+★ [CURVA DE ENERGÍA — NO plana]
+Cortes 1-2: EXPLOSIÓN (gancho + sorpresa)
+Corte 3: micro-pausa ("Imagínate eso...")
+Cortes 4-5: SEGUNDA EXPLOSIÓN (bloqueo de retención)
+Corte 6: comparación visual (respiro)
+Cortes 7-8: CLÍMAX + Loop
+
 [Reglas de guion — Qwen3-TTS Optimizado LATAM]
 * Español latinoamericano neutro, accesible, energético. Tono de amigo contando algo increíble.
 * 8-12 palabras por corte, una oración. Ritmo rápido y dinámico.
@@ -979,6 +1016,12 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 * Sin primeros planos frontales de rostros.
 * Detalles específicos: colores brillantes, texturas exageradas, composición llamativa.
 
+* [9:16 COMPOSICIÓN VERTICAL — OBLIGATORIO]
+  - Componer para formato vertical: priorizar elementos altos/verticales
+  - Colocar sujeto clave en los 2/3 superiores (20% inferior reservado para subtítulos)
+  - NUNCA usar "wide panoramic landscape" — siempre "tall vertical composition"
+  - NUNCA incluir "text", "labels", "numbers overlay", "depth markers" en prompts
+
 ★★★ [COINCIDENCIA DE SUJETO — REGLA DE MÁXIMA PRIORIDAD] ★★★
 * Cada image_prompt DEBE representar el sujeto de su script correspondiente.
 * script="los pulpos tienen 3 corazones" → image_prompt DEBE contener "octopus". Sin sujetos abstractos.
@@ -994,6 +1037,9 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 * Energía ALTA de principio a fin, con micro-pausas de asombro. Nunca misma etiqueta 2x seguidos, mín 3 tipos.
 * Impacto visual: Corte 1 = EXPLOSIVO (colores vibrantes, escala exagerada). Todos los cortes con brillo/color/dramatismo. Misma paleta 2x PROHIBIDA.
 * Ritmo: Rápido en general. Alternar datos cortos↔comparaciones. Nunca 3 cortes con mismo ritmo.
+* [PROHIBIDO LISTAR DATOS] Nunca 3+ datos nuevos en cortes consecutivos. Insertar comparación/metáfora entre cortes de datos.
+  ❌ Corte3="agua a 400°C" → Corte4="vida prospera" → Corte5="huesos de ballena"
+  ✅ Corte3="agua a 400°C" → Corte4="vida prospera" → Corte5="Imagina esa profundidad..." (pausa de metáfora)
 
 [Ejemplo dorado — Tema: "Datos increíbles sobre los pulpos" (arco emocional completo de 8 cortes)]
 {
