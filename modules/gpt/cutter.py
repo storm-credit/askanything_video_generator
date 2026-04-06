@@ -1340,6 +1340,10 @@ These English keywords help YouTube's algorithm classify this content for US aud
         # HARD FAIL 유형별 수정 라우팅
         has_visual_fail = any("VISUAL" in f for f in hard_fails)
         has_structure_fail = any(k in "".join(hard_fails) for k in ["HOOK", "TENSION", "LOOP", "TONE"])
+        has_academic_fail = any("ACADEMIC" in f for f in hard_fails)
+        if has_academic_fail:
+            print("-> [HARD FAIL 수정] 학술체 리라이트 시도...")
+            cuts = _rewrite_academic_tone(cuts, lang, llm_provider, _verify_key(), llm_model)
         if has_structure_fail:
             print("-> [HARD FAIL 수정] 구조 검증으로 자동 수정 시도 (1회)...")
             cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model, channel)
@@ -1807,7 +1811,19 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
     if not any(kw in first_prompt for kw in impact_keywords):
         failures.append(f"VISUAL_WEAK: Cut 1 image_prompt에 임팩트 키워드 없음")
 
-    # 5) 톤-채널 일치 검증
+    # 5) 학술체 감지 — "연구에 따르면" 등 학술적 도입부
+    academic_patterns_ko = ["연구에 따르면", "과학자들이 발견", "에 의하면", "것으로 밝혀", "것으로 알려져", "분석에 따르면", "논문에 따르면"]
+    academic_patterns_en = ["according to", "studies show", "researchers found", "scientists discovered", "research suggests", "a study published"]
+    academic_patterns_es = ["según estudios", "los científicos descubrieron", "investigaciones demuestran", "un estudio publicado"]
+    all_scripts_combined = " ".join(c.get("script", "") for c in cuts).lower()
+    for pat in academic_patterns_ko + academic_patterns_en + academic_patterns_es:
+        if pat.lower() in all_scripts_combined:
+            # 어떤 컷에서 발견됐는지 찾기
+            for ci, c in enumerate(cuts):
+                if pat.lower() in c.get("script", "").lower():
+                    failures.append(f"ACADEMIC_TONE: Cut {ci+1}에 학술체 '{pat}' — '{c['script'][:50]}'")
+
+    # 6) 톤-채널 일치 검증
     if channel:
         from modules.utils.channel_config import get_channel_preset
         preset = get_channel_preset(channel)
@@ -1982,6 +1998,60 @@ def _request_gemini_freeform(api_key: str, prompt: str, model: str | None = None
         config={"response_mime_type": "application/json", "http_options": types.HttpOptions(timeout=60_000)},
     )
     return (response.text or "").strip()
+
+
+# ── 학술체 리라이트 ─────────────────────────────────────────────────
+
+def _rewrite_academic_tone(cuts: list[dict], lang: str, llm_provider: str, api_key: str, model: str | None = None) -> list[dict]:
+    """학술체 표현을 펀치력 있는 구어체로 리라이트."""
+    academic_patterns = {
+        "ko": ["연구에 따르면", "과학자들이 발견", "에 의하면", "것으로 밝혀", "것으로 알려져", "분석에 따르면", "논문에 따르면"],
+        "en": ["according to", "studies show", "researchers found", "scientists discovered", "research suggests", "a study published"],
+        "es": ["según estudios", "los científicos descubrieron", "investigaciones demuestran", "un estudio publicado"],
+    }
+    patterns = academic_patterns.get(lang, academic_patterns["en"])
+
+    # 학술체가 포함된 컷만 추출
+    targets = []
+    for i, cut in enumerate(cuts):
+        script = cut.get("script", "")
+        if any(p.lower() in script.lower() for p in patterns):
+            targets.append({"cut": i + 1, "script": script})
+
+    if not targets:
+        return cuts
+
+    rewrite_rules = {
+        "ko": "학술적 도입부를 제거하고 팩트를 바로 던지는 반말 구어체로 바꿔라. 의미는 유지. 예: '연구에 따르면 이 물질은 독성이 있어' → '이 물질, 금보다 독해'",
+        "en": "Remove academic introductions and state the fact directly. Keep meaning. Example: 'According to NASA, this planet has diamond rain' → 'This planet rains diamonds.'",
+        "es": "Elimina introducciones académicas y di el dato directamente. Mantén el significado. Ejemplo: 'Según estudios, este animal...' → 'Este animal...'",
+    }
+
+    prompt = f"""Rewrite ONLY the scripts below to remove academic/research-framing language.
+Rule: {rewrite_rules.get(lang, rewrite_rules['en'])}
+
+Scripts to fix:
+{json.dumps(targets, ensure_ascii=False)}
+
+Output JSON array: [{{"cut": 1, "script": "rewritten"}}]
+ONLY output scripts that were changed. Keep same length range."""
+
+    try:
+        import json as _json
+        raw = _request_gemini_freeform(api_key, prompt, model)
+        rewrites = _json.loads(raw)
+        if isinstance(rewrites, list):
+            for rw in rewrites:
+                idx = rw.get("cut", 0) - 1
+                new_script = rw.get("script", "")
+                if 0 <= idx < len(cuts) and new_script:
+                    old = cuts[idx]["script"]
+                    cuts[idx]["script"] = new_script
+                    print(f"  [학술체 리라이트] Cut {idx+1}: '{old[:30]}' → '{new_script[:30]}'")
+    except Exception as e:
+        print(f"  [학술체 리라이트] 실패 (원본 유지): {e}")
+
+    return cuts
 
 
 # ── 문장 자연화 리라이트 (Script Polisher) ─────────────────────────
