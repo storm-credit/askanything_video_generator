@@ -2904,6 +2904,66 @@ async def get_all_channel_stats(refresh: bool = False):
     return {"success": True, "channels": results}
 
 
+# ── 성과 분석 엔진 API ──────────────────────────────────────────
+
+@app.post("/api/analytics/snapshot")
+async def analytics_snapshot(label: str = "auto", refresh: bool = True):
+    """현재 성과 스냅샷 저장 (before/after 비교 기준선)."""
+    from modules.analytics.performance_tracker import take_snapshot
+    result = take_snapshot(label=label, refresh=refresh)
+    channels_summary = {ch: {k: v for k, v in d.items() if k != "videos"} for ch, d in result.get("channels", {}).items()}
+    return {"success": True, "label": result["label"], "timestamp": result["timestamp"], "channels": channels_summary}
+
+
+@app.get("/api/analytics/snapshots")
+async def analytics_list_snapshots():
+    """저장된 스냅샷 목록."""
+    from modules.analytics.performance_tracker import list_snapshots
+    return {"success": True, "snapshots": list_snapshots()}
+
+
+@app.get("/api/analytics/compare")
+async def analytics_compare(before: str = None, after: str = None):
+    """두 스냅샷 비교. 미지정 시 첫 번째/마지막 비교."""
+    from modules.analytics.performance_tracker import compare_snapshots
+    return {"success": True, **compare_snapshots(before, after)}
+
+
+@app.get("/api/analytics/trend/{channel}")
+async def analytics_trend(channel: str, days: int = 14):
+    """채널 일별 트렌드."""
+    from modules.analytics.performance_tracker import get_daily_trend
+    return {"success": True, "channel": channel, "trend": get_daily_trend(channel, days)}
+
+
+@app.post("/api/analytics/record-daily")
+async def analytics_record_daily():
+    """오늘 일별 기록 저장."""
+    from modules.analytics.performance_tracker import record_daily
+    return {"success": True, "data": record_daily()}
+
+
+@app.get("/api/analytics/hooks/{channel}")
+async def analytics_hooks(channel: str, refresh: bool = False):
+    """훅 패턴별 평균 조회수."""
+    from modules.analytics.performance_tracker import analyze_hook_patterns
+    return {"success": True, "channel": channel, "patterns": analyze_hook_patterns(channel, refresh)}
+
+
+@app.get("/api/analytics/cross-channel")
+async def analytics_cross_channel(refresh: bool = False):
+    """같은 토픽의 채널별 조회수 비교."""
+    from modules.analytics.performance_tracker import analyze_topic_cross_channel
+    return {"success": True, "topics": analyze_topic_cross_channel(refresh)}
+
+
+@app.get("/api/analytics/tone-report")
+async def analytics_tone_report():
+    """톤 변경 영향 종합 리포트."""
+    from modules.analytics.performance_tracker import get_tone_change_report
+    return {"success": True, **get_tone_change_report()}
+
+
 @app.post("/api/batch/import-today")
 async def batch_import_today():
     """오늘 날짜의 Day 파일을 자동 감지하여 batch 큐에 등록합니다."""
