@@ -45,13 +45,19 @@ STATE_FILE = os.path.join("assets", "_deploy_state.json")
 
 
 def _save_state():
-    """배포 상태를 파일로 저장 — 컨테이너 재시작 시 복구용."""
+    """배포 상태를 파일로 저장 — 원자적 쓰기 (크래시 안전)."""
+    import tempfile
     try:
-        os.makedirs(os.path.dirname(STATE_FILE) or ".", exist_ok=True)
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
+        state_dir = os.path.dirname(STATE_FILE) or "."
+        os.makedirs(state_dir, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=state_dir, suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(_deploy_status, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, STATE_FILE)
     except Exception as e:
         print(f"[자동 배포] 상태 저장 실패: {e}")
+        if 'tmp_path' in locals() and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 def _load_state(target_date_str: str) -> set[str]:
@@ -329,8 +335,21 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 print(f"  ✅ 완료: {channel} — '{title}'")
 
             except Exception as e:
+                err_str = str(e)[:200]
+                is_retryable = any(k in err_str.lower() for k in ["429", "timeout", "resource_exhausted", "rate limit", "connection"])
+
+                if is_retryable and task_result.get("_retries", 0) < 2:
+                    retry_num = task_result.get("_retries", 0) + 1
+                    wait_sec = 30 * (2 ** (retry_num - 1))  # 30s, 60s
+                    print(f"  ⏳ 리트라이 가능 에러 — {wait_sec}초 후 재시도 ({retry_num}/2): {err_str}")
+                    await asyncio.sleep(wait_sec)
+                    task_result["_retries"] = retry_num
+                    # 스케줄 맨 뒤에 다시 추가
+                    schedule.append({**item, "_retries": retry_num})
+                    continue  # results에 추가하지 않고 다음으로
+
                 task_result["status"] = "failed"
-                task_result["error"] = str(e)[:200]
+                task_result["error"] = err_str
                 _deploy_status["failed"] += 1
                 print(f"  ❌ 실패: {channel} — '{topic}': {e}")
                 traceback.print_exc()
