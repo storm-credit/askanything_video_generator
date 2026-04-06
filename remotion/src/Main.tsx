@@ -17,11 +17,11 @@ type CutProps = {
   word_timestamps: WordProps[];
   duration_in_frames: number;
   description?: string;
-  emotion?: 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
+  emotion?: 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM';
 };
 
 // Extract [EMOTION] tag from cut description field
-const EMOTION_TAGS = new Set(['SHOCK', 'WONDER', 'TENSION', 'REVEAL', 'CALM']);
+const EMOTION_TAGS = new Set(['SHOCK', 'WONDER', 'TENSION', 'REVEAL', 'URGENCY', 'DISBELIEF', 'IDENTITY', 'CALM']);
 const extractEmotion = (cut: CutProps): EmotionTag | undefined => {
   if (cut.emotion && EMOTION_TAGS.has(cut.emotion)) return cut.emotion as EmotionTag;
   if (!cut.description) return undefined;
@@ -67,13 +67,16 @@ const CAMERA_PRESETS: Record<Exclude<CameraStyle, 'auto'>, KenBurnsPreset[]> = {
 };
 
 // Emotion → camera preset mapping (overrides round-robin when emotion tag present)
-type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'CALM';
+type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM';
 const EMOTION_CAMERA: Record<EmotionTag, KenBurnsPreset> = {
-  SHOCK:   { startScale: 1.0, endScale: 1.2, startX: 0, endX: -4, startY: 0, endY: -3 },
-  WONDER:  { startScale: 1.0, endScale: 1.06, startX: -1, endX: 1, startY: 0, endY: -0.5 },
-  TENSION: { startScale: 1.08, endScale: 1.12, startX: 0, endX: 0, startY: 1, endY: -1 },
-  REVEAL:  { startScale: 1.18, endScale: 1.0, startX: -3, endX: 3, startY: -2, endY: 2 },
-  CALM:    { startScale: 1.0, endScale: 1.02, startX: 0, endX: 0, startY: 0, endY: 0 },
+  SHOCK:     { startScale: 1.0, endScale: 1.2, startX: 0, endX: -4, startY: 0, endY: -3 },
+  WONDER:    { startScale: 1.0, endScale: 1.06, startX: -1, endX: 1, startY: 0, endY: -0.5 },
+  TENSION:   { startScale: 1.08, endScale: 1.12, startX: 0, endX: 0, startY: 1, endY: -1 },
+  REVEAL:    { startScale: 1.18, endScale: 1.0, startX: -3, endX: 3, startY: -2, endY: 2 },
+  URGENCY:   { startScale: 1.0, endScale: 1.15, startX: 2, endX: -3, startY: 0, endY: -2 },
+  DISBELIEF: { startScale: 1.1, endScale: 1.0, startX: -2, endX: 2, startY: -1, endY: 1 },
+  IDENTITY:  { startScale: 1.0, endScale: 1.04, startX: 0, endX: 0, startY: -0.5, endY: 0.5 },
+  CALM:      { startScale: 1.0, endScale: 1.02, startX: 0, endX: 0, startY: 0, endY: 0 },
 };
 
 const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: number; cameraStyle?: CameraStyle; emotion?: EmotionTag }> = ({ src, durationInFrames, index, cameraStyle = 'dynamic', emotion }) => {

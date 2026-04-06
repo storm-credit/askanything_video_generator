@@ -292,15 +292,23 @@ def mark_risky(job_id: int, notes: str | None = None) -> None:
     update_job(job_id, **kwargs)
 
 
-def mark_approved(job_id: int) -> None:
-    """최종 승인 — 렌더 단계로 이동 가능."""
-    update_job(
-        job_id,
-        status="approved",
-        prompt_status="approved",
-        fact_check_status="verified",
-        approved_at=datetime.now().isoformat(),
-    )
+def mark_approved(job_id: int) -> bool:
+    """최종 승인 — 렌더 단계로 이동 가능. 이미 running/completed면 무시."""
+    with _lock:
+        conn = _get_conn()
+        try:
+            row = conn.execute("SELECT status FROM batch_jobs WHERE id = ?", (job_id,)).fetchone()
+            if not row or row["status"] in ("running", "completed"):
+                return False
+            conn.execute(
+                "UPDATE batch_jobs SET status = 'approved', prompt_status = 'approved', "
+                "fact_check_status = 'verified', approved_at = ? WHERE id = ? AND status NOT IN ('running', 'completed')",
+                (datetime.now().isoformat(), job_id),
+            )
+            conn.commit()
+            return True
+        finally:
+            conn.close()
 
 
 def _compute_hash(text: str) -> str:

@@ -2722,7 +2722,9 @@ async def batch_approve(job_id: int):
     job = get_job(job_id)
     if not job:
         return {"success": False, "message": f"작업 #{job_id} 없음"}
-    mark_approved(job_id)
+    ok = mark_approved(job_id)
+    if not ok:
+        return {"success": False, "message": f"작업 #{job_id}은 현재 상태에서 승인할 수 없습니다 (running/completed)"}
     return {"success": True, "message": f"작업 #{job_id} 승인 완료 — 렌더 가능"}
 
 

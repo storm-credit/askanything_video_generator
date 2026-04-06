@@ -24,7 +24,7 @@ CHANNEL_API_KEYS = {
     "askanything": os.getenv("YOUTUBE_API_KEY_ASKANYTHING", ""),
     "wonderdrop": os.getenv("YOUTUBE_API_KEY_WONDERDROP", ""),
     "exploratodo": os.getenv("YOUTUBE_API_KEY_EXPLORATODO", ""),
-    "prismtale": os.getenv("YOUTUBE_API_KEY_EXPLORATODO", ""),  # exploratodo 키 공유
+    "prismtale": os.getenv("YOUTUBE_API_KEY_PRISMTALE", os.getenv("YOUTUBE_API_KEY_EXPLORATODO", "")),
 }
 
 # 캐시 파일 경로
