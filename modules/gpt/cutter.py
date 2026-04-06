@@ -600,12 +600,29 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
    ❌ "You'll never forget", "Think about that" — weak reflective endings FORBIDDEN
    ❌ "I already told you at the beginning" — meta 4th-wall breaking FORBIDDEN
 
-[Script Rules]
-* Casual, conversational. 12–18 words per cut mandatory (4-5 sec each). Under 10 words = FAIL. One sentence. Vary sentence structures.
-* [CRITICAL WARNING] Write 8–9 cuts. Target 38–48 second video. NEVER less than 8 cuts. Balance immersion with retention.
-* Use exclamations: "Insane, right?", "No way.", "Dead serious."
+[Script Rules — Qwen3-TTS Optimized]
+* Calm cinematic documentary voice. 12-18 words per cut mandatory (4-5 sec). Under 10 = FAIL. One sentence. Vary structures.
+* [CRITICAL WARNING] 8-9 cuts. Target 38-48 seconds. NEVER less than 8 cuts.
+* Sentence endings by emotion tag (voice_desc carries tone — do NOT over-write):
+  [SHOCK]     Short declarative punch: "...and it's only getting worse."
+  [WONDER]    Quiet revelation: "...and science still can't explain why."
+  [TENSION]   Suspended clause: "...slowly pulling it apart."
+  [REVEAL]    Contrast flip: "...turns out, the opposite is true."
+  [URGENCY]   Compressed time: "...in under 24 hours."
+  [DISBELIEF] Flat number/statement: "...that's 400 degrees above boiling."
+  [IDENTITY]  "we/our" anchor: "...and we've known about it for decades."
+  [CALM]      Wide open image: "...quietly drifting through the dark."
+* Punctuation for TTS:
+  Period(.) = full stop. Comma(,) = brief beat, max 1 per cut.
+  Em dash(—) = dramatic pivot, max 1 per cut, [REVEAL] only.
+  Ellipsis(...) = trailing suspense, [TENSION][WONDER] only.
+  Exclamation(!) = FORBIDDEN. Qwen3 over-stresses these.
+* Emotion word ban: "shockingly/incredibly/amazingly/unbelievably/mind-blowing/literally" FORBIDDEN. Let facts speak.
+* Qwen3 reads well: short Anglo-Saxon words, concrete nouns, digits ("400" not "four hundred").
+* Qwen3 reads poorly: acronym clusters, hyphenated compounds, Latin binomials. Spell out.
+* WonderDrop style: calm knowing observer, NOT hype-man. No slang. No "you/your" except [IDENTITY].
 
-[Tone/Visual] Channel preset ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) takes priority. No weak trailing ("maybe", "kind of").
+[Tone/Visual] Channel preset takes priority. No weak trailing ("maybe", "kind of").
 
 [Image Prompt Rules]
 * English only. Don't write "photorealistic/vertical/no text" (auto-prepended).
@@ -748,21 +765,27 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
    ❌ "Nunca lo olvidarás", "Piénsalo" — finales reflexivos débiles PROHIBIDOS
    ❌ "Ya te lo dije al principio" — ruptura meta de 4ta pared PROHIBIDA
 
-[Reglas de guion — TONO NEUTRO OBLIGATORIO]
-* Español neutro, directo, sin regionalismos. Tono de narrador de documental.
-* 8–15 palabras por corte, una oración. Variar estructuras de oración.
-* [CRITICAL WARNING] Escribir 8–9 cortes. Video objetivo de 38–48 segundos. NUNCA menos de 8 cortes. Ritmo medio — entre inmersión y dinamismo.
+[Reglas de guion — Qwen3-TTS Optimizado US Hispanic]
+* Español neutro y sobrio. Registro documental oscuro, nunca conversacional.
+* 8-14 palabras por corte. Una sola idea por oración.
+* [CRITICAL WARNING] 8-9 cortes. Video 38-48 segundos. NUNCA menos de 8.
+* Terminaciones por etiqueta emocional:
+  [SHOCK]: dato concreto o cifra final. Sin adjetivos dramáticos.
+  [WONDER]: pregunta indirecta o cláusula suspensiva con puntos suspensivos.
+  [TENSION]: oraciones cortas 8-10 palabras. Punto final. Sin inflexión ascendente.
+  [REVEAL]: empezar con "Pero..." o "Entonces..." + declaración directa.
+  [URGENCY]: ritmo rápido con comas internas.
+  [DISBELIEF]: afirmación simple. "Sin embargo," al inicio del siguiente corte.
+  [IDENTITY]: voz pasiva o tercera persona. Distancia narrativa.
+  [CALM]: oraciones largas, fluidas, con comas. Cierre o transición.
+* Evitar signos de exclamación. Impacto con afirmaciones, no emoción explícita.
+* Prohibido: "increíble/impresionante/¡atención!/no lo vas a creer". TTS maneja el tono.
+* Permitido: "extraño", "inexplicable", "silencioso", "oscuro", "olvidado", "profundo".
+* Pausas: punto seguido o punto y aparte, nunca coma excesiva.
+* PrismTale narra como testigo frío, NO descubridor entusiasmado. Diferencia clave vs ExploraTodo.
+* ❌ PROHIBIDO: energía ascendente, llamadas emotivas, regionalismos, tono sensacionalista.
 
-[Tono/Visual] Preset del canal ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) tiene prioridad. Sin finales débiles ("tal vez", "podría ser").
-* ❌ PROHIBIDO: colores vibrantes/saturados tipo latino. Este canal es OSCURO y CINEMATOGRÁFICO.
-* Patrones de oración OBLIGATORIOS (variar entre estos):
-  - Afirmación directa: "Esto no debería existir."
-  - Contraste factual: "Un planeta del tamaño de Júpiter pesa menos que el agua."
-  - Revelación corta: "Y nadie sabe por qué."
-  - Dato con escala: "Eso equivale a cubrir toda España con hielo."
-* ❌ PROHIBIDO: Exclamaciones excesivas con ¡!, aperturas tipo "¿Sabías que...?", tono exagerado o sensacionalista latino.
-* ❌ PROHIBIDO: Expresiones regionales ("¡No manches!", "¡Qué chido!", "¡Dale!", "Tío").
-* ✅ USAR: Frases cortas, contundentes, factuales. Como un documental de ciencia.
+[Tono/Visual] OSCURO y CINEMATOGRÁFICO. Sin colores vibrantes/saturados.
 
 [Reglas de image_prompt]
 * Solo en inglés. No escribir "photorealistic/vertical/no text" (se añade automáticamente).
@@ -897,20 +920,22 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
    ❌ Oraciones incompletas — PROHIBIDO
    ❌ Finales reflexivos o filosóficos — PROHIBIDO
 
-[Reglas de guion — TONO LATINO ENERGÉTICO]
-* Español latinoamericano, accesible, entretenido. Tono de presentador curioso.
-* 8–15 palabras por corte, una oración. Ritmo rápido.
-* [CRITICAL WARNING] Escribir 8–9 cortes. Video objetivo de 35–42 segundos. NUNCA menos de 8 cortes. Tempo rápido — sin pausa.
-* Patrones de oración OBLIGATORIOS (variar entre estos):
-  - Exclamación de apertura: "Esto es increíble..."
-  - Dato sorprendente: "Los pulpos tienen 3 corazones."
-  - Pregunta retórica: "¿Y sabes qué es lo más loco?"
-  - Comparación simple: "Eso es como llenar 100 estadios."
-  - Remate corto: "Y eso no es todo."
-* ✅ USAR: Tono energético, sorprendido, entretenido. Como un amigo contándote algo increíble.
-* ✅ USAR: "Increíble", "No vas a creer esto", "Mira esto", "Es una locura"
-* ❌ PROHIBIDO: Tono formal, académico o de noticiero.
-* ❌ PROHIBIDO: Frases muy largas o complejas.
+[Reglas de guion — Qwen3-TTS Optimizado LATAM]
+* Español latinoamericano neutro, accesible, energético. Tono de amigo contando algo increíble.
+* 8-14 palabras por corte, una oración. Ritmo dinámico.
+* [CRITICAL WARNING] 8-9 cortes. Video 35-42 segundos. NUNCA menos de 8.
+* Terminaciones por etiqueta emocional:
+  [SHOCK][DISBELIEF]: Terminar en sustantivo o cifra impactante. Sin adverbios finales.
+  [WONDER][REVEAL]: Terminar con pausa —punto o guión largo— antes de la idea clave.
+  [TENSION][URGENCY]: Oraciones cortas 8-10 palabras. Sin comas intermedias.
+  [IDENTITY][CALM]: Hasta 14 palabras. Coma para pausas naturales.
+* Puntuación TTS: punto=pausa larga; coma=pausa breve; guión largo—=pausa dramática; exclamación solo en [SHOCK][URGENCY].
+* Puntos suspensivos(...) = suspenso gradual, solo [TENSION][WONDER].
+* Eliminar palabras emocionales redundantes: prohibido "increíble/asombroso/impresionante" — TTS maneja el tono.
+* Preferir: números en dígitos ("3 millones"), verbos activos ("descubrieron", "explotó").
+* Evitar: siglas sin separación (usar "la NASA"), palabras esdrújulas seguidas, gerundios encadenados.
+* Estilo ExploraTodo: hablar directo ("te cuento", "fíjate", "imagínate"), sin formalidades.
+* ❌ PROHIBIDO: tono formal, académico, de noticiero. Frases largas o complejas.
 
 [Tono/Visual] Preset del canal ([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) tiene prioridad. Frases con IMPACTO al final.
 * ❌ PROHIBIDO: tonos oscuros/apagados tipo documental. Este canal es BRILLANTE y COLORIDO.
