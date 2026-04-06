@@ -432,8 +432,8 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   금지 도입부: "연구에 따르면", "과학자들이 발견한", "~에 의하면", "~것으로 밝혀졌다", "~것으로 알려져 있다" → 학술체는 이탈 유발. 팩트를 바로 던져라.
   ❌ "연구에 따르면 이 물질은 독성이 있어" → ✅ "이 물질, 금보다 독해"
   ❌ "NASA에 의하면 이 행성은..." → ✅ "이 행성, 다이아몬드 비가 와"
-* 한 컷 25~40자 필수 (4~5초 분량). 25자 미만은 FAIL. 한 문장. 연속 동일 문장구조 금지.
-* [CRITICAL WARNING] 8~9컷으로 작성. 총 35~42초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지.
+* 한 컷 20~32자 필수 (3~4초 분량). 20자 미만은 FAIL. 한 문장. 연속 동일 문장구조 금지.
+* [CRITICAL WARNING] 8~9컷으로 작성. 총 28~35초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지. 한국 쇼츠는 빠를수록 좋다.
 
 [Qwen3-TTS 최적화 규칙]
 * 감정 태그가 TTS 음성 톤을 직접 바꾼다. 태그와 내용 불일치 절대 금지.
@@ -503,7 +503,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     {
       "description": "[컷 묘사 (한국어)] [감정태그]",
       "image_prompt": "[영어 이미지 프롬프트 (MASTER_STYLE 자동 적용됨)]",
-      "script": "[성우 대본: 구어체 반말, 25~40자 필수. 25자 미만 FAIL]"
+      "script": "[성우 대본: 구어체 반말, 20~32자 필수. 20자 미만 FAIL]"
     }
   ]
 }
@@ -604,11 +604,11 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
    ❌ "I already told you at the beginning" — meta 4th-wall breaking FORBIDDEN
 
 [Script Rules — Qwen3-TTS Optimized]
-* Calm cinematic documentary voice. 12-18 words per cut mandatory (4-5 sec). Under 10 = FAIL. One sentence. Vary structures.
+* Calm cinematic documentary voice. 10-15 words per cut mandatory (3-4 sec). Under 8 = FAIL. One sentence. Vary structures.
 * NEVER start with academic phrases: "According to research", "Scientists discovered", "Studies show", "Researchers found" → Drop the fact directly.
   ❌ "According to NASA, this planet has diamond rain" → ✅ "This planet rains diamonds."
   ❌ "Researchers discovered that..." → ✅ "This creature hasn't aged in 200 years."
-* [CRITICAL WARNING] 8-9 cuts. Target 35-42 seconds. NEVER less than 8 cuts.
+* [CRITICAL WARNING] 8-9 cuts. Target 28-36 seconds. NEVER less than 8 cuts. Shorter = better retention.
 * Sentence endings by emotion tag (voice_desc carries tone — do NOT over-write):
   [SHOCK]     Short declarative punch: "...and it's only getting worse."
   [WONDER]    Quiet revelation: "...and science still can't explain why."
@@ -682,7 +682,7 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
       "image_prompt": "[English image prompt (MASTER_STYLE auto-applied)]",
-      "script": "[Voice-over: casual, 12-18 words mandatory. Under 10 = FAIL]"
+      "script": "[Voice-over: casual, 10-15 words mandatory. Under 8 = FAIL]"
     }
   ]
 }
@@ -784,8 +784,8 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 
 [Reglas de guion — Qwen3-TTS Optimizado US Hispanic]
 * Español neutro y sobrio. Registro documental oscuro, nunca conversacional.
-* 8-14 palabras por corte. Una sola idea por oración.
-* [CRITICAL WARNING] 8-9 cortes. Video 35-42 segundos. NUNCA menos de 8.
+* 8-12 palabras por corte. Una sola idea por oración. Más corto = mejor retención.
+* [CRITICAL WARNING] 8-9 cortes. Video 28-36 segundos. NUNCA menos de 8.
 * Terminaciones por etiqueta emocional:
   [SHOCK]: dato concreto o cifra final. Sin adjetivos dramáticos.
   [WONDER]: pregunta indirecta o cláusula suspensiva con puntos suspensivos.
@@ -950,8 +950,8 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 
 [Reglas de guion — Qwen3-TTS Optimizado LATAM]
 * Español latinoamericano neutro, accesible, energético. Tono de amigo contando algo increíble.
-* 8-14 palabras por corte, una oración. Ritmo dinámico.
-* [CRITICAL WARNING] 8-9 cortes. Video 35-42 segundos. NUNCA menos de 8.
+* 8-12 palabras por corte, una oración. Ritmo dinámico. Más corto = mejor retención.
+* [CRITICAL WARNING] 8-9 cortes. Video 28-36 segundos. NUNCA menos de 8.
 * Terminaciones por etiqueta emocional:
   [SHOCK][DISBELIEF]: Terminar en sustantivo o cifra impactante. Sin adverbios finales.
   [WONDER][REVEAL]: Terminar con pausa —punto o guión largo— antes de la idea clave.

@@ -99,11 +99,9 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
                      voice_desc: str | None = None, emotion: str | None = None,
                      channel: str | None = None, speed: float | None = None) -> str | None:
     """Qwen3-TTS HTTP API로 음성 생성."""
-    # 채널별 기본 voice_desc
+    # 채널별 기본 voice_desc — 감정별 변경 제거 (일관된 톤 유지)
+    # 감정은 대본 내용이 전달, 목소리 톤은 전 컷 동일해야 자연스러움
     base_desc = CHANNEL_VOICE_DESC.get(channel, CHANNEL_VOICE_DESC.get("askanything", ""))
-    # 감정 태그 추가
-    if emotion and emotion in EMOTION_VOICE_DESC:
-        base_desc += f", {EMOTION_VOICE_DESC[emotion]}"
     # 사용자 지정 voice_desc 우선
     final_desc = voice_desc or base_desc
 
