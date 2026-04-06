@@ -18,7 +18,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tts_speed": 1.2,  # 1.05→1.2 (한국 쇼츠는 빠른 말이 기본 — 바이럴 기준)
         "min_cuts": 8,
         "max_cuts": 9,
-        "target_duration": "28-35",  # 초 — Qwen3 기준 빠른 템포
+        "target_duration": "25-32",  # 초 — KO 쇼츠 가장 빠르게
         "voice_settings": {
             "stability": 0.35,
             "similarity_boost": 0.82,
@@ -45,7 +45,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tts_speed": 1.05,  # 0.95→1.05 (Qwen3가 EL보다 느림 — 보정)
         "min_cuts": 8,
         "max_cuts": 9,
-        "target_duration": "28-36",  # 38-48→35-42 (짧을수록 완주율↑, EN 경쟁 시장)
+        "target_duration": "30-36",  # EN 다큐멘터리 — 여유 있는 페이싱
         "voice_settings": {
             "stability": 0.45,  # 0.65→0.45 (단조로움 제거, 감정 표현력↑)
             "similarity_boost": 0.85,
@@ -72,7 +72,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tts_speed": 1.1,  # 1.0→1.1 (Qwen3 보정 — ES는 원래 빠른 언어)
         "min_cuts": 8,
         "max_cuts": 9,
-        "target_duration": "28-36",  # 초 — 빠른 템포, KO와 유사 리듬
+        "target_duration": "28-34",  # ES-LATAM 에너제틱, 빠른 리듬
         "voice_settings": {
             "stability": 0.4,
             "similarity_boost": 0.82,
@@ -99,7 +99,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "tts_speed": 1.0,  # 0.95→1.0 (Qwen3 보정 — PrismTale 시네마틱이지만 너무 느리면 이탈)
         "min_cuts": 8,
         "max_cuts": 9,
-        "target_duration": "28-36",  # 38-48→35-42 (다른 채널과 통일, 길면 이탈)
+        "target_duration": "32-38",  # ES-US 시네마틱 몰입 — 약간 길게 허용
 
         "voice_settings": {
             "stability": 0.55,
