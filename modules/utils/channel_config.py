@@ -15,7 +15,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "askanything": {
         "language": "ko",
         "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
-        "tts_speed": 1.05,  # 1.0→1.05 (한국 쇼츠 체감 속도 맞춤 — 느릿느릿 방지)
+        "tts_speed": 1.2,  # 1.05→1.2 (한국 쇼츠는 빠른 말이 기본 — 바이럴 기준)
         "min_cuts": 8,
         "max_cuts": 9,
         "target_duration": "35-42",  # 초 — 빠른 템포, 완주율 우선
@@ -42,7 +42,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "wonderdrop": {
         "language": "en",
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
-        "tts_speed": 0.95,  # 0.85→0.95 (EN 시장은 빠른 페이싱이 완주율↑)
+        "tts_speed": 1.05,  # 0.95→1.05 (Qwen3가 EL보다 느림 — 보정)
         "min_cuts": 8,
         "max_cuts": 9,
         "target_duration": "35-42",  # 38-48→35-42 (짧을수록 완주율↑, EN 경쟁 시장)
@@ -69,7 +69,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "exploratodo": {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
-        "tts_speed": 1.0,  # 0.95→1.0 (스페인어는 빠른 언어)
+        "tts_speed": 1.1,  # 1.0→1.1 (Qwen3 보정 — ES는 원래 빠른 언어)
         "min_cuts": 8,
         "max_cuts": 9,
         "target_duration": "35-42",  # 초 — 빠른 템포, KO와 유사 리듬
@@ -96,7 +96,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "prismtale": {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성 — 미국 히스패닉 타겟)
-        "tts_speed": 0.95,  # 0.9→0.95 (0.9는 체감상 지루함 — 완주율 하락)
+        "tts_speed": 1.0,  # 0.95→1.0 (Qwen3 보정 — PrismTale 시네마틱이지만 너무 느리면 이탈)
         "min_cuts": 8,
         "max_cuts": 9,
         "target_duration": "35-42",  # 38-48→35-42 (다른 채널과 통일, 길면 이탈)
