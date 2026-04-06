@@ -807,7 +807,14 @@ async def generate_video_endpoint(req: GenerateRequest):
                 def _run_tts_and_whisper():
                     """TTS 생성 후 바로 Whisper 타임스탬프 추출 (순차 but 동일 스레드)"""
                     try:
-                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=channel_voice_id, voice_settings=channel_voice_settings)
+                        # 감정 태그 추출 (description에서)
+                        _cut_emotion = None
+                        _cut_desc = cut.get("description", cut.get("text", ""))
+                        for _etag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY"]:
+                            if f"[{_etag}]" in _cut_desc:
+                                _cut_emotion = _etag
+                                break
+                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=channel_voice_id, voice_settings=channel_voice_settings, emotion=_cut_emotion, channel=req.channel)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"TTS: {exc}")

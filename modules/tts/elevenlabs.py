@@ -51,20 +51,87 @@ def check_quota(api_key: str = None) -> dict | None:
     return None
 
 
-def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko", speed: float | None = None, voice_id: str | None = None, voice_settings: dict | None = None) -> str | None:
+# ── 감정 태그 → Qwen3 voice_desc 매핑 ──
+EMOTION_VOICE_DESC = {
+    "SHOCK": "shocked, intense, urgent, breathless delivery",
+    "WONDER": "amazed, full of wonder, slow and dramatic",
+    "TENSION": "tense, suspenseful, building urgency, dark",
+    "REVEAL": "dramatic reveal, confident, triumphant pause",
+    "URGENCY": "urgent, pressing, time-critical, fast",
+    "DISBELIEF": "incredulous, disbelief, questioning tone",
+    "IDENTITY": "proud, personal, intimate warm connection",
+}
+
+# ── 채널 → Qwen3 기본 voice_desc ──
+CHANNEL_VOICE_DESC = {
+    "askanything": "Deep Korean male voice, documentary narrator, curious and dramatic, emphasize numbers",
+    "wonderdrop": "Deep calm male voice, cinematic documentary narrator, confident, Netflix documentary feel",
+    "exploratodo": "Energetic young male voice, Latin American Spanish, excited and fast-paced, like a friend telling something incredible",
+    "prismtale": "Deep male voice, neutral Spanish, dark cinematic tone, mysterious, slow controlled delivery",
+}
+
+QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://localhost:8010")
+
+
+def _generate_qwen3(text: str, output_path: str, language: str = "ko",
+                     voice_desc: str | None = None, emotion: str | None = None,
+                     channel: str | None = None) -> str | None:
+    """Qwen3-TTS HTTP API로 음성 생성."""
+    # 채널별 기본 voice_desc
+    base_desc = CHANNEL_VOICE_DESC.get(channel, CHANNEL_VOICE_DESC.get("askanything", ""))
+    # 감정 태그 추가
+    if emotion and emotion in EMOTION_VOICE_DESC:
+        base_desc += f", {EMOTION_VOICE_DESC[emotion]}"
+    # 사용자 지정 voice_desc 우선
+    final_desc = voice_desc or base_desc
+
+    try:
+        import json
+        resp = requests.post(
+            f"{QWEN3_TTS_URL}/generate",
+            json={"text": text, "engine": "qwen3", "lang": language, "voice_desc": final_desc},
+            timeout=120,
+        )
+        if resp.status_code == 200 and len(resp.content) > 1000:
+            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+            with open(output_path, "wb") as f:
+                f.write(resp.content)
+            print(f"OK [Qwen3-TTS] 컷 음성 생성 완료! ({len(resp.content)//1024}KB)")
+            return output_path
+        else:
+            error_msg = resp.text[:100] if resp.status_code != 200 else "too small"
+            print(f"[Qwen3-TTS 실패] {resp.status_code}: {error_msg}")
+            return None
+    except Exception as e:
+        print(f"[Qwen3-TTS 연결 실패] {e}")
+        return None
+
+
+def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko", speed: float | None = None, voice_id: str | None = None, voice_settings: dict | None = None, emotion: str | None = None, channel: str | None = None) -> str | None:
     """
-    ElevenLabs API를 사용하여 매우 사실적인 다큐멘터리/쇼츠용 음성(.mp3)을 생성합니다.
-    빈 텍스트 → 기본 문구로 대체, 타임아웃/네트워크 오류 → 최대 3회 재시도.
-    eleven_multilingual_v2 모델이 텍스트 언어를 자동 감지하므로 별도 언어 설정 불필요.
+    TTS 음성 생성. Qwen3-TTS 우선, 실패 시 ElevenLabs 폴백.
     """
-    # 빈 스크립트: 1초 무음 WAV 생성 (API 호출 절약)
+    # 빈 스크립트: 1초 무음 WAV 생성
     if not text or not text.strip() or text.strip() == "...":
-        print(f"[ElevenLabs 경고] 컷 {index+1} 스크립트가 비어 있어 무음 오디오를 생성합니다.")
+        print(f"[TTS 경고] 컷 {index+1} 스크립트가 비어 있어 무음 오디오를 생성합니다.")
         output_dir = os.path.join("assets", topic_folder, "audio")
         os.makedirs(output_dir, exist_ok=True)
         silent_path = os.path.join(output_dir, f"cut_{index:02d}.wav")
         _write_silent_wav(silent_path, duration_sec=1.0)
         return silent_path
+
+    # TTS 엔진 선택: QWEN3 우선
+    tts_engine = os.getenv("TTS_ENGINE", "qwen3").lower()
+
+    if tts_engine == "qwen3":
+        output_dir = os.path.join("assets", topic_folder, "audio")
+        os.makedirs(output_dir, exist_ok=True)
+        wav_path = os.path.join(output_dir, f"cut_{index:02d}.wav")
+
+        result = _generate_qwen3(text, wav_path, language, emotion=emotion, channel=channel)
+        if result:
+            return result
+        print(f"[TTS] Qwen3 실패 → ElevenLabs 폴백")
 
     api_key = api_key_override or os.getenv("ELEVENLABS_API_KEY")
     if not api_key or api_key == "YOUR_ELEVENLABS_API_KEY_HERE":
