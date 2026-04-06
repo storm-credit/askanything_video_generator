@@ -15,16 +15,16 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "askanything": {
         "language": "ko",
         "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
-        "tts_speed": 1.0,  # 0.9→1.0 (한국어는 0.9가 느리게 들림)
+        "tts_speed": 1.05,  # 1.0→1.05 (한국 쇼츠 체감 속도 맞춤 — 느릿느릿 방지)
         "min_cuts": 8,
         "max_cuts": 9,
         "target_duration": "35-42",  # 초 — 빠른 템포, 완주율 우선
         "voice_settings": {
-            "stability": 0.35,  # 0.4→0.35 (더 다이나믹)
+            "stability": 0.35,
             "similarity_boost": 0.82,
-            "style": 0.35,  # 0.65→0.35 (과장 제거, 신뢰도 향상)
+            "style": 0.35,
             "use_speaker_boost": True,
-        },
+        },  # ElevenLabs 전용 (현재 미사용 — Qwen3 운영)
         "bgm_theme": "random",
         "platforms": ["youtube"],
         "caption_size": 58,
@@ -96,10 +96,11 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "prismtale": {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성 — 미국 히스패닉 타겟)
-        "tts_speed": 0.9,
+        "tts_speed": 0.95,  # 0.9→0.95 (0.9는 체감상 지루함 — 완주율 하락)
         "min_cuts": 8,
         "max_cuts": 9,
-        "target_duration": "38-48",  # 초 — 시네마틱 몰입, EN과 유사 리듬
+        "target_duration": "35-42",  # 38-48→35-42 (다른 채널과 통일, 길면 이탈)
+
         "voice_settings": {
             "stability": 0.55,
             "similarity_boost": 0.85,

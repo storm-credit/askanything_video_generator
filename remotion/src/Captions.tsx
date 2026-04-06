@@ -108,6 +108,9 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
     return wordTimestamps.some(w => /[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/.test(w.word));
   }, [wordTimestamps]);
 
+  // captionY → paddingBottom 변환 (captionY=28→47%, captionY=38→42%, captionY=50→35%)
+  const bottomPadding = `${Math.round(60 - captionY * 0.5)}%`;
+
   // 한국어: 카라오케 스타일 — 핵심 단어 노란색 + 팝업 애니메이션 (2025 트렌드)
   if (isCJK) {
     if (visibleWords.length === 0) return null;
@@ -116,7 +119,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
     const highlightColor = getEmotionColor(emotion);
 
     return (
-      <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '47%' }}>
+      <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: bottomPadding }}>
         <div style={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -171,7 +174,7 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
 
   // 영어/스페인어: 단어별 하이라이트 + 크기 강화
   return (
-    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '47%' }}>
+    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: bottomPadding }}>
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',

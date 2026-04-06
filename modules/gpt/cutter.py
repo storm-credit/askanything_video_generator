@@ -429,6 +429,9 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   [TENSION]      "~있거든", "~인데" (미완결 긴장감)
   [IDENTITY]     "~알아?", "~알지?" (청자 직접 호명)
   금지 어미: "~있어"/"~해" 단독 문장 끝, "~입니다/합니다/~습니다" 존댓말
+  금지 도입부: "연구에 따르면", "과학자들이 발견한", "~에 의하면", "~것으로 밝혀졌다", "~것으로 알려져 있다" → 학술체는 이탈 유발. 팩트를 바로 던져라.
+  ❌ "연구에 따르면 이 물질은 독성이 있어" → ✅ "이 물질, 금보다 독해"
+  ❌ "NASA에 의하면 이 행성은..." → ✅ "이 행성, 다이아몬드 비가 와"
 * 한 컷 25~40자 필수 (4~5초 분량). 25자 미만은 FAIL. 한 문장. 연속 동일 문장구조 금지.
 * [CRITICAL WARNING] 8~9컷으로 작성. 총 35~42초 영상 목표. 절대 8컷 미만 금지. 빠른 템포 유지.
 
@@ -602,7 +605,10 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
 
 [Script Rules — Qwen3-TTS Optimized]
 * Calm cinematic documentary voice. 12-18 words per cut mandatory (4-5 sec). Under 10 = FAIL. One sentence. Vary structures.
-* [CRITICAL WARNING] 8-9 cuts. Target 38-48 seconds. NEVER less than 8 cuts.
+* NEVER start with academic phrases: "According to research", "Scientists discovered", "Studies show", "Researchers found" → Drop the fact directly.
+  ❌ "According to NASA, this planet has diamond rain" → ✅ "This planet rains diamonds."
+  ❌ "Researchers discovered that..." → ✅ "This creature hasn't aged in 200 years."
+* [CRITICAL WARNING] 8-9 cuts. Target 35-42 seconds. NEVER less than 8 cuts.
 * Sentence endings by emotion tag (voice_desc carries tone — do NOT over-write):
   [SHOCK]     Short declarative punch: "...and it's only getting worse."
   [WONDER]    Quiet revelation: "...and science still can't explain why."

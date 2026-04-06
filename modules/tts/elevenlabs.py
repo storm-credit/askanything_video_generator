@@ -54,7 +54,7 @@ def check_quota(api_key: str = None) -> dict | None:
 # ── 감정 태그 → Qwen3 voice_desc 매핑 ──
 EMOTION_VOICE_DESC = {
     "SHOCK": "shocked, intense, urgent, breathless delivery",
-    "WONDER": "amazed, full of wonder, slow and dramatic",
+    "WONDER": "amazed, full of wonder, steady pace, clear enunciation",
     "TENSION": "tense, suspenseful, building urgency, dark",
     "REVEAL": "dramatic reveal, confident, triumphant pause",
     "URGENCY": "urgent, pressing, time-critical, fast",
@@ -65,10 +65,10 @@ EMOTION_VOICE_DESC = {
 
 # ── 채널 → Qwen3 기본 voice_desc ──
 CHANNEL_VOICE_DESC = {
-    "askanything": "Deep Korean male voice, documentary narrator, curious and dramatic, emphasize numbers",
+    "askanything": "Deep Korean male voice, sharp fast-paced narrator, punchy and direct, emphasize numbers, never drag sentence endings",
     "wonderdrop": "Deep calm male voice, cinematic documentary narrator, confident, Netflix documentary feel",
     "exploratodo": "Energetic young male voice, Latin American Spanish, excited and fast-paced, like a friend telling something incredible",
-    "prismtale": "Deep male voice, neutral Spanish, dark cinematic tone, mysterious, slow controlled delivery",
+    "prismtale": "Deep male voice, neutral Spanish, dark cinematic tone, mysterious, steady controlled delivery, never drag endings",
 }
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
@@ -97,7 +97,7 @@ CHANNEL_SPEAKER = {
 
 def _generate_qwen3(text: str, output_path: str, language: str = "ko",
                      voice_desc: str | None = None, emotion: str | None = None,
-                     channel: str | None = None) -> str | None:
+                     channel: str | None = None, speed: float | None = None) -> str | None:
     """Qwen3-TTS HTTP API로 음성 생성."""
     # 채널별 기본 voice_desc
     base_desc = CHANNEL_VOICE_DESC.get(channel, CHANNEL_VOICE_DESC.get("askanything", ""))
@@ -115,7 +115,8 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
         resp = requests.post(
             f"{QWEN3_TTS_URL}/generate",
             json={"text": text, "engine": "qwen3", "lang": language,
-                  "voice_desc": final_desc, "voice": speaker},
+                  "voice_desc": final_desc, "voice": speaker,
+                  **({"speed": speed} if speed else {})},
             timeout=120,
         )
         if resp.status_code == 200 and len(resp.content) > 1000:
@@ -160,10 +161,11 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         os.makedirs(output_dir, exist_ok=True)
         wav_path = os.path.join(output_dir, f"cut_{index:02d}.wav")
 
-        result = _generate_qwen3(text, wav_path, language, emotion=emotion, channel=channel)
+        result = _generate_qwen3(text, wav_path, language, emotion=emotion, channel=channel, speed=speed)
         if result:
             return result
-        print(f"[TTS] Qwen3 실패 → ElevenLabs 폴백")
+        print(f"[TTS] Qwen3 실패")
+        return None  # ElevenLabs 폴백 비활성화 — Qwen3 전용 운영
 
     api_key = api_key_override or os.getenv("ELEVENLABS_API_KEY")
     if not api_key or api_key == "YOUR_ELEVENLABS_API_KEY_HERE":
