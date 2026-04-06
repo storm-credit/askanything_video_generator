@@ -785,7 +785,7 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 [Reglas de guion — Qwen3-TTS Optimizado US Hispanic]
 * Español neutro y sobrio. Registro documental oscuro, nunca conversacional.
 * 8-14 palabras por corte. Una sola idea por oración.
-* [CRITICAL WARNING] 8-9 cortes. Video 38-48 segundos. NUNCA menos de 8.
+* [CRITICAL WARNING] 8-9 cortes. Video 35-42 segundos. NUNCA menos de 8.
 * Terminaciones por etiqueta emocional:
   [SHOCK]: dato concreto o cifra final. Sin adjetivos dramáticos.
   [WONDER]: pregunta indirecta o cláusula suspensiva con puntos suspensivos.
