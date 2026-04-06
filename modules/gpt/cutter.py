@@ -739,6 +739,17 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - ❌ No todo funciona "oscuro" — el tema debe tener misterio natural, no forzado
 - Canal en rápido crecimiento — mantener frecuencia de subida es CRUCIAL
 
+[Patrones de estructura — seleccionar el mejor para el tema]
+
+★ Patrón A: Haynes (ciencia/espacio/datos) ← por defecto
+  Gancho → Cadena de impacto → Bloqueo retención → Clímax → Loop
+★ Patrón B: Revelación Inversa (historia/descubrimiento/misterio)
+  Resultado primero → "¿Cómo?" → Retroceso → Retorno al origen + Loop
+★ Patrón C: Conflicto-Resolución (animales/naturaleza/supervivencia)
+  Situación → Problema → Intentos → Giro → Resolución + Loop
+
+Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es claro.
+
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 38–48 seg total)]
 1. Corte 1 — Gancho: Suelta el dato más impactante como afirmación directa. SIN preguntas. ★ REGLA DE 1.7 SEG: el image_prompt DEBE tener impacto visual extremo (escala, contraste de color, surrealismo).
    Patrones de gancho: contraste numérico, negación+revelación, urgencia temporal, destructor de intuición
@@ -898,6 +909,17 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 - ⚠️ Temas de cuerpo humano/psicología son débiles en TODOS los canales — evitar
 - ❌ Cuidado con la exageración visual: colores brillantes NO justifican datos inventados
 - ESTRATEGIA: diversificar hits — necesita múltiples videos de 5K+ en vez de depender de uno solo
+
+[Patrones de estructura — seleccionar el mejor para el tema]
+
+★ Patrón A: Haynes (ciencia/espacio/datos) ← por defecto
+  Gancho → Cadena de sorpresa → Bloqueo retención → Impacto máximo → Loop directo
+★ Patrón B: Revelación Inversa (descubrimiento/evento Hubble/misterio)
+  Resultado primero → "¿Cómo pasó?" → Retroceso energético → Retorno + Loop directo
+★ Patrón C: Conflicto-Resolución (animales/naturaleza/supervivencia)
+  Animal/situación → Problema → Intentos locos → Giro increíble → Resolución + Loop directo
+
+Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es claro.
 
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 35–42 seg total)]
 1. Corte 1 — Gancho: El dato más impactante como exclamación o afirmación fuerte. ★ REGLA DE 1.7 SEG: image_prompt con colores vibrantes, escenas llamativas, impacto visual máximo.
@@ -1727,6 +1749,26 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         failures.append(f"HOOK_WEAK: 첫 컷이 약한 패턴 포함 — '{first_script[:50]}'")
     if first_script.rstrip().endswith("?") or first_script.rstrip().endswith("？"):
         failures.append(f"HOOK_QUESTION: 첫 컷이 질문형 — '{first_script[:50]}'")
+
+    # 1-b) Hook 길이 강제 — 채널별 Cut1 글자/단어 수 제한
+    if channel:
+        from modules.utils.channel_config import get_channel_preset as _get_hook_preset
+        _hook_preset = _get_hook_preset(channel)
+        _hook_lang = (_hook_preset or {}).get("language", "en")
+        if _hook_lang == "ko":
+            # 한국어: 15자 초과 시 reject
+            if len(first_script.replace(" ", "")) > 15:
+                failures.append(f"HOOK_TOO_LONG: KO 훅 {len(first_script.replace(' ', ''))}자 (최대 15자) — '{first_script[:30]}'")
+        elif _hook_lang == "en":
+            # 영어: 10단어 초과 시 reject
+            word_count = len(first_script.split())
+            if word_count > 10:
+                failures.append(f"HOOK_TOO_LONG: EN 훅 {word_count}단어 (최대 10) — '{first_script[:40]}'")
+        elif _hook_lang == "es":
+            # 스페인어: 12단어 초과 시 reject
+            word_count = len(first_script.split())
+            if word_count > 12:
+                failures.append(f"HOOK_TOO_LONG: ES 훅 {word_count}단어 (최대 12) — '{first_script[:40]}'")
 
     # 2) 긴장 상승 검증 — 감정 태그 다양성
     emotions = []

@@ -42,23 +42,23 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "wonderdrop": {
         "language": "en",
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
-        "tts_speed": 0.85,
+        "tts_speed": 0.95,  # 0.85→0.95 (EN 시장은 빠른 페이싱이 완주율↑)
         "min_cuts": 8,
         "max_cuts": 9,
-        "target_duration": "38-48",  # 초 — 몰입+완주 균형
+        "target_duration": "35-42",  # 38-48→35-42 (짧을수록 완주율↑, EN 경쟁 시장)
         "voice_settings": {
-            "stability": 0.65,
+            "stability": 0.45,  # 0.65→0.45 (단조로움 제거, 감정 표현력↑)
             "similarity_boost": 0.85,
-            "style": 0.2,
+            "style": 0.3,  # 0.2→0.3 (약간의 스타일 추가)
             "use_speaker_boost": True,
         },
         "bgm_theme": "random",
         "platforms": ["youtube"],
         "caption_size": 54,
         "caption_y": 38,
-        "camera_style": "gentle",
-        "visual_style": "cinematic, realistic, overcast daylight, lens flare allowed, clean mid-range exposure, documentary style, ultra detailed, depth of field, subtle colors, high realism",
-        "tone": "calm, cinematic, documentary-style narration, confident, clear, slightly mysterious. Loop: natural and subtle — reconnect to the opening line smoothly without obvious repetition",
+        "camera_style": "dynamic",  # gentle→dynamic (시네마틱 유지하되 에너지 추가)
+        "visual_style": "cinematic, high contrast, dark background with bright subject, one strong accent color, dramatic rim lighting, ultra detailed, depth of field, lens flare, high realism",
+        "tone": "cinematic documentary narration, fascinated and engaged (not detached), confident, clear, quietly intense. Loop: natural and subtle — reconnect to the opening line smoothly without obvious repetition",
         "forbidden_phrases": ["insane", "mind-blowing", "you won't believe", "literally dying", "no cap", "bro", "lowkey", "ngl"],
         "upload_accounts": {
             "youtube": None,

@@ -73,6 +73,27 @@ CHANNEL_VOICE_DESC = {
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
 
+# ── 감정 태그 → ElevenLabs voice_settings 매핑 (폴백 시 감정 반영) ──
+EMOTION_TO_EL_SETTINGS = {
+    "SHOCK":     {"stability": 0.25, "style": 0.45},
+    "WONDER":    {"stability": 0.40, "style": 0.30},
+    "TENSION":   {"stability": 0.30, "style": 0.40},
+    "REVEAL":    {"stability": 0.50, "style": 0.35},
+    "URGENCY":   {"stability": 0.20, "style": 0.50},
+    "DISBELIEF": {"stability": 0.30, "style": 0.40},
+    "IDENTITY":  {"stability": 0.55, "style": 0.20},
+    "CALM":      {"stability": 0.65, "style": 0.15},
+}
+
+
+# ── 채널 → Qwen3 speaker 매핑 (채널별 다른 남성 음색) ──
+CHANNEL_SPEAKER = {
+    "askanything": "eric",      # 한국어 남성 — 깨끗하고 자연스러운 음색
+    "wonderdrop": "ryan",       # 영어 남성 — 밝은 미국 남성, 깨끗한 중음
+    "exploratodo": "dylan",     # 스페인어 LATAM — 활기찬 리듬감 있는 남성
+    "prismtale": "ryan",        # 스페인어 US — 미국 남성 음색, 다크톤은 voice_desc로
+}
+
 
 def _generate_qwen3(text: str, output_path: str, language: str = "ko",
                      voice_desc: str | None = None, emotion: str | None = None,
@@ -86,17 +107,27 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
     # 사용자 지정 voice_desc 우선
     final_desc = voice_desc or base_desc
 
+    # 채널별 speaker 선택
+    speaker = CHANNEL_SPEAKER.get(channel, "eric")
+
     try:
         import json
         resp = requests.post(
             f"{QWEN3_TTS_URL}/generate",
-            json={"text": text, "engine": "qwen3", "lang": language, "voice_desc": final_desc},
+            json={"text": text, "engine": "qwen3", "lang": language,
+                  "voice_desc": final_desc, "voice": speaker},
             timeout=120,
         )
         if resp.status_code == 200 and len(resp.content) > 1000:
             os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
             with open(output_path, "wb") as f:
                 f.write(resp.content)
+            # LUFS 정규화 (-14 LUFS, ElevenLabs 경로와 동일 기준)
+            try:
+                from modules.utils.audio import normalize_audio_lufs
+                normalize_audio_lufs(output_path)
+            except Exception as norm_err:
+                print(f"  [Qwen3-TTS] LUFS 정규화 건너뜀: {norm_err}")
             print(f"OK [Qwen3-TTS] 컷 음성 생성 완료! ({len(resp.content)//1024}KB)")
             return output_path
         else:
@@ -159,6 +190,11 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
     }
     final_voice_settings = {**default_voice_settings, **(voice_settings or {})}
 
+    # 감정 태그 → ElevenLabs voice_settings 동적 반영
+    if emotion and emotion in EMOTION_TO_EL_SETTINGS:
+        final_voice_settings.update(EMOTION_TO_EL_SETTINGS[emotion])
+        print(f"  [ElevenLabs] 감정 반영: {emotion} → stability={final_voice_settings['stability']}, style={final_voice_settings['style']}")
+
     data = {
         "text": text,
         "model_id": "eleven_multilingual_v2",
@@ -211,6 +247,12 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                         time.sleep(_backoff_delay(attempt))
                         continue
                     return None
+                # LUFS 정규화 (Qwen3와 동일 기준 -14 LUFS)
+                try:
+                    from modules.utils.audio import normalize_audio_lufs
+                    normalize_audio_lufs(audio_path)
+                except Exception as norm_err:
+                    print(f"  [ElevenLabs] LUFS 정규화 건너뜀: {norm_err}")
                 print(f"OK [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 음성 생성 완료!")
                 return audio_path
 

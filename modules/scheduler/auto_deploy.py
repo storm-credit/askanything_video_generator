@@ -14,6 +14,7 @@
   GET  /api/scheduler/status       → 현재 진행 상태
 """
 import os
+import json
 import asyncio
 import traceback
 from datetime import datetime, timezone, timedelta
@@ -39,6 +40,38 @@ _deploy_status: dict[str, Any] = {
     "started_at": None,
     "finished_at": None,
 }
+
+STATE_FILE = os.path.join("assets", "_deploy_state.json")
+
+
+def _save_state():
+    """배포 상태를 파일로 저장 — 컨테이너 재시작 시 복구용."""
+    try:
+        os.makedirs(os.path.dirname(STATE_FILE) or ".", exist_ok=True)
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(_deploy_status, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[자동 배포] 상태 저장 실패: {e}")
+
+
+def _load_state(target_date_str: str) -> set[str]:
+    """이전 배포에서 완료된 토픽 목록 로드 — 중복 생성 방지."""
+    try:
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            # 같은 날짜의 이전 배포 결과만 사용
+            if state.get("current_date") == target_date_str:
+                completed = set()
+                for r in state.get("results", []):
+                    if r.get("status") == "success":
+                        completed.add(f"{r['channel']}:{r['topic']}")
+                if completed:
+                    print(f"[자동 배포] 이전 배포에서 {len(completed)}개 완료 토픽 발견 → 스킵")
+                return completed
+    except Exception as e:
+        print(f"[자동 배포] 상태 로드 실패 (무시): {e}")
+    return set()
 
 
 def get_status() -> dict[str, Any]:
@@ -132,10 +165,13 @@ async def run_auto_deploy(target_date: datetime | None = None,
             ],
         }
 
-    # 3. 배포 시작
+    # 3. 배포 시작 — 이전 완료 토픽 로드
+    date_str = target_date.strftime("%Y-%m-%d")
+    completed_keys = _load_state(date_str)
+
     _deploy_status = {
         "running": True,
-        "current_date": target_date.strftime("%Y-%m-%d"),
+        "current_date": date_str,
         "total": len(schedule),
         "completed": 0,
         "failed": 0,
@@ -144,11 +180,18 @@ async def run_auto_deploy(target_date: datetime | None = None,
         "started_at": datetime.now(KST).isoformat(),
         "finished_at": None,
     }
+    _save_state()
 
     try:
         loop = asyncio.get_running_loop()
 
         for item in schedule:
+            # 중복 방지: 이전 배포에서 성공한 토픽 스킵
+            item_key = f"{item['channel']}:{item['topic']}"
+            if item_key in completed_keys:
+                print(f"[자동 배포] 스킵 (이미 완료): {item['channel']} — '{item['topic']}'")
+                _deploy_status["completed"] += 1
+                continue
             topic = item["topic"]
             channel = item["channel"]
             publish_at = item["publish_at_iso"]
@@ -293,11 +336,13 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 traceback.print_exc()
 
             _deploy_status["results"].append(task_result)
+            _save_state()  # 매 토픽 완료 후 상태 저장
 
     finally:
         _deploy_status["running"] = False
         _deploy_status["current_task"] = None
         _deploy_status["finished_at"] = datetime.now(KST).isoformat()
+        _save_state()  # 최종 상태 저장
 
     return {
         "success": True,

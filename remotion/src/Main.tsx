@@ -207,11 +207,24 @@ type GlobalWordSegment = { startFrame: number; endFrame: number };
 
 // For a given frame, find the nearest speech boundary and compute interpolated BGM volume
 // Uses binary search (O(log n)) instead of linear scan
+const BGM_FADEOUT_FRAMES = 12;   // 마지막 0.5초(12f@24fps) BGM fade-out → 팝/클릭 방지
+
 function getDynamicBgmVolume(
   frame: number,
   timeline: GlobalWordSegment[],
+  totalFrames?: number,
 ): number {
   if (timeline.length === 0) return BGM_VOLUME;
+
+  // 영상 끝부분 fade-out: 마지막 12프레임에서 볼륨 → 0 (hard cut 방지)
+  if (totalFrames && frame >= totalFrames - BGM_FADEOUT_FRAMES) {
+    return interpolate(
+      frame,
+      [totalFrames - BGM_FADEOUT_FRAMES, totalFrames],
+      [BGM_VOLUME_SILENCE, 0],
+      { extrapolateRight: 'clamp', extrapolateLeft: 'clamp' },
+    );
+  }
 
   // 첫 0.5초 인트로: BGM 풀 볼륨으로 시작 → 나레이션 전에 음악 존재감 확보
   if (frame < BGM_INTRO_FRAMES) {
@@ -253,7 +266,7 @@ const DynamicBgmAudio: React.FC<{
   cuts: CutProps[];
   startFrames: number[];
 }> = ({ src, cuts, startFrames }) => {
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
   const globalTimeline = useMemo(
     () => buildGlobalWordTimeline(cuts, startFrames, fps),
@@ -263,8 +276,8 @@ const DynamicBgmAudio: React.FC<{
   const hasTimestamps = globalTimeline.length > 0;
 
   const volumeCallback = useCallback(
-    (f: number) => getDynamicBgmVolume(f, globalTimeline),
-    [globalTimeline],
+    (f: number) => getDynamicBgmVolume(f, globalTimeline, durationInFrames),
+    [globalTimeline, durationInFrames],
   );
 
   return (
