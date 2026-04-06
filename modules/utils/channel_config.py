@@ -15,10 +15,10 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "askanything": {
         "language": "ko",
         "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
-        "tts_speed": 1.2,  # 1.05→1.2 (한국 쇼츠는 빠른 말이 기본 — 바이럴 기준)
+        "tts_speed": 1.2,  # 한국 쇼츠 빠른 말 기준
         "min_cuts": 8,
-        "max_cuts": 9,
-        "target_duration": "25-32",  # 초 — KO 쇼츠 가장 빠르게
+        "max_cuts": 11,  # 빠른 말 + 30-40초 → 최대 11컷
+        "target_duration": "30-40",  # 실제 탑 31-39초, 업계 30-50초
         "voice_settings": {
             "stability": 0.35,
             "similarity_boost": 0.82,
@@ -42,10 +42,10 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "wonderdrop": {
         "language": "en",
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
-        "tts_speed": 1.05,  # 0.95→1.05 (Qwen3가 EL보다 느림 — 보정)
+        "tts_speed": 1.05,  # Qwen3 보정
         "min_cuts": 8,
-        "max_cuts": 9,
-        "target_duration": "30-36",  # EN 다큐멘터리 — 여유 있는 페이싱
+        "max_cuts": 10,  # 35-45초 → 최대 10컷
+        "target_duration": "35-45",  # 실제 탑 28-41초, 업계 35-50초
         "voice_settings": {
             "stability": 0.45,  # 0.65→0.45 (단조로움 제거, 감정 표현력↑)
             "similarity_boost": 0.85,
@@ -69,10 +69,10 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "exploratodo": {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
-        "tts_speed": 1.1,  # 1.0→1.1 (Qwen3 보정 — ES는 원래 빠른 언어)
+        "tts_speed": 1.1,  # Qwen3 보정
         "min_cuts": 8,
-        "max_cuts": 9,
-        "target_duration": "28-34",  # ES-LATAM 에너제틱, 빠른 리듬
+        "max_cuts": 10,  # 34-42초 → 최대 10컷
+        "target_duration": "34-42",  # 실제 탑 34-45초, 긴 영상 +59% 성과
         "voice_settings": {
             "stability": 0.4,
             "similarity_boost": 0.82,
@@ -96,10 +96,10 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "prismtale": {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성 — 미국 히스패닉 타겟)
-        "tts_speed": 1.0,  # 0.95→1.0 (Qwen3 보정 — PrismTale 시네마틱이지만 너무 느리면 이탈)
+        "tts_speed": 1.0,  # Qwen3 시네마틱 페이싱
         "min_cuts": 8,
-        "max_cuts": 9,
-        "target_duration": "32-38",  # ES-US 시네마틱 몰입 — 약간 길게 허용
+        "max_cuts": 10,  # 38-48초 → 최대 10컷
+        "target_duration": "38-48",  # 실제 탑 39-46초, 몰입형 최적
 
         "voice_settings": {
             "stability": 0.55,
