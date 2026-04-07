@@ -220,10 +220,14 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
                 lang = lang_map.get(channel, "ko")
 
+                # 토픽명: 채널 언어에 맞는 제목 사용 (한국어 토픽이 EN/ES에 들어가면 LLM 혼동)
+                _item_title = item.get("title", "")
+                _topic_for_llm = _item_title if (_item_title and _item_title != topic and lang != "ko") else topic
+
                 # lambda 클로저 캡처 문제 방지: 변수를 기본 인수로 바인딩
                 cuts, topic_folder, title, tags, description = await loop.run_in_executor(
                     None,
-                    lambda _t=topic, _l=lang, _c=channel: generate_cuts(
+                    lambda _t=_topic_for_llm, _l=lang, _c=channel: generate_cuts(
                         _t,
                         lang=_l,
                         llm_provider="gemini",

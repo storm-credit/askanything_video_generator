@@ -69,15 +69,17 @@ def calculate_schedule(topics: list[dict],
     # 날짜만 추출 (시간 제거)
     base_date = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # 채널별 주제 목록 구성
-    channel_topics: dict[str, list[str]] = {}
+    # 채널별 주제 목록 구성 (채널별 제목 포함)
+    channel_topics: dict[str, list[dict]] = {}
     for topic in topics:
         topic_name = topic.get("topic_group", "unknown")
         channels = topic.get("channels", {})
-        for ch in channels:
+        for ch, ch_data in channels.items():
             if ch not in channel_topics:
                 channel_topics[ch] = []
-            channel_topics[ch].append(topic_name)
+            # 채널별 제목이 있으면 사용, 없으면 토픽명
+            ch_title = ch_data.get("title", topic_name) if isinstance(ch_data, dict) else topic_name
+            channel_topics[ch].append({"topic": topic_name, "title": ch_title})
 
     # 채널별 시간 분배
     schedule = []
@@ -105,7 +107,9 @@ def calculate_schedule(topics: list[dict],
             )
 
         # 각 영상 시간 배정
-        for i, topic_name in enumerate(ch_topics):
+        for i, topic_item in enumerate(ch_topics):
+            topic_name = topic_item["topic"] if isinstance(topic_item, dict) else topic_item
+            topic_title = topic_item.get("title", topic_name) if isinstance(topic_item, dict) else topic_name
             publish_time = start_dt + timedelta(minutes=interval_min * i)
 
             # YouTube API용 ISO 8601 (UTC로 변환)
@@ -113,6 +117,7 @@ def calculate_schedule(topics: list[dict],
 
             schedule.append({
                 "topic": topic_name,
+                "title": topic_title,  # 채널별 제목 (EN/ES 토픽명)
                 "channel": ch,
                 "publish_at_kst": publish_time.strftime("%Y-%m-%d %H:%M KST"),
                 "publish_at_iso": publish_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
