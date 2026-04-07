@@ -151,6 +151,13 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         _write_silent_wav(silent_path, duration_sec=1.0)
         return silent_path
 
+    # speed 미지정 시 channel_config에서 자동 로드
+    if speed is None and channel:
+        from modules.utils.channel_config import get_channel_preset
+        _preset = get_channel_preset(channel)
+        if _preset:
+            speed = _preset.get("tts_speed")
+
     # TTS 엔진 선택: QWEN3 우선
     tts_engine = os.getenv("TTS_ENGINE", "qwen3").lower()
 
