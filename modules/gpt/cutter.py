@@ -455,6 +455,15 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
   줄임표(...) → 사용 금지 (TTS에서 끊김/무음 발생).
   하이픈(—) → [REVEAL] 컷에서만 1개. "근데 반전은—그게 독이야."
 * (pause), [silence] 같은 지시어 script에 삽입 금지. TTS가 텍스트로 읽어버림.
+* 단위 표기 규칙 (TTS가 약어/기호를 잘못 읽음):
+  ❌ "70km" → ✅ "칠십 킬로미터" (숫자도 한글로)
+  ❌ "400°C" → ✅ "사백 도"
+  ❌ "2.5억" → ✅ "이억 오천만"
+  ❌ "50%" → ✅ "오십 퍼센트"
+  ❌ "3m" → ✅ "삼 미터"
+  ❌ "10kg" → ✅ "십 킬로그램"
+  모든 숫자+단위는 한글로 풀어쓰기. 아라비아 숫자+약어 조합 금지.
+  숫자와 단위 사이 반드시 띄어쓰기.
 
 [톤/비주얼] 채널 프리셋([CHANNEL VISUAL IDENTITY], [NARRATOR TONE]) 최우선. 약한 마무리("~같아", "~일 수도") 금지.
 * 비속어 금지: "미쳤/미친/ㅋㅋ/ㄹㅇ" 금지.
@@ -649,6 +658,13 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
   Exclamation(!) = FORBIDDEN. Qwen3 over-stresses these.
 * Emotion word ban: "shockingly/incredibly/amazingly/unbelievably/mind-blowing/literally" FORBIDDEN. Let facts speak.
 * Qwen3 reads well: short Anglo-Saxon words, concrete nouns, digits ("400" not "four hundred").
+* Unit notation — spell out ALL units (Qwen3 cannot read abbreviations):
+  ❌ "70km" → ✅ "seventy kilometers"
+  ❌ "400°C" → ✅ "four hundred degrees"
+  ❌ "50%" → ✅ "fifty percent"
+  ❌ "3m" → ✅ "three meters"
+  ❌ "2.5B" → ✅ "two point five billion"
+  No abbreviations, no symbols in scripts. Spell everything out.
 * Qwen3 reads poorly: acronym clusters, hyphenated compounds, Latin binomials. Spell out.
 * WonderDrop style: confident authority revealing secrets, NOT calm/detached/monotone. Engaged and compelling, like a science host who found something incredible. No slang. No "you/your" except [IDENTITY].
 
@@ -842,6 +858,11 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 * Permitido: "extraño", "inexplicable", "silencioso", "oscuro", "olvidado", "profundo".
 * Pausas: punto seguido o punto y aparte, nunca coma excesiva.
 * PrismTale narra como testigo frío, NO descubridor entusiasmado. Diferencia clave vs ExploraTodo.
+* Unidades — escribir TODO en palabras (Qwen3 no lee abreviaturas):
+  ❌ "70km" → ✅ "setenta kilómetros"
+  ❌ "400°C" → ✅ "cuatrocientos grados"
+  ❌ "50%" → ✅ "cincuenta por ciento"
+  Sin abreviaturas ni símbolos en scripts.
 * ❌ PROHIBIDO: energía ascendente, llamadas emotivas, regionalismos, tono sensacionalista.
 
 [Tono/Visual] OSCURO y CINEMATOGRÁFICO. Sin colores vibrantes/saturados.
@@ -1031,6 +1052,12 @@ Cortes 7-8: CLÍMAX + Loop
 * Eliminar palabras emocionales redundantes: prohibido "increíble/asombroso/impresionante" — TTS maneja el tono.
 * Preferir: números en dígitos ("3 millones"), verbos activos ("descubrieron", "explotó").
 * Evitar: siglas sin separación (usar "la NASA"), palabras esdrújulas seguidas, gerundios encadenados.
+* Unidades — escribir TODO en palabras (Qwen3 no lee abreviaturas):
+  ❌ "70km" → ✅ "setenta kilómetros"
+  ❌ "400°C" → ✅ "cuatrocientos grados"
+  ❌ "50%" → ✅ "cincuenta por ciento"
+  ❌ "3m" → ✅ "tres metros"
+  Sin abreviaturas ni símbolos en scripts.
 * Estilo ExploraTodo: hablar directo ("te cuento", "fíjate", "imagínate"), sin formalidades.
 * ❌ PROHIBIDO: tono formal, académico, de noticiero. Frases largas o complejas.
 
