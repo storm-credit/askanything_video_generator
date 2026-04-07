@@ -2964,6 +2964,24 @@ async def analytics_tone_report():
     return {"success": True, **get_tone_change_report()}
 
 
+@app.post("/api/scheduler/generate-topics")
+async def generate_topics_endpoint(start_date: str = None, days: int = 7):
+    """주간 토픽 자동 생성 — 성과 분석 기반."""
+    from modules.scheduler.topic_generator import generate_weekly_topics
+    from datetime import datetime
+    if start_date:
+        dt = datetime.strptime(start_date, "%Y-%m-%d")
+    else:
+        # 다음 월요일 기준
+        dt = datetime.now()
+        while dt.weekday() != 0:  # 0=월요일
+            dt += timedelta(days=1)
+    result = await asyncio.get_running_loop().run_in_executor(
+        None, lambda: generate_weekly_topics(dt, days=days)
+    )
+    return result
+
+
 @app.post("/api/batch/import-today")
 async def batch_import_today():
     """오늘 날짜의 Day 파일을 자동 감지하여 batch 큐에 등록합니다."""
