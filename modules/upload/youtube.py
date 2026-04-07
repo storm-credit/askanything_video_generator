@@ -9,7 +9,7 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/youtube"]
 _BASE_DIR = Path(__file__).resolve().parent.parent.parent  # project root
 TOKENS_DIR = _BASE_DIR / "youtube_tokens"
 CLIENT_SECRETS_DIR = _BASE_DIR / "client_secrets"
@@ -301,7 +301,209 @@ def upload_video(
     if publish_at:
         result["scheduled_at"] = publish_at
         print(f"   [YouTube] 예약 공개: {publish_at}")
+
+    # 재생목록 자동 추가
+    try:
+        playlist_id = add_to_playlist(video_id, title, tags or [], channel_id)
+        if playlist_id:
+            result["playlist_id"] = playlist_id
+    except Exception as e:
+        print(f"   [재생목록] 자동 추가 실패 (업로드는 성공): {e}")
+
     return result
+
+
+# ── 재생목록 자동 분류 ──────────────────────────────────────────
+
+# 카테고리 → 재생목록 이름 매핑
+PLAYLIST_CATEGORIES = {
+    "우주/행성": {"ko": "🌌 우주와 행성", "en": "🌌 Space & Planets", "es": "🌌 Espacio y Planetas"},
+    "공룡/고생물": {"ko": "🦕 공룡과 고생물", "en": "🦕 Dinosaurs & Fossils", "es": "🦕 Dinosaurios y Fósiles"},
+    "심해/바다": {"ko": "🌊 심해의 비밀", "en": "🌊 Deep Sea Secrets", "es": "🌊 Secretos del Mar"},
+    "지구/자연": {"ko": "🌍 지구와 자연", "en": "🌍 Earth & Nature", "es": "🌍 Tierra y Naturaleza"},
+    "동물": {"ko": "🐾 놀라운 동물", "en": "🐾 Amazing Animals", "es": "🐾 Animales Increíbles"},
+    "역사": {"ko": "📜 역사 반전", "en": "📜 History Revealed", "es": "📜 Historia Revelada"},
+}
+
+# 카테고리 감지 키워드 (title/tags에서 매칭)
+_CATEGORY_KEYWORDS = {
+    "우주/행성": ["planet", "star", "space", "행성", "별", "우주", "sun", "moon", "saturn", "jupiter", "venus", "mars", "sol", "luna", "estrella", "galaxia", "neptun", "plut"],
+    "공룡/고생물": ["dinosaur", "공룡", "fossil", "rex", "dragon", "fósil", "dinosaurio", "stego", "trice", "ankylo", "megalodon", "extinct"],
+    "심해/바다": ["ocean", "sea", "deep", "바다", "심해", "해구", "mar", "océano", "marina", "whale", "고래", "ballena", "trench"],
+    "지구/자연": ["earth", "지구", "volcano", "지진", "tierra", "volcán", "earthquake", "magnetic", "자기장", "climate", "ice age"],
+    "동물": ["animal", "동물", "shark", "상어", "tiburón", "penguin", "octopus", "문어", "pulpo", "crow", "까마귀", "ant", "spider"],
+    "역사": ["history", "역사", "ancient", "roman", "viking", "egypt", "medieval", "고대", "historia", "antiguo"],
+}
+
+_playlist_cache: dict[str, dict[str, str]] = {}  # channel_id → {category: playlist_id}
+_PLAYLIST_CACHE_FILE = TOKENS_DIR / "playlist_map.json"
+
+
+def _detect_category(title: str, tags: list[str] = None) -> str:
+    """제목+태그에서 카테고리 자동 감지."""
+    text = (title + " " + " ".join(tags or [])).lower()
+    for category, keywords in _CATEGORY_KEYWORDS.items():
+        if any(kw in text for kw in keywords):
+            return category
+    return ""
+
+
+def _get_playlist_lang(channel: str) -> str:
+    """채널별 언어."""
+    lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
+    return lang_map.get(channel, "en")
+
+
+def _load_playlist_cache():
+    """저장된 재생목록 ID 로드."""
+    global _playlist_cache
+    if _PLAYLIST_CACHE_FILE.exists():
+        try:
+            with open(_PLAYLIST_CACHE_FILE, "r") as f:
+                _playlist_cache = json.load(f)
+        except Exception:
+            _playlist_cache = {}
+
+
+def _save_playlist_cache():
+    """재생목록 ID 저장."""
+    TOKENS_DIR.mkdir(exist_ok=True)
+    with open(_PLAYLIST_CACHE_FILE, "w") as f:
+        json.dump(_playlist_cache, f, ensure_ascii=False, indent=2)
+
+
+def ensure_playlists(channel_id: str, channel: str) -> dict[str, str]:
+    """채널에 카테고리별 재생목록이 있는지 확인, 없으면 생성. {category: playlist_id} 반환."""
+    _load_playlist_cache()
+    cache_key = channel_id or channel
+
+    if cache_key in _playlist_cache and len(_playlist_cache[cache_key]) >= len(PLAYLIST_CATEGORIES):
+        return _playlist_cache[cache_key]
+
+    creds = _get_credentials(channel_id)
+    if not creds:
+        return {}
+
+    youtube = build("youtube", "v3", credentials=creds)
+    lang = _get_playlist_lang(channel)
+
+    # 기존 재생목록 조회
+    existing = {}
+    try:
+        resp = youtube.playlists().list(part="snippet", mine=True, maxResults=50).execute()
+        for item in resp.get("items", []):
+            existing[item["snippet"]["title"]] = item["id"]
+    except Exception as e:
+        print(f"[재생목록] 조회 실패: {e}")
+        return {}
+
+    result = _playlist_cache.get(cache_key, {})
+
+    for category, names in PLAYLIST_CATEGORIES.items():
+        playlist_name = names.get(lang, names["en"])
+        if category in result:
+            continue  # 이미 캐시에 있음
+        if playlist_name in existing:
+            result[category] = existing[playlist_name]
+            print(f"[재생목록] 기존 발견: {playlist_name}")
+        else:
+            # 새로 생성
+            try:
+                resp = youtube.playlists().insert(
+                    part="snippet,status",
+                    body={
+                        "snippet": {"title": playlist_name, "description": f"{category} 관련 쇼츠 모음"},
+                        "status": {"privacyStatus": "public"},
+                    },
+                ).execute()
+                result[category] = resp["id"]
+                print(f"[재생목록] 생성: {playlist_name} → {resp['id']}")
+            except Exception as e:
+                print(f"[재생목록] 생성 실패 ({playlist_name}): {e}")
+
+    _playlist_cache[cache_key] = result
+    _save_playlist_cache()
+    return result
+
+
+def add_to_playlist(video_id: str, title: str, tags: list[str],
+                    channel_id: str = None, channel: str = None) -> str | None:
+    """업로드된 영상을 카테고리에 맞는 재생목록에 자동 추가."""
+    category = _detect_category(title, tags)
+    if not category:
+        print(f"[재생목록] 카테고리 감지 실패: {title}")
+        return None
+
+    playlists = ensure_playlists(channel_id, channel)
+    playlist_id = playlists.get(category)
+    if not playlist_id:
+        print(f"[재생목록] '{category}' 재생목록 없음")
+        return None
+
+    creds = _get_credentials(channel_id)
+    if not creds:
+        return None
+
+    youtube = build("youtube", "v3", credentials=creds)
+    try:
+        youtube.playlistItems().insert(
+            part="snippet",
+            body={
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {"kind": "youtube#video", "videoId": video_id},
+                },
+            },
+        ).execute()
+        lang = _get_playlist_lang(channel)
+        playlist_name = PLAYLIST_CATEGORIES[category].get(lang, category)
+        print(f"OK [재생목록] '{title}' → {playlist_name}")
+        return playlist_id
+    except Exception as e:
+        print(f"[재생목록] 추가 실패: {e}")
+        return None
+
+
+def classify_existing_videos(channel_id: str = None, channel: str = None) -> dict:
+    """기존 업로드 영상들을 재생목록에 소급 분류."""
+    creds = _get_credentials(channel_id)
+    if not creds:
+        return {"error": "인증 필요"}
+
+    youtube = build("youtube", "v3", credentials=creds)
+    playlists = ensure_playlists(channel_id, channel)
+
+    # 내 채널 영상 조회
+    videos = []
+    try:
+        # 내 채널 ID 가져오기
+        ch_resp = youtube.channels().list(part="contentDetails", mine=True).execute()
+        uploads_id = ch_resp["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+
+        next_page = None
+        while True:
+            resp = youtube.playlistItems().list(
+                part="snippet", playlistId=uploads_id, maxResults=50, pageToken=next_page,
+            ).execute()
+            for item in resp.get("items", []):
+                videos.append({
+                    "video_id": item["snippet"]["resourceId"]["videoId"],
+                    "title": item["snippet"]["title"],
+                })
+            next_page = resp.get("nextPageToken")
+            if not next_page:
+                break
+    except Exception as e:
+        return {"error": f"영상 조회 실패: {e}"}
+
+    # 각 영상 분류
+    classified = 0
+    for v in videos:
+        result = add_to_playlist(v["video_id"], v["title"], [], channel_id, channel)
+        if result:
+            classified += 1
+
+    return {"success": True, "total": len(videos), "classified": classified}
 
 
 def disconnect(channel_id: str = None) -> dict:

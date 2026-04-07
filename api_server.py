@@ -3004,6 +3004,38 @@ async def cron_status():
     return {"success": True, **get_status()}
 
 
+@app.post("/api/youtube/playlists/setup/{channel}")
+async def setup_playlists(channel: str):
+    """채널에 카테고리별 재생목록 생성."""
+    from modules.upload.youtube import ensure_playlists
+    from modules.utils.channel_config import get_channel_preset
+    preset = get_channel_preset(channel)
+    if not preset:
+        return {"success": False, "message": f"채널 '{channel}' 없음"}
+    accounts_path = os.path.join("youtube_tokens", "channel_accounts.json")
+    ch_id = None
+    if os.path.exists(accounts_path):
+        with open(accounts_path) as f:
+            ch_id = json.load(f).get(channel, {}).get("youtube")
+    playlists = ensure_playlists(ch_id, channel)
+    return {"success": True, "channel": channel, "playlists": playlists}
+
+
+@app.post("/api/youtube/playlists/classify/{channel}")
+async def classify_channel_videos(channel: str):
+    """기존 영상을 재생목록에 소급 분류."""
+    from modules.upload.youtube import classify_existing_videos
+    accounts_path = os.path.join("youtube_tokens", "channel_accounts.json")
+    ch_id = None
+    if os.path.exists(accounts_path):
+        with open(accounts_path) as f:
+            ch_id = json.load(f).get(channel, {}).get("youtube")
+    result = await asyncio.get_running_loop().run_in_executor(
+        None, lambda: classify_existing_videos(ch_id, channel)
+    )
+    return result
+
+
 @app.post("/api/scheduler/generate-topics")
 async def generate_topics_endpoint(start_date: str = None, days: int = 7):
     """주간 토픽 자동 생성 — 성과 분석 기반."""
