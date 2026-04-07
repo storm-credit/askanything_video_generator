@@ -108,34 +108,40 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
     # 채널별 speaker 선택
     speaker = CHANNEL_SPEAKER.get(channel, "eric")
 
-    try:
-        import json
-        resp = requests.post(
-            f"{QWEN3_TTS_URL}/generate",
-            json={"text": text, "engine": "qwen3", "lang": language,
-                  "voice_desc": final_desc, "voice": speaker,
-                  **({"speed": speed} if speed else {})},
-            timeout=120,
-        )
-        if resp.status_code == 200 and len(resp.content) > 1000:
-            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-            with open(output_path, "wb") as f:
-                f.write(resp.content)
-            # LUFS 정규화 (-14 LUFS, ElevenLabs 경로와 동일 기준)
-            try:
-                from modules.utils.audio import normalize_audio_lufs
-                normalize_audio_lufs(output_path)
-            except Exception as norm_err:
-                print(f"  [Qwen3-TTS] LUFS 정규화 건너뜀: {norm_err}")
-            print(f"OK [Qwen3-TTS] 컷 음성 생성 완료! ({len(resp.content)//1024}KB)")
-            return output_path
-        else:
-            error_msg = resp.text[:100] if resp.status_code != 200 else "too small"
-            print(f"[Qwen3-TTS 실패] {resp.status_code}: {error_msg}")
-            return None
-    except Exception as e:
-        print(f"[Qwen3-TTS 연결 실패] {e}")
-        return None
+    import time as _time
+    MAX_RETRIES = 3
+    for attempt in range(MAX_RETRIES):
+        try:
+            resp = requests.post(
+                f"{QWEN3_TTS_URL}/generate",
+                json={"text": text, "engine": "qwen3", "lang": language,
+                      "voice_desc": final_desc, "voice": speaker,
+                      **({"speed": speed} if speed else {})},
+                timeout=120,
+            )
+            if resp.status_code == 200 and len(resp.content) > 1000:
+                os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+                with open(output_path, "wb") as f:
+                    f.write(resp.content)
+                try:
+                    from modules.utils.audio import normalize_audio_lufs
+                    normalize_audio_lufs(output_path)
+                except Exception as norm_err:
+                    print(f"  [Qwen3-TTS] LUFS 정규화 건너뜀: {norm_err}")
+                print(f"OK [Qwen3-TTS] 컷 음성 생성 완료! ({len(resp.content)//1024}KB)")
+                return output_path
+            else:
+                error_msg = resp.text[:100] if resp.status_code != 200 else "too small"
+                print(f"[Qwen3-TTS 실패] {resp.status_code}: {error_msg} (시도 {attempt+1}/{MAX_RETRIES})")
+        except Exception as e:
+            print(f"[Qwen3-TTS 연결 실패] {e} (시도 {attempt+1}/{MAX_RETRIES})")
+
+        if attempt < MAX_RETRIES - 1:
+            wait = 2 ** (attempt + 1)
+            print(f"  [Qwen3-TTS] {wait}초 후 재시도...")
+            _time.sleep(wait)
+
+    return None
 
 
 def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko", speed: float | None = None, voice_id: str | None = None, voice_settings: dict | None = None, emotion: str | None = None, channel: str | None = None) -> str | None:

@@ -97,6 +97,18 @@ async def _scheduler_loop():
     _running = True
     print(f"[크론] 스케줄러 시작 ({len(_jobs)}개 작업)")
 
+    # 헬스체크 — 등록된 잡 수 확인 + 텔레그램 알림
+    expected_jobs = 4  # deploy, topics, stats, playlists
+    if len(_jobs) < expected_jobs:
+        try:
+            from modules.utils.notify import notify_warning
+            notify_warning("크론", f"등록된 잡 {len(_jobs)}개 — 예상 {expected_jobs}개. 누락 확인 필요!")
+        except Exception:
+            pass
+    else:
+        job_names = ", ".join(j["name"] for j in _jobs)
+        print(f"[크론] 헬스체크 OK — {len(_jobs)}개 잡: {job_names}")
+
     while _running:
         now = _now_kst()
         for job in _jobs:
