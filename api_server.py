@@ -857,7 +857,10 @@ async def generate_video_endpoint(req: GenerateRequest):
                         except Exception as exc:
                             print(f"[컷 {i+1} LUFS 정규화 경고] {exc}")
                         try:
-                            whisper_result[0] = generate_word_timestamps(tts_result[0], api_key_override, language=language)
+                            _raw_timestamps = generate_word_timestamps(tts_result[0], api_key_override, language=language)
+                            # Whisper 재인식 오류 보정: 원본 스크립트 텍스트로 매핑
+                            from modules.transcription.whisper import align_words_with_script
+                            whisper_result[0] = align_words_with_script(_raw_timestamps, cut.get("script", ""))
                         except Exception as exc:
                             with errors_lock:
                                 errors.append(f"타임스탬프: {exc}")

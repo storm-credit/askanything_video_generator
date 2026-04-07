@@ -1,10 +1,37 @@
 import os
+import re
 import time
 import random
 from openai import OpenAI
 
 
 MAX_RETRIES = 2
+
+
+def align_words_with_script(whisper_words: list[dict], script: str) -> list[dict]:
+    """Whisper 타임스탬프에 원본 스크립트 텍스트를 매핑.
+
+    Whisper가 외래어를 잘못 인식할 수 있으므로 (오무아무아→웅하마),
+    타임스탬프(시간)는 Whisper 것을 쓰고 단어 텍스트는 원본 스크립트를 사용.
+    """
+    if not whisper_words or not script:
+        return whisper_words
+
+    # 원본 스크립트를 단어로 분리
+    script_words = script.split()
+    if not script_words:
+        return whisper_words
+
+    # 단어 수가 비슷하면 1:1 매핑
+    if abs(len(script_words) - len(whisper_words)) <= 2:
+        aligned = []
+        for i, w in enumerate(whisper_words):
+            word_text = script_words[i] if i < len(script_words) else w["word"]
+            aligned.append({"word": word_text, "start": w["start"], "end": w["end"]})
+        return aligned
+
+    # 단어 수 차이가 크면 Whisper 원본 유지 (안전)
+    return whisper_words
 
 
 def generate_word_timestamps(audio_path: str, api_key: str | None = None, language: str = "ko") -> list[dict]:

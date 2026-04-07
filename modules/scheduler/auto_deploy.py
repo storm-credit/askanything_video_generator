@@ -282,7 +282,10 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     audio_paths.append(aud)
                     if aud:
                         words = get_word_timestamps(aud)
-                        word_timestamps.append(words or [])
+                        # Whisper 재인식 오류 보정: 원본 스크립트로 매핑
+                        from modules.transcription.whisper import align_words_with_script
+                        words = align_words_with_script(words or [], script)
+                        word_timestamps.append(words)
                     else:
                         word_timestamps.append([])
 
