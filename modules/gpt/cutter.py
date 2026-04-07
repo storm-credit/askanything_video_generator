@@ -635,7 +635,7 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
    ❌ "I already told you at the beginning" — meta 4th-wall breaking FORBIDDEN
 
 [Script Rules — Qwen3-TTS Optimized]
-* Calm cinematic documentary voice. 10-15 words per cut mandatory (3-4 sec). Under 8 = FAIL. One sentence. Vary structures.
+* Calm cinematic documentary voice. 8-12 words per cut mandatory (3-4 sec). Under 6 = FAIL. One sentence. Vary structures. SHORTER = BETTER.
 * NEVER start with academic phrases: "According to research", "Scientists discovered", "Studies show", "Researchers found" → Drop the fact directly.
   ❌ "According to NASA, this planet has diamond rain" → ✅ "This planet rains diamonds."
   ❌ "Researchers discovered that..." → ✅ "This creature hasn't aged in 200 years."
@@ -730,7 +730,7 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
     {
       "description": "[Cut description (English)] [EMOTION_TAG]",
       "image_prompt": "[English image prompt (MASTER_STYLE auto-applied)]",
-      "script": "[Voice-over: casual, 10-15 words mandatory. Under 8 = FAIL]"
+      "script": "[Voice-over: casual, 8-12 words mandatory. Under 6 = FAIL]"
     }
   ]
 }
@@ -841,7 +841,7 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 
 [Reglas de guion — Qwen3-TTS Optimizado US Hispanic]
 * Español neutro y sobrio. Registro documental oscuro, nunca conversacional.
-* 8-14 palabras por corte. Una sola idea por oración.
+* 8-11 palabras por corte. Una sola idea por oración. MÁS CORTO = MEJOR.
 * [CRITICAL WARNING] 8-10 cortes. Video 38-48 segundos. NUNCA menos de 8. PrismTale es cinematográfico — más largo = más vistas.
 * Terminaciones por etiqueta emocional:
   [SHOCK]: dato concreto o cifra final. Sin adjetivos dramáticos.
@@ -1039,7 +1039,7 @@ Cortes 7-8: CLÍMAX + Loop
 
 [Reglas de guion — Qwen3-TTS Optimizado LATAM]
 * Español latinoamericano neutro, accesible, energético. Tono de amigo contando algo increíble.
-* 8-12 palabras por corte, una oración. Ritmo rápido y dinámico.
+* 8-10 palabras por corte, una oración. Ritmo rápido y dinámico. MÁS CORTO = MEJOR.
 * [CRITICAL WARNING] 8-10 cortes. Video 34-42 segundos. NUNCA menos de 8. LATAM = ritmo rápido pero con suficiente desarrollo.
 * Terminaciones por etiqueta emocional:
   [SHOCK][DISBELIEF]: Terminar en sustantivo o cifra impactante. Sin adverbios finales.

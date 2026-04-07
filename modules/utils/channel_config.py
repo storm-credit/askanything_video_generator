@@ -42,7 +42,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "wonderdrop": {
         "language": "en",
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
-        "tts_speed": 1.15,  # 1.1→1.15 (50초 나옴 → 43초 이내로)
+        "tts_speed": 1.20,  # 실측 50초@1.15 → 1.20+단어수 축소로 43초 이내
         "min_cuts": 8,
         "max_cuts": 10,
         "target_duration": "35-43",  # 실제 탑 28-41초, 스위트스팟 35-43초
@@ -69,7 +69,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "exploratodo": {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
-        "tts_speed": 1.15,  # 1.1→1.15 (48초 나옴 → 42초 이내로)
+        "tts_speed": 1.20,  # 실측 48초@1.15 → 1.20+단어수 축소로 42초 이내
         "min_cuts": 8,
         "max_cuts": 10,  # 34-42초 → 최대 10컷
         "target_duration": "34-42",  # 실제 탑 34-45초, 긴 영상 +59% 성과
@@ -96,7 +96,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "prismtale": {
         "language": "es",
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성 — 미국 히스패닉 타겟)
-        "tts_speed": 1.15,  # 1.0→1.15 (70초 나옴 → 48초 이내로 압축)
+        "tts_speed": 1.20,  # 실측 56초@1.15 → 1.20+단어수 축소로 48초 이내
         "min_cuts": 8,
         "max_cuts": 10,  # 38-48초 → 최대 10컷
         "target_duration": "38-48",  # 실제 탑 39-46초, 몰입형 최적
