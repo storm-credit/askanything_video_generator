@@ -37,10 +37,13 @@ def _verify_image_matches_prompt(image_bytes: bytes, prompt: str, api_key: str) 
             config={"http_options": types.HttpOptions(timeout=15_000)},
         )
         answer = (response.text or "").strip().lower()
-        return answer.startswith("yes")
+        matched = answer.startswith("yes")
+        if not matched:
+            print(f"  [Vision 검증] 불일치 — Gemini 응답: '{answer}'")
+        return matched
     except Exception as e:
-        print(f"  [Vision 검증] 스킵 (에러: {e})")
-        return True  # 검증 실패 시 통과 (이미지 생성 자체는 유지)
+        print(f"  [Vision 검증] API 에러 (통과 처리): {e}")
+        return True  # API 에러 시만 통과 — 검증 결과 "no"는 False 반환
 
 
 def generate_image_with_quota(prompt: str, index: int, topic_folder: str = "default_topic",

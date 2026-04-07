@@ -1354,7 +1354,7 @@ These English keywords help YouTube's algorithm classify this content for US aud
         cuts = cuts[:_cfg_max]
         print(f"[컷 수 조정] {_cfg_max}컷으로 잘라냄 (채널 max_cuts)")
     if len(cuts) < _cfg_min:
-        print(f"⚠️ [검증 경고] 컷 수 {len(cuts)}개 (채널 최소 {_cfg_min}) — 부족하지만 진행")
+        raise ValueError(f"[HARD FAIL] 컷 수 {len(cuts)}개 — 채널 최소 {_cfg_min}컷 미달. 스크립트 재생성 필요.")
 
     # title이 비어있으면 제목을 폴백으로 사용 (자막 포함 방지)
     if not title:
@@ -1851,6 +1851,10 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                 break
     if len(set(emotions)) < 3:
         failures.append(f"TENSION_FLAT: 감정 태그 {len(set(emotions))}종류 (최소 3 필요)")
+    # 2연속 동일 감정 태그 체크
+    for i in range(1, len(emotions)):
+        if emotions[i] == emotions[i-1]:
+            failures.append(f"EMOTION_REPEAT: 컷 {i}~{i+1} 동일 태그 [{emotions[i]}] 연속")
 
     # 3) 루프 연결 검증 — 마지막 컷이 미완성 문장인지
     last_script = cuts[-1].get("script", "")

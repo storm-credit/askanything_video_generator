@@ -15,7 +15,7 @@ def _backoff_delay(attempt: int) -> float:
     return base + random.uniform(0, base * 0.5)
 
 
-def _write_silent_wav(path: str, duration_sec: float = 1.0, sample_rate: int = 22050):
+def _write_silent_wav(path: str, duration_sec: float = 1.0, sample_rate: int = 24000):
     """무음 WAV 파일을 생성합니다 (API 호출 없이 빈 스크립트 처리용)."""
     num_samples = int(sample_rate * duration_sec)
     data_size = num_samples * 2  # 16-bit mono
