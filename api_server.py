@@ -70,8 +70,24 @@ async def _lifespan(app):
         return record_daily()
     add_daily("일일 성과 기록", 23, 50, _cron_record)
 
+    # 내일 1회 — 재생목록 소급 분류 (YouTube 쿼터 리셋 후)
+    def _cron_playlist_classify():
+        from modules.upload.youtube import classify_existing_videos
+        import json
+        accounts_path = os.path.join("youtube_tokens", "channel_accounts.json")
+        if not os.path.exists(accounts_path):
+            return
+        with open(accounts_path) as f:
+            accounts = json.load(f)
+        for ch in ["askanything", "wonderdrop", "exploratodo", "prismtale"]:
+            ch_id = accounts.get(ch, {}).get("youtube")
+            if ch_id:
+                print(f"[재생목록] {ch} 소급 분류 시작...")
+                classify_existing_videos(ch_id, ch)
+    add_daily("재생목록 소급 분류", 10, 0, _cron_playlist_classify)  # 10:00 KST (쿼터 리셋 후)
+
     cron_start()
-    print(f"[크론] 3개 작업 등록 완료")
+    print(f"[크론] 4개 작업 등록 완료")
 
     yield
     _cut_executor.shutdown(wait=False)
