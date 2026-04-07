@@ -281,7 +281,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     aud = generate_tts(script, i, topic_folder, language=lang, emotion=_emo, channel=channel)
                     audio_paths.append(aud)
                     if aud:
-                        words = get_word_timestamps(aud)
+                        words = get_word_timestamps(aud, language=lang)
                         # Whisper 재인식 오류 보정: 원본 스크립트로 매핑
                         from modules.transcription.whisper import align_words_with_script
                         words = align_words_with_script(words or [], script)
