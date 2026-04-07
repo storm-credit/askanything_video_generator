@@ -1,0 +1,154 @@
+"""내장 크론 스케줄러 — 외부 의존성 없이 asyncio 기반.
+
+api_server.py 시작 시 자동 등록. Docker 재시작해도 다시 등록.
+
+스케줄:
+  매주 일요일 21:00 KST → 주간 토픽 생성 (다음 주 7일분)
+  매일 05:00 KST → 당일 Day 파일 자동 배포
+  매일 23:50 KST → 일일 성과 기록
+"""
+import asyncio
+import threading
+from datetime import datetime, timedelta, timezone
+from typing import Callable, Any
+
+KST = timezone(timedelta(hours=9))
+
+# 등록된 작업 목록
+_jobs: list[dict] = []
+_running = False
+_thread: threading.Thread | None = None
+
+
+def _now_kst() -> datetime:
+    return datetime.now(KST)
+
+
+def _next_run(hour: int, minute: int, weekday: int | None = None) -> datetime:
+    """다음 실행 시각 계산. weekday=None이면 매일, 0=월~6=일."""
+    now = _now_kst()
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    if weekday is not None:
+        # 특정 요일
+        days_ahead = weekday - now.weekday()
+        if days_ahead < 0 or (days_ahead == 0 and now >= target):
+            days_ahead += 7
+        target += timedelta(days=days_ahead)
+    else:
+        # 매일
+        if now >= target:
+            target += timedelta(days=1)
+
+    return target
+
+
+def add_daily(name: str, hour: int, minute: int, func: Callable):
+    """매일 실행 작업 등록."""
+    _jobs.append({
+        "name": name,
+        "hour": hour,
+        "minute": minute,
+        "weekday": None,
+        "func": func,
+        "type": "daily",
+    })
+    next_t = _next_run(hour, minute)
+    print(f"[크론] 등록: {name} — 매일 {hour:02d}:{minute:02d} KST (다음: {next_t.strftime('%m/%d %H:%M')})")
+
+
+def add_weekly(name: str, weekday: int, hour: int, minute: int, func: Callable):
+    """매주 특정 요일 실행 작업 등록. weekday: 0=월~6=일."""
+    day_names = ["월", "화", "수", "목", "금", "토", "일"]
+    _jobs.append({
+        "name": name,
+        "hour": hour,
+        "minute": minute,
+        "weekday": weekday,
+        "func": func,
+        "type": "weekly",
+    })
+    next_t = _next_run(hour, minute, weekday)
+    print(f"[크론] 등록: {name} — 매주 {day_names[weekday]} {hour:02d}:{minute:02d} KST (다음: {next_t.strftime('%m/%d %H:%M')})")
+
+
+async def _run_job(job: dict):
+    """작업 실행 (동기/비동기 모두 지원)."""
+    name = job["name"]
+    print(f"\n[크론] ▶ {name} 시작 ({_now_kst().strftime('%m/%d %H:%M')})")
+    try:
+        result = job["func"]()
+        if asyncio.iscoroutine(result):
+            result = await result
+        print(f"[크론] ✅ {name} 완료")
+        # 텔레그램 알림 (실패 시에만 — 성공은 각 모듈이 자체 알림)
+    except Exception as e:
+        print(f"[크론] ❌ {name} 실패: {e}")
+        try:
+            from modules.utils.notify import notify_warning
+            notify_warning("크론", f"{name} 실패: {str(e)[:150]}")
+        except Exception:
+            pass
+
+
+async def _scheduler_loop():
+    """메인 스케줄러 루프 — 1분마다 체크."""
+    global _running
+    _running = True
+    print(f"[크론] 스케줄러 시작 ({len(_jobs)}개 작업)")
+
+    while _running:
+        now = _now_kst()
+        for job in _jobs:
+            next_t = _next_run(job["hour"], job["minute"], job.get("weekday"))
+            # 현재 시각이 실행 시각과 1분 이내 차이면 실행
+            diff = (next_t - now).total_seconds()
+            if -30 <= diff <= 30:
+                # 이미 이번 분에 실행했는지 체크
+                last_run = job.get("_last_run")
+                if last_run and (now - last_run).total_seconds() < 120:
+                    continue
+                job["_last_run"] = now
+                asyncio.create_task(_run_job(job))
+
+        await asyncio.sleep(30)  # 30초마다 체크
+
+
+def _run_in_thread():
+    """별도 스레드에서 이벤트 루프 실행."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(_scheduler_loop())
+
+
+def start():
+    """크론 스케줄러 시작 (백그라운드 스레드)."""
+    global _thread
+    if _thread and _thread.is_alive():
+        print("[크론] 이미 실행 중")
+        return
+    _thread = threading.Thread(target=_run_in_thread, daemon=True)
+    _thread.start()
+
+
+def stop():
+    """크론 스케줄러 중지."""
+    global _running
+    _running = False
+    print("[크론] 스케줄러 중지")
+
+
+def get_status() -> dict[str, Any]:
+    """현재 크론 상태 반환."""
+    now = _now_kst()
+    jobs_info = []
+    for job in _jobs:
+        next_t = _next_run(job["hour"], job["minute"], job.get("weekday"))
+        jobs_info.append({
+            "name": job["name"],
+            "type": job["type"],
+            "schedule": f"{job['hour']:02d}:{job['minute']:02d} KST",
+            "next_run": next_t.strftime("%Y-%m-%d %H:%M KST"),
+            "last_run": job.get("_last_run", "").isoformat() if job.get("_last_run") else None,
+        })
+    return {"running": _running, "jobs": jobs_info}

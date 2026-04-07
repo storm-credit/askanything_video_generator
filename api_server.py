@@ -43,6 +43,36 @@ async def _lifespan(app):
     quota_manager.register_projects(project_map)
     total_keys = sum(len(v) for v in project_map.values())
     print(f"[QuotaManager] {len(project_map)}개 프로젝트, {total_keys}개 키 등록")
+
+    # ── 크론 스케줄러 시작 ──
+    from modules.scheduler.cron import add_daily, add_weekly, start as cron_start
+
+    # 매일 05:00 KST — 자동 배포
+    async def _cron_deploy():
+        from modules.scheduler.auto_deploy import run_auto_deploy
+        return await run_auto_deploy()
+    add_daily("자동 배포", 5, 0, _cron_deploy)
+
+    # 매주 일요일 21:00 KST — 주간 토픽 생성
+    def _cron_topics():
+        from modules.scheduler.topic_generator import generate_weekly_topics
+        from datetime import datetime, timedelta, timezone
+        _kst = timezone(timedelta(hours=9))
+        # 다음 월요일 기준
+        now = datetime.now(_kst)
+        monday = now + timedelta(days=(7 - now.weekday()))
+        return generate_weekly_topics(monday, days=7)
+    add_weekly("주간 토픽 생성", 6, 21, 0, _cron_topics)  # 6=일요일
+
+    # 매일 23:50 KST — 일일 성과 기록
+    def _cron_record():
+        from modules.analytics.performance_tracker import record_daily
+        return record_daily()
+    add_daily("일일 성과 기록", 23, 50, _cron_record)
+
+    cron_start()
+    print(f"[크론] 3개 작업 등록 완료")
+
     yield
     _cut_executor.shutdown(wait=False)
 
@@ -2962,6 +2992,13 @@ async def analytics_tone_report():
     """톤 변경 영향 종합 리포트."""
     from modules.analytics.performance_tracker import get_tone_change_report
     return {"success": True, **get_tone_change_report()}
+
+
+@app.get("/api/scheduler/cron")
+async def cron_status():
+    """크론 스케줄러 상태 확인."""
+    from modules.scheduler.cron import get_status
+    return {"success": True, **get_status()}
 
 
 @app.post("/api/scheduler/generate-topics")
