@@ -65,10 +65,10 @@ EMOTION_VOICE_DESC = {
 
 # ── 채널 → Qwen3 기본 voice_desc ──
 CHANNEL_VOICE_DESC = {
-    "askanything": "Fast-talking Korean male narrator, rapid-fire delivery, consistent energy level throughout, never change pitch dramatically, maintain same tone from start to finish, punchy and direct",
-    "wonderdrop": "Confident male narrator, steady authority, maintain consistent tone and energy throughout entire script, never get excited or drop energy, same level from first word to last",
-    "exploratodo": "Energetic young male voice, Latin American Spanish, maintain same high energy consistently, never drop or spike in intensity, steady fast pace throughout",
-    "prismtale": "Deep male voice, neutral Spanish, dark cinematic tone, maintain exact same tone and pace throughout, never get dramatic or change intensity, steady controlled delivery",
+    "askanything": "Korean male, fast steady narration, same energy throughout",
+    "wonderdrop": "English male, confident steady narration, same energy throughout",
+    "exploratodo": "Spanish male, energetic steady narration, same energy throughout",
+    "prismtale": "Spanish male, calm steady narration, same energy throughout",
 }
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
