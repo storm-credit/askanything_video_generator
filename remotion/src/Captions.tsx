@@ -27,23 +27,22 @@ const EN_STOPWORDS = new Set([
 
 type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM';
 
-// 감정별 하이라이트 색상 (활성 단어 + 강조 단어 공용)
+// 자막 색상 — 노랑 통일 (감정별 색 변경은 쇼츠에서 산만함)
+const HIGHLIGHT_COLOR = '#FFE600';
+
 const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
-  SHOCK: '#FF4444',
-  WONDER: '#FFB800',
-  TENSION: '#FF6600',
-  REVEAL: '#00CC66',
-  URGENCY: '#FF1744',    // 긴급 — 강렬한 빨강
-  DISBELIEF: '#E040FB',  // 불신 — 보라
-  IDENTITY: '#00E5FF',   // 정체성 — 시안
-  CALM: '#90CAF9',       // 차분 — 연한 파랑
+  SHOCK: HIGHLIGHT_COLOR,
+  WONDER: HIGHLIGHT_COLOR,
+  TENSION: HIGHLIGHT_COLOR,
+  REVEAL: HIGHLIGHT_COLOR,
+  URGENCY: HIGHLIGHT_COLOR,
+  DISBELIEF: HIGHLIGHT_COLOR,
+  IDENTITY: HIGHLIGHT_COLOR,
+  CALM: HIGHLIGHT_COLOR,
 };
 
-const getEmotionColor = (emotion?: string): string => {
-  if (emotion && emotion in EMOTION_HIGHLIGHT_COLOR) {
-    return EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag];
-  }
-  return '#FFD700'; // default gold
+const getEmotionColor = (_emotion?: string): string => {
+  return HIGHLIGHT_COLOR;
 };
 
 const isEmphasisWord = (word: string): boolean => {
