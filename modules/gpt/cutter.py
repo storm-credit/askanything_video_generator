@@ -348,7 +348,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 🔬 [팩트 검증 규칙 — 채널 신뢰도 최우선]
 - 검증 안 된 숫자 단정 금지: "정확히 X배" → "약 X배", "추정 X배" 사용
-- "과학자들이 증명했다/밝혀졌다" 남발 금지 → "연구에 따르면", "~로 알려져 있다" 사용
+- "과학자들이 증명했다/밝혀졌다" 남발 금지 → 팩트를 바로 진술 ("이 물질은 독성이 있어")
 - 배타적 단정 금지: "유일한/최초의/절대/역사상 가장" → "거의 유일한/가장 ~중 하나" 사용
 - 인과관계 날조 금지: 상관관계를 인과관계로 바꾸지 말 것 ("A하면 B된다" → "A와 B는 관련이 있다")
 - 과장 수식어 제한: 근거 없는 "역사상 가장", "우주에서 제일" 사용 금지
@@ -731,7 +731,8 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 
 🔬 [REGLAS DE VERIFICACIÓN — La credibilidad del canal es lo primero]
 - Números no verificados prohibidos en forma definitiva: "exactamente 10 veces" → "aproximadamente 10 veces"
-- No abusar de "los científicos demostraron/descubrieron": usar "según investigaciones", "estudios sugieren"
+- PROHIBIDO iniciar script con "Según estudios", "Los científicos descubrieron", "Investigaciones demuestran" — soltar el dato directamente.
+  ❌ "Según estudios, este animal vive 200 años" → ✅ "Este animal lleva 200 años vivo."
 - No absolutos exclusivos: "el único/el primero/el más de la historia" → "uno de los pocos/entre los más grandes"
 - No fabricar causalidad: "hacer A causa B" → "A está relacionado con B"
 - No superlativos sin evidencia: "el más grande de la historia", "lo más extremo" sin respaldo
@@ -863,7 +864,7 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
   "title": "El fondo del océano esconde esto",
   "tags": ["#Shorts", "#Ocean", "#DeepSea", "#Science", "#Océano"],
   "cuts": [
-    {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "La presión del abismo equivale a 50 elefantes sobre tu uña."},
+    {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "La presión del abismo son 50 elefantes sobre tu uña."},
     {"description": "Massive bioluminescent jellyfish glowing in total darkness [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "Pero ahí abajo hay criaturas que generan su propia luz sin el sol."},
     {"description": "Hydrothermal vent erupting superheated water on the ocean floor [TENSION]", "image_prompt": "Hydrothermal vent erupting superheated black water at ocean floor, extreme temperature shimmer, orange mineral deposits, dramatic side lighting from magma glow below", "script": "Y en el fondo el agua hierve a cuatrocientos grados."},
     {"description": "Alien-like colony of tube worms thriving next to the boiling vent [REVEAL]", "image_prompt": "Colony of giant tube worms and eyeless shrimp thriving around hydrothermal vent, alien-like ecosystem, warm amber glow against cold blue ocean, macro lens perspective", "script": "Lo inesperado es que junto a esa agua hirviendo la vida prospera."},
@@ -913,7 +914,8 @@ Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de image
 
 🔬 [REGLAS DE VERIFICACIÓN — La credibilidad del canal es lo primero]
 - Números no verificados prohibidos en forma definitiva: "exactamente 10 veces" → "aproximadamente 10 veces"
-- No abusar de "los científicos demostraron": usar "según investigaciones", "estudios sugieren"
+- PROHIBIDO iniciar script con "Según estudios", "Los científicos descubrieron", "Investigaciones demuestran" — soltar el dato directamente.
+  ❌ "Según estudios, este animal vive 200 años" → ✅ "Este animal lleva 200 años vivo."
 - No absolutos exclusivos: "el único/el primero/el más de la historia" → "uno de los pocos/entre los más grandes"
 - No fabricar causalidad: "hacer A causa B" → "A está relacionado con B"
 - No superlativos sin evidencia: "el más grande de la historia" sin respaldo → prohibido
