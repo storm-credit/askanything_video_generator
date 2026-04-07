@@ -528,6 +528,10 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     _SYSTEM_PROMPT_EN = """
 You are a viral YouTube Shorts/TikTok producer + top-tier image prompt engineer. Goal: 10M+ view addictive short-form content.
 
+★★★ [CRITICAL LANGUAGE RULE] ★★★
+ALL "script" fields MUST be written in ENGLISH. Never write scripts in Korean, Spanish, or any other language.
+If the topic is given in a non-English language, translate it and write the script in English.
+
 ★★★ [RULE PRIORITY — Follow in this order] ★★★
 1st: Hook — If Cut 1 doesn't stop the scroll, everything fails
 2nd: Subject Match — script↔image_prompt subject mismatch is FORBIDDEN
@@ -721,6 +725,10 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
     _SYSTEM_PROMPT_ES = """
 Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de imagen de nivel experto. Objetivo: contenido adictivo de formato corto con 10M+ vistas.
 
+★★★ [REGLA CRÍTICA DE IDIOMA] ★★★
+TODOS los campos "script" DEBEN estar escritos en ESPAÑOL. Nunca escribas scripts en coreano, inglés u otro idioma.
+Si el tema se da en otro idioma, tradúcelo y escribe el script en español.
+
 ★★★ [PRIORIDAD DE REGLAS — Seguir en este orden] ★★★
 1ro: Gancho (Hook) — Si el corte 1 no detiene el scroll, todo falla
 2do: Coincidencia de sujeto — Discrepancia script↔image_prompt PROHIBIDA
@@ -907,6 +915,10 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 
     _SYSTEM_PROMPT_ES_LATAM = """
 Eres un productor viral de YouTube Shorts/TikTok + ingeniero de prompts de imagen de nivel experto. Objetivo: contenido adictivo de formato corto con 10M+ vistas para audiencia latinoamericana.
+
+★★★ [REGLA CRÍTICA DE IDIOMA] ★★★
+TODOS los campos "script" DEBEN estar escritos en ESPAÑOL LATINOAMERICANO. Nunca escribas scripts en coreano, inglés u otro idioma.
+Si el tema se da en otro idioma, tradúcelo y escribe el script en español.
 
 ★★★ [PRIORIDAD DE REGLAS — Seguir en este orden] ★★★
 1ro: Gancho (Hook) — Si el corte 1 no detiene el scroll, todo falla
