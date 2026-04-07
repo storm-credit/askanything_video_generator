@@ -15,7 +15,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
     "askanything": {
         "language": "ko",
         "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
-        "tts_speed": 1.2,  # 한국 쇼츠 빠른 말 기준
+        "tts_speed": 1.3,  # 1.2→1.3 (시청자 피드백: 갑갑하다)
         "min_cuts": 8,
         "max_cuts": 11,  # 빠른 말 + 30-40초 → 최대 11컷
         "target_duration": "30-40",  # 실제 탑 31-39초, 업계 30-50초
