@@ -14,22 +14,22 @@ CHANNEL_WINDOWS = {
     "askanything": {
         "start": dt_time(18, 0),   # KST 18:00 — 한국 퇴근
         "end": dt_time(21, 0),     # KST 21:00
-        "min_interval_min": 30,    # 최소 간격 30분
+        "min_interval_min": 45,    # Veo3 Hero Only 기준 여유 확보    # 최소 간격 30분
     },
     "wonderdrop": {
         "start": dt_time(6, 0),    # KST 06:00 = EST 17:00
         "end": dt_time(9, 0),      # KST 09:00
-        "min_interval_min": 30,
+        "min_interval_min": 45,    # Veo3 Hero Only 기준 여유 확보
     },
     "exploratodo": {
         "start": dt_time(9, 0),    # KST 09:00 = CST 19:00
         "end": dt_time(12, 0),     # KST 12:00
-        "min_interval_min": 30,
+        "min_interval_min": 45,    # Veo3 Hero Only 기준 여유 확보
     },
     "prismtale": {
         "start": dt_time(7, 0),    # KST 07:00 = EST 18:00
         "end": dt_time(10, 0),     # KST 10:00
-        "min_interval_min": 30,
+        "min_interval_min": 45,    # Veo3 Hero Only 기준 여유 확보
     },
 }
 

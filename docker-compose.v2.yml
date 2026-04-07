@@ -1,14 +1,14 @@
 services:
-  backend:
+  backend-v2:
     build:
       context: .
       dockerfile: Dockerfile.backend.v2
-    container_name: askanything-backend
+    container_name: askanything-backend-v2
     ports:
-      - "8003:8003"
+      - "8004:8004"
     env_file: .env
     environment:
-      - API_PORT=8003
+      - API_PORT=8004
       - UVICORN_RELOAD=false
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002
       - DOWNLOAD_DIR=/app/downloads
@@ -32,15 +32,15 @@ services:
       - ./vertex-sa-key-prismtale.json:/app/vertex-sa-key-prismtale.json:ro
     restart: unless-stopped
 
-  frontend:
+  frontend-v2:
     build:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8003
-    container_name: askanything-frontend
+        NEXT_PUBLIC_API_URL: http://localhost:8004
+    container_name: askanything-frontend-v2
     ports:
-      - "3000:3000"
+      - "3002:3000"
     depends_on:
-      - backend
+      - backend-v2
     restart: unless-stopped
