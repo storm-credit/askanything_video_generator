@@ -332,16 +332,21 @@ PLAYLIST_CATEGORIES = {
     "지구/자연": {"ko": "🌍 지구와 자연", "en": "🌍 Earth & Nature", "es": "🌍 Tierra y Naturaleza"},
     "동물": {"ko": "🐾 놀라운 동물", "en": "🐾 Amazing Animals", "es": "🐾 Animales Increíbles"},
     "역사": {"ko": "📜 역사 반전", "en": "📜 History Revealed", "es": "📜 Historia Revelada"},
+    "인체/심리": {"ko": "🧠 인체의 비밀", "en": "🧠 Human Body Secrets", "es": "🧠 Secretos del Cuerpo"},
+    "물리/화학": {"ko": "⚡ 물리와 화학", "en": "⚡ Physics & Chemistry", "es": "⚡ Física y Química"},
+    "기타": {"ko": "🔬 놀라운 과학", "en": "🔬 Amazing Science", "es": "🔬 Ciencia Increíble"},
 }
 
 # 카테고리 감지 키워드 (title/tags에서 매칭)
 _CATEGORY_KEYWORDS = {
-    "우주/행성": ["planet", "star", "space", "행성", "별", "우주", "sun", "moon", "saturn", "jupiter", "venus", "mars", "sol", "luna", "estrella", "galaxia", "neptun", "plut"],
+    "우주/행성": ["planet", "star", "space", "행성", "별", "우주", "천문", "sun", "moon", "saturn", "jupiter", "venus", "mars", "sol", "luna", "estrella", "galaxia", "neptun", "plut", "asteroid", "comet", "소행성", "혜성", "meteor", "nebula", "galaxy", "은하"],
     "공룡/고생물": ["dinosaur", "공룡", "fossil", "rex", "dragon", "fósil", "dinosaurio", "stego", "trice", "ankylo", "megalodon", "extinct"],
     "심해/바다": ["ocean", "sea", "deep", "바다", "심해", "해구", "mar", "océano", "marina", "whale", "고래", "ballena", "trench"],
     "지구/자연": ["earth", "지구", "volcano", "지진", "tierra", "volcán", "earthquake", "magnetic", "자기장", "climate", "ice age"],
     "동물": ["animal", "동물", "shark", "상어", "tiburón", "penguin", "octopus", "문어", "pulpo", "crow", "까마귀", "ant", "spider"],
     "역사": ["history", "역사", "ancient", "roman", "viking", "egypt", "medieval", "고대", "historia", "antiguo"],
+    "인체/심리": ["body", "brain", "heart", "뇌", "심장", "인체", "blood", "cuerpo", "cerebro", "lung", "폐", "bone"],
+    "물리/화학": ["physics", "물리", "화학", "quantum", "atom", "energy", "gravity", "중력", "원자", "física", "química"],
 }
 
 _playlist_cache: dict[str, dict[str, str]] = {}  # channel_id → {category: playlist_id}
@@ -349,12 +354,12 @@ _PLAYLIST_CACHE_FILE = TOKENS_DIR / "playlist_map.json"
 
 
 def _detect_category(title: str, tags: list[str] = None) -> str:
-    """제목+태그에서 카테고리 자동 감지."""
+    """제목+태그에서 카테고리 자동 감지. 못 찾으면 '기타'."""
     text = (title + " " + " ".join(tags or [])).lower()
     for category, keywords in _CATEGORY_KEYWORDS.items():
         if any(kw in text for kw in keywords):
             return category
-    return ""
+    return "기타"
 
 
 def _get_playlist_lang(channel: str) -> str:
