@@ -132,15 +132,9 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
             const isActive = currentTime >= w.start && currentTime <= w.end;
             const isEmphasized = isActive && w.emphasis;
 
-            // 카라오케: 현재 단어 = 노란색, 강조 단어 = 감정 색상, 나머지 = 흰색
-            const color = isEmphasized
-              ? highlightColor
-              : isActive
-                ? '#FFE600'  // 노란색 카라오케 하이라이트
-                : '#FFFFFF';
-
-            // 팝업 애니메이션: 현재 단어 살짝 커짐
-            const scale = isActive ? 1.12 : 1;
+            // 색만 변경 — 말하는 단어 노랑, 나머지 흰색 (크기 고정)
+            const color = isActive ? '#FFE600' : '#FFFFFF';
+            const scale = 1;  // 크기 변동 없음
             const opacity = currentTime >= w.start - 0.3 ? 1 : 0;
 
             return (
@@ -194,31 +188,15 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
           const isEmphasized = isActive && w.emphasis;
           const highlightColor = getEmotionColor(emotion);
 
-          // 중복 제거: 상단 EMOTION_HIGHLIGHT_COLOR 재사용
-          const emphasisColor = emotion && EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag] ? EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag] : '#FF4444';
-
-          const color = isEmphasized
-            ? emphasisColor
-            : isActive
-              ? highlightColor
-              : 'rgba(255, 255, 255, 0.75)';
-
-          const highlightGlow = `0px 2px 12px rgba(0, 0, 0, 0.9), 0px 0px 6px ${highlightColor}4D`;
-
-          // emphasis glow uses emphasisColor for hex → rgba conversion
-          const emphasisR = parseInt(emphasisColor.slice(1, 3), 16);
-          const emphasisG = parseInt(emphasisColor.slice(3, 5), 16);
-          const emphasisB = parseInt(emphasisColor.slice(5, 7), 16);
+          // 색만 변경 — 말하는 단어 노랑, 나머지 흰색 반투명 (크기 고정)
+          const color = isActive ? '#FFE600' : 'rgba(255, 255, 255, 0.75)';
 
           const solidOutline = '4px 4px 0px #000, -4px -4px 0px #000, 4px -4px 0px #000, -4px 4px 0px #000, 0px 4px 0px #000, 0px -4px 0px #000, 4px 0px 0px #000, -4px 0px 0px #000, 0px 0px 8px rgba(0,0,0,0.7)';
-          const textShadow = isEmphasized
-            ? `${solidOutline}, 0px 0px 16px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.7), 0px 0px 32px rgba(${emphasisR}, ${emphasisG}, ${emphasisB}, 0.3)`
-            : isActive
-              ? `${solidOutline}, 0px 0px 12px ${highlightColor}80, 0px 0px 24px ${highlightColor}40`
-              : solidOutline;
+          const textShadow = isActive
+            ? `${solidOutline}, 0px 0px 12px #FFE60080, 0px 0px 24px #FFE60040`
+            : solidOutline;
 
-          // 팝업 스케일: 활성 단어 1.12, 강조 단어 1.18
-          const scale = isEmphasized ? 1.18 : isActive ? 1.1 : 1;
+          const scale = 1;  // 크기 변동 없음
 
           // 영어/ES: 최소 100px 강제 (ES 전문가 권장 95~110px)
           const latinSize = Math.max(captionSize, 100);
