@@ -324,18 +324,48 @@ def upload_video(
 
 # ── 재생목록 자동 분류 ──────────────────────────────────────────
 
-# 카테고리 → 재생목록 이름 매핑
-PLAYLIST_CATEGORIES = {
-    "우주/행성": {"ko": "🌌 우주와 행성", "en": "🌌 Space & Planets", "es": "🌌 Espacio y Planetas"},
-    "공룡/고생물": {"ko": "🦕 공룡과 고생물", "en": "🦕 Dinosaurs & Fossils", "es": "🦕 Dinosaurios y Fósiles"},
-    "심해/바다": {"ko": "🌊 심해의 비밀", "en": "🌊 Deep Sea Secrets", "es": "🌊 Secretos del Mar"},
-    "지구/자연": {"ko": "🌍 지구와 자연", "en": "🌍 Earth & Nature", "es": "🌍 Tierra y Naturaleza"},
-    "동물": {"ko": "🐾 놀라운 동물", "en": "🐾 Amazing Animals", "es": "🐾 Animales Increíbles"},
-    "역사": {"ko": "📜 역사 반전", "en": "📜 History Revealed", "es": "📜 Historia Revelada"},
-    "인체/심리": {"ko": "🧠 인체의 비밀", "en": "🧠 Human Body Secrets", "es": "🧠 Secretos del Cuerpo"},
-    "물리/화학": {"ko": "⚡ 물리와 화학", "en": "⚡ Physics & Chemistry", "es": "⚡ Física y Química"},
-    "기타": {"ko": "🔬 놀라운 과학", "en": "🔬 Amazing Science", "es": "🔬 Ciencia Increíble"},
+# 채널별 재생목록 구조 (성과 데이터 기반 — 채널마다 다름)
+CHANNEL_PLAYLISTS = {
+    "askanything": {  # KO — 동물 ✅(1,832), 인체 ❌
+        "심해/바다": "🌊 심해의 비밀",
+        "우주/행성": "🌌 우주와 행성",
+        "공룡/고생물": "🦕 공룡과 고생물",
+        "지구/자연": "🌍 지구와 자연",
+        "동물": "🐾 놀라운 동물",
+        "역사": "📜 역사 반전",
+        "기타": "🔬 놀라운 과학",
+    },
+    "wonderdrop": {  # EN — 동물 ✅(408), 인체 ❌(115)
+        "심해/바다": "🌊 Deep Sea Secrets",
+        "우주/행성": "🌌 Space & Planets",
+        "공룡/고생물": "🦕 Dinosaurs & Fossils",
+        "지구/자연": "🌍 Earth & Nature",
+        "동물": "🐾 Amazing Animals",
+        "역사": "📜 History Revealed",
+        "기타": "🔬 Amazing Science",
+    },
+    "exploratodo": {  # ES-LATAM — 동물 ✅(799), 인체 ❌(342)
+        "심해/바다": "🌊 Secretos del Mar",
+        "우주/행성": "🌌 Espacio y Planetas",
+        "공룡/고생물": "🦕 Dinosaurios y Fósiles",
+        "지구/자연": "🌍 Tierra y Naturaleza",
+        "동물": "🐾 Animales Increíbles",
+        "역사": "📜 Historia Revelada",
+        "기타": "🔬 Ciencia Increíble",
+    },
+    "prismtale": {  # ES-US — 동물 ❌(26), 인체 ✅(1,595)
+        "심해/바다": "🌊 Secretos del Abismo",
+        "우주/행성": "🌌 Misterios del Espacio",
+        "공룡/고생물": "🦕 Criaturas Extintas",
+        "지구/자연": "🌍 Secretos de la Tierra",
+        "인체/심리": "🧠 Secretos del Cuerpo",
+        "역사": "📜 Historia Oculta",
+        "기타": "🔬 Ciencia Oculta",
+    },
 }
+
+# 하위 호환 — 이전 코드에서 PLAYLIST_CATEGORIES 참조하는 곳 대응
+PLAYLIST_CATEGORIES = {}
 
 # 카테고리 감지 키워드 (title/tags에서 매칭)
 _CATEGORY_KEYWORDS = {
@@ -353,11 +383,16 @@ _playlist_cache: dict[str, dict[str, str]] = {}  # channel_id → {category: pla
 _PLAYLIST_CACHE_FILE = TOKENS_DIR / "playlist_map.json"
 
 
-def _detect_category(title: str, tags: list[str] = None) -> str:
-    """제목+태그에서 카테고리 자동 감지. 못 찾으면 '기타'."""
+def _detect_category(title: str, tags: list[str] = None, channel: str = None) -> str:
+    """제목+태그에서 카테고리 자동 감지. 채널에 해당 재생목록 없으면 '기타'."""
     text = (title + " " + " ".join(tags or [])).lower()
+    ch_playlists = CHANNEL_PLAYLISTS.get(channel, {}) if channel else {}
+
     for category, keywords in _CATEGORY_KEYWORDS.items():
         if any(kw in text for kw in keywords):
+            # 이 채널에 해당 재생목록이 있는지 확인
+            if ch_playlists and category not in ch_playlists:
+                continue  # 없으면 다음 카테고리 시도
             return category
     return "기타"
 
@@ -391,7 +426,10 @@ def ensure_playlists(channel_id: str, channel: str) -> dict[str, str]:
     _load_playlist_cache()
     cache_key = channel_id or channel
 
-    if cache_key in _playlist_cache and len(_playlist_cache[cache_key]) >= len(PLAYLIST_CATEGORIES):
+    # 채널별 재생목록 구조
+    ch_playlists = CHANNEL_PLAYLISTS.get(channel, CHANNEL_PLAYLISTS.get("askanything", {}))
+
+    if cache_key in _playlist_cache and len(_playlist_cache[cache_key]) >= len(ch_playlists):
         return _playlist_cache[cache_key]
 
     creds = _get_credentials(channel_id)
@@ -399,7 +437,6 @@ def ensure_playlists(channel_id: str, channel: str) -> dict[str, str]:
         return {}
 
     youtube = build("youtube", "v3", credentials=creds)
-    lang = _get_playlist_lang(channel)
 
     # 기존 재생목록 조회
     existing = {}
@@ -413,15 +450,13 @@ def ensure_playlists(channel_id: str, channel: str) -> dict[str, str]:
 
     result = _playlist_cache.get(cache_key, {})
 
-    for category, names in PLAYLIST_CATEGORIES.items():
-        playlist_name = names.get(lang, names["en"])
+    for category, playlist_name in ch_playlists.items():
         if category in result:
-            continue  # 이미 캐시에 있음
+            continue
         if playlist_name in existing:
             result[category] = existing[playlist_name]
             print(f"[재생목록] 기존 발견: {playlist_name}")
         else:
-            # 새로 생성
             try:
                 resp = youtube.playlists().insert(
                     part="snippet,status",
@@ -443,7 +478,7 @@ def ensure_playlists(channel_id: str, channel: str) -> dict[str, str]:
 def add_to_playlist(video_id: str, title: str, tags: list[str],
                     channel_id: str = None, channel: str = None) -> str | None:
     """업로드된 영상을 카테고리에 맞는 재생목록에 자동 추가."""
-    category = _detect_category(title, tags)
+    category = _detect_category(title, tags, channel)
     if not category:
         print(f"[재생목록] 카테고리 감지 실패: {title}")
         return None
