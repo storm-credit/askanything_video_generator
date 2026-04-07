@@ -397,7 +397,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
 [패턴 A: 하이네스 구조 (8~9컷, 각 4~5초, 총 35~42초)]
 1. Cut 1 — 결론 폭탄(Hook): 가장 충격적 팩트를 단정문으로 던져라. 질문형 금지. ★ 1.7초 법칙: image_prompt에 극단적 스케일/강렬 색대비/비현실 장면 필수.
-   후크 패턴: 숫자 대비, 부정+반전, 시간 긴급성, 직관 파괴
+   후크 패턴 7가지 (영상마다 다른 유형 사용, 연속 3회 같은 유형 금지):
+   ① 불가능: "이건 존재하면 안 돼" ② 숫자 앵커: "400도. 바닷속에서."
+   ③ 비교: "지구보다 크고, 공기보다 가벼워" ④ 카운트다운: "3초 뒤에 모든 게 바뀌어"
+   ⑤ 도전: "이거 아는 사람 2%야" ⑥ 부정: "아무도 이 얘기 안 해"
+   ⑦ 감각: "이건 썩은 달걀 냄새가 나. 우주에서."
    ★★★ [훅 필수 규칙] 첫 문장은 반드시 상식을 깨거나 "불가능해 보이는 사실"이어야 함.
    ❌ "이건 흥미롭다" ❌ "오늘 소개할 건" → ✅ "이건 존재해선 안 되는 거야" ✅ "과학자들도 설명 못하는 게 있어"
    ❌ 금지 훅 패턴: "~란 사실", "사실은...", "알고 보면", "~라는 게 있어" → 전부 약한 도입. 바로 팩트를 던져라.
@@ -590,7 +594,11 @@ Pick the pattern that fits the topic best. Default to Pattern A if unsure.
 
 [Pattern A: Haynes Structure (8–9 cuts, ~4–5 sec each, 35–45 sec total)]
 1. Cut 1 — Hook: Drop the most shocking fact as a declarative statement. NO questions. ★ 1.7-SEC RULE: image_prompt MUST have extreme visual impact (scale, color contrast, surreal).
-   Hook patterns: number contrast, negation+reveal, time urgency, intuition breaker
+   Hook archetypes (rotate — never use same type 3x in a row):
+   ① Impossibility: "This should NOT exist" ② Number anchor: "400 degrees. Underwater."
+   ③ Comparison: "Bigger than Earth. Lighter than air." ④ Countdown: "In 3 seconds, everything changes"
+   ⑤ Challenge: "Only 2% of people know this" ⑥ Negation: "Nobody talks about this"
+   ⑦ Sensory: "It smells like rotten eggs. From space."
    ★★★ [HOOK MUST RULE] First line MUST break common belief or present an "impossible fact."
    ❌ "This is interesting" ❌ "Today we'll talk about" → ✅ "This should not exist" ✅ "Scientists can't explain this"
 2. Cut 2–3 — Shock chain: "But here's the insane part..." escalate.
@@ -780,7 +788,11 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 38–48 seg total)]
 1. Corte 1 — Gancho: Suelta el dato más impactante como afirmación directa. SIN preguntas. ★ REGLA DE 1.7 SEG: el image_prompt DEBE tener impacto visual extremo (escala, contraste de color, surrealismo).
-   Patrones de gancho: contraste numérico, negación+revelación, urgencia temporal, destructor de intuición
+   Arquetipos de gancho (rotar — nunca usar el mismo tipo 3 veces seguidas):
+   ① Imposibilidad: "Esto NO debería existir" ② Número ancla: "400 grados. Bajo el agua."
+   ③ Comparación: "Más grande que la Tierra. Más ligero que el aire." ④ Cuenta regresiva: "En 3 segundos todo cambia"
+   ⑤ Desafío: "Solo el 2% sabe esto" ⑥ Negación: "Nadie habla de esto"
+   ⑦ Sensorial: "Huele a huevo podrido. Desde el espacio."
    ★★★ [REGLA DEL GANCHO] La primera línea DEBE romper una creencia común o presentar un "hecho imposible."
    ❌ "Esto es interesante" ❌ "Hoy vamos a hablar de" → ✅ "Esto no debería existir" ✅ "Los científicos no pueden explicar esto"
 2. Cortes 2–3 — Cadena de impacto: "Pero lo más inquietante es que..." escalar.
@@ -961,24 +973,30 @@ Elegir el patrón que mejor se adapte al tema. Por defecto Patrón A si no es cl
 
 [Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 35–42 seg total)]
 1. Corte 1 — Gancho: El dato más impactante como exclamación o afirmación fuerte. ★ REGLA DE 1.7 SEG: image_prompt con colores vibrantes, escenas llamativas, impacto visual máximo.
-   Patrones de gancho: "Esto es increíble...", contraste numérico, dato sorprendente
+   Arquetipos de gancho (rotar — nunca usar el mismo tipo 3 veces seguidas):
+   ① Imposibilidad: "Esto NO debería existir!" ② Número ancla: "400 grados. Bajo el agua."
+   ③ Comparación: "Más grande que la Tierra!" ④ Cuenta regresiva: "En 3 segundos todo cambia"
+   ⑤ Desafío: "Solo el 2% sabe esto" ⑥ Negación: "Nadie habla de esto"
+   ⑦ Sensorial: "Huele a huevo podrido. Desde el espacio."
    ★★★ [REGLA DEL GANCHO] La primera línea DEBE ser EXPLOSIVA. Dato imposible o exclamación que no se puede ignorar.
    ❌ "Hoy vamos a ver algo curioso" → ✅ "¡Esto NO debería existir!" ✅ "¡Nadie puede creer que esto sea real!"
 2. Cortes 2–3 — Cadena de sorpresa: "¿Y sabes qué es lo más loco?" escalar rápido.
 3. Cortes 4–5 — Dato curioso: Introducir segundo dato impactante. ★ Ritmo rápido, sin pausa. Cambiar visual cada corte.
    ★★★ [BLOQUEO DE RETENCIÓN] Cortes 3–4 DEBEN meter un dato nuevo que haga IMPOSIBLE salir del video. El espectador debe pensar "espera, ¿QUÉ?"
 4. Cortes 6–8 — Impacto máximo: Datos más fuertes + comparaciones simples ("Eso es como llenar 100 piscinas").
-5. Cortes 9–10 — Loop directo: La última línea debe ser casi idéntica a la primera. Repetición obvia y fuerte.
-   ★★★ [REGLAS DEL LOOP — REPETICIÓN DIRECTA] ★★★
-   * El último corte DEBE repetir o reflejar directamente el primer corte.
-   * El loop debe ser OBVIO — el espectador debe sentir que el video vuelve a empezar.
-   * Patrón principal: Primera línea ≈ Última línea (casi idénticas).
-     ej. Corte 1="Esto es increíble..." → Último="Esto es increíble..."
-     ej. Corte 1="Los pulpos tienen 3 corazones" → Último="3 corazones... y eso no es todo"
-   ✅ Repetición fuerte y directa — esta es la CLAVE
+5. Cortes 9–10 — Loop: La última línea DEBE hacer que el espectador quiera volver a oír el Corte 1.
+   ★★★ [REGLAS DEL LOOP — 3 PATRONES] ★★★
+   * Usar UNO de estos 3 patrones:
+     (A) Eco invertido: Última línea repite la primera pero con significado cambiado.
+         ej. Corte 1="Los pulpos tienen 3 corazones" → Último="3 corazones... y ninguno les sirve para sentir dolor"
+     (B) Pregunta callback: Última línea lanza una pregunta cuya respuesta ES el Corte 1.
+         ej. Último="¿Y sabes qué tiene este animal que nadie más tiene?" → Corte 1="Los pulpos tienen 3 corazones"
+     (C) Zoom out: Última línea expande la primera a una escala mayor.
+         ej. Corte 1="Este dinosaurio tenía dientes como espadas" → Último="Y había miles de ellos dominando el planeta"
+   ★ [LOOP AUTO-TEST] Lee la última línea seguida del Corte 1. Si suena como conversación natural → PASS. Si el espectador siente "se acabó" → FAIL.
    ❌ "La próxima vez te cuento..." — PROHIBIDO
    ❌ Oraciones incompletas — PROHIBIDO
-   ❌ Finales reflexivos o filosóficos — PROHIBIDO
+   ❌ Repetición idéntica de la primera línea — demasiado obvio, aburre
 
 ★ [CURVA DE ENERGÍA — NO plana]
 Cortes 1-2: EXPLOSIÓN (gancho + sorpresa)
