@@ -68,7 +68,7 @@ CHANNEL_VOICE_DESC = {
     "askanything": "Korean male, fast steady narration, same energy throughout",
     "wonderdrop": "English male, confident steady narration, same energy throughout",
     "exploratodo": "Spanish male, energetic steady narration, same energy throughout",
-    "prismtale": "Spanish male, calm steady narration, same energy throughout",
+    "prismtale": "Spanish female, calm steady narration, same energy throughout",
 }
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
@@ -91,7 +91,7 @@ CHANNEL_SPEAKER = {
     "askanything": "eric",      # 한국어 남성 — 깨끗하고 자연스러운 음색
     "wonderdrop": "ryan",       # 영어 남성 — 밝은 미국 남성, 깨끗한 중음
     "exploratodo": "dylan",     # 스페인어 LATAM — 활기찬 리듬감 있는 남성
-    "prismtale": "ryan",        # 스페인어 US — 미국 남성 음색, 다크톤은 voice_desc로
+    "prismtale": "serena",       # 스페인어 US — 여성, 다크 미스터리 톤에 차별화
 }
 
 
