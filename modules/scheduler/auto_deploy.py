@@ -333,6 +333,13 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 task_result["youtube"] = yt_result
                 _deploy_status["completed"] += 1
                 print(f"  ✅ 완료: {channel} — '{title}'")
+                # 텔레그램 알림
+                try:
+                    from modules.utils.notify import notify_success
+                    _yt_url = (yt_result or {}).get("url", "")
+                    notify_success(channel, title, video_url=_yt_url)
+                except Exception:
+                    pass
 
             except Exception as e:
                 err_str = str(e)[:200]
@@ -353,6 +360,12 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 _deploy_status["failed"] += 1
                 print(f"  ❌ 실패: {channel} — '{topic}': {e}")
                 traceback.print_exc()
+                # 텔레그램 실패 알림
+                try:
+                    from modules.utils.notify import notify_failure
+                    notify_failure(channel, topic, error=err_str)
+                except Exception:
+                    pass
 
             _deploy_status["results"].append(task_result)
             _save_state()  # 매 토픽 완료 후 상태 저장
@@ -362,6 +375,15 @@ async def run_auto_deploy(target_date: datetime | None = None,
         _deploy_status["current_task"] = None
         _deploy_status["finished_at"] = datetime.now(KST).isoformat()
         _save_state()  # 최종 상태 저장
+        # 일일 배포 요약 알림
+        try:
+            from modules.utils.notify import notify_deploy_summary
+            notify_deploy_summary(
+                _deploy_status["total"], _deploy_status["completed"],
+                _deploy_status["failed"], date_str,
+            )
+        except Exception:
+            pass
 
     return {
         "success": True,
