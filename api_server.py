@@ -47,11 +47,11 @@ async def _lifespan(app):
     # ── 크론 스케줄러 시작 ──
     from modules.scheduler.cron import add_daily, add_weekly, start as cron_start
 
-    # 매일 05:00 KST — 자동 배포
+    # 매일 03:00 KST — 자동 배포 (06:00 예약 전 여유 확보)
     async def _cron_deploy():
         from modules.scheduler.auto_deploy import run_auto_deploy
         return await run_auto_deploy()
-    add_daily("자동 배포", 5, 0, _cron_deploy)
+    add_daily("자동 배포", 3, 0, _cron_deploy)
 
     # 매주 일요일 21:00 KST — 주간 토픽 생성
     def _cron_topics():
