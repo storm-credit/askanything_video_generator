@@ -66,6 +66,17 @@ class ImageAgent(BaseAgent):
                         img_path = generate_image_dalle(
                             cut["prompt"], i, ctx.topic_folder, key,
                             topic=ctx.topic)
+
+                    # Gemini Flash Vision 검수 + 실패 시 1회 재생성
+                    if img_path:
+                        from modules.orchestrator.agents.image_validator import validate_and_retry
+                        img_path = validate_and_retry(
+                            img_path, cut["prompt"], i, ctx.topic_folder,
+                            image_engine=ctx.image_engine,
+                            image_model=ctx.image_model,
+                            gemini_keys=ctx.gemini_keys_override,
+                            topic=ctx.topic,
+                        )
                 except Exception as exc:
                     # image_model이 명시적으로 지정된 경우 폴백 없이 에러 처리
                     if ctx.image_model:
