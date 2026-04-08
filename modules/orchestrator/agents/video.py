@@ -57,6 +57,18 @@ class VideoAgent(BaseAgent):
             hero_indices = set(range(len(ctx.cuts)))
             yield f"[VideoAgent] 전체 {len(ctx.cuts)}컷 영상 변환 ({ctx.video_engine})...\n"
 
+        def _find_existing_video(i: int) -> str | None:
+            """video_clips/ 폴더에 기존 Veo3 영상이 있으면 재사용."""
+            clips_dir = os.path.join("assets", ctx.topic_folder, "video_clips")
+            if not os.path.isdir(clips_dir):
+                return None
+            # veo3_cut_00.mp4, veo3_cut_01.mp4 패턴
+            for pattern in [f"veo3_cut_{i:02d}.mp4", f"cut_{i:02d}.mp4"]:
+                path = os.path.join(clips_dir, pattern)
+                if os.path.exists(path) and os.path.getsize(path) > 10000:  # 10KB 이상
+                    return path
+            return None
+
         def _convert_one(i: int) -> tuple[int, str | None]:
             if ctx.is_cancelled():
                 return i, None
@@ -67,6 +79,12 @@ class VideoAgent(BaseAgent):
 
             if i not in hero_indices:
                 return i, None  # Ken Burns (이미지 그대로)
+
+            # 기존 Veo3 영상 재사용
+            existing = _find_existing_video(i)
+            if existing:
+                print(f"[VideoAgent] 컷 {i+1} 기존 영상 재사용: {os.path.basename(existing)}")
+                return i, existing
 
             try:
                 vid_key = get_google_key(ctx.llm_key, service=ctx.video_engine,
