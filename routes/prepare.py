@@ -997,12 +997,32 @@ async def load_session(req: LoadSessionRequest):
             "image_url": img_url,
         })
 
+    # 기존 Veo3 영상 자동 감지 → 비디오 엔진 추천
+    video_clips_dir = os.path.join("assets", folder_name, "video_clips")
+    existing_videos = 0
+    if os.path.isdir(video_clips_dir):
+        existing_videos = len([f for f in os.listdir(video_clips_dir)
+                              if f.endswith(".mp4") and os.path.getsize(os.path.join(video_clips_dir, f)) > 10000])
+
+    if existing_videos == 0:
+        recommended_engine = "none"        # 이미지만 → Ken Burns
+        recommended_model = ""
+    elif existing_videos >= len(cuts):
+        recommended_engine = "veo3"        # 전체 영상 있음 → Standard
+        recommended_model = ""
+    else:
+        recommended_engine = "veo3"        # 일부만 있음 → Hero Only
+        recommended_model = "hero-only"
+
     return {
         "sessionId": session_id,
         "title": title,
         "cuts": preview_cuts,
         "channel": meta.get("channel", ""),
         "tags": tags,
+        "recommendedVideoEngine": recommended_engine,
+        "recommendedVideoModel": recommended_model,
+        "existingVideos": existing_videos,
     }
 
 

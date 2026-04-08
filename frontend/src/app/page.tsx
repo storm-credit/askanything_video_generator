@@ -243,6 +243,11 @@ export default function Home() {
         const channel = data.channel || folder;
         newPreviews[channel] = { sessionId: data.sessionId, title: data.title, channel, cuts: data.cuts };
         lastTitle = data.title;
+        // 기존 Veo3 영상 자동 감지 → 비디오 엔진 자동 선택
+        if (data.recommendedVideoEngine) {
+          setVideoEngine(data.recommendedVideoEngine);
+          if (data.recommendedVideoModel) setVideoModel(data.recommendedVideoModel);
+        }
       }
       if (Object.keys(newPreviews).length === 0) { alert("세션 복원 실패"); return; }
       if (Object.keys(newPreviews).length === 1 && !Object.values(newPreviews)[0].channel) {
