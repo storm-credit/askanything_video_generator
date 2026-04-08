@@ -74,9 +74,9 @@ def cleanup_sessions():
     now = time.time()
     with session_lock:
         expired = [sid for sid, s in prepared_sessions.items()
-                   if now - s.get("created_at", 0) > SESSION_MAX_AGE]
+                   if now - s.get("_created", s.get("created_at", 0)) > SESSION_MAX_AGE]
         for sid in expired:
             del prepared_sessions[sid]
         while len(prepared_sessions) > SESSION_MAX_COUNT:
-            oldest = min(prepared_sessions, key=lambda k: prepared_sessions[k].get("created_at", 0))
+            oldest = min(prepared_sessions, key=lambda k: prepared_sessions[k].get("_created", prepared_sessions[k].get("created_at", 0)))
             del prepared_sessions[oldest]
