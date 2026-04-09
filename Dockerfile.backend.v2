@@ -1,0 +1,46 @@
+# ── Backend v2: Python 3.12 + Node 20 + ffmpeg ──
+# v1과 동일 베이스 + routes/ 디렉토리 추가
+FROM python:3.12-slim AS backend
+
+# System dependencies + Chromium libs for Remotion rendering
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    curl \
+    blender \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+    libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+    libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 \
+    libcairo2 libasound2 libxshmfence1 \
+    fonts-noto-cjk fonts-noto-color-emoji \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir elevenlabs yt-dlp
+
+# Remotion dependencies (Node)
+COPY remotion/package.json remotion/package-lock.json* remotion/
+RUN cd remotion && npm install --production=false
+
+# Copy application code (v2: routes/ + orchestrator 포함)
+COPY api_server.py .
+COPY routes/ routes/
+COPY modules/ modules/
+COPY remotion/ remotion/
+COPY blender/ blender/
+COPY preflight_check.py syntax_check.py ./
+
+# Create directories
+RUN mkdir -p assets brand client_secrets youtube_tokens tiktok_tokens
+
+EXPOSE 8004
+
+ENV UVICORN_RELOAD=false
+ENV API_PORT=8004
+
+CMD ["python", "api_server.py"]

@@ -9,10 +9,10 @@ import { ProgressPanel } from "../components/ProgressPanel";
 
 // 채널 프리셋 정의
 const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number; cameraStyle: string }> = {
-  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 54, captionY: 35, cameraStyle: "auto" },
-  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 0.85, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "auto" },
-  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 0.95, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "auto" },
-  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 0.9, platforms: ["youtube"], captionSize: 50, captionY: 35, cameraStyle: "auto" },
+  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 1.3, platforms: ["youtube"], captionSize: 58, captionY: 38, cameraStyle: "dynamic" },
+  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 1.20, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
+  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 1.20, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
+  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 1.20, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
 };
 
 // localStorage 유틸
@@ -243,6 +243,11 @@ export default function Home() {
         const channel = data.channel || folder;
         newPreviews[channel] = { sessionId: data.sessionId, title: data.title, channel, cuts: data.cuts };
         lastTitle = data.title;
+        // 기존 Veo3 영상 자동 감지 → 비디오 엔진 자동 선택
+        if (data.recommendedVideoEngine) {
+          setVideoEngine(data.recommendedVideoEngine);
+          if (data.recommendedVideoModel) setVideoModel(data.recommendedVideoModel);
+        }
       }
       if (Object.keys(newPreviews).length === 0) { alert("세션 복원 실패"); return; }
       if (Object.keys(newPreviews).length === 1 && !Object.values(newPreviews)[0].channel) {
@@ -457,9 +462,14 @@ export default function Home() {
     veo3: [
       { value: "", label: `Veo 3 Standard (기본)${remainLabel("veo-3.0-generate-001")}` },
       { value: "veo-3.0-fast-generate-001", label: `Veo 3 Fast${remainLabel("veo-3.0-fast-generate-001")}` },
+      { value: "hero-only", label: "Hero Only (SHOCK/REVEAL만 영상)" },
     ],
     sora2: [{ value: "", label: "Sora 2 (기본)" }],
     kling: [{ value: "", label: "Kling v1 (기본)" }],
+    blender: [
+      { value: "solar_system", label: "태양계 크기 비교" },
+      { value: "giant_stars", label: "별 크기 비교" },
+    ],
     none: [],
   };
 
@@ -1719,7 +1729,7 @@ export default function Home() {
             </div>
 
             {/* AI 엔진 — 수동 모드에서만 표시 */}
-            {qualityPreset === "manual" && <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+            {(qualityPreset === "manual" || qualityPreset === "custom") && <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
@@ -1762,6 +1772,7 @@ export default function Home() {
                     <option value="veo3" className="bg-gray-900">Veo 3</option>
                     <option value="sora2" className="bg-gray-900">Sora 2</option>
                     <option value="kling" className="bg-gray-900">Kling</option>
+                    <option value="blender" className="bg-gray-900">Blender 3D</option>
                     <option value="none" className="bg-gray-900">없음</option>
                   </select>
                   {VIDEO_MODELS[videoEngine]?.length > 1 && (
@@ -1832,7 +1843,7 @@ export default function Home() {
                     </div>
                     <span className="text-[10px] text-indigo-400/70 tabular-nums">{ttsSpeed}x</span>
                   </div>
-                  <input type="range" min="0.7" max="1.2" step="0.05" value={ttsSpeed} onChange={(e) => setTtsSpeed(parseFloat(e.target.value))} disabled={isGenerating || selectedChannels.length >= 2} className={`w-full h-1 accent-indigo-500 ${selectedChannels.length >= 2 ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`} />
+                  <input type="range" min="0.7" max="1.5" step="0.05" value={ttsSpeed} onChange={(e) => setTtsSpeed(parseFloat(e.target.value))} disabled={isGenerating || selectedChannels.length >= 2} className={`w-full h-1 accent-indigo-500 ${selectedChannels.length >= 2 ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`} />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">

@@ -495,6 +495,16 @@ def add_to_playlist(video_id: str, title: str, tags: list[str],
 
     youtube = build("youtube", "v3", credentials=creds)
     try:
+        # 중복 체크: 이미 재생목록에 있는지 확인
+        existing = youtube.playlistItems().list(
+            part="snippet", playlistId=playlist_id, maxResults=50,
+        ).execute()
+        existing_ids = {item["snippet"]["resourceId"]["videoId"]
+                       for item in existing.get("items", [])}
+        if video_id in existing_ids:
+            print(f"[재생목록] 이미 존재 — 스킵: '{title}'")
+            return playlist_id
+
         youtube.playlistItems().insert(
             part="snippet",
             body={

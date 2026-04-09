@@ -1,0 +1,311 @@
+"""MainOrchestrator — 에이전트 파이프라인 지휘자.
+
+기존 api_server.py의 sse_generator() 700줄을 에이전트 단위로 분리.
+동일한 SSE 프로토콜 (PROG|, WARN|, ERROR|, DONE|, UPLOAD_DONE|) 유지.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import re
+import shutil
+from typing import AsyncGenerator
+
+from modules.orchestrator.base import AgentContext, ModelRouter
+from modules.orchestrator.tracker import TokenTracker
+from modules.orchestrator.agents.script import ScriptAgent
+from modules.orchestrator.agents.quality import QualityAgent
+from modules.orchestrator.agents.visual import VisualDirectorAgent
+from modules.orchestrator.agents.polish import PolishAgent
+from modules.orchestrator.agents.image import ImageAgent
+from modules.orchestrator.agents.tts import TTSAgent
+from modules.orchestrator.agents.video import VideoAgent
+from modules.orchestrator.agents.render import RenderAgent
+from modules.orchestrator.agents.upload import UploadAgent
+
+
+class MainOrchestrator:
+    """에이전트 파이프라인 오케스트라.
+
+    Stage 1: Script (순차) → ScriptAgent
+    Stage 2: Assets (병렬) → ImageAgent + TTSAgent
+    Stage 3: Render (순차) → RenderAgent
+    Stage 4: Upload (순차) → UploadAgent
+    """
+
+    def __init__(self, model_overrides: dict[str, str] | None = None):
+        self._router = ModelRouter(overrides=model_overrides)
+
+    async def run(self, ctx: AgentContext) -> AsyncGenerator[str, None]:
+        tracker = TokenTracker(ctx)
+
+        # 에이전트 인스턴스 생성
+        script_agent = ScriptAgent(self._router, tracker)
+        quality_agent = QualityAgent(self._router, tracker)
+        visual_agent = VisualDirectorAgent(self._router, tracker)
+        polish_agent = PolishAgent(self._router, tracker)
+        image_agent = ImageAgent(self._router, tracker)
+        tts_agent = TTSAgent(self._router, tracker)
+        video_agent_inst = VideoAgent(self._router, tracker)
+        render_agent = RenderAgent(self._router, tracker)
+        upload_agent = UploadAgent(self._router, tracker)
+
+        yield f"GEN_ID|{ctx.request_id}\n"
+
+        # ── 사전 검증 ──
+        pre_warnings = self._pre_validate(ctx)
+        for w in pre_warnings:
+            yield w
+
+        yield "PROG|10\n"
+
+        # ── YouTube URL 자동 감지 ──
+        ctx.topic, ctx.reference_url = self._resolve_youtube_topic(
+            ctx.topic, ctx.reference_url)
+
+        # ── Stage 1: Script Pipeline (순차) ──
+        try:
+            async for msg in script_agent.execute(ctx):
+                yield msg
+        except Exception as exc:
+            yield f"ERROR|[ScriptAgent] {self._safe_error(exc)}\n"
+            return
+
+        yield "PROG|30\n"
+
+        # ── 콘텐츠 유형 자동 라우팅 ──
+        from modules.orchestrator.content_router import classify_content, get_visual_recommendation
+        content_type = classify_content(ctx.topic, ctx.cuts)
+        rec = get_visual_recommendation(content_type)
+        if content_type != "imagen":
+            yield f"[Orchestrator] 콘텐츠 분석: {rec['description']}\n"
+            # 비디오 엔진 자동 설정 (사용자가 명시적으로 지정하지 않은 경우)
+            if ctx.video_engine == "none" and rec["video_engine"] != "none":
+                ctx.video_engine = rec["video_engine"]
+
+        # Review 모드: 여기서 중단
+        if ctx.workflow_mode == "review":
+            yield "REVIEW_READY|\n"
+            yield "PROG|100\n"
+            yield f"DONE|{ctx.topic_folder}\n"
+            return
+
+        if ctx.is_cancelled():
+            yield "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"
+            return
+
+        # Phase 2: 검증/비주얼/폴리시를 독립 에이전트로 실행 (각자 다른 모델 사용)
+        # 예산 기반 최적화: 토큰 초과 시 비핵심 에이전트 스킵
+        budget_exceeded = tracker.is_request_over_budget()
+        if budget_exceeded:
+            yield f"WARN|[Orchestrator] 토큰 예산 초과 — 비핵심 검증 스킵\n"
+
+        if not budget_exceeded:
+            try:
+                async for msg in quality_agent.execute(ctx):
+                    yield msg
+            except Exception as exc:
+                yield f"WARN|[QualityAgent] {self._safe_error(exc)} — 스킵\n"
+        else:
+            yield "[Orchestrator] QualityAgent 스킵 (예산 초과)\n"
+
+        yield "PROG|45\n"
+
+        if not budget_exceeded:
+            try:
+                async for msg in visual_agent.execute(ctx):
+                    yield msg
+            except Exception as exc:
+                yield f"WARN|[VisualDirectorAgent] {self._safe_error(exc)} — 스킵\n"
+        else:
+            yield "[Orchestrator] VisualDirectorAgent 스킵 (예산 초과)\n"
+
+        yield "PROG|55\n"
+
+        # PolishAgent는 항상 실행 (필수 — 금지 표현 필터링)
+        try:
+            async for msg in polish_agent.execute(ctx):
+                yield msg
+        except Exception as exc:
+            yield f"WARN|[PolishAgent] {self._safe_error(exc)} — 스킵\n"
+
+        yield "PROG|60\n"
+
+        # ── Stage 2: Asset Production (병렬) ──
+        if ctx.is_cancelled():
+            yield "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"
+            return
+
+        yield "[Orchestrator] 이미지 + TTS 병렬 생성 시작...\n"
+
+        async def _collect_agent_msgs(agent) -> list[str]:
+            msgs = []
+            async for msg in agent.execute(ctx):
+                msgs.append(msg)
+            return msgs
+
+        img_task = asyncio.create_task(_collect_agent_msgs(image_agent))
+        tts_task = asyncio.create_task(_collect_agent_msgs(tts_agent))
+
+        for task in asyncio.as_completed([img_task, tts_task]):
+            try:
+                msgs = await task
+                for msg in msgs:
+                    yield msg
+            except Exception as exc:
+                yield f"ERROR|[Asset] {self._safe_error(exc)}\n"
+                return
+
+        # 에셋 검증
+        failed_visual = [i+1 for i, p in enumerate(ctx.visual_paths) if p is None]
+        failed_audio = [i+1 for i, p in enumerate(ctx.audio_paths) if p is None]
+        if failed_visual or failed_audio:
+            details = []
+            if failed_visual:
+                details.append(f"이미지 실패: 컷 {failed_visual}")
+            if failed_audio:
+                details.append(f"오디오 실패: 컷 {failed_audio}")
+            yield f"ERROR|[소스 생성 오류] {', '.join(details)}\n"
+            return
+
+        yield "PROG|75\n"
+
+        # ── Stage 2.5: Video Conversion (이미지→영상) 또는 Blender 3D ──
+        if ctx.video_engine == "blender":
+            # Blender 이미지 → Veo3 파이프라인 (향후)
+            # 현재: BlenderAgent로 3D 렌더
+            from modules.orchestrator.agents.blender import BlenderAgent
+            blender_inst = BlenderAgent(self._router, tracker)
+            try:
+                async for msg in blender_inst.execute(ctx):
+                    yield msg
+            except Exception as exc:
+                yield f"WARN|[BlenderAgent] {self._safe_error(exc)}\n"
+        elif ctx.video_engine != "none":
+            try:
+                async for msg in video_agent_inst.execute(ctx):
+                    yield msg
+            except Exception as exc:
+                yield f"WARN|[VideoAgent] {self._safe_error(exc)} — Ken Burns 대체\n"
+
+        yield "PROG|85\n"
+
+        if ctx.is_cancelled():
+            yield "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"
+            return
+
+        # ── Stage 3: Render ──
+        try:
+            async for msg in render_agent.execute(ctx):
+                yield msg
+        except Exception as exc:
+            yield f"ERROR|[RenderAgent] {self._safe_error(exc)}\n"
+            return
+
+        if not ctx.video_paths:
+            yield "ERROR|[RenderAgent] 렌더링 결과가 없습니다.\n"
+            return
+
+        yield "PROG|95\n"
+
+        # Downloads 폴더 자동 복사
+        self._save_to_downloads(ctx)
+
+        # 프론트엔드 경로
+        primary = list(ctx.video_paths.keys())[0]
+        video_path = ctx.video_paths[primary]
+        final_filename = os.path.basename(video_path)
+        relative_video_path = f"/assets/{ctx.topic_folder}/video/{final_filename}"
+
+        yield f"[완료] 렌더링 대성공! {final_filename}\n"
+
+        # ── Stage 4: Upload (조건부) ──
+        if ctx.publish_mode != "local":
+            try:
+                async for msg in upload_agent.execute(ctx):
+                    yield msg
+            except Exception as exc:
+                yield f"WARN|[UploadAgent] {self._safe_error(exc)}\n"
+
+        yield "PROG|100\n"
+
+        # 토큰 요약
+        summary = tracker.summary()
+        if summary["calls"] > 0:
+            yield (f"[Orchestrator] 토큰: {summary['total_tokens']:,} | "
+                   f"비용: ${summary['total_cost_usd']}\n")
+
+        # 썸네일 경로
+        thumb_relative = ""
+        if ctx.thumbnail_path and os.path.exists(ctx.thumbnail_path):
+            thumb_relative = f"/assets/{ctx.topic_folder}/video/thumbnail.jpg"
+
+        yield f"DONE|{relative_video_path}|{thumb_relative}\n"
+
+    # ── Helper Methods ──
+
+    def _pre_validate(self, ctx: AgentContext) -> list[str]:
+        """사전 검증: API 키 가용성 경고."""
+        warnings = []
+        from modules.utils.keys import count_google_keys, count_available_keys
+        total = count_google_keys(extra_keys=ctx.gemini_keys_override)
+        avail = count_available_keys(extra_keys=ctx.gemini_keys_override)
+        if total > 0 and avail < total:
+            blocked = total - avail
+            if avail == 0:
+                warnings.append(f"WARN|[Google 키 경고] 모든 {total}개 키가 429 차단됨.\n")
+            else:
+                warnings.append(f"WARN|[Google 키 상태] {avail}/{total}개 사용 가능 ({blocked}개 차단 중)\n")
+        return warnings
+
+    @staticmethod
+    def _resolve_youtube_topic(topic: str, ref_url: str | None) -> tuple[str, str | None]:
+        """YouTube URL 자동 감지 + topic 교체."""
+        try:
+            from modules.utils.youtube_extractor import extract_youtube_reference
+            import re as _re
+            yt_pattern = _re.compile(r'(https?://(?:www\.)?(?:youtube\.com|youtu\.be)/\S+)')
+            match = yt_pattern.search(topic)
+            if match and not ref_url:
+                ref_url = match.group(1)
+            if ref_url:
+                result = extract_youtube_reference(ref_url)
+                if result and result.get("title"):
+                    yt_title = result["title"]
+                    transcript = result.get("transcript", "")
+                    if transcript:
+                        topic = f"{yt_title}\n\n[원본 영상 내용]\n{transcript}"
+                    else:
+                        topic = yt_title
+        except Exception:
+            pass
+        return topic, ref_url
+
+    @staticmethod
+    def _save_to_downloads(ctx: AgentContext):
+        """Downloads 폴더로 자동 복사."""
+        if not ctx.video_paths:
+            return
+        dl_base = os.environ.get("DOWNLOAD_DIR",
+                                 os.path.join(os.path.expanduser("~"), "Downloads"))
+        if not os.path.isdir(dl_base):
+            return
+        primary = list(ctx.video_paths.keys())[0]
+        video_path = ctx.video_paths[primary]
+        channel = ctx.channel or "default"
+        dl_dir = os.path.join(dl_base, ctx.topic_folder)
+        os.makedirs(dl_dir, exist_ok=True)
+        try:
+            dl_path = os.path.join(dl_dir, f"{channel}.mp4")
+            shutil.copy2(os.path.abspath(video_path), dl_path)
+        except Exception as exc:
+            print(f"[Orchestrator] Downloads 복사 실패: {exc}")
+
+    @staticmethod
+    def _safe_error(exc: Exception) -> str:
+        """API 키 마스킹된 에러 문자열."""
+        err_str = str(exc)[:200]
+        return re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}",
+                      r"\1***", err_str)

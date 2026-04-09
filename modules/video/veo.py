@@ -22,6 +22,31 @@ MAX_WAIT = 300  # 5분
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수 (무료 키 다수 → 유료 키 도달까지)
 
 
+def _reencode_for_remotion(video_path: str) -> str:
+    """Veo3 출력 영상을 Remotion 호환 코덱으로 re-encode.
+    PIPELINE_ERROR_DECODE 방지: H.264 baseline + yuv420p.
+    """
+    import subprocess
+    tmp = video_path + ".re.mp4"
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", video_path,
+            "-c:v", "libx264", "-profile:v", "baseline", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-movflags", "+faststart",
+            tmp,
+        ], capture_output=True, check=True, timeout=60)
+        os.replace(tmp, video_path)
+        print(f"  [Veo3] re-encode 완료 (Remotion 호환)")
+    except Exception as e:
+        print(f"  [Veo3] re-encode 실패 (원본 유지): {e}")
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    return video_path
+
+
 def generate_video_veo(
     image_path: str,
     prompt: str,
@@ -167,6 +192,8 @@ def generate_video_veo(
                                 pass
                             raise
                         record_key_usage(final_key, service_tag)
+                        # Remotion 호환성: ffmpeg re-encode (코덱 디코딩 에러 방지)
+                        final_path = _reencode_for_remotion(final_path)
                         elapsed = time.time() - start
                         print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
                         return final_path
@@ -188,6 +215,8 @@ def generate_video_veo(
                                 pass
                             raise
                         record_key_usage(final_key, service_tag)
+                        # Remotion 호환성: ffmpeg re-encode (코덱 디코딩 에러 방지)
+                        final_path = _reencode_for_remotion(final_path)
                         elapsed = time.time() - start
                         print(f"OK [{model_label}] 컷 {index+1} 렌더링 완료! ({elapsed:.0f}초)")
                         return final_path

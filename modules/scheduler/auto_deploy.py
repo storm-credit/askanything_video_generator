@@ -126,7 +126,8 @@ async def run_auto_deploy(target_date: datetime | None = None,
         return {"success": False, "message": "이미 배포가 진행 중입니다"}
 
     from modules.utils.obsidian_parser import get_today_topics
-    from modules.gpt.cutter import generate_cuts
+    from modules.orchestrator.orchestrator import MainOrchestrator
+    from modules.orchestrator.base import AgentContext
 
     if target_date is None:
         target_date = datetime.now(KST)
@@ -215,136 +216,48 @@ async def run_auto_deploy(target_date: datetime | None = None,
             }
 
             try:
-                # 3-1. 스크립트 생성 (cutter.py)
-                print(f"  [1/4] 스크립트 생성 중...")
+                # v2 오케스트라: 전체 파이프라인을 에이전트 시스템으로 실행
                 lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
                 lang = lang_map.get(channel, "ko")
 
-                # 토픽명: 채널 언어에 맞는 제목 사용 (한국어 토픽이 EN/ES에 들어가면 LLM 혼동)
                 _item_title = item.get("title", "")
                 _topic_for_llm = _item_title if (_item_title and _item_title != topic and lang != "ko") else topic
 
-                # lambda 클로저 캡처 문제 방지: 변수를 기본 인수로 바인딩
-                cuts, topic_folder, title, tags, description = await loop.run_in_executor(
-                    None,
-                    lambda _t=_topic_for_llm, _l=lang, _c=channel: generate_cuts(
-                        _t,
-                        lang=_l,
-                        llm_provider="gemini",
-                        channel=_c,
-                    ),
+                ctx = AgentContext(
+                    topic=_topic_for_llm,
+                    language=lang,
+                    channel=channel,
+                    image_engine="imagen",
+                    image_model="imagen-4.0-generate-001",  # Standard 고정
+                    video_engine="veo3",
+                    video_model="hero-only",  # SHOCK/REVEAL만 영상 (비용 절감)
+                    publish_mode="scheduled",
+                    scheduled_time=publish_at,
+                    gemini_keys_override=os.getenv("GEMINI_API_KEYS", ""),
                 )
-                print(f"  [1/4] 스크립트 완료: '{title}' ({len(cuts)}컷)")
 
-                # 3-2. 이미지 생성
-                print(f"  [2/4] 이미지 생성 중...")
-                from modules.image.imagen import generate_image_imagen
-                from modules.utils.keys import get_google_key
+                orchestrator = MainOrchestrator()
+                yt_url = ""
 
-                image_paths = []
-                gemini_keys = os.getenv("GEMINI_API_KEYS", "")
-                for i, cut in enumerate(cuts):
-                    try:
-                        img_key = get_google_key(None, service="imagen", extra_keys=gemini_keys)
-                        img_path = generate_image_imagen(
-                            cut.get("prompt", ""),
-                            i, topic_folder, img_key,
-                            gemini_api_keys=gemini_keys,
-                            topic=topic,
-                        )
-                        image_paths.append(img_path)
-                    except Exception as img_err:
-                        print(f"    컷{i+1} 이미지 실패: {img_err}")
-                        image_paths.append(None)
-
-                print(f"  [2/4] 이미지 완료: {sum(1 for p in image_paths if p)}장")
-
-                # 3-3. TTS + 렌더링
-                print(f"  [3/4] TTS + 렌더링 중...")
-                from modules.tts.elevenlabs import generate_tts
-                from modules.transcription.whisper import get_word_timestamps
-                from modules.video.remotion import create_remotion_video
-
-                audio_paths = []
-                word_timestamps = []
-                scripts = []
-                for i, cut in enumerate(cuts):
-                    script = cut.get("script", "")
-                    scripts.append(script)
-                    # 감정 태그 추출
-                    _desc = cut.get("description", cut.get("text", ""))
-                    _emo = None
-                    for _et in ["SHOCK","WONDER","TENSION","REVEAL","URGENCY","DISBELIEF","IDENTITY","CALM"]:
-                        if f"[{_et}]" in _desc:
-                            _emo = _et
-                            break
-                    aud = generate_tts(script, i, topic_folder, language=lang, emotion=_emo, channel=channel)
-                    audio_paths.append(aud)
-                    if aud:
-                        words = get_word_timestamps(aud, language=lang)
-                        # Whisper 재인식 오류 보정: 원본 스크립트로 매핑
-                        from modules.transcription.whisper import align_words_with_script
-                        words = align_words_with_script(words or [], script)
-                        word_timestamps.append(words)
-                    else:
-                        word_timestamps.append([])
-
-                # 유효한 컷만 필터
-                valid = [(v, a, s, w) for v, a, s, w in
-                         zip(image_paths, audio_paths, scripts, word_timestamps)
-                         if v and a]
-
-                if not valid:
-                    raise RuntimeError("유효한 컷이 없습니다")
-
-                v_paths, a_paths, s_list, w_list = zip(*valid)
-                descriptions = [cut.get("description", cut.get("text", "")) for cut in cuts[:len(valid)]]
-
-                video_path = create_remotion_video(
-                    list(v_paths), list(a_paths), list(s_list), list(w_list),
-                    topic_folder, title=title, channel=channel,
-                    descriptions=descriptions,
-                )
-                print(f"  [3/4] 렌더링 완료: {video_path}")
-
-                # 3-4. YouTube 예약 업로드
-                print(f"  [4/4] YouTube 예약 업로드 중... ({item['publish_at_kst']})")
-                from modules.upload.youtube import upload_to_youtube
-                import json as _json
-
-                # 채널 ID 매칭 (channel_accounts.json)
-                _ch_accounts_path = os.path.join("youtube_tokens", "channel_accounts.json")
-                _ch_id = None
-                if os.path.exists(_ch_accounts_path):
-                    with open(_ch_accounts_path, "r") as _f:
-                        _accounts = _json.load(_f)
-                    _ch_id = _accounts.get(channel, {}).get("youtube")
-
-                tags_clean = [t for t in tags if t.lower() != "#shorts"]
-                tag_str = " ".join(tags_clean)
-                full_desc = f"{description}\n\n{tag_str}".strip() if description else tag_str
-
-                _video_file = video_path if isinstance(video_path, str) else list(video_path.values())[0]
-                yt_result = upload_to_youtube(
-                    video_path=_video_file,
-                    title=title,
-                    description=full_desc,
-                    tags=[t.lstrip("#") for t in tags_clean],
-                    privacy="private",  # 예약은 private → publishAt
-                    publish_at=publish_at,
-                    channel_id=_ch_id,
-                )
+                async for msg in orchestrator.run(ctx):
+                    # SSE 메시지에서 핵심 이벤트 추출
+                    if msg.startswith("UPLOAD_DONE|youtube|"):
+                        yt_url = msg.split("|", 2)[2].strip()
+                    elif msg.startswith("ERROR|"):
+                        raise RuntimeError(msg[6:].strip())
+                    # 진행 로그 출력
+                    if not msg.startswith("PROG|"):
+                        print(f"  {msg.rstrip()}")
 
                 task_result["status"] = "success"
-                task_result["video_path"] = video_path if isinstance(video_path, str) else str(video_path)
-                task_result["youtube"] = yt_result
+                task_result["video_path"] = str(ctx.video_paths) if ctx.video_paths else None
+                task_result["youtube"] = {"url": yt_url} if yt_url else None
                 _deploy_status["completed"] += 1
-                print(f"  ✅ 완료: {channel} — '{title}'")
+                print(f"  ✅ 완료: {channel} — '{ctx.title}'")
                 # 텔레그램 알림
                 try:
                     from modules.utils.notify import notify_success
-                    _yt_url = (yt_result or {}).get("url", "")
-                    notify_success(channel, title, video_url=_yt_url)
+                    notify_success(channel, ctx.title, video_url=yt_url)
                 except Exception:
                     pass
 
@@ -367,12 +280,17 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 _deploy_status["failed"] += 1
                 print(f"  ❌ 실패: {channel} — '{topic}': {e}")
                 traceback.print_exc()
-                # 텔레그램 실패 알림
+                # FailureAnalyzer: 실패 분류 + 로그 + 텔레그램 상세 알림
                 try:
-                    from modules.utils.notify import notify_failure
-                    notify_failure(channel, topic, error=err_str)
+                    from modules.orchestrator.agents.failure_analyzer import analyze_and_notify
+                    analyze_and_notify(channel, topic, err_str)
                 except Exception:
-                    pass
+                    # 폴백: 기존 알림
+                    try:
+                        from modules.utils.notify import notify_failure
+                        notify_failure(channel, topic, error=err_str)
+                    except Exception:
+                        pass
 
             _deploy_status["results"].append(task_result)
             _save_state()  # 매 토픽 완료 후 상태 저장

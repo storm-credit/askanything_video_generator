@@ -1,0 +1,1079 @@
+"""준비/세션/렌더 라우터.
+
+/api/prepare (SSE), /api/replace-image, /api/regenerate-image,
+/api/register-day-session, /api/batch-generate-images,
+/api/render (SSE), /api/sessions, /api/sessions/load,
+/api/sessions/generate-scripts
+"""
+
+from __future__ import annotations
+
+import os
+import json
+import re
+import io
+import copy
+import asyncio
+import shutil
+import traceback
+import threading
+import glob
+
+from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, HTTPException, Form, File, UploadFile
+from fastapi.responses import JSONResponse
+from sse_starlette.sse import EventSourceResponse
+
+from routes.shared import (
+    prepared_sessions,
+    session_lock,
+    cleanup_sessions,
+    generate_semaphore,
+    resolve_youtube_topic,
+    VOICE_MAP,
+    VOICE_ID_TO_NAME,
+)
+
+router = APIRouter(prefix="/api", tags=["prepare"])
+
+
+# ── 상수 ──────────────────────────────────────────────────────────
+
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
+MAX_IMAGE_SIZE = 20 * 1024 * 1024  # 20MB
+
+
+# ── 세션 정리 ────────────────────────────────────────────────────
+
+def _cleanup_sessions():
+    """오래된 세션 자동 정리 (메모리 누수 방지)."""
+    cleanup_sessions()
+
+
+# ── 자동 음성 선택 ────────────────────────────────────────────────
+
+# ElevenLabs premade voice IDs
+_VOICE_MAP = {
+    "eric":    "cjVigY5qzO86Huf0OWal",
+    "adam":    "pNInz6obpgDQGcFmaJgB",
+    "brian":   "nPczCjzI2devNBz1zQrb",
+    "bill":    "pqHfZKP75CvOlQylNhV4",
+    "daniel":  "onwK4e9ZLuTAKqWW03F9",
+    "rachel":  "21m00Tcm4TlvDq8ikWAM",
+    "sarah":   "EXAVITQu4vr4xnSDxMaL",
+    "matilda": "XrExE9yKIg1WjnnlVkGX",
+    "charlie": "IKne3meq5aSn9XLyUdCD",
+    "antoni":  "ErXwobaYiN019PkySvjV",
+    "george":  "JBFqnCBsd6RMkjVDRZzb",
+}
+
+_VOICE_ID_TO_NAME = {v: k.capitalize() for k, v in _VOICE_MAP.items()}
+
+_TONE_RULES: list[tuple[list[str], str]] = [
+    (["공포", "호러", "귀신", "유령", "살인", "미스터리", "괴담", "소름", "horror", "ghost", "murder", "creepy", "dark", "죽음", "저주", "심령", "폐허"], "george"),
+    (["웃긴", "유머", "밈", "meme", "funny", "코미디", "개그", "ㅋㅋ", "레전드", "웃음", "드립", "짤"], "charlie"),
+    (["과학", "기술", "AI", "인공지능", "우주", "NASA", "양자", "물리", "화학", "생물", "science", "tech", "quantum", "로봇", "컴퓨터", "프로그래밍"], "daniel"),
+    (["역사", "전쟁", "고대", "조선", "제국", "세계대전", "history", "ancient", "war", "왕조", "문명", "유적"], "bill"),
+    (["감동", "힐링", "동기부여", "motivation", "inspiring", "감성", "위로", "희망", "사랑", "인생", "명언"], "matilda"),
+    (["뉴스", "시사", "경제", "정치", "주식", "투자", "부동산", "금리", "인플레이션", "news", "economy", "stock", "비트코인", "코인"], "adam"),
+    (["자연", "동물", "여행", "바다", "산", "nature", "animal", "travel", "풍경", "safari", "ocean"], "sarah"),
+]
+
+
+def _auto_select_voice(topic: str, language: str = "ko") -> str:
+    """주제 키워드를 분석하여 최적의 ElevenLabs 음성을 자동 선택합니다."""
+    topic_lower = topic.lower()
+    for keywords, voice_name in _TONE_RULES:
+        for kw in keywords:
+            if kw.lower() in topic_lower:
+                print(f"[음성 자동 선택] '{kw}' 매칭 → {voice_name} ({_VOICE_MAP[voice_name][:12]}...)")
+                return _VOICE_MAP[voice_name]
+    return _VOICE_MAP["eric"]
+
+
+# ── Pydantic 모델 ─────────────────────────────────────────────────
+
+
+class PrepareRequest(BaseModel):
+    topic: str = Field(..., min_length=1, max_length=500)
+    apiKey: str | None = None
+    llmProvider: str = "gemini"
+    llmKey: str | None = None
+    llmModel: str | None = None
+    imageModel: str | None = None
+    geminiKeys: str | None = None
+    imageEngine: str = "imagen"
+    language: str = "ko"
+    videoEngine: str = "none"
+    channel: str | None = None
+    referenceUrl: str | None = None
+    maxCuts: int | None = None
+
+    @field_validator("language")
+    @classmethod
+    def valid_language(cls, v: str) -> str:
+        allowed = {"ko", "en", "de", "da", "no", "es", "fr", "pt", "it", "nl", "sv", "pl", "ru", "ja", "zh", "ar", "tr", "hi"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 언어: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("imageEngine")
+    @classmethod
+    def valid_image_engine(cls, v: str) -> str:
+        allowed = {"imagen", "dalle"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 이미지 엔진: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("videoEngine")
+    @classmethod
+    def valid_video_engine(cls, v: str) -> str:
+        allowed = {"veo3", "kling", "sora2", "none"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
+        return v
+
+    @field_validator("llmProvider")
+    @classmethod
+    def valid_llm_provider(cls, v: str) -> str:
+        allowed = {"gemini", "openai", "claude"}
+        if v not in allowed:
+            raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}. 허용: {allowed}")
+        return v
+
+
+class RegenerateImageRequest(BaseModel):
+    sessionId: str
+    cutIndex: int
+    model: str | None = None
+
+
+class RegisterDaySessionRequest(BaseModel):
+    sessionId: str
+    topic: str
+    channel: str = "askanything"
+    cuts: list[dict]
+
+
+class BatchImageRequest(BaseModel):
+    sessionId: str
+    model: str = "standard"
+
+
+class RenderRequest(BaseModel):
+    sessionId: str
+    cuts: list[dict]
+    apiKey: str | None = None
+    llmKey: str | None = None
+    elevenlabsKey: str | None = None
+    ttsSpeed: float = 0.9
+    videoEngine: str = "none"
+    cameraStyle: str = "auto"
+    bgmTheme: str = "random"
+    channel: str | None = None
+    platforms: list[str] = ["youtube"]
+    captionSize: int = Field(48, ge=32, le=72)
+    captionY: int = Field(28, ge=10, le=50)
+    outputPath: str | None = None
+    voiceId: str | None = None
+
+
+class LoadSessionRequest(BaseModel):
+    folder: str = Field(..., min_length=1)
+
+
+class GenerateScriptsRequest(BaseModel):
+    folder: str = Field(..., min_length=1)
+    topic: str = ""
+    lang: str = "ko"
+    channel: str = ""
+    num_cuts: int = 8
+
+
+# ── POST /api/prepare (SSE) ──────────────────────────────────────
+
+
+@router.post("/prepare")
+async def prepare_endpoint(req: PrepareRequest):
+    """1단계: LLM 스크립트 + 이미지 생성만 수행. TTS/렌더는 하지 않음."""
+
+    async def sse_generator():
+      # lazy imports
+      from modules.gpt.cutter import generate_cuts
+      from modules.image.imagen import generate_image_imagen, generate_image_nano_banana
+      from modules.image.dalle import generate_image as generate_image_dalle
+      from modules.utils.keys import get_google_key
+
+      # A/B 변형 + 메타데이터 안전 초기화
+      cut1_ab_variants: list = []
+      video_desc = ""
+      video_tags: list = []
+      async with generate_semaphore:
+        _gemini_keys = req.geminiKeys or None
+        try:
+            llm_key_for_request = get_google_key(req.llmKey, extra_keys=_gemini_keys) if req.llmProvider == "gemini" else req.llmKey
+            loop = asyncio.get_running_loop()
+
+            yield {"data": "PROG|10\n"}
+            # YouTube URL 자동 감지 + topic 교체
+            prep_ref_url = req.referenceUrl
+            prep_topic = req.topic
+            old_prep_topic = prep_topic
+            prep_topic, prep_ref_url = resolve_youtube_topic(prep_topic, prep_ref_url)
+            if prep_topic != old_prep_topic:
+                yield {"data": f"[레퍼런스 분석] YouTube 주제 추출 완료: '{prep_topic.split(chr(10))[0]}'\n"}
+
+            yield {"data": f"[기획] '{prep_topic.split(chr(10))[0]}' 스크립트 생성 중...\n"}
+
+            cuts, topic_folder, video_title, video_tags, video_desc = await loop.run_in_executor(
+                None,
+                lambda: generate_cuts(
+                    prep_topic, api_key_override=req.apiKey, lang=req.language,
+                    llm_provider=req.llmProvider, llm_key_override=llm_key_for_request,
+                    channel=req.channel, llm_model=req.llmModel,
+                    reference_url=prep_ref_url,
+                ),
+            )
+
+            # 테스트 모드: 컷 수 제한
+            if req.maxCuts and len(cuts) > req.maxCuts:
+                cuts = cuts[:req.maxCuts]
+                yield {"data": f"[테스트 모드] {req.maxCuts}컷으로 제한\n"}
+
+            yield {"data": "PROG|30\n"}
+            yield {"data": f"[기획 완료] {len(cuts)}컷 스크립트 생성!\n"}
+
+            # 이미지 생성
+            image_label = {"imagen": "Imagen 4", "nano_banana": "Nano Banana", "dalle": "DALL-E"}.get(req.imageEngine, req.imageEngine)
+            yield {"data": f"[이미지] {image_label}로 이미지 생성 중...\n"}
+
+            image_paths = []
+            for i, cut in enumerate(cuts):
+                try:
+                    _topic = prep_topic
+                    if req.imageEngine == "imagen":
+                        img_key = get_google_key(req.llmKey, service="imagen", extra_keys=_gemini_keys)
+                        img_path = await loop.run_in_executor(
+                            None, lambda idx=i, c=cut, k=img_key, t=_topic: generate_image_imagen(c["prompt"], idx, topic_folder, k, model_override=req.imageModel, gemini_api_keys=_gemini_keys, topic=t)
+                        )
+                    elif req.imageEngine == "nano_banana":
+                        img_key = get_google_key(req.llmKey, service="nano_banana", extra_keys=_gemini_keys)
+                        img_path = await loop.run_in_executor(
+                            None, lambda idx=i, c=cut, k=img_key, t=_topic: generate_image_nano_banana(c["prompt"], idx, topic_folder, k, gemini_api_keys=_gemini_keys, topic=t)
+                        )
+                    else:
+                        img_key = req.apiKey
+                        img_path = await loop.run_in_executor(
+                            None, lambda idx=i, c=cut, k=img_key, t=_topic: generate_image_dalle(c["prompt"], idx, topic_folder, k, topic=t)
+                        )
+                    image_paths.append(img_path)
+                except Exception as exc:
+                    # 폴백 체인
+                    if req.imageEngine in ("imagen", "nano_banana"):
+                        fallback_from = image_label
+                        # Imagen → Nano Banana 폴백
+                        if req.imageEngine == "imagen":
+                            print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
+                            yield {"data": f"  -> 컷 {i+1} Imagen 실패, Nano Banana로 폴백\n"}
+                            try:
+                                _nb_key = get_google_key(req.llmKey, service="nano_banana", extra_keys=_gemini_keys)
+                                _topic2 = prep_topic
+                                img_path = await loop.run_in_executor(
+                                    None, lambda idx=i, c=cut, k=_nb_key, t=_topic2: generate_image_nano_banana(c["prompt"], idx, topic_folder, k, topic=t)
+                                )
+                                image_paths.append(img_path)
+                                continue
+                            except Exception as nb_exc:
+                                print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {nb_exc}")
+                                yield {"data": f"  -> 컷 {i+1} Nano Banana 실패, DALL-E로 폴백\n"}
+                        else:
+                            print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {exc}")
+                            yield {"data": f"  -> 컷 {i+1} Nano Banana 실패, DALL-E로 폴백\n"}
+                        # DALL-E 폴백
+                        _dalle_key = req.apiKey or os.getenv("OPENAI_API_KEY")
+                        if _dalle_key:
+                            try:
+                                _topic2 = prep_topic
+                                img_path = await loop.run_in_executor(
+                                    None, lambda idx=i, c=cut, k=_dalle_key, t=_topic2: generate_image_dalle(c["prompt"], idx, topic_folder, k, topic=t)
+                                )
+                                image_paths.append(img_path)
+                            except Exception as dalle_exc:
+                                print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
+                                image_paths.append(None)
+                        else:
+                            image_paths.append(None)
+                    else:
+                        print(f"[컷 {i+1} 이미지 실패] {exc}")
+                        image_paths.append(None)
+
+                prog = 30 + int(60 * ((i + 1) / len(cuts)))
+                yield {"data": f"PROG|{prog}\n"}
+                yield {"data": f"  -> 컷 {i+1}/{len(cuts)} 이미지 생성 완료\n"}
+
+            # 세션 저장 (오래된 세션 자동 정리)
+            import uuid as _uuid
+            import time as _time
+            _cleanup_sessions()
+            session_id = _uuid.uuid4().hex
+            with session_lock:
+                prepared_sessions[session_id] = {
+                    "cuts": cuts,
+                    "topic_folder": topic_folder,
+                    "title": video_title,
+                    "description": video_desc,
+                    "tags": video_tags,
+                    "image_paths": image_paths,
+                    "topic": req.topic,
+                    "language": req.language,
+                    "cut1_ab_variants": cut1_ab_variants,
+                    "_created": _time.time(),
+                }
+
+            # cuts.json 자동 저장 (세션 복원용)
+            cuts_json_path = os.path.join("assets", topic_folder, "cuts.json")
+            try:
+                os.makedirs(os.path.dirname(cuts_json_path), exist_ok=True)
+                with open(cuts_json_path, "w", encoding="utf-8") as _f:
+                    json.dump({
+                        "cuts": cuts,
+                        "title": video_title,
+                        "tags": video_tags,
+                        "metadata": {
+                            "topic": req.topic,
+                            "channel": req.channel or "",
+                            "language": req.language,
+                            "created_at": __import__("datetime").datetime.now().isoformat(),
+                        }
+                    }, _f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"[세션 저장] cuts.json 저장 실패: {e}")
+
+            # 미리보기 데이터 전송
+            preview_cuts = []
+            for i, cut in enumerate(cuts):
+                img_url = None
+                if image_paths[i] and os.path.exists(image_paths[i]):
+                    rel = image_paths[i].replace("\\", "/")
+                    idx = rel.find("assets/")
+                    if idx >= 0:
+                        img_url = f"/{rel[idx:]}"
+                cut_data: dict = {
+                    "index": i,
+                    "script": cut["script"],
+                    "prompt": cut.get("prompt", ""),
+                    "description": cut.get("description", ""),
+                    "image_url": img_url,
+                }
+                # 컷1 A/B 변형 이미지 URL
+                if i == 0 and cut1_ab_variants:
+                    ab_urls = []
+                    for vp in cut1_ab_variants:
+                        if vp and os.path.exists(vp):
+                            vrel = vp.replace("\\", "/")
+                            vidx = vrel.find("assets/")
+                            if vidx >= 0:
+                                ab_urls.append(f"/{vrel[vidx:]}")
+                    if ab_urls:
+                        cut_data["ab_variants"] = ab_urls
+                preview_cuts.append(cut_data)
+
+            yield {"data": "PROG|100\n"}
+            _tags_str = " ".join(video_tags)
+            _upload_desc = f"{video_desc}\n\n{_tags_str}".strip() if video_desc else _tags_str
+            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'description': _upload_desc, 'tags': video_tags, 'cuts': preview_cuts}, ensure_ascii=False)}\n"}
+
+        except Exception as e:
+            traceback.print_exc()
+            safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(e)[:200])
+            yield {"data": f"ERROR|[준비 오류] {safe_msg}\n"}
+
+    return EventSourceResponse(sse_generator())
+
+
+# ── POST /api/replace-image ──────────────────────────────────────
+
+
+@router.post("/replace-image")
+async def replace_image_endpoint(
+    sessionId: str = Form(...),
+    cutIndex: int = Form(...),
+    file: UploadFile = File(...),
+):
+    """미리보기 단계에서 특정 컷의 이미지를 사용자 파일로 교체."""
+    with session_lock:
+        session = prepared_sessions.get(sessionId)
+    if not session:
+        return JSONResponse(status_code=404, content={"error": "세션을 찾을 수 없습니다."})
+
+    image_paths = session.get("image_paths", [])
+    if cutIndex < 0 or cutIndex >= len(image_paths):
+        return JSONResponse(status_code=400, content={"error": f"잘못된 컷 인덱스: {cutIndex}"})
+
+    # 파일 타입 검증
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        return JSONResponse(status_code=400, content={"error": "PNG, JPG, WEBP 파일만 가능합니다."})
+
+    # 파일 읽기 + 크기 검증
+    data = await file.read()
+    if len(data) > MAX_IMAGE_SIZE:
+        return JSONResponse(status_code=400, content={"error": "파일 크기가 20MB를 초과합니다."})
+
+    # 1080x1920 리사이즈 + 저장
+    try:
+        from PIL import Image, ImageOps
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        fitted = ImageOps.fit(img, (1080, 1920), method=Image.LANCZOS, centering=(0.5, 0.5))
+
+        dest_path = image_paths[cutIndex]
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+
+        import tempfile
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(dest_path), suffix=".tmp")
+        os.close(fd)
+        try:
+            fitted.save(tmp, format="PNG")
+            os.replace(tmp, dest_path)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+
+        # 응답: 새 이미지 URL
+        rel = dest_path.replace("\\", "/")
+        idx = rel.find("assets/")
+        img_url = f"/{rel[idx:]}" if idx >= 0 else None
+        print(f"[이미지 교체] 컷 {cutIndex + 1} 사용자 이미지로 교체 완료")
+        return {"ok": True, "image_url": img_url}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"이미지 처리 실패: {str(e)}"})
+
+
+# ── POST /api/regenerate-image ───────────────────────────────────
+
+
+@router.post("/regenerate-image")
+async def regenerate_image_endpoint(req: RegenerateImageRequest):
+    """특정 컷의 이미지를 재생성합니다. 모델 지정 가능."""
+    with session_lock:
+        session = prepared_sessions.get(req.sessionId)
+    if not session:
+        return JSONResponse(status_code=404, content={"error": "세션을 찾을 수 없습니다."})
+
+    cuts = session.get("cuts", [])
+    image_paths = session.get("image_paths", [])
+    if req.cutIndex < 0 or req.cutIndex >= len(cuts):
+        return JSONResponse(status_code=400, content={"error": f"잘못된 컷 인덱스: {req.cutIndex}"})
+
+    cut = cuts[req.cutIndex]
+    prompt = cut.get("prompt", cut.get("image_prompt", ""))
+    if not prompt:
+        return JSONResponse(status_code=400, content={"error": "이미지 프롬프트가 없습니다."})
+
+    topic_folder = session.get("topic_folder", "default_topic")
+    topic = session.get("topic", "")
+
+    # 이미지 캐시 무효화 — 같은 프롬프트로 재생성 시 캐시 히트 방지
+    from modules.image.imagen import MASTER_STYLE
+    from modules.utils.cache import invalidate_cache
+    try:
+        invalidate_cache(MASTER_STYLE + prompt)
+    except Exception:
+        pass  # 캐시 무효화 실패해도 진행
+
+    gemini_keys = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
+
+    try:
+        new_path = None
+        model_name = req.model or "standard"
+
+        if model_name in ("standard", "fast", "ultra"):
+            model_map = {
+                "standard": "imagen-4.0-generate-001",
+                "fast": "imagen-4.0-fast-generate-001",
+                "ultra": "imagen-4.0-ultra-generate-001",
+            }
+            from modules.image.imagen import generate_image_imagen
+            new_path = generate_image_imagen(
+                prompt, req.cutIndex, topic_folder,
+                model_override=model_map[model_name],
+                gemini_api_keys=gemini_keys, topic=topic,
+            )
+        elif model_name == "nano_banana":
+            from modules.image.imagen import generate_image_nano_banana
+            new_path = generate_image_nano_banana(
+                prompt, req.cutIndex, topic_folder,
+                gemini_api_keys=gemini_keys, topic=topic,
+            )
+        elif model_name == "dalle":
+            from modules.image.dalle import generate_image as generate_image_dalle
+            new_path = generate_image_dalle(prompt, req.cutIndex, topic_folder, topic=topic)
+        else:
+            return JSONResponse(status_code=400, content={"error": f"알 수 없는 모델: {model_name}"})
+
+        if new_path and os.path.exists(new_path):
+            # 세션 업데이트
+            with session_lock:
+                if req.sessionId in prepared_sessions:
+                    prepared_sessions[req.sessionId]["image_paths"][req.cutIndex] = new_path
+
+            rel = new_path.replace("\\", "/")
+            idx = rel.find("assets/")
+            img_url = f"/{rel[idx:]}" if idx >= 0 else None
+            print(f"[이미지 재생성] 컷 {req.cutIndex + 1} {model_name}으로 재생성 완료")
+            return {"ok": True, "image_url": img_url, "model": model_name}
+        else:
+            return JSONResponse(status_code=500, content={"error": "이미지 생성 실패"})
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"재생성 실패: {str(e)}"})
+
+
+# ── POST /api/register-day-session ───────────────────────────────
+
+
+@router.post("/register-day-session")
+async def register_day_session(req: RegisterDaySessionRequest):
+    """Day 파일 스크립트를 백엔드 세션으로 등록 (이미지 생성용)."""
+    folder_name = f"{req.topic.replace(' ', '_')}_{req.channel}"
+    topic_folder = folder_name
+    full_path = os.path.join("assets", folder_name)
+    os.makedirs(os.path.join(full_path, "images"), exist_ok=True)
+
+    # cuts 정규화
+    normalized_cuts = []
+    for c in req.cuts:
+        normalized_cuts.append({
+            "script": c.get("script", ""),
+            "prompt": c.get("prompt", c.get("image_prompt", "")),
+            "description": c.get("description", ""),
+        })
+
+    # cuts.json 저장
+    cuts_path = os.path.join(full_path, "cuts.json")
+    with open(cuts_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "cuts": normalized_cuts,
+            "title": req.topic,
+            "tags": [],
+            "metadata": {
+                "topic": req.topic,
+                "channel": req.channel,
+                "source": "day_file",
+            }
+        }, f, ensure_ascii=False, indent=2)
+
+    # 이미 생성된 이미지 파일 자동 탐지
+    image_paths = []
+    alt_path = os.path.join("assets", full_path)
+    for i in range(len(normalized_cuts)):
+        img_file = os.path.join(full_path, "images", f"cut_{i:02}.png")
+        alt_file = os.path.join(alt_path, "images", f"cut_{i:02}.png")
+        if os.path.exists(img_file):
+            image_paths.append(img_file)
+        elif os.path.exists(alt_file):
+            image_paths.append(alt_file)
+        else:
+            image_paths.append("")
+
+    # 언어 매핑
+    lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
+
+    with session_lock:
+        prepared_sessions[req.sessionId] = {
+            "topic": req.topic,
+            "title": req.topic,
+            "topic_folder": topic_folder,
+            "channel": req.channel,
+            "language": lang_map.get(req.channel, "ko"),
+            "cuts": normalized_cuts,
+            "image_paths": image_paths,
+            "_created": __import__('time').time(),
+        }
+
+    existing_count = sum(1 for p in image_paths if p)
+    image_urls = []
+    for p in image_paths:
+        if p:
+            rel = p.replace("\\", "/")
+            idx = rel.find("assets/")
+            image_urls.append(f"/{rel[idx:]}" if idx >= 0 else None)
+        else:
+            image_urls.append(None)
+    print(f"[Day 세션] {req.channel}: {existing_count}/{len(normalized_cuts)} 이미지 발견 (folder={folder_name})")
+    return {"ok": True, "sessionId": req.sessionId, "cuts_count": len(normalized_cuts), "existing_images": existing_count, "image_urls": image_urls}
+
+
+# ── POST /api/batch-generate-images ──────────────────────────────
+
+
+@router.post("/batch-generate-images")
+async def batch_generate_images(req: BatchImageRequest):
+    """세션의 모든 컷 이미지를 일괄 생성합니다."""
+    with session_lock:
+        session = prepared_sessions.get(req.sessionId)
+    if not session:
+        return JSONResponse(status_code=404, content={"error": "세션을 찾을 수 없습니다."})
+
+    cuts = session.get("cuts", [])
+    topic_folder = session.get("topic_folder", "default_topic")
+    topic = session.get("topic", "")
+    gemini_keys = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
+
+    results = []
+    model_name = req.model or "standard"
+    model_map = {
+        "standard": "imagen-4.0-generate-001",
+        "fast": "imagen-4.0-fast-generate-001",
+        "ultra": "imagen-4.0-ultra-generate-001",
+    }
+
+    for i, cut in enumerate(cuts):
+        prompt = cut.get("prompt", cut.get("image_prompt", ""))
+        if not prompt:
+            results.append({"index": i, "ok": False, "error": "프롬프트 없음"})
+            continue
+        try:
+            new_path = None
+            if model_name in ("standard", "fast", "ultra"):
+                from modules.image.imagen import generate_image_imagen
+                new_path = generate_image_imagen(
+                    prompt, i, topic_folder,
+                    model_override=model_map[model_name],
+                    gemini_api_keys=gemini_keys, topic=topic,
+                )
+            elif model_name == "nano_banana":
+                from modules.image.imagen import generate_image_nano_banana
+                new_path = generate_image_nano_banana(
+                    prompt, i, topic_folder,
+                    gemini_api_keys=gemini_keys, topic=topic,
+                )
+            elif model_name == "dalle":
+                from modules.image.dalle import generate_image as generate_image_dalle
+                new_path = generate_image_dalle(prompt, i, topic_folder, topic=topic)
+
+            if new_path and os.path.exists(new_path):
+                with session_lock:
+                    if req.sessionId in prepared_sessions:
+                        if "image_paths" not in prepared_sessions[req.sessionId]:
+                            prepared_sessions[req.sessionId]["image_paths"] = [""] * len(cuts)
+                        prepared_sessions[req.sessionId]["image_paths"][i] = new_path
+                rel = new_path.replace("\\", "/")
+                idx = rel.find("assets/")
+                img_url = f"/{rel[idx:]}" if idx >= 0 else None
+                results.append({"index": i, "ok": True, "image_url": img_url})
+                print(f"[일괄 이미지] 컷 {i+1}/{len(cuts)} 생성 완료")
+            else:
+                results.append({"index": i, "ok": False, "error": "생성 실패"})
+        except Exception as e:
+            results.append({"index": i, "ok": False, "error": str(e)})
+
+    success_count = sum(1 for r in results if r.get("ok"))
+    return {
+        "ok": True,
+        "total": len(cuts),
+        "success": success_count,
+        "failed": len(cuts) - success_count,
+        "results": results,
+    }
+
+
+# ── POST /api/render (SSE) ───────────────────────────────────────
+
+
+@router.post("/render")
+async def render_endpoint(req: RenderRequest):
+    """2단계: 수정된 스크립트로 TTS → Whisper → Remotion 렌더링."""
+    _cleanup_sessions()
+    with session_lock:
+        session = prepared_sessions.get(req.sessionId)
+    if not session:
+        return JSONResponse(status_code=404, content={"error": "세션이 만료되었습니다. 다시 준비해주세요."})
+
+    async def sse_generator():
+        # lazy imports
+        from modules.tts.elevenlabs import generate_tts
+        from modules.utils.audio import normalize_audio_lufs
+        from modules.transcription.whisper import generate_word_timestamps
+        from modules.video.remotion import create_remotion_video
+        from modules.video.engines import generate_video_from_image
+        from modules.utils.keys import get_google_key
+        from modules.utils.channel_config import get_channel_preset
+
+        try:
+            cuts = copy.deepcopy(session["cuts"])
+            topic_folder = session["topic_folder"]
+            video_title = session["title"]
+            image_paths = session["image_paths"]
+            language = session["language"]
+            api_key_override = req.apiKey or os.getenv("OPENAI_API_KEY", "")
+            elevenlabs_key_override = req.elevenlabsKey or os.getenv("ELEVENLABS_API_KEY", "")
+
+            # 수정된 스크립트 반영
+            script_updates = {c["index"]: c["script"] for c in req.cuts if "script" in c}
+            for idx, new_script in script_updates.items():
+                if 0 <= idx < len(cuts):
+                    cuts[idx]["script"] = new_script
+
+            scripts = [cut["script"] for cut in cuts]
+            loop = asyncio.get_running_loop()
+
+            # 음성 선택: voiceId(auto/직접) > 채널 설정 > 기본값
+            render_voice_id = None
+            render_voice_settings = None
+            if req.voiceId == "auto":
+                render_voice_id = _auto_select_voice(video_title, language)
+            elif req.voiceId:
+                render_voice_id = req.voiceId
+            if not render_voice_id:
+                render_preset = get_channel_preset(req.channel)
+                if render_preset:
+                    render_voice_id = render_preset.get("voice_id")
+                    render_voice_settings = render_preset.get("voice_settings")
+            else:
+                _rp = get_channel_preset(req.channel)
+                if _rp:
+                    render_voice_settings = _rp.get("voice_settings")
+
+            yield {"data": "PROG|10\n"}
+            yield {"data": "[음성] TTS 녹음 + 타임스탬프 추출 시작...\n"}
+
+            # TTS + Whisper (순차)
+            audio_paths = []
+            word_timestamps_list = []
+            for i, script in enumerate(scripts):
+                try:
+                    aud = await loop.run_in_executor(
+                        None, lambda idx=i, s=script: generate_tts(s, idx, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=render_voice_id, voice_settings=render_voice_settings)
+                    )
+                    if aud:
+                        aud = normalize_audio_lufs(aud)
+                    audio_paths.append(aud)
+                except Exception as exc:
+                    print(f"[컷 {i+1} TTS 실패] {exc}")
+                    audio_paths.append(None)
+
+                # Whisper 타임스탬프
+                words = []
+                if audio_paths[-1]:
+                    try:
+                        words = await loop.run_in_executor(
+                            None, lambda a=audio_paths[-1]: generate_word_timestamps(a, api_key_override, language=language)
+                        )
+                    except Exception as exc:
+                        print(f"[컷 {i+1} Whisper 실패] {exc}")
+                word_timestamps_list.append(words or [])
+
+                prog = 10 + int(50 * ((i + 1) / len(scripts)))
+                yield {"data": f"PROG|{prog}\n"}
+                yield {"data": f"  -> 컷 {i+1}/{len(scripts)} 음성 완료\n"}
+
+            # 비디오 변환 (선택) — 히어로 컷(SHOCK/REVEAL)만 비디오 생성
+            visual_paths = list(image_paths)
+            active_video_engine = req.videoEngine
+            _hero_emotions = {"SHOCK", "REVEAL"}
+            if active_video_engine != "none":
+                hero_indices = [i for i, c in enumerate(cuts) if any(f"[{e}]" in c.get("description", "") for e in _hero_emotions)]
+                skip_count = len(cuts) - len(hero_indices)
+                if skip_count > 0:
+                    yield {"data": f"[비디오] 히어로 컷 {len(hero_indices)}개만 비디오 생성 (나머지 {skip_count}개는 Ken Burns)\n"}
+                yield {"data": f"[비디오] {active_video_engine} 변환 중...\n"}
+                for i, img_path in enumerate(image_paths):
+                    if img_path and os.path.exists(img_path) and i in hero_indices:
+                        try:
+                            llm_key = req.llmKey
+                            vid_key = get_google_key(llm_key, service=active_video_engine)
+                            vid = await loop.run_in_executor(
+                                None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"], vk=vid_key, desc=cuts[idx].get("description", ""): generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vk, description=desc)
+                            )
+                            if vid:
+                                visual_paths[i] = vid
+                        except Exception as exc:
+                            print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
+
+            # 실패 체크
+            failed = [i+1 for i, p in enumerate(audio_paths) if p is None]
+            if failed:
+                yield {"data": f"ERROR|[TTS 오류] 컷 {failed} 음성 생성 실패\n"}
+                return
+
+            yield {"data": "PROG|70\n"}
+            yield {"data": "[렌더링] Remotion 렌더링 시작...\n"}
+
+            # Remotion 렌더
+            render_result = await loop.run_in_executor(
+                None,
+                lambda: create_remotion_video(
+                    visual_paths, audio_paths, scripts,
+                    word_timestamps_list, topic_folder, title=video_title,
+                    camera_style=req.cameraStyle, bgm_theme=req.bgmTheme,
+                    channel=req.channel, platforms=req.platforms,
+                    caption_size=req.captionSize,
+                    caption_y=req.captionY,
+                    descriptions=[cut.get("description", "") for cut in cuts],
+                ),
+            )
+
+            if not render_result:
+                import traceback as _tb
+                print("[Remotion 오류] render_result가 None — 상세 로그는 위 터미널 출력을 확인하세요.")
+                yield {"data": "ERROR|[Remotion 오류] 렌더링 실패 — 터미널에서 상세 로그를 확인하세요.\n"}
+                return
+
+            # 결과 처리
+            if isinstance(render_result, str):
+                video_paths_map = {"youtube": render_result}
+            else:
+                video_paths_map = render_result
+
+            primary_path = next(iter(video_paths_map.values()))
+
+            # Downloads 복사
+            downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            for plat, vpath in video_paths_map.items():
+                fname = os.path.basename(vpath)
+                if os.path.isdir(downloads_dir):
+                    try:
+                        await asyncio.to_thread(shutil.copy2, os.path.abspath(vpath), os.path.join(downloads_dir, fname))
+                        if len(video_paths_map) > 1:
+                            yield {"data": f"[저장] {plat.upper()} → Downloads/{fname}\n"}
+                    except Exception as cp_err:
+                        print(f"[Downloads 복사 실패] {cp_err}")
+
+            yield {"data": "PROG|100\n"}
+            final_filename = os.path.basename(primary_path)
+            relative_video_path = f"/assets/{topic_folder}/video/{final_filename}"
+            platform_count = len(video_paths_map)
+            if platform_count > 1:
+                yield {"data": f"[완료] {platform_count}개 플랫폼 영상 렌더링 대성공!\n"}
+            else:
+                yield {"data": f"[완료] 영상 렌더링 대성공! 📂 Downloads 폴더에 저장됨\n"}
+            yield {"data": f"DONE|{relative_video_path}|\n"}
+
+        except Exception as e:
+            traceback.print_exc()
+            safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(e)[:200])
+            yield {"data": f"ERROR|[렌더 오류] {safe_msg}\n"}
+        finally:
+            # 성공/실패 관계없이 세션 정리 (메모리 누수 방지)
+            with session_lock:
+                prepared_sessions.pop(req.sessionId, None)
+
+    return EventSourceResponse(sse_generator())
+
+
+# ── GET /api/sessions ────────────────────────────────────────────
+
+
+@router.get("/sessions")
+async def list_sessions():
+    """assets/ 폴더에서 이미지가 있는 세션 목록 반환."""
+    sessions = []
+    for folder_path in glob.glob("assets/*/images"):
+        folder = os.path.dirname(folder_path)
+        folder_name = os.path.basename(folder)
+        if folder_name in (".cache", "assets"):
+            continue
+        try:
+            img_count = len(glob.glob(os.path.join(folder_path, "cut_*.png")))
+            if img_count == 0:
+                continue
+            vid_dir = os.path.join(folder, "video")
+            has_video = bool(glob.glob(os.path.join(vid_dir, "*.mp4"))) if os.path.isdir(vid_dir) else False
+            has_audio = bool(glob.glob(os.path.join(folder, "audio", "cut_*.mp3"))) if os.path.isdir(os.path.join(folder, "audio")) else False
+            # cuts.json이 있으면 메타데이터 로드
+            cuts_path = os.path.join(folder, "cuts.json")
+            title = folder_name
+            cuts_count = img_count
+            channel = folder_name.rsplit("_", 1)[-1] if "_" in folder_name else ""
+            language = ""
+            created_at = ""
+            has_cuts = os.path.exists(cuts_path) and os.path.getsize(cuts_path) > 2
+            if has_cuts:
+                with open(cuts_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                title = data.get("title", folder_name)
+                cuts_count = len(data.get("cuts", []))
+                meta = data.get("metadata", {})
+                channel = meta.get("channel", channel)
+                language = meta.get("language", "")
+                created_at = meta.get("created_at", "")
+            # 생성 시간 없으면 폴더 수정 시간 사용
+            if not created_at:
+                mtime = os.path.getmtime(folder_path)
+                from datetime import datetime
+                created_at = datetime.fromtimestamp(mtime).isoformat()
+            sessions.append({
+                "folder": folder_name,
+                "title": title,
+                "cuts_count": cuts_count,
+                "image_count": img_count,
+                "has_video": has_video,
+                "has_audio": has_audio,
+                "has_cuts": has_cuts,
+                "channel": channel,
+                "language": language,
+                "created_at": created_at,
+            })
+        except Exception:
+            continue
+    sessions.sort(key=lambda s: s.get("created_at", ""), reverse=True)
+    return {"sessions": sessions}
+
+
+# ── POST /api/sessions/load ──────────────────────────────────────
+
+
+@router.post("/sessions/load")
+async def load_session(req: LoadSessionRequest):
+    """저장된 세션을 메모리에 복원하고 sessionId 반환."""
+    folder_name = os.path.basename(req.folder)  # path traversal 방지
+    topic_folder = os.path.join("assets", folder_name)
+    cuts_path = os.path.join(topic_folder, "cuts.json")
+
+    # 이미지 파일 목록
+    img_dir = os.path.join(topic_folder, "images")
+    if not os.path.isdir(img_dir):
+        raise HTTPException(status_code=404, detail="이미지 폴더가 없습니다")
+    img_files = sorted(glob.glob(os.path.join(img_dir, "cut_*.png")))
+    if not img_files:
+        raise HTTPException(status_code=404, detail="이미지가 없습니다")
+
+    # cuts.json이 있으면 메타데이터 로드, 없으면 이미지 기반 생성
+    if os.path.exists(cuts_path) and os.path.getsize(cuts_path) > 2:
+        with open(cuts_path, encoding="utf-8") as f:
+            data = json.load(f)
+        cuts = data.get("cuts", [])
+        title = data.get("title", folder_name)
+        tags = data.get("tags", [])
+        meta = data.get("metadata", {})
+    else:
+        # cuts.json 없으면 빈 스크립트로 즉시 로드
+        topic_guess = folder_name.rsplit("_", 1)[0].replace("_", " ") if "_" in folder_name else folder_name
+        channel_guess = folder_name.rsplit("_", 1)[-1] if "_" in folder_name else ""
+        lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
+        lang = lang_map.get(channel_guess, "ko")
+        cuts = [{"script": "", "prompt": "", "description": "", "index": i} for i, _ in enumerate(img_files)]
+        title = topic_guess
+        tags = []
+        meta = {"topic": topic_guess, "channel": channel_guess, "language": lang}
+
+    image_paths = list(img_files)
+
+    # 이미지 수와 스크립트 수 맞추기
+    n = min(len(image_paths), len(cuts))
+    image_paths = image_paths[:n]
+    cuts = cuts[:n]
+
+    # 세션 등록
+    import uuid, time as _time
+    session_id = uuid.uuid4().hex[:16]
+    _cleanup_sessions()
+    with session_lock:
+        prepared_sessions[session_id] = {
+            "sessionId": session_id,
+            "cuts": cuts,
+            "topic_folder": folder_name,
+            "title": title,
+            "tags": tags,
+            "image_paths": image_paths,
+            "topic": meta.get("topic", title),
+            "language": meta.get("language", "ko"),
+            "_created": _time.time(),
+        }
+
+    # 프론트엔드용 응답
+    preview_cuts = []
+    for i, cut in enumerate(cuts):
+        img_url = f"/assets/{folder_name}/images/cut_{i:02d}.png" if image_paths[i] else None
+        preview_cuts.append({
+            "index": i,
+            "script": cut.get("script", cut.get("text", "")),
+            "prompt": cut.get("prompt", ""),
+            "description": cut.get("description", ""),
+            "image_url": img_url,
+        })
+
+    # 기존 Veo3 영상 자동 감지 → 비디오 엔진 추천
+    video_clips_dir = os.path.join("assets", folder_name, "video_clips")
+    existing_videos = 0
+    if os.path.isdir(video_clips_dir):
+        existing_videos = len([f for f in os.listdir(video_clips_dir)
+                              if f.endswith(".mp4") and os.path.getsize(os.path.join(video_clips_dir, f)) > 10000])
+
+    if existing_videos == 0:
+        recommended_engine = "none"        # 이미지만 → Ken Burns
+        recommended_model = ""
+    elif existing_videos >= len(cuts):
+        recommended_engine = "veo3"        # 전체 영상 있음 → Standard
+        recommended_model = ""
+    else:
+        recommended_engine = "veo3"        # 일부만 있음 → Hero Only
+        recommended_model = "hero-only"
+
+    return {
+        "sessionId": session_id,
+        "title": title,
+        "cuts": preview_cuts,
+        "channel": meta.get("channel", ""),
+        "tags": tags,
+        "recommendedVideoEngine": recommended_engine,
+        "recommendedVideoModel": recommended_model,
+        "existingVideos": existing_videos,
+    }
+
+
+# ── POST /api/sessions/generate-scripts ──────────────────────────
+
+
+@router.post("/sessions/generate-scripts")
+async def generate_scripts(req: GenerateScriptsRequest):
+    """세션의 이미지에 맞는 스크립트를 LLM으로 생성합니다."""
+    folder_path = os.path.join("assets", req.folder)
+    if not os.path.isdir(folder_path):
+        return {"error": "폴더를 찾을 수 없습니다"}
+
+    topic = req.topic
+    if not topic:
+        name = req.folder
+        for suffix in ("_askanything", "_wonderdrop", "_exploratodo", "_prismtale"):
+            if name.endswith(suffix):
+                name = name[: -len(suffix)]
+                break
+        topic = name.replace("_", " ")
+
+    try:
+        from modules.gpt.cutter import generate_cuts
+        cuts_list, _folder, title, tags, _desc = generate_cuts(topic, lang=req.lang, channel=req.channel, llm_provider="gemini")
+
+        # 이미지 수에 맞춤
+        img_count = len(glob.glob(os.path.join(folder_path, "images", "cut_*.png")))
+        if img_count > 0:
+            cuts_list = cuts_list[:img_count]
+
+        # cuts.json 저장
+        cuts_path = os.path.join(folder_path, "cuts.json")
+        from datetime import datetime
+        with open(cuts_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "cuts": cuts_list, "title": title, "tags": tags,
+                "metadata": {"topic": topic, "channel": req.channel, "language": req.lang,
+                             "created_at": datetime.now().isoformat()}
+            }, f, ensure_ascii=False, indent=2)
+
+        # 프론트엔드용 응답
+        result_cuts = []
+        for i, cut in enumerate(cuts_list):
+            result_cuts.append({
+                "index": i,
+                "script": cut.get("script", cut.get("text", "")),
+                "prompt": cut.get("prompt", ""),
+                "description": cut.get("description", ""),
+            })
+
+        return {"title": title, "cuts": result_cuts, "tags": tags}
+    except Exception as e:
+        return {"error": f"스크립트 생성 실패: {str(e)}"}
