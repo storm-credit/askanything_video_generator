@@ -8,7 +8,7 @@ PROVIDER_LABELS = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT"}
 
 # ── 마스터 스타일 프롬프트 (DALL-E / Imagen 공용, Imagen 프롬프트 가이드 기반) ──
 MASTER_STYLE = (
-    "Professional photograph, photorealistic, 4K HDR, highly detailed, "
+    "Professional photograph, photorealistic, cinematic quality, highly detailed, "
     "sharp focus, controlled lighting, "
     "vertical 9:16 composition, "
     "family-friendly. "
