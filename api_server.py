@@ -38,7 +38,7 @@ async def _lifespan(app):
     async def _cron_deploy():
         from modules.scheduler.auto_deploy import run_auto_deploy
         return await run_auto_deploy()
-    add_daily("자동 배포", 3, 0, _cron_deploy)
+    add_daily("자동 배포", 2, 0, _cron_deploy)
 
     def _cron_topics():
         from modules.scheduler.topic_generator import generate_weekly_topics
