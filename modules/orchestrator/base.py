@@ -57,7 +57,7 @@ class AgentContext:
     image_engine: str = "imagen"
     image_model: str | None = None
     video_engine: str = "veo3"
-    video_model: str | None = None
+    video_model: str = "hero-only"
     voice_id: str | None = None
     voice_settings: dict | None = None
     tts_speed: float = 0.9
