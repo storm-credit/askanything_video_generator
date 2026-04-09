@@ -78,30 +78,20 @@ class ImageAgent(BaseAgent):
                             topic=ctx.topic,
                         )
                 except Exception as exc:
-                    # image_model이 명시적으로 지정된 경우 폴백 없이 에러 처리
-                    if ctx.image_model:
-                        print(f"[ImageAgent] 컷 {i+1} {ctx.image_model} 실패 (폴백 없음): {exc}")
-                    # 폴백 체인: Imagen → Nano Banana → DALL-E (model 미지정 시에만)
-                    elif ctx.image_engine in ("imagen", "nano_banana"):
-                        if ctx.image_engine == "imagen":
-                            try:
-                                nb_key = get_google_key(ctx.llm_key, service="nano_banana",
-                                                        extra_keys=ctx.gemini_keys_override)
-                                img_path = generate_image_nano_banana(
-                                    cut["prompt"], i, ctx.topic_folder, nb_key,
-                                    gemini_api_keys=ctx.gemini_keys_override,
-                                    topic=ctx.topic)
-                            except Exception:
-                                pass
-                        if not img_path:
-                            dalle_key = ctx.api_key_override or os.getenv("OPENAI_API_KEY")
-                            if dalle_key:
-                                try:
-                                    img_path = generate_image_dalle(
-                                        cut["prompt"], i, ctx.topic_folder, dalle_key,
-                                        topic=ctx.topic)
-                                except Exception:
-                                    print(f"[ImageAgent] 컷 {i+1} 전체 폴백 실패")
+                    # 폴백 체인: Imagen Standard → Nano Banana (DALL-E 제외)
+                    if ctx.image_engine == "imagen":
+                        print(f"[ImageAgent] 컷 {i+1} Imagen 실패 → Nano Banana 폴백: {exc}")
+                        try:
+                            nb_key = get_google_key(ctx.llm_key, service="nano_banana",
+                                                    extra_keys=ctx.gemini_keys_override)
+                            img_path = generate_image_nano_banana(
+                                cut["prompt"], i, ctx.topic_folder, nb_key,
+                                gemini_api_keys=ctx.gemini_keys_override,
+                                topic=ctx.topic)
+                            if img_path:
+                                print(f"[ImageAgent] 컷 {i+1} Nano Banana 폴백 성공")
+                        except Exception as nb_exc:
+                            print(f"[ImageAgent] 컷 {i+1} Nano Banana도 실패: {nb_exc}")
                     else:
                         print(f"[ImageAgent] 컷 {i+1} 이미지 생성 실패: {exc}")
 
