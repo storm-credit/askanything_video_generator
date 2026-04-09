@@ -577,8 +577,17 @@ def add_to_playlist(video_id: str, title: str, tags: list[str],
         return None
 
 
+_QUOTA_DAILY_LIMIT = 10_000
+_QUOTA_CLASSIFY_MAX = _QUOTA_DAILY_LIMIT // 2  # 일일 한도의 50%만 사용
+
 def classify_existing_videos(channel_id: str = None, channel: str = None) -> dict:
-    """기존 업로드 영상들을 재생목록에 소급 분류."""
+    """기존 업로드 영상들을 재생목록에 소급 분류.
+
+    YouTube API 쿼터 보호: 일일 한도(10,000 units)의 50%(5,000 units) 초과 시 중단.
+    - channels.list: 1 unit
+    - playlistItems.list: 1 unit/call
+    - playlistItems.insert: 50 units/call
+    """
     creds = _get_credentials(channel_id)
     if not creds:
         return {"error": "인증 필요"}
@@ -586,18 +595,24 @@ def classify_existing_videos(channel_id: str = None, channel: str = None) -> dic
     youtube = build("youtube", "v3", credentials=creds)
     playlists = ensure_playlists(channel_id, channel)
 
+    quota_used = 0
+
     # 내 채널 영상 조회
     videos = []
     try:
-        # 내 채널 ID 가져오기
         ch_resp = youtube.channels().list(part="contentDetails", mine=True).execute()
+        quota_used += 1
         uploads_id = ch_resp["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
         next_page = None
         while True:
+            if quota_used >= _QUOTA_CLASSIFY_MAX:
+                print(f"[재생목록] 쿼터 한도 도달 ({quota_used}/{_QUOTA_CLASSIFY_MAX}) — 영상 목록 조회 중단")
+                break
             resp = youtube.playlistItems().list(
                 part="snippet", playlistId=uploads_id, maxResults=50, pageToken=next_page,
             ).execute()
+            quota_used += 1
             for item in resp.get("items", []):
                 videos.append({
                     "video_id": item["snippet"]["resourceId"]["videoId"],
@@ -609,14 +624,23 @@ def classify_existing_videos(channel_id: str = None, channel: str = None) -> dic
     except Exception as e:
         return {"error": f"영상 조회 실패: {e}"}
 
-    # 각 영상 분류
+    # 각 영상 분류 (playlistItems.list 1 + insert 50 = 영상당 최대 51 units)
     classified = 0
+    skipped_quota = 0
     for v in videos:
+        # insert 50 + list 1 = 51 units 예약
+        if quota_used + 51 > _QUOTA_CLASSIFY_MAX:
+            skipped_quota += 1
+            print(f"[재생목록] 쿼터 한도 임박 ({quota_used}/{_QUOTA_CLASSIFY_MAX}) — '{v['title']}' 이후 중단")
+            break
         result = add_to_playlist(v["video_id"], v["title"], [], channel_id, channel)
+        # add_to_playlist 내부: list 1 + insert 50 = 최대 51 units
+        quota_used += 51
         if result:
             classified += 1
 
-    return {"success": True, "total": len(videos), "classified": classified}
+    print(f"[재생목록] 완료 — 쿼터 사용: {quota_used}/{_QUOTA_CLASSIFY_MAX} units, 분류: {classified}, 스킵(쿼터): {skipped_quota}")
+    return {"success": True, "total": len(videos), "classified": classified, "skipped_quota": skipped_quota, "quota_used": quota_used}
 
 
 def _build_related_comment(video_id: str, title: str, tags: list[str],

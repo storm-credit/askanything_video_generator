@@ -589,6 +589,30 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
         # ④ HARD FAIL 검증 (코드 레벨 품질 게이트) — 실패 시 1회 구조 수정 재시도
         hard_fails = _validate_hard_fail(cuts, channel)
+
+        # ⑤ 내러티브 아크 검증 — HOOK/LOOP/CLIMAX/PIVOT/RELEASE 구조 체크
+        arc_issues = _validate_narrative_arc(cuts, lang)
+        if arc_issues:
+            print(f"⚠️ [아크 검증] {len(arc_issues)}개 구조 문제:")
+            for issue in arc_issues:
+                print(f"  - {issue}")
+            # 아크 문제 → 구조 검증으로 1회 자동 수정
+            has_hook_fail = any("ARC_HOOK" in i for i in arc_issues)
+            has_loop_fail = any("ARC_LOOP" in i for i in arc_issues)
+            has_climax_pivot = any("ARC_CLIMAX" in i or "ARC_PIVOT" in i for i in arc_issues)
+            if has_hook_fail or has_loop_fail or has_climax_pivot:
+                print("-> [아크 수정] 하이네스 구조 검증으로 자동 수정 시도...")
+                cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model, channel)
+                arc_issues_retry = _validate_narrative_arc(cuts, lang)
+                if arc_issues_retry:
+                    print(f"  [아크] 수정 후 {len(arc_issues_retry)}개 남음 — 결과 유지")
+                else:
+                    print("OK [아크] 자동 수정 성공")
+            if any("ARC_RELEASE" in i for i in arc_issues):
+                print("  [아크 경고] 이완 컷 없음 — 수동 확인 권장 (자동 수정 생략)")
+        else:
+            print("OK [아크 검증] HOOK/LOOP/CLIMAX/PIVOT/RELEASE 통과")
+
         region_warns = _validate_region_style(cuts, channel)
         if hard_fails:
             print(f"⚠️ [HARD FAIL] {len(hard_fails)}개 품질 문제 감지:")
@@ -915,8 +939,8 @@ Return raw JSON only, no markdown code blocks."""
             if field == "script" and new_val != cuts[idx].get("script"):
                 old = cuts[idx]["script"]
                 # 한국어: 수정 후 20자 미만이면 거부, 영어/스페인어: 8단어 미만이면 거부
-                if len(new_val) < len(old) * 0.7:
-                    print(f"  [구조 수정 거부] 컷{idx+1} 글자수 30%+ 감소 ({len(old)}→{len(new_val)}) — 원본 유지")
+                if len(new_val) < len(old) * 0.6:
+                    print(f"  [구조 수정 거부] 컷{idx+1} 글자수 40%+ 감소 ({len(old)}→{len(new_val)}) — 원본 유지")
                     continue
                 if len(new_val) < 15:
                     print(f"  [구조 수정 거부] 컷{idx+1} 수정 후 15자 미만 ({len(new_val)}자) — 원본 유지")
@@ -986,9 +1010,9 @@ Do NOT include markdown code blocks. Return raw JSON only."""
             if 0 <= idx < len(cuts) and item.get("verified"):
                 old_script = cuts[idx]["script"]
                 new_script = item["verified"]
-                # 글자수 보호: 수정 후 30%+ 줄어들면 거부
-                if len(new_script) < len(old_script) * 0.7:
-                    print(f"  [팩트 수정 거부] 컷{idx+1} 글자수 30%+ 감소 ({len(old_script)}→{len(new_script)}) — 원본 유지")
+                # 글자수 보호: 수정 후 40%+ 줄어들면 거부
+                if len(new_script) < len(old_script) * 0.6:
+                    print(f"  [팩트 수정 거부] 컷{idx+1} 글자수 40%+ 감소 ({len(old_script)}→{len(new_script)}) — 원본 유지")
                     continue
                 if len(new_script) < 15:
                     print(f"  [팩트 수정 거부] 컷{idx+1} 15자 미만 ({len(new_script)}자) — 원본 유지")
@@ -1115,6 +1139,68 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                     failures.append(f"TONE_MISMATCH: calm 채널에 감탄부호 과다 ({exclaim_count}/{len(cuts)}컷)")
 
     return failures
+
+
+def _validate_narrative_arc(cuts: list[dict], lang: str = "ko") -> list[str]:
+    """narrative_blueprint 아크 코드 검증 — 감정 태그 기반, LLM 호출 없음.
+
+    검증 항목:
+    1. HOOK: 첫 컷 강한 감정 (SHOCK/URGENCY/DISBELIEF)
+    2. LOOP: 마지막 컷 열린 마무리 감정 (SHOCK/URGENCY 끝 금지)
+    3. CLIMAX: 후반부(컷5~끝-1)에 SHOCK/REVEAL/URGENCY 존재
+    4. PIVOT: 중반부(컷3~5)에 REVEAL/SHOCK 존재 (두 번째 훅)
+    5. RELEASE: WONDER/CALM/IDENTITY 최소 1개
+    """
+    _EMOTION_RE = re.compile(
+        r'\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM)\]', re.IGNORECASE
+    )
+    emotions: list[str | None] = []
+    for cut in cuts:
+        m = _EMOTION_RE.search(cut.get("description", "") or cut.get("text", ""))
+        emotions.append(m.group(1).upper() if m else None)
+
+    if not emotions or len(emotions) < 4:
+        return []  # 컷 수 부족은 다른 검증에서 처리
+
+    issues: list[str] = []
+
+    # 1. HOOK: 첫 컷은 강한 감정 필수
+    high_emotions = {"SHOCK", "URGENCY", "DISBELIEF"}
+    if emotions[0] not in high_emotions:
+        issues.append(
+            f"ARC_HOOK: 첫 컷 감정 [{emotions[0]}] 약함 — SHOCK/URGENCY/DISBELIEF 필요"
+        )
+
+    # 2. LOOP: 마지막 컷은 열린 마무리 (SHOCK/URGENCY로 끝나면 루프 안 됨)
+    if emotions[-1] in ("SHOCK", "URGENCY"):
+        issues.append(
+            f"ARC_LOOP: 마지막 컷 [{emotions[-1]}] — 루프 엔딩에 부적합. CALM/WONDER/IDENTITY 권장"
+        )
+
+    # 3. CLIMAX: 후반부(컷5~끝-1)에 임팩트 감정 존재
+    climax_emotions = {"SHOCK", "REVEAL", "URGENCY", "DISBELIEF"}
+    climax_range = emotions[4:-1] if len(emotions) > 5 else emotions[3:-1]
+    if climax_range and not any(e in climax_emotions for e in climax_range if e):
+        issues.append(
+            "ARC_CLIMAX: 후반부 클라이맥스 없음 — 컷5~끝-1에 SHOCK/REVEAL/URGENCY 필요"
+        )
+
+    # 4. PIVOT: 중반부(컷3~5)에 두 번째 훅 (REVEAL or SHOCK)
+    pivot_range = emotions[2:5] if len(emotions) > 4 else emotions[2:]
+    pivot_emotions = {"REVEAL", "SHOCK", "DISBELIEF", "URGENCY"}
+    if pivot_range and not any(e in pivot_emotions for e in pivot_range if e):
+        issues.append(
+            "ARC_PIVOT: 중반부(컷3~5) 두 번째 훅 없음 — REVEAL/SHOCK/URGENCY 필요"
+        )
+
+    # 5. RELEASE: 이완 컷 (WONDER/CALM/IDENTITY) 최소 1개
+    release_emotions = {"WONDER", "CALM", "IDENTITY"}
+    if not any(e in release_emotions for e in emotions if e):
+        issues.append(
+            "ARC_RELEASE: 이완 컷 없음 — WONDER/CALM/IDENTITY 최소 1개 필요 (파도형 리듬)"
+        )
+
+    return issues
 
 
 def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str, channel: str | None = None) -> list[dict]:
