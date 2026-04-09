@@ -37,8 +37,8 @@ export default function Home() {
   const [llmModel, setLlmModel] = useState(() => loadSetting("llmModel", ""));
   const [imageEngine, setImageEngine] = useState(() => loadSetting("imageEngine", "imagen"));
   const [imageModel, setImageModel] = useState(() => loadSetting("imageModel", ""));
-  const [videoEngine, setVideoEngine] = useState(() => loadSetting("videoEngine", "none"));
-  const [videoModel, setVideoModel] = useState(() => loadSetting("videoModel", ""));
+  const [videoEngine, setVideoEngine] = useState(() => loadSetting("videoEngine", "veo3"));
+  const [videoModel, setVideoModel] = useState(() => loadSetting("videoModel", "hero-only"));
   const [testMode, setTestMode] = useState(() => loadSetting("testMode", false));
   const [isDownloading, setIsDownloading] = useState(false);
   const [language, setLanguage] = useState(() => loadSetting("language", "ko"));
@@ -69,10 +69,10 @@ export default function Home() {
   type ChannelStatus = { progress: number; logs: string[]; status: 'idle' | 'generating' | 'done' | 'error'; videoUrl?: string; errorMsg?: string; genId?: string };
   const [channelResults, setChannelResults] = useState<Record<string, ChannelStatus>>({});
   const multiAbortRefs = useRef<Record<string, AbortController>>({});
-  const [ttsSpeed, setTtsSpeed] = useState(() => loadSetting("ttsSpeed", 0.9));
+  const [ttsSpeed, setTtsSpeed] = useState(() => loadSetting("ttsSpeed", 1.05));
   const [voiceId, setVoiceId] = useState(() => loadSetting("voiceId", "auto"));
   const [captionSize, setCaptionSize] = useState(() => loadSetting("captionSize", 54));
-  const [captionY, setCaptionY] = useState(() => loadSetting("captionY", 35));
+  const [captionY, setCaptionY] = useState(() => loadSetting("captionY", 38));
 
   // 설정 변경 시 localStorage에 자동 저장
   useEffect(() => {
@@ -108,7 +108,7 @@ export default function Home() {
     setLlmModel(_load("llmModel", ""));
     setImageEngine(_load("imageEngine", "imagen"));
     setImageModel(_load("imageModel", ""));
-    setVideoEngine(_load("videoEngine", "none"));
+    setVideoEngine(_load("videoEngine", "veo3"));
     setVideoModel(_load("videoModel", ""));
     setTestMode(_load("testMode", false));
     setLanguage(_load("language", "ko"));
