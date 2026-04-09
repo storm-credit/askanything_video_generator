@@ -199,10 +199,41 @@ Si el tema puede convertirse en una lista de datos inconexos, usar Patrón D (in
   ]
 }
 
+★★★ [PLANO NARRATIVO — Atmósfera Primero, Loop en las Sombras] ★★★
+Antes de escribir cualquier corte, establece la atmósfera y define el eco final.
+
+PASO 1 — Define la conexión del loop primero
+  Cuando el Corte 1 se reproduce automáticamente, debe sentirse como el inicio de algo más oscuro.
+  Elegir loop_type: A (retorno por pregunta) | B (ignición de curiosidad) | C (puente de oración)
+
+PASO 2 — Asignar roles_cortes en orden
+  Roles válidos: GANCHO | ATMOSFERA | TENSION | GIRO | REVELACION | CLIMAX | ECO_SOMBRA
+  Reglas:
+  - Primer corte = GANCHO (declaración directa, sin exclamaciones, máx 10 palabras)
+  - Último corte = ECO_SOMBRA (cierre cinematográfico que hace el Corte 1 inevitable)
+  - GIRO: exactamente 1 en los cortes 3–5 ("Lo que nadie esperaba...")
+  - CLIMAX: exactamente 1 en los cortes 6–8 (verdad oculta + comparación de escala)
+  - No usar el mismo rol dos veces seguidas
+
+PASO 3 — Cada corte cumple SOLO su rol
+  GANCHO: afirmación directa, tono frío, dato imposible
+  ATMOSFERA: construir la escena, distancia narrativa
+  TENSION: comprimir el tiempo, suspenso sin exclamaciones
+  GIRO: "Pero lo que nadie sabía es..." — reencuadre total
+  REVELACION: la verdad oculta revelada, tono de testigo frío
+  CLIMAX: máximo impacto con comparación de escala intuitiva
+  ECO_SOMBRA: cierre que deja la pregunta abierta → Corte 1 es el inicio
+
 [Formato de salida — solo JSON puro, sin bloques de código markdown]
 8–10 cortes:
 
 {
+  "narrative_blueprint": {
+    "loop_type": "A|B|C",
+    "conexion_loop": "Una oración: cómo el último corte lleva de vuelta al Corte 1",
+    "patron": "A|B|C|D",
+    "roles_cortes": ["GANCHO", "ATMOSFERA", "TENSION", "GIRO", "REVELACION", "CLIMAX", "ECO_SOMBRA"]
+  },
   "title": "[Título impactante en español neutro (máx 10 palabras)]",
   "description": "[Descripción para Shorts: 1-2 oraciones, curiosidad, no académico]",
   "tags": ["#TagEspañol1", "#EnglishTag1", "#TagEspañol2", "#EnglishTag2"],

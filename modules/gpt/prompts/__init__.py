@@ -23,6 +23,9 @@ _PROMPT_FILES = {
 @lru_cache(maxsize=8)
 def load_system_prompt(lang: str, channel: str | None = None) -> str:
     """언어/채널에 맞는 시스템 프롬프트를 파일에서 로드.
+    캐시 무효화: load_system_prompt.cache_clear() 호출
+    """
+    """언어/채널에 맞는 시스템 프롬프트를 파일에서 로드.
 
     Args:
         lang: 언어 코드 ("ko", "en", "es" 등)

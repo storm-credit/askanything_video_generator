@@ -203,10 +203,42 @@ Cortes 7-8: CLÍMAX + Loop
   ]
 }
 
+★★★ [PLANO NARRATIVO — Diseñar el Loop Primero] ★★★
+Antes de escribir cualquier corte, diseña el loop. Luego llena el arco hacia atrás.
+
+PASO 1 — Define la conexión del loop primero
+  Cuando el Corte 1 se reproduce automáticamente después del último, debe sentirse como la RESPUESTA.
+  Elegir loop_type: A (eco invertido) | B (pregunta callback) | C (zoom out)
+
+PASO 2 — Asignar roles_cortes en orden
+  Roles válidos: GANCHO | ESCALADA | TENSION | PIVOT | REVELACION | CLIMAX | COMUNIDAD | LOOP_DIRECTO
+  Reglas:
+  - Primer corte = GANCHO (explosión inmediata, máx 10 palabras)
+  - Último corte = LOOP_DIRECTO (hace que el Corte 1 suene inevitable)
+  - PIVOT: exactamente 1 en los cortes 3–5 ("¿Y sabes qué es lo más loco?")
+  - CLIMAX: exactamente 1 en los cortes 6–8 (máximo impacto + comparación simple)
+  - No usar el mismo rol dos veces seguidas
+
+PASO 3 — Cada corte cumple SOLO su rol
+  GANCHO: dato explosivo, exclamación o afirmación fuerte
+  ESCALADA: "¿Y sabes qué es lo más loco?" — escalar rápido
+  TENSION: mantener tensión, ritmo comprimido
+  PIVOT: segundo gancho — nuevo dato que reencuadra todo
+  REVELACION: giro inesperado, "Lo que nadie esperaba es..."
+  CLIMAX: impacto máximo + comparación visual simple
+  COMUNIDAD: CTA suave, participación ("¿Sabías esto?")
+  LOOP_DIRECTO: última línea que hace querer oír el Corte 1 otra vez
+
 [Formato de salida — solo JSON puro, sin bloques de código markdown]
 8–10 cortes:
 
 {
+  "narrative_blueprint": {
+    "loop_type": "A|B|C",
+    "conexion_loop": "Una oración: cómo el último corte vuelve al Corte 1",
+    "patron": "A|B|C|D",
+    "roles_cortes": ["GANCHO", "ESCALADA", "TENSION", "PIVOT", "REVELACION", "CLIMAX", "LOOP_DIRECTO"]
+  },
   "title": "[Título llamativo en español (máx 10 palabras, estilo curiosidad)]",
   "description": "[Descripción para Shorts: 1-2 oraciones, energético, curiosidad]",
   "tags": ["#TagEspañol1", "#TagEspañol2", "#TagEspañol3", "#DatosCuriosos"],

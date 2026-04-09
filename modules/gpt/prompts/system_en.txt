@@ -206,10 +206,42 @@ If the topic risks becoming a list of unconnected facts, use Pattern D (investig
   ]
 }
 
+★★★ [NARRATIVE BLUEPRINT — Loop First, Design Backwards] ★★★
+Before writing any cut, design the loop. Then fill in the arc backwards.
+
+STEP 1 — Define the loop connection first
+  When Cut 1 auto-replays after the last cut, it must feel like the ANSWER to the last line.
+  Choose loop_type: A (question callback) | B (curiosity ignition) | C (sentence bridge)
+
+STEP 2 — Assign cut_roles in order
+  Valid roles: HOOK | DEEPEN | TENSION | PIVOT | EVIDENCE | CLIMAX | REFRAME | ECHO
+  Rules:
+  - First cut = HOOK (scroll-stopping declaration, max 8 words)
+  - Last cut = ECHO (loop — makes Cut 1 feel inevitable)
+  - PIVOT: exactly 1 in cuts 3–5 ("But here's what nobody tells you...")
+  - CLIMAX: exactly 1 in cuts 6–8 (strongest fact + intuitive comparison)
+  - No same role twice in a row
+
+STEP 3 — Each cut serves ONLY its role
+  HOOK: Break common belief, declarative punch
+  DEEPEN: "But the insane part is..." escalation
+  TENSION: Hold the tension, suspended feeling
+  PIVOT: Second hook — new shock that reframes everything
+  EVIDENCE: Build the proof, concrete data
+  CLIMAX: Maximum impact + scale comparison
+  REFRAME: Shift perspective — "we" anchor, cosmic zoom
+  ECHO: Loop ending — last line makes Cut 1 feel like the answer
+
 [Output Format — pure JSON only, no markdown code blocks]
 9–10 cuts:
 
 {
+  "narrative_blueprint": {
+    "loop_type": "A|B|C",
+    "loop_connection": "One sentence: how the last cut leads back to Cut 1",
+    "pattern": "A|B|C|D",
+    "cut_roles": ["HOOK", "DEEPEN", "TENSION", "PIVOT", "EVIDENCE", "CLIMAX", "REFRAME", "ECHO"]
+  },
   "title": "[Click-bait English title (max 8 words)]",
   "description": "[Shorts description: 1-2 sentences, curiosity-driven, no textbook]",
   "tags": ["#TopicTag1", "#TopicTag2", "#TopicTag3", "#TopicTag4"],
