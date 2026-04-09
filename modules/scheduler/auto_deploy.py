@@ -254,10 +254,19 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 task_result["youtube"] = {"url": yt_url} if yt_url else None
                 _deploy_status["completed"] += 1
                 print(f"  ✅ 완료: {channel} — '{ctx.title}'")
-                # 텔레그램 알림
+                # 비용 기록 + 텔레그램 알림
                 try:
-                    from modules.utils.notify import notify_success
+                    from modules.utils.cost_tracker import record_generation_cost
+                    from modules.utils.notify import notify_success, notify_cost
+                    cost_entry = record_generation_cost(
+                        channel=channel, success=True,
+                        llm_usd=ctx.total_cost(),
+                        image_count=ctx.image_count,
+                        video_count=ctx.video_count,
+                        tts_chars=ctx.tts_chars,
+                    )
                     notify_success(channel, ctx.title, video_url=yt_url)
+                    notify_cost(channel, ctx.title, cost_entry, video_url=yt_url)
                 except Exception:
                     pass
 
@@ -279,6 +288,18 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 task_result["error"] = err_str
                 _deploy_status["failed"] += 1
                 print(f"  ❌ 실패: {channel} — '{topic}': {e}")
+                # 실패 시에도 부분 비용 기록
+                try:
+                    from modules.utils.cost_tracker import record_generation_cost
+                    record_generation_cost(
+                        channel=channel, success=False,
+                        llm_usd=ctx.total_cost() if "ctx" in dir() else 0.0,
+                        image_count=ctx.image_count if "ctx" in dir() else 0,
+                        video_count=ctx.video_count if "ctx" in dir() else 0,
+                        tts_chars=ctx.tts_chars if "ctx" in dir() else 0,
+                    )
+                except Exception:
+                    pass
                 traceback.print_exc()
                 # FailureAnalyzer: 실패 분류 + 로그 + 텔레그램 상세 알림
                 try:

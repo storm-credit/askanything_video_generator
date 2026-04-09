@@ -116,6 +116,7 @@ class VideoAgent(BaseAgent):
             if vid_path:
                 ctx.visual_paths[i] = vid_path  # 이미지를 영상으로 교체
                 converted += 1
+                ctx.video_count += 1
                 yield f"  -> 컷 {i+1} 영상 변환 완료\n"
 
         executor.shutdown(wait=False)

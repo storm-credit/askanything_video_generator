@@ -69,8 +69,13 @@ async def _lifespan(app):
                 classify_existing_videos(ch_id, ch)
     add_daily("재생목록 소급 분류", 10, 0, _cron_playlist_classify)
 
+    def _cron_daily_cost():
+        from modules.utils.notify import notify_daily_cost
+        notify_daily_cost()
+    add_daily("일일 비용 결산", 22, 0, _cron_daily_cost)
+
     cron_start()
-    print(f"[크론] 4개 작업 등록 완료")
+    print(f"[크론] 5개 작업 등록 완료")
 
     yield
     cut_executor.shutdown(wait=False)

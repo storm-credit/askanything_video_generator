@@ -97,6 +97,8 @@ class TTSAgent(BaseAgent):
             i, aud_path, timestamps = await coro
             ctx.audio_paths[i] = aud_path
             ctx.word_timestamps[i] = timestamps
+            if aud_path and i < len(ctx.cuts):
+                ctx.tts_chars += len(ctx.cuts[i].get("script", ""))
             status = "OK" if aud_path else "FAILED"
             yield f"  -> 컷 {i+1} TTS {status}\n"
 

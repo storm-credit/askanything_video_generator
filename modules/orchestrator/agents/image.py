@@ -146,6 +146,8 @@ class ImageAgent(BaseAgent):
         for coro in asyncio.as_completed(tasks):
             i, path, ab_vars = await coro
             ctx.visual_paths[i] = path
+            if path:
+                ctx.image_count += 1
             if i == 0 and ab_vars:
                 ctx.cut1_ab_variants = ab_vars
             status = "OK" if path else "FAILED"

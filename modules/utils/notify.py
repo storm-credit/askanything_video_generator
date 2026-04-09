@@ -97,6 +97,28 @@ def notify_warning(context: str, message: str):
     )
 
 
+def notify_cost(channel: str, title: str, cost_entry: dict, video_url: str = ""):
+    """영상 완료 시 비용 표 (원화) 전송."""
+    try:
+        from modules.utils.cost_tracker import build_cost_table_text
+        text = build_cost_table_text(cost_entry, channel, title)
+        if video_url:
+            text += f'\n🔗 <a href="{video_url}">YouTube 보기</a>'
+        _send(text)
+    except Exception as e:
+        print(f"[알림] 비용 알림 실패: {e}")
+
+
+def notify_daily_cost(date: str = ""):
+    """일일 결산 비용 표 (원화) 전송."""
+    try:
+        from modules.utils.cost_tracker import build_daily_summary_text
+        text = build_daily_summary_text(date or None)
+        _send(text)
+    except Exception as e:
+        print(f"[알림] 일일 결산 알림 실패: {e}")
+
+
 def notify_deploy_summary(total: int, completed: int, failed: int, date: str):
     """일일 배포 완료 요약."""
     if failed == 0:

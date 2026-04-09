@@ -101,6 +101,11 @@ class AgentContext:
     # ── 토큰 추적 ──
     token_log: list[TokenUsage] = field(default_factory=list)
 
+    # ── 비용 카운팅 (ImageAgent/VideoAgent/TTSAgent 기록) ──
+    image_count: int = 0
+    video_count: int = 0
+    tts_chars: int = 0
+
     # ── 취소 ──
     _cancelled: bool = False
 
