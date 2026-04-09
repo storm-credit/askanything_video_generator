@@ -10,9 +10,9 @@ import { ProgressPanel } from "../components/ProgressPanel";
 // 채널 프리셋 정의
 const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number; cameraStyle: string }> = {
   askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 1.3, platforms: ["youtube"], captionSize: 58, captionY: 38, cameraStyle: "dynamic" },
-  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 1.20, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
-  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 1.20, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
-  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 1.20, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
+  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
+  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
+  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
 };
 
 // localStorage 유틸
@@ -479,12 +479,12 @@ export default function Home() {
       case "best":
         setLlmProvider("gemini"); setLlmModel("");
         setImageEngine("imagen"); setImageModel("");
-        setVideoEngine("none"); setVideoModel("");
+        setVideoEngine("veo3"); setVideoModel("hero-only");
         break;
       case "balanced":
         setLlmProvider("gemini"); setLlmModel("gemini-2.5-flash");
         setImageEngine("imagen"); setImageModel("");
-        setVideoEngine("none"); setVideoModel("");
+        setVideoEngine("veo3"); setVideoModel("hero-only");
         break;
       case "fast":
         setLlmProvider("gemini"); setLlmModel("gemini-2.5-flash");
