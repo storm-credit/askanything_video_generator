@@ -89,6 +89,30 @@ def _get_credentials(channel_id: str = None) -> Credentials | None:
     return None
 
 
+_CHANNEL_CACHE_FILE = TOKENS_DIR / "_channel_cache.json"
+
+
+def _load_channel_cache() -> dict:
+    """채널 ID → {id, title} 캐시 로드 (API 쿼터 절약)."""
+    try:
+        if _CHANNEL_CACHE_FILE.exists():
+            return json.loads(_CHANNEL_CACHE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_channel_cache(channel_id: str, info: dict):
+    """채널 정보를 캐시에 저장."""
+    try:
+        _ensure_tokens_dir()
+        cache = _load_channel_cache()
+        cache[channel_id] = info
+        _CHANNEL_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"[YouTube] 채널 캐시 저장 실패: {e}")
+
+
 def _save_credentials(creds: Credentials, channel_id: str) -> None:
     _ensure_tokens_dir()
     token_path = TOKENS_DIR / f"{channel_id}.json"
@@ -96,11 +120,14 @@ def _save_credentials(creds: Credentials, channel_id: str) -> None:
 
 
 def get_channels() -> list[dict]:
-    """연동된 모든 YouTube 채널 목록을 반환합니다."""
+    """연동된 모든 YouTube 채널 목록을 반환합니다.
+    채널 정보는 캐시에서 읽어 API 쿼터를 절약합니다.
+    """
     _ensure_tokens_dir()
+    cache = _load_channel_cache()
     channels = []
     for token_file in sorted(TOKENS_DIR.glob("*.json")):
-        if token_file.name == "channel_accounts.json":
+        if token_file.name in ("channel_accounts.json", "_channel_cache.json"):
             continue
         channel_id = token_file.stem
         try:
@@ -109,8 +136,19 @@ def get_channels() -> list[dict]:
                 creds.refresh(Request())
                 token_file.write_text(creds.to_json())
             if creds and creds.valid:
-                info = _get_channel_info(creds)
-                channels.append({"id": info["id"], "title": info["title"], "connected": True})
+                # 캐시 우선 — API 호출 없이 채널 정보 반환
+                cached = cache.get(channel_id)
+                if cached:
+                    channels.append({"id": cached["id"], "title": cached["title"], "connected": True})
+                else:
+                    # 캐시 미스 시에만 API 호출
+                    try:
+                        info = _get_channel_info(creds)
+                        _save_channel_cache(info["id"], info)
+                        channels.append({"id": info["id"], "title": info["title"], "connected": True})
+                    except Exception as api_err:
+                        print(f"[YouTube] 채널 API 호출 실패 ({channel_id}): {api_err}")
+                        channels.append({"id": channel_id, "title": channel_id, "connected": True})
             else:
                 channels.append({"id": channel_id, "title": channel_id, "connected": False})
         except Exception as e:
@@ -201,8 +239,24 @@ def handle_auth_callback(auth_code: str, state: str | None = None) -> dict:
     creds = flow.credentials
 
     # 채널 정보 조회 후 채널 ID로 저장
-    info = _get_channel_info(creds)
-    _save_credentials(creds, info["id"])
+    # 쿼터 초과 시 토큰은 임시 ID로 저장하고 graceful 처리
+    try:
+        info = _get_channel_info(creds)
+        _save_credentials(creds, info["id"])
+        _save_channel_cache(info["id"], info)
+    except Exception as e:
+        err_str = str(e)
+        if "quotaExceeded" in err_str or "403" in err_str:
+            # 쿼터 초과: 채널 ID 모르지만 토큰은 저장
+            fallback_id = f"pending_{channel_preset or 'unknown'}_{int(time.time())}"
+            _save_credentials(creds, fallback_id)
+            print(f"[YouTube] 쿼터 초과로 채널 정보 조회 실패 — 임시 ID '{fallback_id}'로 저장. 내일 재인증 필요.")
+            return {
+                "success": True,
+                "warning": "YouTube API 쿼터 초과 — 채널 정보를 가져오지 못했습니다. 내일(쿼터 리셋 후) 다시 연동해주세요.",
+                "channel": {"id": fallback_id, "title": channel_preset or "Unknown"},
+            }
+        raise
 
     # 채널 프리셋에 YouTube 계정 자동 매핑
     if channel_preset:

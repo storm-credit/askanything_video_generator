@@ -1,4 +1,4 @@
-import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile, useCurrentFrame, interpolate, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Sequence, Video, Audio, Img, staticFile, useCurrentFrame, interpolate, useVideoConfig, Easing } from 'remotion';
 import React, { useCallback, useMemo } from 'react';
 import { Captions } from './Captions';
 
@@ -43,40 +43,58 @@ function isVideoPath(path: string): boolean {
 }
 
 // Ken Burns 효과 프리셋: 스타일별 그룹
-type KenBurnsPreset = { startScale: number; endScale: number; startX: number; endX: number; startY: number; endY: number };
+type EasingType = 'linear' | 'easeInOut' | 'easeIn' | 'easeOut' | 'easeInOutStrong';
+type KenBurnsPreset = { startScale: number; endScale: number; startX: number; endX: number; startY: number; endY: number; easing?: EasingType };
 type CameraStyle = 'auto' | 'dynamic' | 'gentle' | 'static';
+
+// Easing 함수 맵 — 감정별 카메라 무빙 곡선 (선형 이동은 기계적, 비선형이 영화적)
+const EASING_FN: Record<EasingType, (t: number) => number> = {
+  linear: Easing.linear,
+  easeInOut: Easing.inOut(Easing.ease),               // 기본 Ken Burns — 부드러운 시작/끝
+  easeIn: Easing.in(Easing.quad),                     // SHOCK — 갑작스러운 가속
+  easeOut: Easing.out(Easing.quad),                   // REVEAL — 서서히 멈추며 공개
+  easeInOutStrong: Easing.inOut(Easing.cubic),        // TENSION/WONDER — 강한 유지감
+};
 
 const CAMERA_PRESETS: Record<Exclude<CameraStyle, 'auto'>, KenBurnsPreset[]> = {
   dynamic: [
-    { startScale: 1.0, endScale: 1.15, startX: 0, endX: -3, startY: 0, endY: -2 },
-    { startScale: 1.12, endScale: 1.0, startX: -2, endX: 2, startY: -1, endY: 1 },
-    { startScale: 1.0, endScale: 1.1, startX: 2, endX: -2, startY: 0, endY: 0 },
-    { startScale: 1.08, endScale: 1.0, startX: 0, endX: 0, startY: 2, endY: -2 },
-    { startScale: 1.0, endScale: 1.18, startX: -1, endX: 1, startY: -1, endY: 1 },
-    { startScale: 1.15, endScale: 1.02, startX: 3, endX: -1, startY: 0, endY: -1 },
+    { startScale: 1.0, endScale: 1.15, startX: 0, endX: -3, startY: 0, endY: -2, easing: 'easeInOut' },
+    { startScale: 1.12, endScale: 1.0, startX: -2, endX: 2, startY: -1, endY: 1, easing: 'easeInOut' },
+    { startScale: 1.0, endScale: 1.1, startX: 2, endX: -2, startY: 0, endY: 0, easing: 'easeInOut' },
+    { startScale: 1.08, endScale: 1.0, startX: 0, endX: 0, startY: 2, endY: -2, easing: 'easeInOut' },
+    { startScale: 1.0, endScale: 1.18, startX: -1, endX: 1, startY: -1, endY: 1, easing: 'easeInOut' },
+    { startScale: 1.15, endScale: 1.02, startX: 3, endX: -1, startY: 0, endY: -1, easing: 'easeInOut' },
   ],
   gentle: [
-    { startScale: 1.0, endScale: 1.05, startX: 0, endX: -1, startY: 0, endY: -0.5 },
-    { startScale: 1.04, endScale: 1.0, startX: -0.5, endX: 0.5, startY: 0, endY: 0 },
-    { startScale: 1.0, endScale: 1.04, startX: 0.5, endX: -0.5, startY: 0, endY: 0 },
-    { startScale: 1.03, endScale: 1.0, startX: 0, endX: 0, startY: 0.5, endY: -0.5 },
+    { startScale: 1.0, endScale: 1.05, startX: 0, endX: -1, startY: 0, endY: -0.5, easing: 'easeInOutStrong' },
+    { startScale: 1.04, endScale: 1.0, startX: -0.5, endX: 0.5, startY: 0, endY: 0, easing: 'easeInOutStrong' },
+    { startScale: 1.0, endScale: 1.04, startX: 0.5, endX: -0.5, startY: 0, endY: 0, easing: 'easeInOutStrong' },
+    { startScale: 1.03, endScale: 1.0, startX: 0, endX: 0, startY: 0.5, endY: -0.5, easing: 'easeInOutStrong' },
   ],
   static: [
-    { startScale: 1.0, endScale: 1.0, startX: 0, endX: 0, startY: 0, endY: 0 },
+    { startScale: 1.0, endScale: 1.0, startX: 0, endX: 0, startY: 0, endY: 0, easing: 'linear' },
   ],
 };
 
 // Emotion → camera preset mapping (overrides round-robin when emotion tag present)
 type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM';
 const EMOTION_CAMERA: Record<EmotionTag, KenBurnsPreset> = {
-  SHOCK:     { startScale: 1.0, endScale: 1.2, startX: 0, endX: -4, startY: 0, endY: -3 },
-  WONDER:    { startScale: 1.0, endScale: 1.06, startX: -1, endX: 1, startY: 0, endY: -0.5 },
-  TENSION:   { startScale: 1.08, endScale: 1.12, startX: 0, endX: 0, startY: 1, endY: -1 },
-  REVEAL:    { startScale: 1.18, endScale: 1.0, startX: -3, endX: 3, startY: -2, endY: 2 },
-  URGENCY:   { startScale: 1.0, endScale: 1.15, startX: 2, endX: -3, startY: 0, endY: -2 },
-  DISBELIEF: { startScale: 1.1, endScale: 1.0, startX: -2, endX: 2, startY: -1, endY: 1 },
-  IDENTITY:  { startScale: 1.0, endScale: 1.04, startX: 0, endX: 0, startY: -0.5, endY: 0.5 },
-  CALM:      { startScale: 1.0, endScale: 1.02, startX: 0, endX: 0, startY: 0, endY: 0 },
+  // SHOCK: 빠른 가속 줌인 — 충격 순간 카메라가 반응하는 느낌
+  SHOCK:     { startScale: 1.0, endScale: 1.2, startX: 0, endX: -4, startY: 0, endY: -3, easing: 'easeIn' },
+  // WONDER: 느린 부드러운 줌 — 경이감은 서두르지 않음
+  WONDER:    { startScale: 1.0, endScale: 1.06, startX: -1, endX: 1, startY: 0, endY: -0.5, easing: 'easeInOutStrong' },
+  // TENSION: 거의 정지에 가까운 미세 이동 — 정적인 긴장감
+  TENSION:   { startScale: 1.05, endScale: 1.08, startX: 0, endX: 0.5, startY: 0, endY: -0.5, easing: 'easeInOutStrong' },
+  // REVEAL: 줌아웃으로 시작 → 서서히 멈춤 — 비밀이 드러나는 호흡
+  REVEAL:    { startScale: 1.18, endScale: 1.0, startX: -3, endX: 3, startY: -2, endY: 2, easing: 'easeOut' },
+  // URGENCY: 빠른 가속 패닝 — 급박함
+  URGENCY:   { startScale: 1.0, endScale: 1.15, startX: 2, endX: -3, startY: 0, endY: -2, easing: 'easeIn' },
+  // DISBELIEF: 줌인 후 잠깐 머뭄 — "이게 진짜야?" 같은 멈춤 연출
+  DISBELIEF: { startScale: 1.1, endScale: 1.0, startX: -2, endX: 2, startY: -1, endY: 1, easing: 'easeOut' },
+  // IDENTITY: 극도로 미세한 이동 — 감정이 내면으로 향하는 느낌
+  IDENTITY:  { startScale: 1.0, endScale: 1.03, startX: 0, endX: 0, startY: -0.5, endY: 0.5, easing: 'easeInOut' },
+  // CALM: 거의 정지 — 여백과 호흡
+  CALM:      { startScale: 1.0, endScale: 1.02, startX: 0, endX: 0, startY: 0, endY: 0, easing: 'easeInOut' },
 };
 
 const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: number; cameraStyle?: CameraStyle; emotion?: EmotionTag }> = ({ src, durationInFrames, index, cameraStyle = 'dynamic', emotion }) => {
@@ -93,7 +111,11 @@ const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: nu
     preset = presets[index % presets.length];
   }
 
-  const progress = interpolate(frame, [0, durationInFrames], [0, 1], { extrapolateRight: 'clamp' });
+  const easingFn = EASING_FN[preset.easing ?? 'easeInOut'];
+  const progress = interpolate(frame, [0, durationInFrames], [0, 1], {
+    extrapolateRight: 'clamp',
+    easing: easingFn,
+  });
 
   const scale = interpolate(progress, [0, 1], [preset.startScale, preset.endScale]);
   const translateX = interpolate(progress, [0, 1], [preset.startX, preset.endX]);
@@ -166,13 +188,30 @@ const BrandOutro: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
-const FADE_IN_FRAMES = 6; // 250ms @ 24fps
+const FADE_IN_FRAMES = 6;   // 250ms @ 24fps
+const CROSS_FRAMES = 6;      // cross-dissolve 오버랩 길이 (visual only)
 
-const FadeIn: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// Cross-dissolve visual wrapper — 양쪽 fade-in/out, 인접 컷과 오버랩
+const CrossDissolveVisual: React.FC<{
+  children: React.ReactNode;
+  durationInFrames: number;
+  isFirst: boolean;
+  isLast: boolean;
+}> = ({ children, durationInFrames, isFirst, isLast }) => {
   const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, FADE_IN_FRAMES], [0, 1], { extrapolateRight: 'clamp' });
+  // Fade-in: 첫 컷이면 즉시, 나머지는 CROSS_FRAMES 동안 fade
+  const fadeIn = isFirst
+    ? 1
+    : interpolate(frame, [0, CROSS_FRAMES], [0, 1], { extrapolateRight: 'clamp' });
+  // Fade-out: 마지막 컷이면 유지, 나머지는 끝 CROSS_FRAMES 동안 fade
+  const fadeOut = isLast
+    ? 1
+    : interpolate(frame, [durationInFrames - CROSS_FRAMES, durationInFrames], [1, 0], {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      });
   return (
-    <AbsoluteFill style={{ opacity }}>
+    <AbsoluteFill style={{ opacity: Math.min(fadeIn, fadeOut) }}>
       {children}
     </AbsoluteFill>
   );
@@ -326,34 +365,51 @@ export const Main: React.FC<{
         </Sequence>
       )}
 
-      {/* 본편 컷 시퀀스 */}
+      {/* 본편 — Visual 레이어 (cross-dissolve 오버랩, z-index 순서대로) */}
       {cuts.map((cut, index) => {
-        const startFrame = startFrames[index];
+        const isFirst = index === 0;
+        const isLast = index === cuts.length - 1;
+        // 첫 컷 제외: CROSS_FRAMES 앞당겨 시작 → 이전 컷과 오버랩
+        const visualStart = startFrames[index] - (isFirst ? 0 : CROSS_FRAMES);
+        // 마지막 컷 제외: CROSS_FRAMES 연장 → 다음 컷과 오버랩
+        const visualDuration = cut.duration_in_frames + (isFirst ? 0 : CROSS_FRAMES) + (isLast ? 0 : CROSS_FRAMES);
 
-        // staticFile()로 public dir 기준 상대 경로 로드
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
-        const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
         const isVideo = isVideoPath(visualSrc);
         const emotion = extractEmotion(cut);
 
         return (
-          <Sequence key={index} from={startFrame} durationInFrames={cut.duration_in_frames}>
-            <FadeIn>
+          <Sequence key={`v-${index}`} from={visualStart} durationInFrames={visualDuration}>
+            <CrossDissolveVisual durationInFrames={visualDuration} isFirst={isFirst} isLast={isLast}>
               <AbsoluteFill>
-                  {isVideo ? (
-                      <Video
-                        src={visualSrc}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        loop
-                        muted
-                      />
-                  ) : (
-                      <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={emotion} />
-                  )}
-                  <Audio src={audioSrc} />
-                  <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={emotion} />
+                {isVideo ? (
+                  <Video
+                    src={visualSrc}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    loop
+                    muted
+                  />
+                ) : (
+                  <KenBurnsImage src={visualSrc} durationInFrames={cut.duration_in_frames} index={index} cameraStyle={cameraStyle} emotion={emotion} />
+                )}
               </AbsoluteFill>
-            </FadeIn>
+            </CrossDissolveVisual>
+          </Sequence>
+        );
+      })}
+
+      {/* 본편 — Audio + Caption 레이어 (정확한 타이밍, 오버랩 없음) */}
+      {cuts.map((cut, index) => {
+        const startFrame = startFrames[index];
+        const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
+        const emotion = extractEmotion(cut);
+
+        return (
+          <Sequence key={`a-${index}`} from={startFrame} durationInFrames={cut.duration_in_frames}>
+            <AbsoluteFill>
+              <Audio src={audioSrc} />
+              <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={emotion} />
+            </AbsoluteFill>
           </Sequence>
         );
       })}

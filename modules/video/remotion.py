@@ -227,7 +227,7 @@ PLATFORM_CONFIGS = {
 
 def _extract_emotion(description: str) -> str | None:
     """description에서 [SHOCK], [WONDER] 등 감정 태그를 추출합니다."""
-    match = re.search(r'\[(SHOCK|WONDER|TENSION|REVEAL|CALM)\]', description or "", re.IGNORECASE)
+    match = re.search(r'\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM)\]', description or "", re.IGNORECASE)
     return match.group(1).upper() if match else None
 
 
