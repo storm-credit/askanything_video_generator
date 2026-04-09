@@ -1729,7 +1729,7 @@ export default function Home() {
             </div>
 
             {/* AI 엔진 — 항상 표시 */}
-            {<div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
