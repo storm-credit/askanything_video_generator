@@ -229,17 +229,21 @@ async def run_auto_deploy(target_date: datetime | None = None,
 
                 # 포맷 3단계 폴백: Day명시 → 키워드감지 → 채널선호
                 _fmt = job.get("format_type")
+                _fmt_src = "Day명시" if _fmt else None
                 if not _fmt:
                     from modules.gpt.prompts.formats import detect_format_type
                     _fmt = detect_format_type(topic, lang)
+                    if _fmt:
+                        _fmt_src = "키워드"
                 if not _fmt:
                     from modules.utils.channel_config import get_channel_preset as _gcp
                     _preferred = (_gcp(channel) or {}).get("preferred_formats", [])
                     if _preferred:
                         import random as _random
                         _fmt = _random.choice(_preferred)
+                        _fmt_src = "채널선호"
                 if _fmt:
-                    print(f"  [포맷 선택] {channel}: {_fmt} (출처: {'Day명시' if job.get('format_type') else '키워드' if detect_format_type(topic, lang) else '채널선호'})")
+                    print(f"  [포맷 선택] {channel}: {_fmt} (출처: {_fmt_src})")
 
                 ctx = AgentContext(
                     topic=_topic_for_llm,
