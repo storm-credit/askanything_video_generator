@@ -19,6 +19,13 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "min_cuts": 8,
         "max_cuts": 11,  # 빠른 말 + 30-40초 → 최대 11컷
         "target_duration": "30-40",  # 실제 탑 31-39초, 업계 30-50초
+        # 포맷별 최적 컷 수 (tts_speed 1.3x 기준, 목표 30-40초)
+        "format_cuts": {
+            "WHO_WINS":      {"min": 11, "max": 11},  # ~2.7s/컷 → 11컷=30s
+            "IF":            {"min": 10, "max": 11},  # ~3.1s/컷 → 10컷=31s
+            "EMOTIONAL_SCI": {"min": 8,  "max": 9},   # ~3.9s/컷 → 8컷=31s
+            "FACT":          {"min": 10, "max": 11},  # ~3.1s/컷 → 10컷=31s
+        },
         "voice_settings": {
             "stability": 0.35,
             "similarity_boost": 0.82,
@@ -28,7 +35,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "bgm_theme": "random",
         "platforms": ["youtube"],
         "caption_size": 58,
-        "caption_y": 38,
+        "caption_y": 50,
         "camera_style": "dynamic",
         "visual_style": "high contrast, rim lighting from below, single key light, deep shadow fill ratio 70:30, ultra detailed, vibrant colors, cinematic angle, bold composition, highly saturated",
         "tone": "궁금증 자극, 충격적 팩트, 한국식 친근한 반말. Loop: very strong — first and last lines should nearly mirror each other for obvious repetition",
@@ -44,8 +51,15 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
         "tts_speed": 1.05,  # 1.20→1.05 (시청자 피드백: 너무 빠름)
         "min_cuts": 8,
-        "max_cuts": 10,
+        "max_cuts": 11,
         "target_duration": "35-43",  # 실제 탑 28-41초, 스위트스팟 35-43초
+        # 포맷별 최적 컷 수 (tts_speed 1.05x 기준, 목표 35-43초)
+        "format_cuts": {
+            "WHO_WINS":      {"min": 11, "max": 11},  # ~2.8s/컷 → 11컷=31s (짧은문장이라 max)
+            "IF":            {"min": 10, "max": 11},  # ~3.7s/컷 → 10컷=37s
+            "EMOTIONAL_SCI": {"min": 8,  "max": 9},   # ~4.7s/컷 → 8컷=38s
+            "FACT":          {"min": 10, "max": 11},  # ~3.7s/컷 → 10컷=37s
+        },
         "voice_settings": {
             "stability": 0.45,  # 0.65→0.45 (단조로움 제거, 감정 표현력↑)
             "similarity_boost": 0.85,
@@ -55,7 +69,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "bgm_theme": "random",
         "platforms": ["youtube"],
         "caption_size": 54,
-        "caption_y": 38,
+        "caption_y": 50,
         "camera_style": "dynamic",  # gentle→dynamic (시네마틱 유지하되 에너지 추가)
         "visual_style": "cinematic, high contrast, dark background with bright subject, one strong accent color, dramatic rim lighting, ultra detailed, depth of field, lens flare, high realism",
         "tone": "confident authority narrator, compelling and clear, like revealing a secret the viewer needs to know. NOT calm/detached — engaged and forward-driving. Loop: natural callback — last line makes Cut 1 feel like the answer.",
@@ -71,8 +85,15 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
         "tts_speed": 1.05,  # 1.20→1.05 (시청자 피드백: 너무 빠름)
         "min_cuts": 8,
-        "max_cuts": 10,  # 34-42초 → 최대 10컷
+        "max_cuts": 11,
         "target_duration": "34-42",  # 실제 탑 34-45초, 긴 영상 +59% 성과
+        # 포맷별 최적 컷 수 (tts_speed 1.05x 기준, 목표 34-42초)
+        "format_cuts": {
+            "WHO_WINS":      {"min": 11, "max": 11},  # ~2.8s/컷 → 11컷=31s
+            "IF":            {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
+            "EMOTIONAL_SCI": {"min": 8,  "max": 9},   # ~4.7s/컷 → 8컷=38s
+            "FACT":          {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
+        },
         "voice_settings": {
             "stability": 0.4,
             "similarity_boost": 0.82,
@@ -82,7 +103,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "bgm_theme": "random",
         "platforms": ["youtube"],
         "caption_size": 54,
-        "caption_y": 38,
+        "caption_y": 50,
         "camera_style": "dynamic",
         "visual_style": "bright colors, vibrant, golden hour warm tones, high saturation +20%, teal-orange color grade, exaggerated, glowing effects, eye catching, dramatic, colorful",
         "tone": "energetic, curious, fast-paced, engaging, surprising, entertaining, quick rhythm. Loop: strong and direct — simple repetition, punchy endings that mirror the hook",
@@ -98,8 +119,15 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성 — 미국 히스패닉 타겟)
         "tts_speed": 1.05,  # 1.20→1.05 (시청자 피드백: 너무 빠름)
         "min_cuts": 8,
-        "max_cuts": 10,  # 38-48초 → 최대 10컷
+        "max_cuts": 11,
         "target_duration": "38-48",  # 실제 탑 39-46초, 몰입형 최적
+        # 포맷별 최적 컷 수 (tts_speed 1.05x 기준, 목표 38-48초)
+        "format_cuts": {
+            "WHO_WINS":      {"min": 11, "max": 11},  # ~2.8s/컷 → 11컷=31s (몰입형이라 긴컷유도)
+            "IF":            {"min": 11, "max": 11},  # ~3.7s/컷 → 11컷=41s
+            "EMOTIONAL_SCI": {"min": 9,  "max": 10},  # ~4.7s/컷 → 9컷=42s
+            "FACT":          {"min": 11, "max": 11},  # ~3.7s/컷 → 11컷=41s
+        },
 
         "voice_settings": {
             "stability": 0.55,
@@ -110,7 +138,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "bgm_theme": "random",
         "platforms": ["youtube"],
         "caption_size": 54,
-        "caption_y": 38,
+        "caption_y": 50,
         "camera_style": "dynamic",
         "visual_style": "cinematic, single motivated practical light source, 80% frame in shadow, ultra detailed, high contrast focus, mysterious atmosphere, glowing elements, sharp subject, dark background",
         "tone": "neutral Spanish with US Hispanic feel, clear, intriguing, cinematic, controlled, slight emphasis on shocking words, avoid sounding playful. Loop: medium — reconnect naturally but more explicitly than English, less obvious than Latin",

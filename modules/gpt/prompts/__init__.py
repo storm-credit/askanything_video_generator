@@ -79,6 +79,12 @@ IMPORTANT: {lang_name} sentences tend to be longer than English. Keep each scrip
     return prompt
 
 
+def inject_format_prompt(system_prompt: str, format_type: str | None, lang: str) -> str:
+    """포맷 유형 프롬프트를 시스템 프롬프트 뒤에 주입."""
+    from modules.gpt.prompts.formats import inject_format_prompt as _inject
+    return _inject(system_prompt, format_type, lang)
+
+
 def inject_channel_config(system_prompt: str, channel: str | None) -> str:
     """채널별 비주얼 스타일/톤/컷 수를 시스템 프롬프트에 주입.
 

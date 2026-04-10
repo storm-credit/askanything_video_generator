@@ -140,6 +140,8 @@ async def run_auto_deploy(target_date: datetime | None = None,
             "message": f"{target_date.strftime('%m-%d')} Day 파일 없음",
         }
 
+    day_file_path: str | None = result.get("file_path")
+
     # 2. 스케줄 계산
     schedule = calculate_schedule(result["topics"], target_date)
 
@@ -206,9 +208,11 @@ async def run_auto_deploy(target_date: datetime | None = None,
             _deploy_status["current_task"] = f"{channel}: {topic}"
             print(f"\n[자동 배포] {channel} — '{topic}' 생성 시작 (예약: {item['publish_at_kst']})")
 
+            job = item  # alias for clarity
             task_result = {
                 "topic": topic,
                 "channel": channel,
+                "topic_group": item.get("topic_group", topic),
                 "publish_at": publish_at,
                 "status": "pending",
                 "error": None,
@@ -231,6 +235,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     image_model="imagen-4.0-generate-001",  # Standard 고정
                     video_engine="veo3",
                     video_model="hero-only",  # SHOCK/REVEAL만 영상 (비용 절감)
+                    format_type=job.get("format_type"),  # Day 파일 포맷 태그
                     publish_mode="scheduled",
                     scheduled_time=publish_at,
                     gemini_keys_override=os.getenv("GEMINI_API_KEYS", ""),
@@ -252,8 +257,24 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 task_result["status"] = "success"
                 task_result["video_path"] = str(ctx.video_paths) if ctx.video_paths else None
                 task_result["youtube"] = {"url": yt_url} if yt_url else None
+                task_result["format_type"] = job.get("format_type", "FACT")
                 _deploy_status["completed"] += 1
                 print(f"  ✅ 완료: {channel} — '{ctx.title}'")
+                # Day 파일 체크박스: 같은 topic_group의 모든 채널이 완료되면 ✅ 표시
+                if day_file_path:
+                    topic_group = job.get("topic_group", "")
+                    if topic_group:
+                        # 이 topic_group에서 예상 채널 수
+                        group_total = sum(1 for s in schedule if s.get("topic_group") == topic_group)
+                        # 기존 결과에서 성공 수 (현재 포함)
+                        group_success = sum(1 for r in _deploy_status["results"] if r.get("topic_group") == topic_group and r.get("status") == "success")
+                        if group_success + 1 >= group_total:
+                            try:
+                                from modules.utils.obsidian_parser import tick_topic_done
+                                if tick_topic_done(day_file_path, topic_group):
+                                    print(f"  📋 Day 파일 체크: ✅ {topic_group[:30]}")
+                            except Exception:
+                                pass
                 # 비용 기록 + 텔레그램 알림
                 try:
                     from modules.utils.cost_tracker import record_generation_cost
@@ -266,7 +287,8 @@ async def run_auto_deploy(target_date: datetime | None = None,
                         tts_chars=ctx.tts_chars,
                     )
                     notify_success(channel, ctx.title, video_url=yt_url)
-                    notify_cost(channel, ctx.title, cost_entry, video_url=yt_url)
+                    notify_cost(channel, ctx.title, cost_entry, video_url=yt_url,
+                                format_type=job.get("format_type", ""))
                 except Exception:
                     pass
 
@@ -286,6 +308,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
 
                 task_result["status"] = "failed"
                 task_result["error"] = err_str
+                task_result["format_type"] = job.get("format_type", "FACT")
                 _deploy_status["failed"] += 1
                 print(f"  ❌ 실패: {channel} — '{topic}': {e}")
                 # 실패 시에도 부분 비용 기록

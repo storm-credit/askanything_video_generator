@@ -47,6 +47,7 @@ class AgentContext:
     language: str = "ko"
     channel: str | None = None
     reference_url: str | None = None
+    format_type: str | None = None  # WHO_WINS / IF / EMOTIONAL_SCI / FACT
 
     # ── LLM 설정 ──
     llm_provider: str = "gemini"

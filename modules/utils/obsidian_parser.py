@@ -38,7 +38,10 @@ TAG_CHANNEL_MAP = {
 }
 
 # 태그 추출 정규식
-TAG_RE = re.compile(r"\[(공통|KO전용|EN전용|ES전용|ES-US전용|ES-LATAM전용)\]\s*$")
+TAG_RE = re.compile(r"\[(공통|KO전용|EN전용|ES전용|ES-US전용|ES-LATAM전용)\]")
+
+# 포맷 태그 추출 정규식: [포맷:WHO_WINS], [포맷:IF], [포맷:EMOTIONAL_SCI], [포맷:FACT]
+FORMAT_TAG_RE = re.compile(r"\[포맷:([A-Z_]+)\]")
 
 # Day 파일 기본 경로 (도커: /app/obsidian, 로컬: Windows 경로)
 DEFAULT_VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH", "/app/obsidian")
@@ -140,7 +143,12 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
         # 태그 추출: [공통], [KO전용] 등
         tag_match = TAG_RE.search(topic_name_raw)
         topic_tag = tag_match.group(1) if tag_match else "공통"
-        topic_name = TAG_RE.sub("", topic_name_raw).strip()
+        # 포맷 태그 추출: [포맷:WHO_WINS] 등
+        format_match = FORMAT_TAG_RE.search(topic_name_raw)
+        format_type = format_match.group(1) if format_match else "FACT"
+        # 태그 제거 후 순수 주제명
+        topic_name = TAG_RE.sub("", topic_name_raw)
+        topic_name = FORMAT_TAG_RE.sub("", topic_name).strip()
         allowed_channels = TAG_CHANNEL_MAP.get(topic_tag, TAG_CHANNEL_MAP["공통"])
 
         # 뉴스 주제(5번)는 스킵 — "직접 입력" 플레이스홀더
@@ -191,6 +199,7 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
                     "cuts": cuts,
                     "topic_group": topic_name,
                     "topic_tag": topic_tag,
+                    "format_type": format_type,
                     "day_file": day_filename,
                     "source_file": day_filename,
                     "source_section": f"Topic {topic_num}",
@@ -221,6 +230,7 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
                     "cuts": [],  # 스크립트 없음 → cutter.py가 생성
                     "topic_group": topic_name,
                     "topic_tag": topic_tag,
+                    "format_type": format_type,
                     "day_file": day_filename,
                     "source_file": day_filename,
                     "source_section": f"Topic {topic_num}",
@@ -291,7 +301,7 @@ def get_today_topics(channel: str | None = None,
     else:
         path = find_today_file(vault_path)
     if not path:
-        return {"file": None, "topics": []}
+        return {"file": None, "file_path": None, "topics": []}
 
     jobs = parse_day_file(path)
 
@@ -317,6 +327,7 @@ def get_today_topics(channel: str | None = None,
 
     return {
         "file": os.path.basename(path),
+        "file_path": path,
         "topics": list(groups.values()),
     }
 
@@ -325,3 +336,35 @@ def list_day_files(vault_path: str = DEFAULT_VAULT_PATH) -> list[str]:
     """볼트의 모든 Day 파일 목록을 반환합니다."""
     files = glob.glob(os.path.join(vault_path, "Day *.md"))
     return sorted(files)
+
+
+def tick_topic_done(file_path: str, topic_group: str) -> bool:
+    """Day 파일에서 topic_group 섹션 헤더에 ✅ 마크 추가.
+
+    ## N. 주제명  →  ## N. ✅ 주제명
+
+    Args:
+        file_path: Day 파일 전체 경로
+        topic_group: topic_group 명 (순수 주제명, 태그 제외)
+
+    Returns:
+        True if updated, False if already marked or not found
+    """
+    if not os.path.exists(file_path):
+        return False
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # topic_group을 포함하는 ## N. ... 헤더 찾기 (이미 ✅ 있으면 스킵)
+    pattern = re.compile(
+        r"^(## \d+\.\s*)(?!✅)([^\n]*" + re.escape(topic_group[:20]) + r"[^\n]*)",
+        re.MULTILINE,
+    )
+    match = pattern.search(content)
+    if not match:
+        return False
+
+    updated = content[:match.start()] + match.group(1) + "✅ " + match.group(2) + content[match.end():]
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(updated)
+    return True

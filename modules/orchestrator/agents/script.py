@@ -43,6 +43,7 @@ class ScriptAgent(BaseAgent):
                 channel=ctx.channel,
                 llm_model=spec.model_id,
                 reference_url=ctx.reference_url,
+                format_type=ctx.format_type,
                 _skip_verify=True,
                 _skip_visual_director=True,
                 _skip_polish=True,

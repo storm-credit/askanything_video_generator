@@ -311,6 +311,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
                   channel: str | None = None, llm_model: str | None = None,
                   reference_url: str | None = None,
+                  format_type: str | None = None,
                   *, _skip_verify: bool = False, _skip_visual_director: bool = False,
                   _skip_polish: bool = False) -> tuple[list[dict[str, Any]], str, str, list[str]]:
     # YouTube 자막 포함된 topic에서 제목/자막 분리
@@ -329,9 +330,12 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     os.makedirs(os.path.join(base_path, "video"), exist_ok=True)
 
     # System Prompt — 외부 파일에서 로드 (modules/gpt/prompts/)
-    from modules.gpt.prompts import load_system_prompt, inject_channel_config
+    from modules.gpt.prompts import load_system_prompt, inject_channel_config, inject_format_prompt
     system_prompt = load_system_prompt(lang, channel)
     system_prompt = inject_channel_config(system_prompt, channel)
+    if format_type:
+        system_prompt = inject_format_prompt(system_prompt, format_type, lang)
+        print(f"-> [포맷 주입] {format_type} ({lang})")
 
     # ── 이하 원본 인라인 프롬프트 (외부 파일로 이동됨) ──
     # 파일 위치: modules/gpt/prompts/system_{ko,en,es_us,es_latam}.txt
@@ -479,16 +483,28 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     if not cuts and last_error:
         raise RuntimeError(f"[{provider_label}] 모든 재시도 실패 ({max_key_attempts}회)") from last_error
 
+    # 채널×포맷별 min/max_cuts — 확장/트림 전에 먼저 계산
+    from modules.utils.channel_config import get_channel_preset as _get_cuts_preset
+    _cuts_preset = _get_cuts_preset(channel) if channel else None
+    _format_cuts = (_cuts_preset or {}).get("format_cuts", {}).get(format_type or "", {}) if format_type else {}
+    _cfg_max = _format_cuts.get("max") or (_cuts_preset or {}).get("max_cuts", 10)
+    _cfg_min = _format_cuts.get("min") or (_cuts_preset or {}).get("min_cuts", 8)
+    if _format_cuts:
+        print(f"-> [포맷 컷 수] {format_type} × {channel}: {_cfg_min}~{_cfg_max}컷 적용")
+
     # 컷 수 검증 — 초과 시 트림, 부족 시 기존 컷 기반 확장 요청 (전체 재생성 방지)
-    if len(cuts) > 10:
-        print(f"-> [검증] 컷 수 {len(cuts)}개 → 10개로 트림")
-        cuts = cuts[:10]
-    elif len(cuts) < 7:
-        print(f"-> [검증 실패] 컷 수가 {len(cuts)}개입니다. 기존 컷 기반 확장 요청합니다 (목표: 8~10컷).")
+    if len(cuts) > _cfg_max:
+        print(f"-> [검증] 컷 수 {len(cuts)}개 → {_cfg_max}개로 트림")
+        cuts = cuts[:_cfg_max]
+    elif len(cuts) < _cfg_min:
+        _fmt_label = f"[{format_type}] " if format_type else ""
+        print(f"-> [검증 실패] {_fmt_label}컷 수가 {len(cuts)}개입니다. 기존 컷 기반 확장 요청합니다 (목표: {_cfg_min}~{_cfg_max}컷).")
         if llm_provider == "gemini":
             retry_key = get_google_key(None, service="gemini", exclude=exhausted_keys) or current_key
         else:
             retry_key = current_key
+        # 포맷 시스템 프롬프트 재주입 (확장 요청에도 포맷 구조 규칙 적용)
+        retry_system = inject_format_prompt(system_prompt, format_type, lang) if format_type else system_prompt
         # 기존 컷 데이터를 포함하여 확장만 요청 (전체 재생성 대신)
         existing_cuts_json = json.dumps(
             [{"script": c["script"], "description": c.get("text", ""), "image_prompt": c.get("prompt", "")} for c in cuts],
@@ -496,23 +512,22 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
         )
         if lang == "en":
             retry_expansion = (
-                f"\n\nOnly {len(cuts)} cuts were generated. Expand to 7-10 total cuts. "
-                f"You MUST keep ALL existing cuts verbatim and add 2-4 NEW cuts between them to reinforce buildup/climax. "
+                f"\n\nOnly {len(cuts)} cuts were generated. Expand to {_cfg_min}-{_cfg_max} total cuts. "
+                f"You MUST keep ALL existing cuts verbatim and add NEW cuts between them to reinforce buildup/climax. "
                 f"Return the complete expanded array.\nExisting cuts: {existing_cuts_json}"
             )
         elif lang == "es":
             retry_expansion = (
-                f"\n\nSolo se generaron {len(cuts)} cortes. Expande a 7-10 cortes en total. "
-                f"DEBES mantener TODOS los cortes existentes tal cual y agregar 2-4 cortes NUEVOS entre ellos para reforzar el clímax. "
+                f"\n\nSolo se generaron {len(cuts)} cortes. Expande a {_cfg_min}-{_cfg_max} cortes en total. "
+                f"DEBES mantener TODOS los cortes existentes tal cual y agregar cortes NUEVOS entre ellos para reforzar el clímax. "
                 f"Devuelve el array completo expandido.\nCortes existentes: {existing_cuts_json}"
             )
         else:
             retry_expansion = (
-                f"\n\n기존에 {len(cuts)}컷만 생성되었습니다. 총 8~10컷으로 확장하세요. "
-                f"기존 컷은 반드시 그대로 유지하고, 사이에 2~4개의 새 컷을 추가하여 빌드업/클라이맥스를 보강하세요. "
+                f"\n\n기존에 {len(cuts)}컷만 생성되었습니다. 총 {_cfg_min}~{_cfg_max}컷으로 확장하세요. "
+                f"기존 컷은 반드시 그대로 유지하고, 사이에 새 컷을 추가하여 빌드업/클라이맥스를 보강하세요. "
                 f"확장된 전체 배열을 반환하세요.\n기존 컷: {existing_cuts_json}"
             )
-        # 확장 재시도: 자막/팩트체크 컨텍스트 제외하고 토픽+기존 컷만 전달 (토큰 절약)
         if lang == "en":
             retry_user = f"Topic: '{_safe_title}'." + retry_expansion
         elif lang == "es":
@@ -521,8 +536,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             retry_user = f"주제: '{_safe_title}'." + retry_expansion
         _original_cuts = cuts[:]
         try:
-            expanded_cuts, title, tags, _ = _request_cuts(llm_provider, retry_key, system_prompt, retry_user, model_override=llm_model)
-            # 기존 컷이 보존되었는지 검증: 원본 스크립트가 확장 결과에 포함되어야 함
+            expanded_cuts, title, tags, _ = _request_cuts(llm_provider, retry_key, retry_system, retry_user, model_override=llm_model)
             original_scripts = {c["script"].strip()[:30] for c in _original_cuts}
             expanded_scripts = {c["script"].strip()[:30] for c in expanded_cuts}
             preserved = original_scripts & expanded_scripts
@@ -539,14 +553,6 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             else:
                 raise
 
-    # 채널별 min/max_cuts 적용
-    from modules.utils.channel_config import get_channel_preset as _get_cuts_preset
-    _cuts_preset = _get_cuts_preset(channel) if channel else None
-    _cfg_max = (_cuts_preset or {}).get("max_cuts", 10)
-    _cfg_min = (_cuts_preset or {}).get("min_cuts", 8)
-    if len(cuts) > _cfg_max:
-        cuts = cuts[:_cfg_max]
-        print(f"[컷 수 조정] {_cfg_max}컷으로 잘라냄 (채널 max_cuts)")
     if len(cuts) < _cfg_min:
         raise ValueError(f"[HARD FAIL] 컷 수 {len(cuts)}개 — 채널 최소 {_cfg_min}컷 미달. 스크립트 재생성 필요.")
 
@@ -588,6 +594,10 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             cuts = _verify_facts(cuts, fact_context, _topic_title, llm_provider, _verify_key(), lang, llm_model)
 
         # ④ HARD FAIL 검증 (코드 레벨 품질 게이트) — 실패 시 1회 구조 수정 재시도
+        # format_type을 각 컷에 첨부 (포맷별 HARD FAIL 검증용)
+        if format_type:
+            for _c in cuts:
+                _c["format_type"] = format_type.upper()
         hard_fails = _validate_hard_fail(cuts, channel)
 
         # ⑤ 내러티브 아크 검증 — HOOK/LOOP/CLIMAX/PIVOT/RELEASE 구조 체크
@@ -1120,7 +1130,42 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                 if pat.lower() in c.get("script", "").lower():
                     failures.append(f"ACADEMIC_TONE: Cut {ci+1}에 학술체 '{pat}' — '{c['script'][:50]}'")
 
-    # 6) 톤-채널 일치 검증
+    # 6) 포맷별 구조 검증 (format_type이 cuts에 첨부된 경우)
+    fmt_type = (cuts[0].get("format_type") or "").upper() if cuts else ""
+
+    if fmt_type == "WHO_WINS":
+        # 컷1 반드시 [SHOCK]
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" not in first_desc.upper():
+            failures.append("FORMAT_WHO_WINS: 컷1 [SHOCK] 태그 없음 — 대결 선언 컷 필수")
+        # REVEAL이 후반부(컷7 이후)에 있어야 함 (너무 일찍 승자 공개 방지)
+        for ci, c in enumerate(cuts[:min(6, len(cuts))]):
+            desc = c.get("description", c.get("text", ""))
+            if "REVEAL" in desc.upper():
+                failures.append(f"FORMAT_WHO_WINS: 컷{ci+1} 조기 [REVEAL] — 승자는 컷7 이후 공개 필요")
+                break
+
+    elif fmt_type == "EMOTIONAL_SCI":
+        # 컷1에 [SHOCK] 있으면 포맷 위반
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" in first_desc.upper():
+            failures.append("FORMAT_EMOTIONAL_SCI: 컷1 [SHOCK] 금지 — 감성과학은 [WONDER]로 시작 필수")
+        # [WONDER] 또는 [IDENTITY] 최소 2컷 이상
+        warm_count = sum(
+            1 for c in cuts
+            if any(t in (c.get("description", "") or c.get("text", "")).upper()
+                   for t in ("WONDER", "IDENTITY"))
+        )
+        if warm_count < 2:
+            failures.append(f"FORMAT_EMOTIONAL_SCI: WONDER/IDENTITY 태그 {warm_count}컷 (최소 2 필요)")
+
+    elif fmt_type == "IF":
+        # 컷1 반드시 [SHOCK]
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" not in first_desc.upper():
+            failures.append("FORMAT_IF: 컷1 [SHOCK] 태그 없음 — 가정 선언 컷 필수")
+
+    # 7) 톤-채널 일치 검증
     if channel:
         from modules.utils.channel_config import get_channel_preset
         preset = get_channel_preset(channel)

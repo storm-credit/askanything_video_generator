@@ -73,13 +73,19 @@ def calculate_schedule(topics: list[dict],
     channel_topics: dict[str, list[dict]] = {}
     for topic in topics:
         topic_name = topic.get("topic_group", "unknown")
+        format_type = topic.get("format_type", "FACT")
         channels = topic.get("channels", {})
         for ch, ch_data in channels.items():
             if ch not in channel_topics:
                 channel_topics[ch] = []
             # 채널별 제목이 있으면 사용, 없으면 토픽명
             ch_title = ch_data.get("title", topic_name) if isinstance(ch_data, dict) else topic_name
-            channel_topics[ch].append({"topic": topic_name, "title": ch_title})
+            channel_topics[ch].append({
+                "topic": topic_name,
+                "title": ch_title,
+                "format_type": format_type,
+                "topic_group": topic_name,
+            })
 
     # 채널별 시간 분배
     schedule = []
@@ -119,6 +125,8 @@ def calculate_schedule(topics: list[dict],
                 "topic": topic_name,
                 "title": topic_title,  # 채널별 제목 (EN/ES 토픽명)
                 "channel": ch,
+                "topic_group": topic_item.get("topic_group", topic_name) if isinstance(topic_item, dict) else topic_name,
+                "format_type": topic_item.get("format_type", "FACT") if isinstance(topic_item, dict) else "FACT",
                 "publish_at_kst": publish_time.strftime("%Y-%m-%d %H:%M KST"),
                 "publish_at_iso": publish_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "publish_at": publish_time,
