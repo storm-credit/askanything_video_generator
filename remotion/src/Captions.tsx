@@ -215,8 +215,6 @@ export const Captions: React.FC<{
       }}>
         {visibleWords.map((w) => {
           const isActive = currentTime >= w.start && currentTime <= w.end;
-          const isVisible = currentTime >= w.start - 0.5;
-          if (!isVisible) return null;
 
           const isEmphasized = isActive && w.emphasis;
           const color = isActive ? highlightColor : 'rgba(255, 255, 255, 0.82)';
