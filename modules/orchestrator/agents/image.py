@@ -140,7 +140,15 @@ class ImageAgent(BaseAgent):
                 ctx.image_count += 1
             if i == 0 and ab_vars:
                 ctx.cut1_ab_variants = ab_vars
-            status = "OK" if path else "FAILED"
+                # Vision API로 스크롤멈추기 점수 측정 → 최선 선택
+                best = _pick_best_cut1(path, ab_vars, ctx.cuts[0].get("script", ""),
+                                       ctx.gemini_keys_override or ctx.llm_key)
+                if best and best != path:
+                    ctx.visual_paths[0] = best
+                    yield f"  -> 컷1 A/B 최선 선택 완료 (원본 교체)\n"
+                else:
+                    yield f"  -> 컷1 A/B 점수 측정 완료 (원본 유지)\n"
+            status = "OK" if ctx.visual_paths[i] else "FAILED"
             yield f"  -> 컷 {i+1} 이미지 {status}\n"
 
         executor.shutdown(wait=False)
@@ -150,3 +158,85 @@ class ImageAgent(BaseAgent):
             yield f"WARN|[ImageAgent] 이미지 실패: 컷 {failed}\n"
         else:
             yield f"[ImageAgent] 전체 {len(ctx.cuts)}컷 이미지 생성 완료\n"
+
+
+def _score_scroll_stop(image_path: str, script: str, api_key: str) -> float:
+    """Gemini Vision으로 스크롤멈추기 점수 측정 (0.0~1.0).
+
+    채점 기준:
+      +0.30  극단적 색상 대비 (찬색↔난색, 밝음↔어둠)
+      +0.25  시선 고정 구도 (3분할, 중심 충돌, 드라마틱)
+      +0.20  스케일 대비 (극소↔극대, 클로즈업↔와이드)
+      +0.20  주제 명확성 + 즉각적 임팩트
+      +0.05  텍스트 없음
+    """
+    try:
+        import base64
+        from modules.utils.gemini_client import create_gemini_client
+        try:
+            from google.genai import types as _gtypes
+        except ImportError:
+            return 0.5
+
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
+
+        # API 키 파싱 (쉼표 구분 다중 키 지원)
+        _key = api_key.split(",")[0].strip() if api_key and "," in api_key else (api_key or "")
+        if not _key:
+            return 0.5
+
+        client = create_gemini_client(api_key=_key)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[
+                _gtypes.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                f"""Rate this YouTube Shorts thumbnail's scroll-stop power on 0.0-1.0.
+
+Scoring:
++0.30 if extreme color contrast (cool vs warm, bright vs dark)
++0.25 if eye-locking composition (rule of thirds, central conflict, dramatic angle)
++0.20 if scale contrast (tiny vs huge, extreme close-up vs wide)
++0.20 if subject is instantly clear AND visually shocking/beautiful
++0.05 if no text visible
+
+Script context: "{script[:80]}"
+
+Reply ONLY with a single decimal number like 0.75. Nothing else.""",
+            ],
+        )
+        score = float(response.text.strip().split()[0])
+        return max(0.0, min(1.0, score))
+    except Exception as e:
+        print(f"  [Vision 점수] 에러 (0.5 반환): {e}")
+        return 0.5
+
+
+def _pick_best_cut1(original: str | None, variants: list[str], script: str,
+                    api_key: str) -> str | None:
+    """원본 + A/B 변형 중 스크롤멈추기 점수 최고 이미지 반환."""
+    if not original:
+        return None
+
+    candidates = [original] + (variants or [])
+    if len(candidates) == 1:
+        return original
+
+    try:
+        scores: list[tuple[float, str]] = []
+        for path in candidates:
+            if path and os.path.exists(path):
+                s = _score_scroll_stop(path, script, api_key)
+                scores.append((s, path))
+                label = "원본" if path == original else f"변형{candidates.index(path)}"
+                print(f"  [컷1 Vision] {label}: {s:.2f}")
+
+        if not scores:
+            return original
+
+        best_score, best_path = max(scores, key=lambda x: x[0])
+        print(f"  [컷1 A/B] 최선: {best_score:.2f} ({'원본' if best_path == original else '변형'})")
+        return best_path
+    except Exception as e:
+        print(f"  [컷1 A/B] 점수 선택 실패 (원본 유지): {e}")
+        return original

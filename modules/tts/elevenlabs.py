@@ -71,6 +71,20 @@ CHANNEL_VOICE_DESC = {
     "prismtale": "Spanish female, calm steady narration, same energy throughout",
 }
 
+# ── 감정 태그 → TTS speed 배율 (채널 기본 speed에 곱함) ──
+# 채널 기본 speed (예: 1.3) × 감정 배율 → 최종 speed
+# 최소 0.80, 최대 1.50 클램프
+EMOTION_SPEED_FACTOR: dict[str, float] = {
+    "SHOCK":     1.12,   # 빠르고 긴박 — 충격적 사실 전달
+    "URGENCY":   1.10,   # 급박한 상황
+    "TENSION":   1.05,   # 약간 빠름 — 긴장감 유지
+    "DISBELIEF": 1.08,   # 황당함 — 살짝 빠른 반응
+    "REVEAL":    0.98,   # 약간 느림 — 결과 강조 포즈
+    "WONDER":    0.93,   # 경이감 — 여유 있게
+    "IDENTITY":  0.90,   # 공감/감성 — 친밀하게 느리게
+    "CALM":      0.85,   # 차분함 — 가장 느림
+}
+
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
 
 # ── 감정 태그 → ElevenLabs voice_settings 매핑 (폴백 시 감정 반영) ──
@@ -169,6 +183,15 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         _preset = get_channel_preset(channel)
         if _preset:
             speed = _preset.get("tts_speed")
+
+    # 감정 태그 → speed 배율 적용 (채널 기본값에 곱함)
+    if emotion and emotion in EMOTION_SPEED_FACTOR and speed is not None:
+        factor = EMOTION_SPEED_FACTOR[emotion]
+        adjusted = round(speed * factor, 3)
+        adjusted = max(0.80, min(1.50, adjusted))  # 클램프
+        if adjusted != speed:
+            print(f"  [TTS speed] {emotion} 배율 {factor} → {speed:.2f}x → {adjusted:.2f}x")
+        speed = adjusted
 
     # TTS 엔진 선택: QWEN3 우선
     tts_engine = os.getenv("TTS_ENGINE", "qwen3").lower()
