@@ -122,14 +122,6 @@ class ImageAgent(BaseAgent):
                         ", extreme size contrast wide angle, miniature vs giant side by side, forced perspective",
                         ", aerial overview with tiny human silhouette against massive backdrop, awe-inspiring scale",
                     ],
-                    "FUTURE_VISION": [
-                        ", split temporal composition, left=present reality right=futuristic hologram, blue-silver gradient",
-                        ", extreme close-up futuristic technology detail, neon reflections, shallow depth of field",
-                    ],
-                    "TIMELAPSE_HISTORY": [
-                        ", sepia-toned historical scene transitioning to modern color, visual time passage effect",
-                        ", extreme wide establishing shot of ancient landmark, vintage texture overlay, dramatic sky",
-                    ],
                     "PARADOX": [
                         ", bright pastel reassuring scene with subtle dark undertone, hidden duality composition",
                         ", split light-dark frame, half warm sunlight half cold shadow, dramatic contrast",
@@ -137,10 +129,6 @@ class ImageAgent(BaseAgent):
                     "MYSTERY": [
                         ", silhouette in atmospheric fog, single beam of light, noir-style dramatic shadows",
                         ", extreme close-up of mysterious artifact or clue, dark background, spotlight isolation",
-                    ],
-                    "RANKING_DEBATE": [
-                        ", heroic portrait with trophy/podium atmosphere, metallic gold tones, authority lighting",
-                        ", dramatic lineup of all contenders, each with distinct lighting, arena-style composition",
                     ],
                 }
                 variant_suffixes = _format_variants.get(

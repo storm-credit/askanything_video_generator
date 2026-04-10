@@ -27,9 +27,9 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "FACT":          {"min": 10, "max": 11},  # ~3.1s/컷 → 10컷=31s
             "COUNTDOWN":     {"min": 8,  "max": 10},
             "SCALE":         {"min": 7,  "max": 9},
-            "RANKING_DEBATE": {"min": 9, "max": 10},
+            "MYSTERY":       {"min": 8,  "max": 9},
         },
-        "preferred_formats": ["WHO_WINS", "COUNTDOWN", "SCALE", "IF", "FACT", "RANKING_DEBATE"],
+        "preferred_formats": ["WHO_WINS", "COUNTDOWN", "SCALE", "IF", "FACT", "MYSTERY"],
         "voice_settings": {
             "stability": 0.35,
             "similarity_boost": 0.82,
@@ -63,11 +63,11 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "IF":            {"min": 10, "max": 11},  # ~3.7s/컷 → 10컷=37s
             "EMOTIONAL_SCI": {"min": 8,  "max": 9},   # ~4.7s/컷 → 8컷=38s
             "FACT":          {"min": 10, "max": 11},  # ~3.7s/컷 → 10컷=37s
-            "FUTURE_VISION": {"min": 8,  "max": 10},
+            "MYSTERY":       {"min": 8,  "max": 9},
             "SCALE":         {"min": 7,  "max": 9},
             "PARADOX":       {"min": 7,  "max": 8},
         },
-        "preferred_formats": ["FACT", "FUTURE_VISION", "SCALE", "IF", "PARADOX", "EMOTIONAL_SCI"],
+        "preferred_formats": ["FACT", "SCALE", "IF", "PARADOX", "EMOTIONAL_SCI", "MYSTERY"],
         "voice_settings": {
             "stability": 0.45,  # 0.65→0.45 (단조로움 제거, 감정 표현력↑)
             "similarity_boost": 0.85,
@@ -101,11 +101,11 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "IF":            {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
             "EMOTIONAL_SCI": {"min": 8,  "max": 9},   # ~4.7s/컷 → 8컷=38s
             "FACT":             {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
-            "TIMELAPSE_HISTORY": {"min": 8,  "max": 10},
-            "SCALE":             {"min": 7,  "max": 9},
-            "COUNTDOWN":         {"min": 8,  "max": 10},
+            "PARADOX":       {"min": 7,  "max": 8},
+            "SCALE":         {"min": 7,  "max": 9},
+            "COUNTDOWN":     {"min": 8,  "max": 10},
         },
-        "preferred_formats": ["IF", "WHO_WINS", "TIMELAPSE_HISTORY", "SCALE", "FACT", "COUNTDOWN"],
+        "preferred_formats": ["IF", "WHO_WINS", "SCALE", "FACT", "COUNTDOWN", "PARADOX"],
         "voice_settings": {
             "stability": 0.4,
             "similarity_boost": 0.82,
@@ -139,11 +139,11 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "IF":            {"min": 11, "max": 11},  # ~3.7s/컷 → 11컷=41s
             "EMOTIONAL_SCI": {"min": 9,  "max": 10},  # ~4.7s/컷 → 9컷=42s
             "FACT":             {"min": 11, "max": 11},  # ~3.7s/컷 → 11컷=41s
-            "MYSTERY":          {"min": 8,  "max": 9},
-            "PARADOX":          {"min": 7,  "max": 8},
-            "TIMELAPSE_HISTORY": {"min": 9,  "max": 10},
+            "MYSTERY":   {"min": 8,  "max": 9},
+            "PARADOX":   {"min": 7,  "max": 8},
+            "COUNTDOWN": {"min": 8,  "max": 10},
         },
-        "preferred_formats": ["EMOTIONAL_SCI", "MYSTERY", "PARADOX", "FACT", "IF", "TIMELAPSE_HISTORY"],
+        "preferred_formats": ["EMOTIONAL_SCI", "MYSTERY", "PARADOX", "FACT", "IF", "COUNTDOWN"],
         "voice_settings": {
             "stability": 0.55,
             "similarity_boost": 0.85,
