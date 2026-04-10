@@ -381,9 +381,9 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": "ERROR|.env 파일을 확인하거나, 프론트엔드에서 API Key를 입력해주세요.\n"}
                 return
 
-            # 사전 검증: API 쿼터 체크 (경고만, 차단 안 함)
+            # 사전 검증: API 쿼터 체크 (경고만, 차단 안 함) — Qwen3 TTS 시 스킵
             el_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
-            quota_info = check_elevenlabs_quota(el_key)
+            quota_info = check_elevenlabs_quota(el_key) if os.getenv("TTS_ENGINE", "qwen3").lower() != "qwen3" else None
             if quota_info:
                 remaining = quota_info["remaining"]
                 limit = quota_info["limit"]

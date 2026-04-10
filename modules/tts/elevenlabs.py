@@ -125,8 +125,12 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
     else:
         final_desc = base_desc
 
-    # 채널별 speaker 선택
+    # 채널별 speaker 선택 — 미지원 speaker 폴백
     speaker = CHANNEL_SPEAKER.get(channel, "eric")
+    _VALID_SPEAKERS = {"eric", "ryan", "dylan", "serena", "adam", "bella"}
+    if speaker not in _VALID_SPEAKERS:
+        print(f"  [Qwen3-TTS 경고] 미지원 speaker '{speaker}' → 'eric' 폴백")
+        speaker = "eric"
 
     import time as _time
     MAX_RETRIES = 3
@@ -184,8 +188,12 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         if _preset:
             speed = _preset.get("tts_speed")
 
+    # speed 폴백: channel도 없으면 기본 1.0 (감정 배율 적용을 위해)
+    if speed is None:
+        speed = 1.0
+
     # 감정 태그 → speed 배율 적용 (채널 기본값에 곱함)
-    if emotion and emotion in EMOTION_SPEED_FACTOR and speed is not None:
+    if emotion and emotion in EMOTION_SPEED_FACTOR:
         factor = EMOTION_SPEED_FACTOR[emotion]
         adjusted = round(speed * factor, 3)
         adjusted = max(0.80, min(1.50, adjusted))  # 클램프

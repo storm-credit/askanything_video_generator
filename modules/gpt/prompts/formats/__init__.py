@@ -54,7 +54,7 @@ def inject_format_prompt(system_prompt: str, format_type: str | None, lang: str)
 
 # ── 포맷별 컷 수 가이드 ──
 FORMAT_CUT_GUIDE: dict[str, dict[str, int]] = {
-    "WHO_WINS":      {"min": 9, "max": 11, "ideal": 11},
+    "WHO_WINS":      {"min": 11, "max": 11, "ideal": 11},  # 반드시 11컷 (_validate_cuts와 일치)
     "IF":            {"min": 9, "max": 11, "ideal": 10},
     "EMOTIONAL_SCI": {"min": 8, "max": 9,  "ideal": 8},
     "FACT":          {"min": 8, "max": 10, "ideal": 9},

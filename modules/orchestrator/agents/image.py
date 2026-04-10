@@ -95,12 +95,29 @@ class ImageAgent(BaseAgent):
                     else:
                         print(f"[ImageAgent] 컷 {i+1} 이미지 생성 실패: {exc}")
 
-            # 컷1 A/B 테스트 변형
+            # 컷1 A/B 테스트 변형 — 포맷별 최적 구도
             if i == 0 and img_path:
-                variant_suffixes = [
-                    ", extreme close-up shot, macro perspective, filling the entire frame, shallow depth of field",
-                    ", ultra wide establishing shot, tiny human silhouette for scale comparison, dramatic deep perspective",
-                ]
+                _format_variants = {
+                    "WHO_WINS": [
+                        ", dramatic split-frame composition, left vs right, extreme color contrast cool vs warm, both subjects frame-filling",
+                        ", bird's eye view of two opposing forces, symmetrical tension, cinematic wide angle",
+                    ],
+                    "IF": [
+                        ", before-after catastrophic transformation, extreme scale shift, saturated apocalyptic colors",
+                        ", extreme close-up of the moment of change, shallow depth of field, dramatic lighting shift",
+                    ],
+                    "EMOTIONAL_SCI": [
+                        ", warm golden macro shot, soft ethereal glow, intimate human scale, shallow depth of field",
+                        ", overhead perspective with warm amber lighting, gentle soft focus, poetic atmosphere",
+                    ],
+                    "FACT": [
+                        ", extreme close-up shot, macro perspective, filling the entire frame, shallow depth of field",
+                        ", ultra wide establishing shot, tiny human silhouette for scale comparison, dramatic deep perspective",
+                    ],
+                }
+                variant_suffixes = _format_variants.get(
+                    ctx.format_type or "", _format_variants["FACT"]
+                )
                 for vi, suffix in enumerate(variant_suffixes):
                     try:
                         vkey = _get_image_key()
@@ -223,19 +240,34 @@ def _pick_best_cut1(original: str | None, variants: list[str], script: str,
         return original
 
     try:
-        scores: list[tuple[float, str]] = []
-        for path in candidates:
-            if path and os.path.exists(path):
-                s = _score_scroll_stop(path, script, api_key)
-                scores.append((s, path))
-                label = "원본" if path == original else f"변형{candidates.index(path)}"
+        # 병렬 채점 — 순차 대비 ~3x 속도 향상
+        valid = [(i, p) for i, p in enumerate(candidates) if p and os.path.exists(p)]
+        if not valid:
+            return original
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        scores: list[tuple[float, str, str]] = []
+
+        with ThreadPoolExecutor(max_workers=len(valid)) as pool:
+            futures = {
+                pool.submit(_score_scroll_stop, path, script, api_key): (idx, path)
+                for idx, path in valid
+            }
+            for fut in as_completed(futures):
+                idx, path = futures[fut]
+                try:
+                    s = fut.result()
+                except Exception:
+                    s = 0.5
+                label = "원본" if path == original else f"변형{idx}"
+                scores.append((s, path, label))
                 print(f"  [컷1 Vision] {label}: {s:.2f}")
 
         if not scores:
             return original
 
-        best_score, best_path = max(scores, key=lambda x: x[0])
-        print(f"  [컷1 A/B] 최선: {best_score:.2f} ({'원본' if best_path == original else '변형'})")
+        best_score, best_path, best_label = max(scores, key=lambda x: x[0])
+        print(f"  [컷1 A/B] 최선: {best_score:.2f} ({best_label})")
         return best_path
     except Exception as e:
         print(f"  [컷1 A/B] 점수 선택 실패 (원본 유지): {e}")
