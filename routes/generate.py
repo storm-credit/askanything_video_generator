@@ -214,9 +214,12 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
         if not claude_key:
             errors.append("ANTHROPIC_API_KEY (Claude 기획 엔진에 필수)")
 
-    elevenlabs_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
-    if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
-        errors.append("ELEVENLABS_API_KEY (TTS 음성 생성에 필수)")
+    # Qwen3 TTS 엔진 사용 시 ElevenLabs 키 불필요
+    _tts_engine = os.getenv("TTS_ENGINE", "qwen3").lower()
+    if _tts_engine != "qwen3":
+        elevenlabs_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
+        if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
+            errors.append("ELEVENLABS_API_KEY (TTS 음성 생성에 필수)")
 
     # Veo 3: Google API 직접 연동 (GEMINI_API_KEYS 로테이션)
     if video_engine == "veo3":
