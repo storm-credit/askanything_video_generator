@@ -97,11 +97,15 @@ def notify_warning(context: str, message: str):
     )
 
 
-def notify_cost(channel: str, title: str, cost_entry: dict, video_url: str = ""):
+def notify_cost(channel: str, title: str, cost_entry: dict, video_url: str = "",
+                format_type: str = ""):
     """영상 완료 시 비용 표 (원화) 전송."""
     try:
         from modules.utils.cost_tracker import build_cost_table_text
         text = build_cost_table_text(cost_entry, channel, title)
+        if format_type:
+            fmt_emoji = {"WHO_WINS": "⚔️", "IF": "🌀", "EMOTIONAL_SCI": "💫", "FACT": "📡"}.get(format_type.upper(), "")
+            text = f"{fmt_emoji} [{format_type}]\n" + text
         if video_url:
             text += f'\n🔗 <a href="{video_url}">YouTube 보기</a>'
         _send(text)

@@ -41,8 +41,17 @@ class VideoAgent(BaseAgent):
             yield f"WARN|[VideoAgent] {ctx.video_engine}: {reason} — Ken Burns 대체\n"
             return
 
-        # 히어로 컷 판별: SHOCK/REVEAL만 영상 변환 (비용 절감)
-        hero_emotions = {"SHOCK", "REVEAL"}
+        # 히어로 컷 판별: 포맷별 핵심 감정 태그 컷만 Veo3 변환 (비용 절감)
+        # 포맷별 히어로 감정 태그 정의 (description 필드의 실제 태그 기준)
+        # 유효 태그: SHOCK, WONDER, TENSION, REVEAL, URGENCY, DISBELIEF, IDENTITY, CALM
+        _FORMAT_HERO_EMOTIONS: dict[str, set[str]] = {
+            "WHO_WINS":      {"SHOCK", "REVEAL", "DISBELIEF"},  # 배틀: 첫컷+승자공개+반전
+            "IF":            {"SHOCK", "REVEAL", "URGENCY"},    # IF: 선언+결말+긴박감
+            "EMOTIONAL_SCI": {"WONDER", "REVEAL"},              # 감성: 훅+깨달음만 (비용 최적화 $2.42→$1.42)
+            "FACT":          {"SHOCK", "REVEAL"},               # 기본
+        }
+        fmt = (ctx.format_type or "FACT").upper()
+        hero_emotions = _FORMAT_HERO_EMOTIONS.get(fmt, {"SHOCK", "REVEAL"})
         hero_mode = ctx.video_model == "hero-only"
 
         if hero_mode:
@@ -52,7 +61,7 @@ class VideoAgent(BaseAgent):
                 if any(f"[{e}]" in desc for e in hero_emotions):
                     hero_indices.add(i)
             skip_count = len(ctx.cuts) - len(hero_indices)
-            yield f"[VideoAgent] 히어로 모드: {len(hero_indices)}컷만 영상 변환 ({skip_count}컷 Ken Burns)\n"
+            yield f"[VideoAgent] 히어로 모드 ({fmt}): {len(hero_indices)}컷 영상 변환 [{','.join(sorted(hero_emotions))}] ({skip_count}컷 Ken Burns)\n"
         else:
             hero_indices = set(range(len(ctx.cuts)))
             yield f"[VideoAgent] 전체 {len(ctx.cuts)}컷 영상 변환 ({ctx.video_engine})...\n"

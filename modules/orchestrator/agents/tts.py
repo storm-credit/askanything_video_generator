@@ -82,7 +82,7 @@ class TTSAgent(BaseAgent):
                     raw_ts = generate_word_timestamps(
                         audio_path, ctx.api_key_override,
                         language=ctx.language)
-                    timestamps = align_words_with_script(raw_ts, cut.get("script", ""))
+                    timestamps = align_words_with_script(raw_ts, cut.get("script", ""), lang=ctx.language)
                 except Exception as exc:
                     print(f"[TTSAgent] 컷 {i+1} 타임스탬프 실패: {exc}")
 

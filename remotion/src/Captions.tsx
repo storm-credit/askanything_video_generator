@@ -9,10 +9,8 @@ type WordProps = {
 
 // Emphasis detection: numbers, power words, impact vocabulary
 // Based on Dual Coding Theory (Paivio 1986) — highlight ≤20% of words for optimal recall
-// Strategy: explicit allow-list (EMPHASIS) > explicit deny-list (STOPWORDS) > length heuristic
 const EMPHASIS_PATTERNS = /^(\d[\d,.]*[%배만억조x]?|미쳤|미침|소름|진짜|ㄹㅇ|대박|역대|최초|헐|insane|crazy|impossible|dead|never|every|million|billion|trillion|forever|nothing|destroy|vanish|disappear|survive|freeze|explode|entire|massive|infinite|absolute|unbelievable|incredible|shocking|terrifying)$/i;
 
-// Common function words — should NOT be emphasized even if 7+ chars
 const EN_STOPWORDS = new Set([
   'because', 'through', 'should', 'before', 'after', 'about', 'between',
   'during', 'without', 'within', 'around', 'already', 'always', 'another',
@@ -27,54 +25,70 @@ const EN_STOPWORDS = new Set([
 
 type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM';
 
-// 자막 색상 — 노랑 통일 (감정별 색 변경은 쇼츠에서 산만함)
-const HIGHLIGHT_COLOR = '#FFE600';
-
+// 감정별 강조색 — 포맷별 몰입감 강화
 const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
-  SHOCK: HIGHLIGHT_COLOR,
-  WONDER: HIGHLIGHT_COLOR,
-  TENSION: HIGHLIGHT_COLOR,
-  REVEAL: HIGHLIGHT_COLOR,
-  URGENCY: HIGHLIGHT_COLOR,
-  DISBELIEF: HIGHLIGHT_COLOR,
-  IDENTITY: HIGHLIGHT_COLOR,
-  CALM: HIGHLIGHT_COLOR,
+  SHOCK:     '#FF3B30',  // 빨강 — 충격
+  WONDER:    '#00D4FF',  // 하늘 — 경이
+  TENSION:   '#FF9500',  // 주황 — 긴장
+  REVEAL:    '#FFE600',  // 노랑 — 반전 (기본)
+  URGENCY:   '#FF6B35',  // 오렌지레드 — 긴박
+  DISBELIEF: '#FF3B30',  // 빨강 — 불신
+  IDENTITY:  '#34C759',  // 초록 — 공감/정체성
+  CALM:      '#FFFFFF',  // 흰색 — 차분
 };
+const DEFAULT_HIGHLIGHT = '#FFE600';
 
-const getEmotionColor = (_emotion?: string): string => {
-  return HIGHLIGHT_COLOR;
+const getEmotionColor = (emotion?: string): string => {
+  if (!emotion) return DEFAULT_HIGHLIGHT;
+  return EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag] ?? DEFAULT_HIGHLIGHT;
 };
 
 const isEmphasisWord = (word: string): boolean => {
-  const clean = word.replace(/[.,!?;:'"]/g, '').toLowerCase();
-  // 1) Explicit power words — always emphasize
+  const clean = word.replace(/[.,!?;:'"¿¡]/g, '').toLowerCase();
   if (EMPHASIS_PATTERNS.test(clean)) return true;
-  // 2) Numbers — always emphasize (data = impact)
   if (/^\d/.test(clean)) return true;
-  // 3) English content words: 7+ chars, not a stopword (stricter threshold)
   if (clean.length >= 7 && /^[a-z]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
-  // 4) Korean: 4+ Hangul syllables (most 4+ syllable Korean words carry high info density)
   if (clean.length >= 4 && /^[\uAC00-\uD7A3]+$/.test(clean)) return true;
-  // 5) Japanese: katakana words (foreign/technical loanwords are attention-grabbing)
   if (/^[\u30A0-\u30FF]{3,}$/.test(clean)) return true;
-  // 6) Chinese: 4+ character words (longer compounds carry high info density)
   if (clean.length >= 4 && /^[\u4E00-\u9FFF]+$/.test(clean)) return true;
-  // 7) European languages (Spanish, French, German, Portuguese, etc.): 8+ chars
   if (clean.length >= 8 && /^[a-zA-Z\u00C0-\u024F]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
   return false;
 };
 
-export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: number; captionY?: number; emotion?: string; channel?: string }> = ({ wordTimestamps, captionSize = 48, captionY = 28, emotion, channel }) => {
+// 동적 폰트 크기 — 구(phrase) 총 글자 수 기반 자동 축소 (넘침 방지)
+// 가용 너비: 1080 × 0.90 = 972px
+// KO: 글자당 평균 em 0.95 → fontSize = min(90, 972 / (totalChars * 0.95))
+// EN: 글자당 평균 em 0.6 → fontSize = min(88, 972 / (totalChars * 0.6))
+const calcCJKFontSize = (words: { word: string }[], base: number): number => {
+  const totalChars = words.reduce((s, w) => s + w.word.replace(/\s/g, '').length, 0);
+  const maxByWidth = Math.floor(972 / Math.max(totalChars * 0.95, 1));
+  return Math.max(64, Math.min(base, maxByWidth));
+};
+
+const calcLatinFontSize = (words: { word: string }[], base: number): number => {
+  const totalChars = words.reduce((s, w) => s + w.word.length + 1, 0); // +1 for space
+  const maxByWidth = Math.floor(972 / Math.max(totalChars * 0.58, 1));
+  return Math.max(60, Math.min(base, maxByWidth));
+};
+
+export const Captions: React.FC<{
+  wordTimestamps: WordProps[];
+  captionSize?: number;
+  captionY?: number;
+  emotion?: string;
+  channel?: string;
+}> = ({ wordTimestamps, captionSize = 48, captionY = 50, emotion, channel }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
 
-  // 구(phrase) 단위 그룹핑: CJK는 3단어, 라틴은 4단어씩 묶어서 고정 표시
+  // 구(phrase) 단위 그룹핑
   const phrases = useMemo(() => {
     const groups: { words: (WordProps & { index: number; emphasis: boolean })[]; start: number; end: number }[] = [];
-    // 한국어/일본어/중국어 단어가 포함되면 3단어로 제한 (줄 넘김 방지)
     const hasCJK = wordTimestamps.some(w => /[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/.test(w.word));
-    const MAX_WORDS_PER_PHRASE = hasCJK ? 3 : 4;
+    // ES 단어가 길어서 3단어로 제한, EN은 4단어
+    const isES = !hasCJK && wordTimestamps.some(w => /[áéíóúüñ¿¡]/i.test(w.word));
+    const MAX_WORDS_PER_PHRASE = hasCJK ? 3 : isES ? 3 : 4;
     let current: (WordProps & { index: number; emphasis: boolean })[] = [];
 
     wordTimestamps.forEach((w, index) => {
@@ -97,45 +111,61 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
     return groups;
   }, [wordTimestamps]);
 
-  const visibleWords = useMemo(() => {
-    const activePhrase = phrases.find(p => currentTime >= p.start - 0.1 && currentTime <= p.end + 0.2);
-    return activePhrase ? activePhrase.words : [];
+  const visiblePhrase = useMemo(() => {
+    return phrases.find(p => currentTime >= p.start - 0.1 && currentTime <= p.end + 0.2) ?? null;
   }, [phrases, currentTime]);
 
-  // 한국어 감지: CJK 문자 포함 여부
+  const visibleWords = visiblePhrase?.words ?? [];
+
+  // 한국어/CJK 감지
   const isCJK = useMemo(() => {
     return wordTimestamps.some(w => /[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/.test(w.word));
   }, [wordTimestamps]);
 
-  // captionY → paddingBottom 변환 (captionY=28→47%, captionY=38→42%, captionY=50→35%)
+  // EN 채널 감지 (wonderdrop)
+  const isEN = !isCJK && (channel === 'wonderdrop' || (!channel && !wordTimestamps.some(w => /[áéíóúüñ]/i.test(w.word))));
+
+  // captionY → paddingBottom (captionY=50→35%, captionY=38→42%, captionY=28→46%)
   const bottomPadding = `${Math.round(60 - captionY * 0.5)}%`;
 
-  // 한국어: 카라오케 스타일 — 핵심 단어 노란색 + 팝업 애니메이션 (2025 트렌드)
-  if (isCJK) {
-    if (visibleWords.length === 0) return null;
+  const highlightColor = getEmotionColor(emotion);
 
-    const cjkSize = Math.max(captionSize, 95);  // 95px (100만 쇼츠 기준 90~110px)
-    const highlightColor = getEmotionColor(emotion);
+  if (visibleWords.length === 0) return null;
+
+  // ── KO / CJK 자막 (배경박스 + 동적 크기) ──────────────────────────────
+  if (isCJK) {
+    const baseSize = Math.max(captionSize, 90);
+    const fontSize = calcCJKFontSize(visibleWords, baseSize);
 
     return (
       <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: bottomPadding }}>
+        {/* 배경박스 — 한국 상위 채널 필수, AI 이미지 위 가독성 확보 */}
         <div style={{
+          backgroundColor: 'rgba(0, 0, 0, 0.68)',
+          borderRadius: '10px',
+          paddingTop: '14px',
+          paddingBottom: '14px',
+          paddingLeft: '22px',
+          paddingRight: '22px',
+          maxWidth: '90%',
           display: 'flex',
           flexWrap: 'wrap',
           justifyContent: 'center',
           alignItems: 'center',
-          maxWidth: '92%',
-          gap: '12px 14px',
+          gap: '10px 12px',
           textAlign: 'center',
         }}>
           {visibleWords.map((w) => {
             const isActive = currentTime >= w.start && currentTime <= w.end;
             const isEmphasized = isActive && w.emphasis;
-
-            // 색만 변경 — 말하는 단어 노랑, 나머지 흰색 (크기 고정)
-            const color = isActive ? '#FFE600' : '#FFFFFF';
-            const scale = 1;  // 크기 변동 없음
+            const color = isActive ? highlightColor : '#FFFFFF';
             const opacity = currentTime >= w.start - 0.3 ? 1 : 0;
+            // scale 제거 — flex 환경에서 레이아웃 박스 고정이라 옆 글자 침범 발생
+            // 대신 강조 단어는 글로우 강화로 시각적 임팩트 전달
+            const emphasisGlow = isEmphasized
+              ? `, 0px 0px 16px ${highlightColor}, 0px 0px 32px ${highlightColor}80`
+              : '';
+            const baseStroke = '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 0px 2px 0px #000, 0px -2px 0px #000, 2px 0px 0px #000, -2px 0px 0px #000';
 
             return (
               <span
@@ -143,17 +173,16 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
                 style={{
                   fontFamily: "'Pretendard', 'Noto Sans KR', sans-serif",
                   fontWeight: 900,
-                  fontSize: `${cjkSize}px`,
-                  color: color,
-                  textShadow: '3px 3px 0px #000, -3px -3px 0px #000, 3px -3px 0px #000, -3px 3px 0px #000, 0px 3px 0px #000, 0px -3px 0px #000, 3px 0px 0px #000, -3px 0px 0px #000',
-                  WebkitTextStroke: '3px #000000',
+                  fontSize: `${fontSize}px`,
+                  color,
+                  textShadow: `${baseStroke}${emphasisGlow}`,
+                  WebkitTextStroke: '2px #000000',
                   paintOrder: 'stroke fill',
                   lineHeight: '1.3',
-                  letterSpacing: '-1px',
+                  letterSpacing: '-0.5px',
                   display: 'inline-block',
-                  transform: `scale(${scale})`,
                   opacity,
-                  transition: 'transform 0.12s ease-out',
+                  transition: 'color 0.05s ease',
                 }}
               >
                 {w.word}
@@ -165,7 +194,12 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
     );
   }
 
-  // 영어/스페인어: 단어별 하이라이트 + 크기 강화
+  // ── EN / ES 자막 (Hormozi 스타일, EN은 대문자) ────────────────────────
+  const baseLatinSize = Math.max(captionSize, 88);
+  const fontSize = calcLatinFontSize(visibleWords, baseLatinSize);
+
+  const solidOutline = '4px 4px 0px #000, -4px -4px 0px #000, 4px -4px 0px #000, -4px 4px 0px #000, 0px 4px 0px #000, 0px -4px 0px #000, 4px 0px 0px #000, -4px 0px 0px #000, 0px 0px 10px rgba(0,0,0,0.8)';
+
   return (
     <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: bottomPadding }}>
       <div style={{
@@ -173,33 +207,27 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
         flexWrap: 'wrap',
         justifyContent: 'center',
         alignItems: 'center',
-        width: '88%',
-        gap: '14px 16px',
+        width: '90%',
+        gap: '12px 14px',
         textAlign: 'center',
-        lineHeight: '1.4',
+        lineHeight: '1.35',
       }}>
         {visibleWords.map((w) => {
           const isActive = currentTime >= w.start && currentTime <= w.end;
-          const hasPassed = currentTime > w.end;
           const isVisible = currentTime >= w.start - 0.5;
-
-          if (!isVisible && !hasPassed && !isActive) return null;
+          if (!isVisible) return null;
 
           const isEmphasized = isActive && w.emphasis;
-          const highlightColor = getEmotionColor(emotion);
-
-          // 색만 변경 — 말하는 단어 노랑, 나머지 흰색 반투명 (크기 고정)
-          const color = isActive ? '#FFE600' : 'rgba(255, 255, 255, 0.75)';
-
-          const solidOutline = '4px 4px 0px #000, -4px -4px 0px #000, 4px -4px 0px #000, -4px 4px 0px #000, 0px 4px 0px #000, 0px -4px 0px #000, 4px 0px 0px #000, -4px 0px 0px #000, 0px 0px 8px rgba(0,0,0,0.7)';
+          const color = isActive ? highlightColor : 'rgba(255, 255, 255, 0.82)';
+          // scale 제거 — 겹침 방지, 글로우 강화로 대체
           const textShadow = isActive
-            ? `${solidOutline}, 0px 0px 12px #FFE60080, 0px 0px 24px #FFE60040`
+            ? isEmphasized
+              ? `${solidOutline}, 0px 0px 14px ${highlightColor}, 0px 0px 28px ${highlightColor}80`
+              : `${solidOutline}, 0px 0px 10px ${highlightColor}60`
             : solidOutline;
 
-          const scale = 1;  // 크기 변동 없음
-
-          // 영어/ES: 최소 100px 강제 (ES 전문가 권장 95~110px)
-          const latinSize = Math.max(captionSize, 100);
+          // EN: 전부 대문자 (Hormozi 표준), ES: 원문 유지
+          const displayWord = isEN ? w.word.toUpperCase() : w.word;
 
           return (
             <span
@@ -207,17 +235,17 @@ export const Captions: React.FC<{ wordTimestamps: WordProps[]; captionSize?: num
               style={{
                 fontFamily: "'Montserrat', 'Inter', sans-serif",
                 fontWeight: 900,
-                fontSize: `${latinSize}px`,
-                color: color,
-                textShadow: textShadow,
-                WebkitTextStroke: '5px #000000',
+                fontSize: `${fontSize}px`,
+                color,
+                textShadow,
+                WebkitTextStroke: '4px #000000',
                 paintOrder: 'stroke fill',
                 lineHeight: '1.3',
                 display: 'inline-block',
-                transform: `scale(${scale})`,
+                transition: 'color 0.05s ease',
               }}
             >
-              {w.word}
+              {displayWord}
             </span>
           );
         })}
