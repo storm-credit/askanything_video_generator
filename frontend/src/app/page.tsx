@@ -9,10 +9,10 @@ import { ProgressPanel } from "../components/ProgressPanel";
 
 // 채널 프리셋 정의
 const CHANNEL_PRESETS: Record<string, { label: string; flag: string; language: string; ttsSpeed: number; platforms: string[]; captionSize: number; captionY: number; cameraStyle: string }> = {
-  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 1.3, platforms: ["youtube"], captionSize: 58, captionY: 38, cameraStyle: "dynamic" },
-  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
-  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
-  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "dynamic" },
+  askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 1.3, platforms: ["youtube"], captionSize: 58, captionY: 38, cameraStyle: "cinematic" },
+  wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "cinematic" },
+  exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "cinematic" },
+  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "cinematic" },
 };
 
 // localStorage 유틸
@@ -42,7 +42,7 @@ export default function Home() {
   const [testMode, setTestMode] = useState(() => loadSetting("testMode", false));
   const [isDownloading, setIsDownloading] = useState(false);
   const [language, setLanguage] = useState(() => loadSetting("language", "ko"));
-  const [cameraStyle, setCameraStyle] = useState(() => loadSetting("cameraStyle", "auto"));
+  const [cameraStyle, setCameraStyle] = useState(() => loadSetting("cameraStyle", "cinematic"));
   const [bgmTheme, setBgmTheme] = useState(() => loadSetting("bgmTheme", "random"));
 
   // 오늘 할 일 모달
@@ -1707,7 +1707,7 @@ export default function Home() {
                             setPlatforms(ch.platforms);
                             setCaptionSize(ch.captionSize);
                             setCaptionY(ch.captionY);
-                            setCameraStyle(ch.cameraStyle);
+                            // cameraStyle은 사용자 설정 유지 (채널 변경 시 덮어쓰지 않음)
                             setVoiceId("auto");
                           }
                         } else if (newSelected.length === 0) {
