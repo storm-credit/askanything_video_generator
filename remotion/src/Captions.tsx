@@ -160,7 +160,7 @@ export const Captions: React.FC<{
             const isActive = currentTime >= w.start && currentTime <= w.end;
             const isEmphasized = isActive && w.emphasis;
             const color = isActive ? highlightColor : '#FFFFFF';
-            const opacity = currentTime >= w.start - 0.3 ? 1 : 0;
+            const opacity = 1; // 문장 단위로 동시 표시 (phrase visibility가 제어)
             // scale 제거 — flex 환경에서 레이아웃 박스 고정이라 옆 글자 침범 발생
             // 대신 강조 단어는 글로우 강화로 시각적 임팩트 전달
             const emphasisGlow = isEmphasized
