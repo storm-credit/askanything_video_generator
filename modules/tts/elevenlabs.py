@@ -53,14 +53,14 @@ def check_quota(api_key: str = None) -> dict | None:
 
 # ── 감정 태그 → Qwen3 voice_desc 매핑 ──
 EMOTION_VOICE_DESC = {
-    "SHOCK": "shocked, intense, urgent, breathless delivery",
-    "WONDER": "amazed, full of wonder, steady pace, clear enunciation",
-    "TENSION": "tense, suspenseful, building urgency, dark",
-    "REVEAL": "dramatic reveal, confident, triumphant pause",
-    "URGENCY": "urgent, pressing, time-critical, fast",
-    "DISBELIEF": "incredulous, disbelief, questioning tone",
-    "IDENTITY": "proud, personal, intimate warm connection",
-    "CALM": "calm, reflective, gentle, soft delivery",
+    "SHOCK": "shocked, intense, urgent, breathless, punchy delivery",
+    "WONDER": "amazed, bright, energetic, clear articulation",
+    "TENSION": "tense, suspenseful, building energy, dark edge",
+    "REVEAL": "dramatic reveal, confident, strong emphasis",
+    "URGENCY": "urgent, pressing, time-critical, fast, punchy",
+    "DISBELIEF": "incredulous, sharp questioning, emphatic tone",
+    "IDENTITY": "proud, warm, direct, engaging connection",
+    "CALM": "composed, clear, steady, direct delivery",
 }
 
 # ── 채널 → Qwen3 기본 voice_desc ──
@@ -77,12 +77,12 @@ CHANNEL_VOICE_DESC = {
 EMOTION_SPEED_FACTOR: dict[str, float] = {
     "SHOCK":     1.12,   # 빠르고 긴박 — 충격적 사실 전달
     "URGENCY":   1.10,   # 급박한 상황
-    "TENSION":   1.05,   # 약간 빠름 — 긴장감 유지
     "DISBELIEF": 1.08,   # 황당함 — 살짝 빠른 반응
-    "REVEAL":    0.98,   # 약간 느림 — 결과 강조 포즈
-    "WONDER":    0.93,   # 경이감 — 여유 있게
-    "IDENTITY":  0.90,   # 공감/감성 — 친밀하게 느리게
-    "CALM":      0.85,   # 차분함 — 가장 느림
+    "TENSION":   1.05,   # 약간 빠름 — 긴장감 유지
+    "REVEAL":    1.02,   # 결과 강조 — 거의 기본 (늘어짐 방지)
+    "WONDER":    1.00,   # 경이감 — 기본 속도 유지
+    "IDENTITY":  1.00,   # 공감/감성 — 기본 속도 유지
+    "CALM":      0.97,   # 차분함 — 미세하게만 느리게 (슬로우 방지)
 }
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
