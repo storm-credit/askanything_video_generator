@@ -49,6 +49,8 @@ def collect_and_analyze() -> dict[str, Any]:
                 cat = "동물"
             elif any(w in title for w in ["earth", "지구", "volcano", "지진", "tierra", "volcán"]):
                 cat = "지구/자연"
+            elif any(w in title for w in ["역사", "문명", "고대", "왕조", "전쟁", "history", "civilization", "ancient", "empire", "dynasty", "medieval", "historia", "civilización", "antiguo", "imperio"]):
+                cat = "역사"
 
             categories[cat] += 1
             category_views[cat].append(views)

@@ -47,7 +47,9 @@ class AgentContext:
     language: str = "ko"
     channel: str | None = None
     reference_url: str | None = None
-    format_type: str | None = None  # WHO_WINS / IF / EMOTIONAL_SCI / FACT
+    format_type: str | None = None  # WHO_WINS / IF / EMOTIONAL_SCI / FACT 등 11종
+    series_title: str | None = None  # 시리즈 제목 (예: 공룡대전)
+    series_id: str | None = None  # 시리즈 재생목록 ID (업로드 후 기록)
 
     # ── LLM 설정 ──
     llm_provider: str = "gemini"

@@ -88,3 +88,44 @@ async def analytics_failures(date: str = None):
     """실패 로그 요약 조회. date=YYYY-MM-DD로 필터."""
     from modules.orchestrator.agents.failure_analyzer import get_failure_summary
     return {"success": True, **get_failure_summary(date)}
+
+
+@router.post("/analytics/alerts")
+async def analytics_run_alerts(send_telegram: bool = True):
+    """성과 이상 탐지 실행 — 아웃라이어/하락/바이럴."""
+    from modules.analytics.alert_engine import run_alerts
+    result = run_alerts(send_telegram=send_telegram)
+    return {"success": True, **result}
+
+
+@router.get("/analytics/alerts/history")
+async def analytics_alert_history():
+    """최근 알림 이력 조회."""
+    from pathlib import Path
+    import json
+    path = Path("assets/_analytics/alerts/last_run.json")
+    if path.exists():
+        return {"success": True, **json.loads(path.read_text(encoding="utf-8"))}
+    return {"success": True, "alerts": [], "message": "아직 실행된 알림 없음"}
+
+
+@router.get("/analytics/retention/{channel}")
+async def analytics_retention(channel: str, days: int = 7):
+    """완시율(averageViewPercentage) 조회 — Analytics API OAuth 필요."""
+    from modules.analytics.youtube_analytics import fetch_retention_data
+    return {"success": True, **fetch_retention_data(channel, days)}
+
+
+@router.get("/analytics/retention-all")
+async def analytics_retention_all(days: int = 7):
+    """전체 채널 완시율 일괄 조회."""
+    from modules.analytics.youtube_analytics import fetch_all_retention
+    return {"success": True, "channels": fetch_all_retention(days)}
+
+
+@router.get("/analytics/low-retention/{channel}")
+async def analytics_low_retention(channel: str, threshold: float = 30.0):
+    """완시율 기준 미달 영상 목록."""
+    from modules.analytics.youtube_analytics import get_low_retention_videos
+    videos = get_low_retention_videos(channel, threshold)
+    return {"success": True, "channel": channel, "threshold": threshold, "videos": videos}

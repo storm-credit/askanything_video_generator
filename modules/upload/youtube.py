@@ -9,7 +9,12 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/youtube"]
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/youtube",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
+]
 _BASE_DIR = Path(__file__).resolve().parent.parent.parent  # project root
 TOKENS_DIR = _BASE_DIR / "youtube_tokens"
 CLIENT_SECRETS_DIR = _BASE_DIR / "client_secrets"

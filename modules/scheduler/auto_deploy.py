@@ -254,6 +254,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     video_engine="veo3",
                     video_model="hero-only",  # SHOCK/REVEAL만 영상 (비용 절감)
                     format_type=_fmt,  # 3단계 폴백 적용
+                    series_title=job.get("series_title"),  # 시리즈 태그 전달
                     publish_mode="scheduled",
                     scheduled_time=publish_at,
                     gemini_keys_override=os.getenv("GEMINI_API_KEYS", ""),

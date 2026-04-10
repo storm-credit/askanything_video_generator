@@ -264,6 +264,16 @@ HOOK_PATTERNS = {
         "en": [r"Most ", r"Largest", r"First ", r"Oldest", r"Biggest"],
         "es": [r"[Mm]ás ", r"[Mm]ayor", r"[Pp]rimero"],
     },
+    "comparison": {
+        "ko": [r"vs", r" 대 ", r"보다", r"더 [큰작강약]", r"이길까", r"누가"],
+        "en": [r"[Vv]s\.?", r"[Cc]ompare", r"[Bb]igger", r"[Ss]tronger", r"[Bb]etter"],
+        "es": [r"[Vv]s\.?", r"[Cc]ompara", r"[Mm]ejor", r"[Mm]ás fuerte"],
+    },
+    "sensory": {
+        "ko": [r"냄새", r"소리", r"느낌", r"맛이", r"온도", r"만지면"],
+        "en": [r"[Ss]mell", r"[Ss]ound", r"[Ff]eel", r"[Tt]aste", r"[Tt]ouch"],
+        "es": [r"[Oo]lor", r"[Ss]onido", r"[Ss]iente", r"[Ss]abor", r"[Tt]ocar"],
+    },
 }
 
 

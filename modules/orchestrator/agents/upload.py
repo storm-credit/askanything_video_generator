@@ -78,6 +78,10 @@ class UploadAgent(BaseAgent):
                             privacy=yt_privacy,
                             channel_id=account_id,
                             publish_at=yt_publish_at,
+                            format_type=ctx.format_type,
+                            series_title=ctx.series_title,
+                            series_id=ctx.series_id,
+                            channel=ctx.channel or "",
                         ),
                     )
                     if yt_result.get("success"):
