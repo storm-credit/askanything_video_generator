@@ -57,18 +57,19 @@ const isEmphasisWord = (word: string): boolean => {
 
 // 동적 폰트 크기 — 구(phrase) 총 글자 수 기반 자동 축소 (넘침 방지)
 // 가용 너비: 1080 × 0.90 = 972px
-// KO: 글자당 평균 em 0.95 → fontSize = min(90, 972 / (totalChars * 0.95))
-// EN: 글자당 평균 em 0.6 → fontSize = min(88, 972 / (totalChars * 0.6))
+// 실효 폭 = 1080 * 0.9 - padding(44px) - gap(16px) = 912px
+// KO: bold CJK 글자당 ~1.02em, EN: 글자당 ~0.6em
+const EFFECTIVE_WIDTH = 912;
 const calcCJKFontSize = (words: { word: string }[], base: number): number => {
   const totalChars = words.reduce((s, w) => s + w.word.replace(/\s/g, '').length, 0);
-  const maxByWidth = Math.floor(972 / Math.max(totalChars * 0.95, 1));
-  return Math.max(64, Math.min(base, maxByWidth));
+  const maxByWidth = Math.floor(EFFECTIVE_WIDTH / Math.max(totalChars * 1.02, 1));
+  return Math.max(48, Math.min(base, maxByWidth));
 };
 
 const calcLatinFontSize = (words: { word: string }[], base: number): number => {
   const totalChars = words.reduce((s, w) => s + w.word.length + 1, 0); // +1 for space
-  const maxByWidth = Math.floor(972 / Math.max(totalChars * 0.58, 1));
-  return Math.max(60, Math.min(base, maxByWidth));
+  const maxByWidth = Math.floor(EFFECTIVE_WIDTH / Math.max(totalChars * 0.6, 1));
+  return Math.max(52, Math.min(base, maxByWidth));
 };
 
 export const Captions: React.FC<{
