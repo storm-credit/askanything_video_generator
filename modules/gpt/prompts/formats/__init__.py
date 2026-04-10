@@ -5,14 +5,14 @@ from __future__ import annotations
 from .who_wins import FRAGMENT as _WHO_WINS
 from .if_premise import FRAGMENT as _IF_PREMISE
 from .emotional_sci import FRAGMENT as _EMOTIONAL_SCI
+from .fact import FRAGMENT as _FACT
 
 # format_type 키 → 프롬프트 딕셔너리
 _FORMAT_MAP: dict[str, dict[str, str]] = {
     "WHO_WINS": _WHO_WINS,
     "IF": _IF_PREMISE,
     "EMOTIONAL_SCI": _EMOTIONAL_SCI,
-    # FACT 포맷은 base 시스템 프롬프트가 기본 처리 → 추가 주입 없음
-    "FACT": {},
+    "FACT": _FACT,
 }
 
 # ES 변형 모두 "es" 키로 처리

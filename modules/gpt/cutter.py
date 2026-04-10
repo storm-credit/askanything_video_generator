@@ -660,7 +660,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     if not _skip_visual_director:
         try:
             _vd_key = _verify_key()
-            cuts = _enhance_image_prompts(cuts, _topic_title, lang, _vd_key, channel)
+            cuts = _enhance_image_prompts(cuts, _topic_title, lang, _vd_key, channel, format_type)
             # 비주얼 디렉터 후 주제 일치 재검증 (공룡 같은 무관 피사체 방지)
             cuts = _verify_subject_match(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model)
         except Exception as _vd_err:
@@ -1138,6 +1138,9 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
             failures.append("FORMAT_WHO_WINS: 컷1 [SHOCK] 태그 없음 — 대결 선언 컷 필수")
+        # 11컷 필수
+        if len(cuts) != 11:
+            failures.append(f"FORMAT_WHO_WINS: {len(cuts)}컷 → 반드시 11컷 필요 (A소개2+B소개2+대결3+과학1+승자1+루프1+훅1)")
         # REVEAL이 후반부(컷7 이후)에 있어야 함 (너무 일찍 승자 공개 방지)
         for ci, c in enumerate(cuts[:min(6, len(cuts))]):
             desc = c.get("description", c.get("text", ""))
@@ -1146,10 +1149,15 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                 break
 
     elif fmt_type == "EMOTIONAL_SCI":
-        # 컷1에 [SHOCK] 있으면 포맷 위반
+        # 컷1 [WONDER] 필수
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
-        if "SHOCK" in first_desc.upper():
-            failures.append("FORMAT_EMOTIONAL_SCI: 컷1 [SHOCK] 금지 — 감성과학은 [WONDER]로 시작 필수")
+        if "WONDER" not in first_desc.upper():
+            failures.append("FORMAT_EMOTIONAL_SCI: 컷1 [WONDER] 태그 필수 — 감성과학은 경이감으로 시작")
+        # 전체 컷에서 [SHOCK] 금지
+        for ci, c in enumerate(cuts):
+            desc = c.get("description", "") or c.get("text", "")
+            if "SHOCK" in desc.upper():
+                failures.append(f"FORMAT_EMOTIONAL_SCI: 컷{ci+1} [SHOCK] 금지 — 감성과학 포맷은 SHOCK 사용 불가")
         # [WONDER] 또는 [IDENTITY] 최소 2컷 이상
         warm_count = sum(
             1 for c in cuts
@@ -1248,17 +1256,43 @@ def _validate_narrative_arc(cuts: list[dict], lang: str = "ko") -> list[str]:
     return issues
 
 
-def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str, channel: str | None = None) -> list[dict]:
+def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str,
+                           channel: str | None = None, format_type: str | None = None) -> list[dict]:
     """비주얼 디렉터 — image_prompt 전문 리라이트. 컷1은 스크롤 멈추기 특별 강화."""
     if not cuts or not api_key:
         return cuts
 
-    print("-> [비주얼 디렉터] image_prompt 최적화 중...")
+    print(f"-> [비주얼 디렉터] image_prompt 최적화 중... (포맷: {format_type or 'AUTO'})")
 
     # 채널별 비주얼 스타일 (channel_config.py에서 가져옴 — 데이터 일원화)
     from modules.utils.channel_config import get_channel_preset
     _preset = get_channel_preset(channel) if channel else None
     channel_style = (_preset or {}).get("visual_style", "cinematic realism, dramatic lighting")
+
+    # 포맷별 비주얼 전략 — Cut 1 구성 방식과 전체 색감 방향 결정
+    _format_visual_strategy = {
+        "WHO_WINS": (
+            "FORMAT=WHO_WINS: Cut 1 MUST show exact 50/50 left-right split frame with both subjects. "
+            "Left subject uses COOL lighting (blue/purple), right uses WARM lighting (orange/red). "
+            "Subjects face each other, frame-filling, max contrast. "
+            "Cut 10 (REVEAL): winner solo, hero lighting from above, loser blurred behind."
+        ),
+        "IF": (
+            "FORMAT=IF: Cut 1 shows catastrophic transformation — left=normal, right=extreme change "
+            "OR before/after split. Color saturation escalates each cut (+20% per cut). "
+            "Cut 8 (CLIMAX): near-monochrome dark OR explosively bright, fragmentation/scale extreme."
+        ),
+        "EMOTIONAL_SCI": (
+            "FORMAT=EMOTIONAL_SCI: ALL cuts MUST use warm palette (gold/amber/coral/rose). "
+            "NO dark/cold/explosive imagery. Cut 1 = everyday wonder, macro beauty, soft ethereal glow. "
+            "Human scale connection in all cuts. Warm white balance throughout."
+        ),
+        "FACT": (
+            "FORMAT=FACT: Documentary realism. Natural lighting, no oversaturation. "
+            "Cut 1 = authoritative reveal, clear focal subject, professional depth. "
+            "Educational clarity over visual shock. Refined, high-quality aesthetic."
+        ),
+    }.get(format_type or "", "")
 
     scripts_and_prompts = []
     for i, cut in enumerate(cuts):
@@ -1271,32 +1305,32 @@ def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str
     prompt = f"""You are a world-class visual director for viral YouTube Shorts. Your ONLY job is to rewrite image_prompts to maximize scroll-stopping power.
 
 Topic: {topic}
+Format: {format_type or 'AUTO'}
 Channel style: {channel_style}
 Language: {lang}
 
+FORMAT VISUAL STRATEGY (HIGHEST PRIORITY):
+{_format_visual_strategy if _format_visual_strategy else "No specific format — maximize visual impact freely."}
+
 RULES:
-- CRITICAL: Do NOT introduce ANY subject not present in the script. The main subject in each script line MUST be the main subject in the image_prompt. Adding unrelated subjects (dinosaurs, animals, people) that are not in the script = FAIL.
+- CRITICAL: Do NOT introduce ANY subject not present in the script. The main subject in each script line MUST be the main subject in the image_prompt. Adding unrelated subjects = FAIL.
 - Cut 1 is the MOST IMPORTANT. It MUST stop the scroll. Include at least 2: extreme scale contrast, intense color contrast, surreal/impossible scene, eye-locking composition.
 - Every image_prompt must START with the main subject from the script.
 - Describe SCENES, not keywords. Full sentences produce better images.
 - Each cut must use a DIFFERENT camera technique (close-up, wide shot, aerial, macro, etc.)
 - 9:16 vertical composition: place subject in upper or lower 1/3, leave top 15% and bottom 20% clear for subtitles.
 - Negative constraints: NO text, NO watermark, NO logo, NO diagrams, NO infographic, NO cartoon, NO anime, NO illustration.
-- 40-60 words per prompt (Cut 1 may use up to 65 words).
+- 40-60 words per prompt (Cut 1 may use up to 70 words).
 - Output ONLY a JSON array of objects: [{{"cut": 1, "image_prompt": "..."}}, ...]
 
 Current cuts:
 {json.dumps(scripts_and_prompts, ensure_ascii=False)}
 
 IMPORTANT — Color Continuity:
-- All cuts in the same episode MUST share a consistent dominant color palette.
-- Space topics: consistent deep blue-black color space throughout
-- Dinosaur/prehistoric: consistent warm amber-green jungle palette
-- Ocean/deep sea: consistent dark teal-blue underwater palette
-- Earth/geology: consistent warm earth tones throughout
-- Pick ONE dominant hue and maintain it across all cuts.
+- All cuts MUST share a consistent dominant color palette (format strategy overrides this if specified).
+- Space topics: deep blue-black | Prehistoric: warm amber-green | Ocean: dark teal-blue | Earth: warm earth tones
 
-Rewrite ALL image_prompts. Make Cut 1 DRAMATICALLY more visually striking than the rest."""
+Rewrite ALL image_prompts. Make Cut 1 DRAMATICALLY (3x) more visually striking than the rest."""
 
     try:
         raw = _request_gemini_freeform(api_key, prompt, "gemini-2.5-flash")

@@ -340,7 +340,8 @@ export const Main: React.FC<{
   cameraStyle?: CameraStyle;
   captionSize?: number;
   captionY?: number;
-}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle = 'dynamic', captionSize = 48, captionY = 28 }) => {
+  channel?: string;
+}> = ({ cuts, introImagePath, outroImagePath, bgmPath, title, cameraStyle = 'dynamic', captionSize = 48, captionY = 28, channel }) => {
 
   const introFrames = introImagePath ? INTRO_DURATION_FRAMES : 0;
   const outroFrames = outroImagePath ? OUTRO_DURATION_FRAMES : 0;
@@ -408,7 +409,7 @@ export const Main: React.FC<{
           <Sequence key={`a-${index}`} from={startFrame} durationInFrames={cut.duration_in_frames}>
             <AbsoluteFill>
               <Audio src={audioSrc} />
-              <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={emotion} />
+              <Captions wordTimestamps={cut.word_timestamps} captionSize={captionSize} captionY={captionY} emotion={emotion} channel={channel} />
             </AbsoluteFill>
           </Sequence>
         );

@@ -227,6 +227,20 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 _item_title = item.get("title", "")
                 _topic_for_llm = _item_title if (_item_title and _item_title != topic and lang != "ko") else topic
 
+                # 포맷 3단계 폴백: Day명시 → 키워드감지 → 채널선호
+                _fmt = job.get("format_type")
+                if not _fmt:
+                    from modules.gpt.prompts.formats import detect_format_type
+                    _fmt = detect_format_type(topic, lang)
+                if not _fmt:
+                    from modules.utils.channel_config import get_channel_preset as _gcp
+                    _preferred = (_gcp(channel) or {}).get("preferred_formats", [])
+                    if _preferred:
+                        import random as _random
+                        _fmt = _random.choice(_preferred)
+                if _fmt:
+                    print(f"  [포맷 선택] {channel}: {_fmt} (출처: {'Day명시' if job.get('format_type') else '키워드' if detect_format_type(topic, lang) else '채널선호'})")
+
                 ctx = AgentContext(
                     topic=_topic_for_llm,
                     language=lang,
@@ -235,7 +249,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     image_model="imagen-4.0-generate-001",  # Standard 고정
                     video_engine="veo3",
                     video_model="hero-only",  # SHOCK/REVEAL만 영상 (비용 절감)
-                    format_type=job.get("format_type"),  # Day 파일 포맷 태그
+                    format_type=_fmt,  # 3단계 폴백 적용
                     publish_mode="scheduled",
                     scheduled_time=publish_at,
                     gemini_keys_override=os.getenv("GEMINI_API_KEYS", ""),
