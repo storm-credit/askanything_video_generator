@@ -276,6 +276,10 @@ def upload_video(
     category_id: str = "22",
     channel_id: str = None,
     publish_at: str | None = None,
+    format_type: str | None = None,
+    series_id: str | None = None,
+    series_title: str | None = None,
+    channel: str = "",
 ) -> dict:
     """YouTube에 동영상을 업로드합니다.
 
@@ -364,6 +368,20 @@ def upload_video(
     except Exception as e:
         print(f"   [재생목록] 자동 추가 실패 (업로드는 성공): {e}")
 
+    # 포맷별 재생목록 추가
+    if format_type:
+        try:
+            add_to_format_playlist(video_id, format_type, channel_id, channel)
+        except Exception as e:
+            print(f"   [포맷 재생목록] 추가 실패 (업로드는 성공): {e}")
+
+    # 시리즈별 재생목록 추가
+    if series_id and series_title:
+        try:
+            add_to_series_playlist(video_id, series_id, series_title, channel_id, channel)
+        except Exception as e:
+            print(f"   [시리즈 재생목록] 추가 실패 (업로드는 성공): {e}")
+
     # 고정 댓글 — 같은 카테고리 과거 영상 링크
     try:
         comment_text = _build_related_comment(video_id, title, tags or [], channel_id, channel)
@@ -380,30 +398,33 @@ def upload_video(
 
 # 채널별 재생목록 구조 (성과 데이터 기반 — 채널마다 다름)
 CHANNEL_PLAYLISTS = {
-    "askanything": {  # KO — 동물 ✅(1,832), 인체 ❌
+    "askanything": {  # KO — 동물 ✅(1,832), 인체 ✅
         "심해/바다": "🌊 심해의 비밀",
         "우주/행성": "🌌 우주와 행성",
         "공룡/고생물": "🦕 공룡과 고생물",
         "지구/자연": "🌍 지구와 자연",
         "동물": "🐾 놀라운 동물",
+        "인체/심리": "🧠 인체의 비밀",
         "역사": "📜 역사 반전",
         "기타": "🔬 놀라운 과학",
     },
-    "wonderdrop": {  # EN — 동물 ✅(408), 인체 ❌(115)
+    "wonderdrop": {  # EN — 동물 ✅(408), 인체 ✅
         "심해/바다": "🌊 Deep Sea Secrets",
         "우주/행성": "🌌 Space & Planets",
         "공룡/고생물": "🦕 Dinosaurs & Fossils",
         "지구/자연": "🌍 Earth & Nature",
         "동물": "🐾 Amazing Animals",
+        "인체/심리": "🧠 Body & Mind",
         "역사": "📜 History Revealed",
         "기타": "🔬 Amazing Science",
     },
-    "exploratodo": {  # ES-LATAM — 동물 ✅(799), 인체 ❌(342)
+    "exploratodo": {  # ES-LATAM — 동물 ✅(799), 인체 ✅
         "심해/바다": "🌊 Secretos del Mar",
         "우주/행성": "🌌 Espacio y Planetas",
         "공룡/고생물": "🦕 Dinosaurios y Fósiles",
         "지구/자연": "🌍 Tierra y Naturaleza",
         "동물": "🐾 Animales Increíbles",
+        "인체/심리": "🧠 Cuerpo y Mente",
         "역사": "📜 Historia Revelada",
         "기타": "🔬 Ciencia Increíble",
     },
@@ -415,6 +436,46 @@ CHANNEL_PLAYLISTS = {
         "인체/심리": "🧠 Secretos del Cuerpo",
         "역사": "📜 Historia Oculta",
         "기타": "🔬 Ciencia Oculta",
+    },
+}
+
+# ── 포맷별 재생목록 (자동 생성) ──
+FORMAT_PLAYLISTS: dict[str, dict[str, str]] = {
+    "askanything": {
+        "WHO_WINS": "⚔️ 대결 시리즈",
+        "IF": "🌀 만약에 시리즈",
+        "FACT": "🔍 충격 팩트",
+        "EMOTIONAL_SCI": "✨ 감성 과학",
+        "COUNTDOWN": "🏆 TOP 5 랭킹",
+        "SCALE": "📏 스케일 비교",
+        "RANKING_DEBATE": "🗳️ 논쟁 랭킹",
+    },
+    "wonderdrop": {
+        "WHO_WINS": "⚔️ Battle Series",
+        "IF": "🌀 What If Series",
+        "FACT": "🔍 Shocking Facts",
+        "EMOTIONAL_SCI": "✨ Emotional Science",
+        "FUTURE_VISION": "🔮 Future Vision",
+        "SCALE": "📏 Scale Comparison",
+        "PARADOX": "🔄 Mind-Bending Paradox",
+    },
+    "exploratodo": {
+        "WHO_WINS": "⚔️ Serie de Batallas",
+        "IF": "🌀 ¿Y Si...?",
+        "FACT": "🔍 Datos Impactantes",
+        "EMOTIONAL_SCI": "✨ Ciencia Emocional",
+        "TIMELAPSE_HISTORY": "⏳ Viaje en el Tiempo",
+        "SCALE": "📏 Comparación de Escala",
+        "COUNTDOWN": "🏆 TOP 5 Ranking",
+    },
+    "prismtale": {
+        "WHO_WINS": "⚔️ Serie de Batallas",
+        "IF": "🌀 ¿Y Si...?",
+        "FACT": "🔍 Datos Ocultos",
+        "EMOTIONAL_SCI": "✨ Ciencia Emocional",
+        "MYSTERY": "🔮 Misterios Sin Resolver",
+        "PARADOX": "🔄 Paradojas Mentales",
+        "TIMELAPSE_HISTORY": "⏳ Viaje en el Tiempo",
     },
 }
 
@@ -437,10 +498,21 @@ _playlist_cache: dict[str, dict[str, str]] = {}  # channel_id → {category: pla
 _PLAYLIST_CACHE_FILE = TOKENS_DIR / "playlist_map.json"
 
 
-def _detect_category(title: str, tags: list[str] = None, channel: str = None) -> str:
-    """제목+태그에서 카테고리 자동 감지. 채널에 해당 재생목록 없으면 '기타'."""
-    text = (title + " " + " ".join(tags or [])).lower()
+def _detect_category(title: str, tags: list[str] = None, channel: str = None,
+                     format_type: str | None = None) -> str:
+    """제목+태그에서 카테고리 자동 감지. 채널에 해당 재생목록 없으면 '기타'.
+
+    format_type이 주어지고 해당 채널의 FORMAT_PLAYLISTS에 존재하면 format_type을 우선 반환.
+    """
     ch_playlists = CHANNEL_PLAYLISTS.get(channel, {}) if channel else {}
+
+    # 포맷 타입 우선 확인
+    if format_type and channel:
+        fmt = format_type.upper()
+        if fmt in FORMAT_PLAYLISTS.get(channel, {}):
+            return fmt
+
+    text = (title + " " + " ".join(tags or [])).lower()
 
     for category, keywords in _CATEGORY_KEYWORDS.items():
         if any(kw in text for kw in keywords):
@@ -473,6 +545,33 @@ def _save_playlist_cache():
     TOKENS_DIR.mkdir(exist_ok=True)
     with open(_PLAYLIST_CACHE_FILE, "w") as f:
         json.dump(_playlist_cache, f, ensure_ascii=False, indent=2)
+
+
+def _load_ext_playlist_cache() -> dict:
+    """포맷/시리즈 재생목록 캐시 로드 (dict 반환)."""
+    if _PLAYLIST_CACHE_FILE.exists():
+        try:
+            with open(_PLAYLIST_CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_ext_playlist_cache(cache: dict):
+    """포맷/시리즈 재생목록 캐시 저장."""
+    TOKENS_DIR.mkdir(exist_ok=True)
+    # 기존 글로벌 캐시와 병합해서 저장
+    merged = {}
+    if _PLAYLIST_CACHE_FILE.exists():
+        try:
+            with open(_PLAYLIST_CACHE_FILE, "r", encoding="utf-8") as f:
+                merged = json.load(f)
+        except Exception:
+            pass
+    merged.update(cache)
+    with open(_PLAYLIST_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(merged, f, ensure_ascii=False, indent=2)
 
 
 def ensure_playlists(channel_id: str, channel: str) -> dict[str, str]:
@@ -574,6 +673,150 @@ def add_to_playlist(video_id: str, title: str, tags: list[str],
         return playlist_id
     except Exception as e:
         print(f"[재생목록] 추가 실패: {e}")
+        return None
+
+
+def add_to_format_playlist(video_id: str, format_type: str | None,
+                           channel_id: str, channel: str = "") -> str | None:
+    """포맷별 재생목록에 영상 추가. 없으면 자동 생성."""
+    if not format_type or not channel:
+        return None
+
+    fmt = format_type.upper()
+    channel_formats = FORMAT_PLAYLISTS.get(channel, {})
+    playlist_title = channel_formats.get(fmt)
+    if not playlist_title:
+        return None
+
+    try:
+        creds = _get_credentials(channel_id)
+        if not creds:
+            return None
+        youtube = build("youtube", "v3", credentials=creds)
+
+        # 캐시에서 포맷 재생목록 ID 확인
+        cache = _load_ext_playlist_cache()
+        cache_key = f"{channel_id}_format"
+        format_map = cache.get(cache_key, {})
+
+        playlist_id = format_map.get(fmt)
+        if not playlist_id:
+            # 기존 재생목록 검색
+            resp = youtube.playlists().list(part="snippet", mine=True, maxResults=50).execute()
+            for item in resp.get("items", []):
+                if item["snippet"]["title"] == playlist_title:
+                    playlist_id = item["id"]
+                    break
+
+            # 없으면 새로 생성
+            if not playlist_id:
+                body = {
+                    "snippet": {
+                        "title": playlist_title,
+                        "description": f"Auto-generated playlist for {fmt} format videos",
+                    },
+                    "status": {"privacyStatus": "public"},
+                }
+                resp = youtube.playlists().insert(part="snippet,status", body=body).execute()
+                playlist_id = resp["id"]
+                print(f"  ✅ 포맷 재생목록 생성: {playlist_title} ({playlist_id})")
+
+            # 캐시 저장
+            format_map[fmt] = playlist_id
+            cache[cache_key] = format_map
+            _save_ext_playlist_cache(cache)
+
+        # 중복 확인
+        existing = youtube.playlistItems().list(
+            part="snippet", playlistId=playlist_id, maxResults=50
+        ).execute()
+        if any(item["snippet"]["resourceId"]["videoId"] == video_id
+               for item in existing.get("items", [])):
+            return playlist_id
+
+        # 추가
+        youtube.playlistItems().insert(
+            part="snippet",
+            body={
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {"kind": "youtube#video", "videoId": video_id},
+                }
+            },
+        ).execute()
+        print(f"  ✅ 포맷 재생목록 추가: {playlist_title} ← {video_id}")
+        return playlist_id
+    except Exception as e:
+        print(f"  ⚠️ 포맷 재생목록 오류: {e}")
+        return None
+
+
+def add_to_series_playlist(video_id: str, series_id: str | None, series_title: str | None,
+                           channel_id: str, channel: str = "") -> str | None:
+    """시리즈별 재생목록에 영상 추가. 없으면 자동 생성."""
+    if not series_id or not series_title:
+        return None
+
+    try:
+        creds = _get_credentials(channel_id)
+        if not creds:
+            return None
+        youtube = build("youtube", "v3", credentials=creds)
+
+        # 캐시에서 시리즈 재생목록 ID 확인
+        cache = _load_ext_playlist_cache()
+        cache_key = f"{channel_id}_series"
+        series_map = cache.get(cache_key, {})
+
+        playlist_id = series_map.get(series_id)
+        if not playlist_id:
+            # 기존 재생목록 검색
+            resp = youtube.playlists().list(part="snippet", mine=True, maxResults=50).execute()
+            for item in resp.get("items", []):
+                if item["snippet"]["title"] == series_title:
+                    playlist_id = item["id"]
+                    break
+
+            # 없으면 새로 생성
+            if not playlist_id:
+                body = {
+                    "snippet": {
+                        "title": series_title,
+                        "description": f"시리즈: {series_id}",
+                    },
+                    "status": {"privacyStatus": "public"},
+                }
+                resp = youtube.playlists().insert(part="snippet,status", body=body).execute()
+                playlist_id = resp["id"]
+                print(f"  ✅ 시리즈 재생목록 생성: {series_title} ({playlist_id})")
+
+            # 캐시 저장
+            series_map[series_id] = playlist_id
+            cache[cache_key] = series_map
+            _save_ext_playlist_cache(cache)
+
+        # 중복 확인
+        existing = youtube.playlistItems().list(
+            part="snippet", playlistId=playlist_id, maxResults=50
+        ).execute()
+        if any(item["snippet"]["resourceId"]["videoId"] == video_id
+               for item in existing.get("items", [])):
+            return playlist_id
+
+        # 추가
+        youtube.playlistItems().insert(
+            part="snippet",
+            body={
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {"kind": "youtube#video", "videoId": video_id},
+                }
+            },
+        ).execute()
+        print(f"  ✅ 시리즈 재생목록 추가: {series_title} ← {video_id}")
+        return playlist_id
+    except Exception as e:
+        print(f"  ⚠️ 시리즈 재생목록 오류: {e}")
         return None
 
 

@@ -1173,6 +1173,68 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         if "SHOCK" not in first_desc.upper():
             failures.append("FORMAT_IF: 컷1 [SHOCK] 태그 없음 — 가정 선언 컷 필수")
 
+    elif fmt_type == "COUNTDOWN":
+        # 컷1 [SHOCK] 필수
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" not in first_desc.upper():
+            failures.append("FORMAT_COUNTDOWN: 컷1 [SHOCK] 태그 없음 — TOP N 선언 컷 필수")
+        # [REVEAL] 태그 존재 확인 (1위 공개)
+        has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
+        if not has_reveal:
+            failures.append("FORMAT_COUNTDOWN: [REVEAL] 태그 없음 — 1위 공개 컷 필수")
+
+    elif fmt_type == "SCALE":
+        # 컷1 [SHOCK] 필수
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" not in first_desc.upper():
+            failures.append("FORMAT_SCALE: 컷1 [SHOCK] 태그 없음 — 스케일 충격 선언 필수")
+
+    elif fmt_type == "FUTURE_VISION":
+        # 컷1 [SHOCK] 필수
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" not in first_desc.upper():
+            failures.append("FORMAT_FUTURE_VISION: 컷1 [SHOCK] 태그 없음 — 미래 충격 선언 필수")
+
+    elif fmt_type == "TIMELAPSE_HISTORY":
+        # 컷1 [SHOCK] 필수
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" not in first_desc.upper():
+            failures.append("FORMAT_TIMELAPSE_HISTORY: 컷1 [SHOCK] 태그 없음 — 시간 점프 선언 필수")
+
+    elif fmt_type == "PARADOX":
+        # 컷1 [SHOCK] 필수
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" not in first_desc.upper():
+            failures.append("FORMAT_PARADOX: 컷1 [SHOCK] 태그 없음 — 통념 충격 선언 필수")
+        # 최소 2개 반전: TENSION + REVEAL 또는 DISBELIEF 필수
+        reversal_count = sum(
+            1 for c in cuts
+            if any(t in (c.get("description", "") or c.get("text", "")).upper()
+                   for t in ("REVEAL", "DISBELIEF"))
+        )
+        if reversal_count < 2:
+            failures.append(f"FORMAT_PARADOX: 반전 {reversal_count}개 (최소 2단계 반전 필수)")
+
+    elif fmt_type == "MYSTERY":
+        # 컷1 [SHOCK] 필수
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" not in first_desc.upper():
+            failures.append("FORMAT_MYSTERY: 컷1 [SHOCK] 태그 없음 — 미스터리 선언 필수")
+        # 열린 결말: 마지막 컷이 단정적이면 안 됨 — [LOOP] 필수
+        last_desc = cuts[-1].get("description", cuts[-1].get("text", ""))
+        if "LOOP" not in last_desc.upper():
+            failures.append("FORMAT_MYSTERY: 마지막 컷 [LOOP] 태그 없음 — 열린 결말 필수")
+
+    elif fmt_type == "RANKING_DEBATE":
+        # 컷1은 [SHOCK] 필수 (이 포맷만 예외적으로 질문형 허용이지만 SHOCK 태그는 필수)
+        first_desc = cuts[0].get("description", cuts[0].get("text", ""))
+        if "SHOCK" not in first_desc.upper():
+            failures.append("FORMAT_RANKING_DEBATE: 컷1 [SHOCK] 태그 없음 — 랭킹 선언 필수")
+        # [REVEAL] 태그 존재 확인 (1위 발표)
+        has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
+        if not has_reveal:
+            failures.append("FORMAT_RANKING_DEBATE: [REVEAL] 태그 없음 — 1위 발표 컷 필수")
+
     # 7) 톤-채널 일치 검증
     if channel:
         from modules.utils.channel_config import get_channel_preset
@@ -1291,6 +1353,61 @@ def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str
             "FORMAT=FACT: Documentary realism. Natural lighting, no oversaturation. "
             "Cut 1 = authoritative reveal, clear focal subject, professional depth. "
             "Educational clarity over visual shock. Refined, high-quality aesthetic."
+        ),
+        "COUNTDOWN": (
+            "FORMAT=COUNTDOWN: Visual intensity increases with rank. "
+            "Cut 1 = panoramic overview setting the scale. "
+            "5th-2nd: progressively more dramatic lighting and scale per rank. "
+            "1st place (REVEAL): maximum impact — dramatic lighting, full-frame, overwhelming presence. "
+            "Final cut: mystery silhouette hinting at next TOP 5."
+        ),
+        "SCALE": (
+            "FORMAT=SCALE: Maximize visual size contrast between objects. "
+            "Cut 1 = extreme size contrast wide angle, miniature vs giant side by side. "
+            "Each cut zooms out further — continuous scale expansion feeling. "
+            "Hero cut: overwhelming cosmic/nature scale, awe-inspiring. "
+            "Final: tiny human silhouette against massive backdrop — humility."
+        ),
+        "FUTURE_VISION": (
+            "FORMAT=FUTURE_VISION: Visual style shifts from present to future. "
+            "Cuts 1-2 = natural lighting, realistic contemporary colors. "
+            "Cuts 3-4 = subtle sci-fi tint, blue/silver color shift. "
+            "Cuts 5-6 = full sci-fi aesthetic, neon/hologram/cosmic visuals. "
+            "Cut 7 = human silhouette vs futuristic landscape. "
+            "Final: mysterious dark silhouette, question mark mood."
+        ),
+        "TIMELAPSE_HISTORY": (
+            "FORMAT=TIMELAPSE_HISTORY: Each era MUST have distinct visual style. "
+            "Distant past: sepia tone, vintage texture, rough grain, desaturated. "
+            "Middle era: color introduced, analog film warmth. "
+            "Present: sharp high-resolution, modern color grading. "
+            "Future: subtle sci-fi, hologram/neon accents. "
+            "CRITICAL: same location/subject across all eras for visual continuity."
+        ),
+        "PARADOX": (
+            "FORMAT=PARADOX: Color tone SHIFTS dramatically at each reversal. "
+            "Cuts 1-2 = bright, pastel, stable — reassuring false comfort. "
+            "Cut 3 (reversal): sudden dark dramatic shift — truth begins. "
+            "Cuts 4-5 = cold blue/neon — deep truth exposed. "
+            "Cut 6 = warm tone returns — personal/intimate. "
+            "Final: half-and-half light/dark composition — duality."
+        ),
+        "MYSTERY": (
+            "FORMAT=MYSTERY: Dark, atmospheric, mysterious throughout. "
+            "Cut 1 = silhouette in fog/mist — unknown presence. "
+            "Cut 2 = historical/antiquated location, vintage lighting. "
+            "Cuts 3-4 = cold fluorescent, investigation/lab feeling. "
+            "Cut 5 = darkest frame — near-horror atmosphere. "
+            "Cut 6 = slight warm light — thread of hypothesis. "
+            "Final: door/portal opening — gateway to next mystery."
+        ),
+        "RANKING_DEBATE": (
+            "FORMAT=RANKING_DEBATE: Each candidate portrayed heroically. "
+            "Cut 1 = trophy/podium atmosphere, metallic/gold tones. "
+            "Lower ranks: standard lighting, neutral composition. "
+            "Upper ranks: progressively more dramatic — gold/metallic highlights. "
+            "1st place: crown/halo effect, maximum authority, hero lighting. "
+            "Final: empty podium with question mark — next ranking teaser."
         ),
     }.get(format_type or "", "")
 

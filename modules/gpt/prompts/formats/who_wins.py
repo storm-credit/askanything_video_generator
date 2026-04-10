@@ -37,6 +37,12 @@ HARD FAIL:
 - 컷1 단일 피사체 → 실패
 - 11컷 미만 → 실패
 - 컷9 이전 승자 공개 → 실패
+
+시리즈 모드 (series_context가 제공된 경우에만 적용):
+- 컷1 훅에 시리즈명 + 에피소드 번호 언급 ("바다의 왕 토너먼트 EP2")
+- 이전 승자가 있으면 컷2에서 언급 ("지난 대결 승자 상어가 돌아왔다")
+- 컷11(LOOP)에 다음 편 예고 포함 ("다음 상대는 범고래다... 이길 수 있을까?")
+- 제목에 시리즈명 + EP 번호 포함 필수
 """,
 
     "en": """
@@ -68,6 +74,12 @@ HARD FAIL:
 - Cut 1 single subject → fail
 - Fewer than 11 cuts → fail
 - Winner revealed before Cut 9 → fail
+
+Series mode (apply ONLY when series_context is provided):
+- Cut 1 hook MUST mention series name + episode number ("Ocean King Tournament EP2")
+- If previous winner exists, mention in Cut 2 ("Last battle's winner, Shark, is back")
+- Cut 11 (LOOP) MUST include next episode teaser ("Next opponent: Orca... can it win?")
+- Title MUST include series name + EP number
 """,
 
     "es": """
@@ -99,5 +111,11 @@ HARD FAIL:
 - Corte 1 sujeto único → fallo
 - Menos de 11 cortes → fallo
 - Ganador antes Corte 9 → fallo
+
+Modo serie (aplicar SOLO cuando series_context está presente):
+- Corte 1 DEBE mencionar nombre de serie + número de episodio ("Torneo del Rey del Mar EP2")
+- Si hay ganador anterior, mencionarlo en Corte 2 ("El ganador pasado, Tiburón, regresa")
+- Corte 11 (LOOP) DEBE incluir avance del próximo episodio
+- Título DEBE incluir nombre de serie + número EP
 """,
 }

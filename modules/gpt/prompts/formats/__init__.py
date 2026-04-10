@@ -6,6 +6,13 @@ from .who_wins import FRAGMENT as _WHO_WINS
 from .if_premise import FRAGMENT as _IF_PREMISE
 from .emotional_sci import FRAGMENT as _EMOTIONAL_SCI
 from .fact import FRAGMENT as _FACT
+from .countdown import FRAGMENT as _COUNTDOWN
+from .scale import FRAGMENT as _SCALE
+from .future_vision import FRAGMENT as _FUTURE_VISION
+from .timelapse_history import FRAGMENT as _TIMELAPSE_HISTORY
+from .paradox import FRAGMENT as _PARADOX
+from .mystery import FRAGMENT as _MYSTERY
+from .ranking_debate import FRAGMENT as _RANKING_DEBATE
 
 # format_type 키 → 프롬프트 딕셔너리
 _FORMAT_MAP: dict[str, dict[str, str]] = {
@@ -13,6 +20,13 @@ _FORMAT_MAP: dict[str, dict[str, str]] = {
     "IF": _IF_PREMISE,
     "EMOTIONAL_SCI": _EMOTIONAL_SCI,
     "FACT": _FACT,
+    "COUNTDOWN": _COUNTDOWN,
+    "SCALE": _SCALE,
+    "FUTURE_VISION": _FUTURE_VISION,
+    "TIMELAPSE_HISTORY": _TIMELAPSE_HISTORY,
+    "PARADOX": _PARADOX,
+    "MYSTERY": _MYSTERY,
+    "RANKING_DEBATE": _RANKING_DEBATE,
 }
 
 # ES 변형 모두 "es" 키로 처리
@@ -55,9 +69,16 @@ def inject_format_prompt(system_prompt: str, format_type: str | None, lang: str)
 # ── 포맷별 컷 수 가이드 ──
 FORMAT_CUT_GUIDE: dict[str, dict[str, int]] = {
     "WHO_WINS":      {"min": 11, "max": 11, "ideal": 11},  # 반드시 11컷 (_validate_cuts와 일치)
-    "IF":            {"min": 9, "max": 11, "ideal": 10},
-    "EMOTIONAL_SCI": {"min": 8, "max": 9,  "ideal": 8},
-    "FACT":          {"min": 8, "max": 10, "ideal": 9},
+    "IF":                {"min": 10, "max": 11, "ideal": 10},
+    "EMOTIONAL_SCI":     {"min": 8,  "max": 9,  "ideal": 8},
+    "FACT":              {"min": 8,  "max": 10, "ideal": 9},
+    "COUNTDOWN":         {"min": 8,  "max": 10, "ideal": 9},
+    "SCALE":             {"min": 7,  "max": 9,  "ideal": 8},
+    "FUTURE_VISION":     {"min": 8,  "max": 10, "ideal": 9},
+    "TIMELAPSE_HISTORY": {"min": 8,  "max": 10, "ideal": 9},
+    "PARADOX":           {"min": 7,  "max": 8,  "ideal": 7},
+    "MYSTERY":           {"min": 8,  "max": 9,  "ideal": 8},
+    "RANKING_DEBATE":    {"min": 9,  "max": 10, "ideal": 9},
 }
 
 
@@ -93,6 +114,41 @@ _DETECT_KEYWORDS: dict[str, dict[str, list[str]]] = {
         "ko": ["사실", "진실", "알려지지", "아무도 모르", "비밀", "충격적", "실제로", "숨겨진"],
         "en": ["truth", "fact", "nobody knows", "secret", "shocking", "actually", "hidden"],
         "es": ["verdad", "dato", "nadie sabe", "secreto", "impactante", "en realidad", "oculto"],
+    },
+    "COUNTDOWN": {
+        "ko": ["top ", "랭킹", "1위", "가장 강한", "가장 무서운", "가장 위험한"],
+        "en": ["top ", "ranked", "#1", "most dangerous", "most powerful"],
+        "es": ["top ", "clasificación", "#1", "más peligroso", "más poderoso"],
+    },
+    "SCALE": {
+        "ko": ["크기", "규모", "배", "스케일", "비교하면", "축소하면", "확대하면", "줄이면"],
+        "en": ["scale", "size of", "times bigger", "compared to", "shrink", "if you scaled"],
+        "es": ["escala", "tamaño", "veces más grande", "comparado con", "si reduces"],
+    },
+    "FUTURE_VISION": {
+        "ko": ["2030", "2040", "2050", "미래", "년 후", "사라질", "대체될"],
+        "en": ["2030", "2040", "2050", "future", "years from now", "will disappear", "will replace"],
+        "es": ["2030", "2040", "2050", "futuro", "años después", "desaparecerá", "reemplazará"],
+    },
+    "TIMELAPSE_HISTORY": {
+        "ko": ["년 전", "세기", "역사", "고대", "과거", "변화", "진화"],
+        "en": ["years ago", "century", "history", "ancient", "evolution", "changed over"],
+        "es": ["años atrás", "siglo", "historia", "antiguo", "evolución", "cambió"],
+    },
+    "PARADOX": {
+        "ko": ["역설", "반대", "잘못 알", "오해", "진짜 이유", "반전"],
+        "en": ["paradox", "opposite", "wrong about", "misconception", "real reason", "twist"],
+        "es": ["paradoja", "opuesto", "equivocados", "error común", "verdadera razón", "giro"],
+    },
+    "MYSTERY": {
+        "ko": ["미스터리", "미해결", "수수께끼", "설명 못", "아무도 모르는 이유"],
+        "en": ["mystery", "unsolved", "enigma", "unexplained", "nobody knows why"],
+        "es": ["misterio", "sin resolver", "enigma", "inexplicable", "nadie sabe por qué"],
+    },
+    "RANKING_DEBATE": {
+        "ko": ["동의", "논란", "최강 순위", "랭킹 발표", "내 순위"],
+        "en": ["agree", "controversial", "my ranking", "debate", "tier list"],
+        "es": ["de acuerdo", "polémico", "mi ranking", "debate", "lista"],
     },
 }
 
