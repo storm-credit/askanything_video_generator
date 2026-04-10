@@ -26,6 +26,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "EMOTIONAL_SCI": {"min": 8,  "max": 9},   # ~3.9s/컷 → 8컷=31s
             "FACT":          {"min": 10, "max": 11},  # ~3.1s/컷 → 10컷=31s
         },
+        "preferred_formats": ["WHO_WINS", "IF", "FACT"],
         "voice_settings": {
             "stability": 0.35,
             "similarity_boost": 0.82,
@@ -60,6 +61,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "EMOTIONAL_SCI": {"min": 8,  "max": 9},   # ~4.7s/컷 → 8컷=38s
             "FACT":          {"min": 10, "max": 11},  # ~3.7s/컷 → 10컷=37s
         },
+        "preferred_formats": ["FACT", "IF", "EMOTIONAL_SCI"],
         "voice_settings": {
             "stability": 0.45,  # 0.65→0.45 (단조로움 제거, 감정 표현력↑)
             "similarity_boost": 0.85,
@@ -94,6 +96,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "EMOTIONAL_SCI": {"min": 8,  "max": 9},   # ~4.7s/컷 → 8컷=38s
             "FACT":          {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
         },
+        "preferred_formats": ["IF", "WHO_WINS", "FACT"],
         "voice_settings": {
             "stability": 0.4,
             "similarity_boost": 0.82,
@@ -128,7 +131,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "EMOTIONAL_SCI": {"min": 9,  "max": 10},  # ~4.7s/컷 → 9컷=42s
             "FACT":          {"min": 11, "max": 11},  # ~3.7s/컷 → 11컷=41s
         },
-
+        "preferred_formats": ["EMOTIONAL_SCI", "FACT", "IF"],
         "voice_settings": {
             "stability": 0.55,
             "similarity_boost": 0.85,

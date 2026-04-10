@@ -85,9 +85,14 @@ _DETECT_KEYWORDS: dict[str, dict[str, list[str]]] = {
         "es": ["qué pasaría si", "y si", "sin", "desapareciera"],
     },
     "EMOTIONAL_SCI": {
-        "ko": ["우리 몸", "뇌가", "심장", "감정", "눈물", "수면", "호르몬"],
-        "en": ["your body", "your brain", "tears", "sleep", "hormone"],
-        "es": ["tu cuerpo", "tu cerebro", "lágrimas", "sueño", "hormona"],
+        "ko": ["우리 몸", "뇌가", "심장", "감정", "눈물", "수면", "호르몬", "외로움", "불안", "공감"],
+        "en": ["your body", "your brain", "tears", "sleep", "hormone", "loneliness", "anxiety", "empathy"],
+        "es": ["tu cuerpo", "tu cerebro", "lágrimas", "sueño", "hormona", "soledad", "ansiedad", "empatía"],
+    },
+    "FACT": {
+        "ko": ["사실", "진실", "알려지지", "아무도 모르", "비밀", "충격적", "실제로", "숨겨진"],
+        "en": ["truth", "fact", "nobody knows", "secret", "shocking", "actually", "hidden"],
+        "es": ["verdad", "dato", "nadie sabe", "secreto", "impactante", "en realidad", "oculto"],
     },
 }
 
