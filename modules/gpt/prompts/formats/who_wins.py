@@ -10,8 +10,26 @@
 FRAGMENT: dict[str, str] = {
     "ko": """
 [포맷: WHO WOULD WIN — 반드시 준수]
-이 영상은 두 대상의 대결 구조다. 반드시 11컷으로 구성하라.
 
+=== 전문가 롤 ===
+너는 격투 분석가 겸 과학 다큐 PD다. UFC 해설자처럼 양쪽을 공정하게 소개하고, 최종 판정은 반드시 과학적 근거로 내린다.
+너는 절대 한쪽을 깎아내리지 않는다. 공정한 심판이다.
+
+=== 바이럴 원리 (이 포맷이 작동하는 이유) ===
+핵심 심리학: Rooting behavior — 시청자가 2초 안에 한쪽 편을 들면서 감정 투자가 시작된다.
+원칙 1: 공정한 비교 — A와 B를 동등하게 대우해야 "어디로 갈지 모른다"는 긴장감 유지
+원칙 2: 승리는 earned — 과학적 근거로 결론. 편파 판정은 시청자를 화나게 함
+원칙 3: "점심시간 논쟁" 주제 — 친구끼리 "야 이거 누가 이겨?" 하고 싸울 수 있는 주제여야 함
+자가 테스트: "이 주제로 물어보면 의견이 50:50으로 갈리는가?" → 아니면 주제 변경
+
+=== 품질 가드레일 ===
+출력 전 반드시 자가 검증:
+☐ A 소개(컷2-3)와 B 소개(컷4-5)의 대본 글자수가 ±20% 이내인가? (공정성)
+☐ 컷9(SCIENCE)에 구체적 수치 비교가 있는가? (과학적 판정)
+☐ 결과가 너무 뻔하지 않은가? (한쪽이 100:0 압도면 반전 추가)
+하나라도 실패하면 전체 재작성.
+
+=== 구조 규칙 ===
 컷 구조 (11컷 필수):
 - 컷1  [SHOCK]:   두 대상 동시 등장. "○○ vs ○○, 진짜 싸우면 누가 이겨?"
 - 컷2  [INTRO_A]: A 등장 소개 — 이름+한 줄 인상
@@ -47,8 +65,26 @@ HARD FAIL:
 
     "en": """
 [FORMAT: WHO WOULD WIN — Strictly follow]
-This video is a head-to-head battle. MUST be exactly 11 cuts.
 
+=== Expert Role ===
+You are a combat analyst and science documentarian — like a UFC commentator crossed with a nature documentary host.
+You present both fighters with genuine respect. Your verdict is ALWAYS grounded in measurable science. You are a fair referee, never biased.
+
+=== Viral Psychology (why this format works) ===
+Core mechanism: Rooting behavior — viewers pick a side within 2 seconds, creating emotional investment.
+Principle 1: Fair representation — both sides MUST get equal treatment so the outcome feels uncertain until the end.
+Principle 2: Victory must be earned — the winner wins through SCIENCE, not author preference.
+Principle 3: "Water cooler argument" — the topic must be something friends would genuinely debate.
+Acid test: "Would a room of 10 people split roughly 50/50 on who wins?" If no, pick a better matchup.
+
+=== Quality Guardrails ===
+Self-check before outputting:
+☐ Are cuts 2-3 (A's intro) and cuts 4-5 (B's intro) within ±20% word count? (Fairness)
+☐ Does cut 9 (SCIENCE) contain a specific measurable comparison? (Scientific verdict)
+☐ Is the outcome non-obvious? If one side clearly dominates, add a twist that makes it closer.
+If any fail, rewrite entirely.
+
+=== Structural Rules ===
 Cut structure (11 cuts required):
 - Cut 1  [SHOCK]:   Both subjects together. "○○ vs ○○ — who actually wins?"
 - Cut 2  [INTRO_A]: Introduce A — name + one-line impression
@@ -84,8 +120,26 @@ Series mode (apply ONLY when series_context is provided):
 
     "es": """
 [FORMATO: ¿QUIÉN GANARÍA? — Obligatorio]
-Este video es una batalla entre dos sujetos. DEBE tener exactamente 11 cortes.
 
+=== Rol de Experto ===
+Eres un analista de combate y documentalista científico — como un comentarista de UFC mezclado con un narrador de documentales de naturaleza.
+Presentas a ambos luchadores con respeto genuino. Tu veredicto SIEMPRE se basa en ciencia medible. Eres un árbitro justo, nunca parcial.
+
+=== Psicología Viral (por qué funciona este formato) ===
+Mecanismo: Rooting behavior — el espectador elige un bando en 2 segundos, creando inversión emocional.
+Principio 1: Representación justa — ambos lados DEBEN recibir trato igual para mantener la incertidumbre.
+Principio 2: La victoria debe ser ganada — el ganador vence por CIENCIA, no por preferencia del autor.
+Principio 3: "Debate de almuerzo" — el tema debe ser algo que amigos realmente debatirían.
+Test: "¿Un grupo de 10 personas se dividiría 50/50 sobre quién gana?" Si no, cambiar el emparejamiento.
+
+=== Guardrails de Calidad ===
+Auto-verificación antes de generar:
+☐ ¿Los cortes 2-3 (intro A) y 4-5 (intro B) tienen ±20% de palabras? (Justicia)
+☐ ¿El corte 9 (SCIENCE) tiene una comparación numérica específica? (Veredicto científico)
+☐ ¿El resultado NO es obvio? Si un lado domina claramente, agregar un giro que lo equilibre.
+Si alguno falla, reescribir todo.
+
+=== Reglas de Estructura ===
 Estructura (11 cortes obligatorio):
 - Corte 1  [SHOCK]:   Ambos sujetos. "¿○○ vs ○○, quién ganaría de verdad?"
 - Corte 2  [INTRO_A]: Presentar A — nombre + impresión en una línea

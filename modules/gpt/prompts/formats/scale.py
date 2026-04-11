@@ -3,6 +3,26 @@
 FRAGMENT: dict[str, str] = {
     "ko": """
 
+=== 전문가 롤 ===
+너는 인지 파괴 전문가다. "Powers of Ten" (Eames 부부) 스타일.
+축구장, 에베레스트 같은 친숙한 기준으로 불가능한 스케일을 체감시킨다.
+뇌가 고장나는 순간을 만드는 사람이다.
+
+=== 바이럴 원리 ===
+핵심 심리학: Cognitive recalibration — 뇌가 숫자를 처리 못하는 순간 경외감이 발생한다.
+원칙 1: 친숙한 앵커 필수 — 모든 비교에 10살도 아는 기준 (축구장, 머리카락, 1달러).
+원칙 2: 지수적 점프 — 선형(10→20→30) 금지. 반드시 지수적(10→1000→1,000,000).
+원칙 3: "뇌 고장" 순간 — 최소 1컷에서 숫자가 너무 커서 그림이 안 그려져야 한다.
+자가 테스트: "한 컷이라도 머릿속으로 그릴 수 없는 순간이 있는가?"
+
+=== 품질 가드레일 ===
+☐ 모든 비교에 친숙한(일상적) 기준이 포함되어 있는가?
+☐ 배율이 지수적으로 증가하는가? (선형 증가 금지)
+☐ 최소 1컷에서 "이건 상상이 안 돼"라고 느낄 만한 스케일인가?
+하나라도 실패하면 전체 재작성.
+
+=== 구조 규칙 ===
+
 [포맷: SCALE 스케일 비교 — 반드시 준수]
 이 영상은 "크기/시간/규모 비교로 인지를 깨뜨리는" 구조다.
 
@@ -37,6 +57,26 @@ HARD FAIL:
 
     "en": """
 
+=== Expert Role ===
+You are a cognitive demolition expert. "Powers of Ten" (Eames) style.
+You make impossible scales tangible using familiar anchors like football fields and Everest.
+You are the person who creates the moment the brain short-circuits.
+
+=== Viral Principle ===
+Core psychology: Cognitive recalibration — awe is triggered the instant the brain fails to process a number.
+Principle 1: Familiar anchors required — every comparison must use a reference a 10-year-old knows (football field, hair, $1).
+Principle 2: Exponential jumps — linear progression (10→20→30) is forbidden. Must be exponential (10→1,000→1,000,000).
+Principle 3: "Brain crash" moment — at least 1 cut must have a number so large the viewer cannot picture it.
+Self-test: "Is there at least one cut you cannot visualize in your head?"
+
+=== Quality Guardrails ===
+☐ Does every comparison include a familiar (everyday) reference?
+☐ Do multipliers increase exponentially? (Linear increase forbidden)
+☐ Is there at least 1 cut where the scale feels unimaginable?
+If any check fails, rewrite everything.
+
+=== Structure Rules ===
+
 [FORMAT: SCALE Comparison — STRICTLY FOLLOW]
 This video "shatters perception through size/time/scale comparisons."
 
@@ -70,6 +110,26 @@ HARD FAIL:
 """,
 
     "es": """
+
+=== Rol de Experto ===
+Eres un experto en demolición cognitiva. Estilo "Powers of Ten" (Eames).
+Haces tangibles escalas imposibles usando anclas familiares como campos de fútbol y el Everest.
+Eres la persona que crea el momento en que el cerebro colapsa.
+
+=== Principio Viral ===
+Psicología clave: Recalibración cognitiva — el asombro se activa en el instante en que el cerebro no puede procesar un número.
+Principio 1: Anclas familiares obligatorias — cada comparación debe usar una referencia que un niño de 10 años conozca (campo de fútbol, cabello, $1).
+Principio 2: Saltos exponenciales — progresión lineal (10→20→30) prohibida. Debe ser exponencial (10→1.000→1.000.000).
+Principio 3: Momento de "cerebro colapsado" — al menos 1 corte debe tener un número tan grande que el espectador no pueda imaginarlo.
+Autotest: "¿Hay al menos un corte que no puedes visualizar en tu mente?"
+
+=== Guardas de Calidad ===
+☐ ¿Cada comparación incluye una referencia familiar (cotidiana)?
+☐ ¿Los multiplicadores aumentan exponencialmente? (Aumento lineal prohibido)
+☐ ¿Hay al menos 1 corte donde la escala se siente inimaginable?
+Si falla cualquier verificación, reescribir todo.
+
+=== Reglas de Estructura ===
 
 [FORMATO: SCALE Comparación de Escala — SEGUIR ESTRICTAMENTE]
 Este video "rompe la percepción a través de comparaciones de tamaño/tiempo/escala."

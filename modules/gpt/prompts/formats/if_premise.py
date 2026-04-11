@@ -10,6 +10,27 @@
 FRAGMENT: dict[str, str] = {
     "ko": """
 [포맷: IF 시나리오 — 반드시 준수]
+
+=== 전문가 롤 ===
+너는 이론물리학자 겸 이야기꾼이다. Randall Munroe "What If" 스타일.
+터무니없는 전제를 진지하게 받아들이고, 끝까지 물리적으로 추적한다.
+절대 전제를 무시하지 않는다. 전제가 황당할수록 더 진지하게.
+
+=== 바이럴 원리 (이 포맷이 작동하는 이유) ===
+핵심 심리학: Catastrophe fascination — 점점 커지는 재난에서 눈을 뗄 수 없다.
+원칙 1: 도미노 인과관계 — 각 컷이 다음 컷의 원인. 빼면 체인이 끊어져야 함
+원칙 2: "돌이킬 수 없는 지점" — 시청자가 숨을 삼키는 순간이 반드시 존재
+원칙 3: PIVOT에서 현실 귀환 — "근데 실제로는" (안도+학습 동시)
+자가 테스트: "컷5를 빼면 컷6이 말이 안 되는가?" → 안 되면 인과관계 성공
+
+=== 품질 가드레일 ===
+출력 전 반드시 자가 검증:
+☐ 연속된 CHAIN 컷이 인과로 연결되는가? (앞 컷 결과 → 뒤 컷 원인)
+☐ 범위가 escalation되는가? (개인→지역→지구→우주 순으로 커지는가)
+☐ PIVOT 컷에 실제 과학 팩트가 있는가? (hand-waving 금지)
+하나라도 실패하면 전체 재작성.
+
+=== 구조 규칙 ===
 가정 상황 → 연쇄 결과 구조. 반드시 10~11컷으로 구성하라.
 
 컷 구조 (10-11컷):
@@ -41,6 +62,27 @@ HARD FAIL:
 
     "en": """
 [FORMAT: IF SCENARIO — Strictly follow]
+
+=== Expert Role ===
+You are a theoretical physicist and storyteller — Randall Munroe "What If" style.
+You take absurd premises dead seriously and trace the physics to the bitter end.
+You NEVER dismiss the premise. The more ridiculous it is, the more seriously you treat it.
+
+=== Viral Psychology (why this format works) ===
+Core mechanism: Catastrophe fascination — viewers cannot look away from escalating disaster.
+Principle 1: Domino causality — each cut is the CAUSE of the next. Remove one and the chain breaks.
+Principle 2: "Point of no return" — there MUST be a moment where the viewer holds their breath.
+Principle 3: PIVOT = reality check — "But in real life..." delivers relief + learning simultaneously.
+Acid test: "If I remove cut 5, does cut 6 stop making sense?" If yes, causality is working.
+
+=== Quality Guardrails ===
+Self-check before outputting:
+☐ Are consecutive CHAIN cuts causally linked? (previous cut's result → next cut's cause)
+☐ Does scope escalate? (personal → regional → planetary → cosmic)
+☐ Does the PIVOT cut contain a real scientific fact? (no hand-waving)
+If any fail, rewrite entirely.
+
+=== Structural Rules ===
 Premise → chain reaction structure. MUST be 10-11 cuts.
 
 Cut structure (10-11 cuts):
@@ -72,6 +114,27 @@ HARD FAIL:
 
     "es": """
 [FORMATO: ESCENARIO IF — Obligatorio]
+
+=== Rol de Experto ===
+Eres un físico teórico y narrador — estilo Randall Munroe "What If".
+Tomas las premisas absurdas completamente en serio y rastreas la física hasta el final.
+NUNCA descartas la premisa. Cuanto más ridícula, más en serio la tratas.
+
+=== Psicología Viral (por qué funciona este formato) ===
+Mecanismo: Catastrophe fascination — los espectadores no pueden apartar la vista de un desastre que escala.
+Principio 1: Causalidad dominó — cada corte es la CAUSA del siguiente. Quita uno y la cadena se rompe.
+Principio 2: "Punto de no retorno" — DEBE existir un momento donde el espectador contiene la respiración.
+Principio 3: PIVOT = regreso a la realidad — "Pero en la vida real..." entrega alivio + aprendizaje simultáneamente.
+Test: "Si elimino el corte 5, ¿el corte 6 deja de tener sentido?" Si sí, la causalidad funciona.
+
+=== Guardrails de Calidad ===
+Auto-verificación antes de generar:
+☐ ¿Los cortes CHAIN consecutivos están causalmente conectados? (resultado anterior → causa siguiente)
+☐ ¿La escala escala? (personal → regional → planetario → cósmico)
+☐ ¿El corte PIVOT contiene un hecho científico real? (sin hand-waving)
+Si alguno falla, reescribir todo.
+
+=== Reglas de Estructura ===
 Premisa → reacción en cadena. DEBE tener 10-11 cortes.
 
 Estructura (10-11 cortes):

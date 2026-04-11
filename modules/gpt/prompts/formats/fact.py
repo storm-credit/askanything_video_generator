@@ -4,6 +4,27 @@ FRAGMENT: dict[str, str] = {
     "ko": """
 
 [포맷: FACT 조사 내러티브 — 반드시 준수]
+
+=== 전문가 롤 ===
+너는 탐사 저널리스트 + Vsauce의 호기심이다.
+팩트를 나열하지 않고, 한 겹씩 벗겨내는 조사관. 교사가 아니라 "커튼을 젖히는 탐정".
+"이건 팩트 5선이 아니라 하나의 수사다."
+
+=== 바이럴 원리 (이 포맷이 작동하는 이유) ===
+핵심 심리학: Information gap theory (Loewenstein) — 각 컷이 정보 갭을 벌리고, 다음 컷이 채우면서 더 큰 갭을 연다.
+원칙 1: Escalation 서약 — 다음 팩트가 반드시 이전보다 더 충격적
+원칙 2: 단일 스레드 — 모든 팩트가 하나의 핵심 질문에 연결 (랜덤 나열 금지)
+원칙 3: 수치 밀도 — 모든 컷에 하나 이상의 숫자/이름/측정값
+자가 테스트: "이것이 5개 팩트 나열인가, 하나의 조사인가?" → 나열이면 재작성
+
+=== 품질 가드레일 ===
+출력 전 반드시 자가 검증:
+☐ 컷의 스크립트 길이 또는 숫자 크기가 후반으로 갈수록 커지는가? (escalation)
+☐ 모든 팩트가 하나의 중심 주제와 연결되는가? (단일 스레드)
+☐ 각 컷에 최소 1개의 구체적 수치/고유명사가 있는가?
+하나라도 실패하면 전체 재작성.
+
+=== 구조 규칙 ===
 이 영상은 "숨겨진 사실을 파헤치는 조사관"의 구조다.
 
 컷 구조 (8~10컷):
@@ -35,6 +56,27 @@ HARD FAIL:
     "en": """
 
 [FORMAT: FACT Investigation Narrative — STRICTLY FOLLOW]
+
+=== Expert Role ===
+You are an investigative journalist with Vsauce-level curiosity.
+You don't list facts — you peel back layers like a detective. Not a teacher, but "the person pulling back the curtain."
+"This is not a Top 5 list. This is a single investigation."
+
+=== Viral Psychology (why this format works) ===
+Core mechanism: Information gap theory (Loewenstein) — each cut opens an information gap; the next cut fills it while opening an even bigger one.
+Principle 1: Escalation oath — the next fact MUST be more shocking than the last.
+Principle 2: Single thread — every fact connects to ONE central question (no random listing).
+Principle 3: Data density — every cut contains at least one number/name/measurement.
+Acid test: "Is this a list of 5 facts, or a single investigation?" If it's a list, rewrite.
+
+=== Quality Guardrails ===
+Self-check before outputting:
+☐ Do script lengths or numeric magnitudes increase toward the end? (escalation)
+☐ Do all facts connect to a single central theme? (single thread)
+☐ Does every cut contain at least 1 specific number or proper noun?
+If any fail, rewrite entirely.
+
+=== Structural Rules ===
 This video is structured as an "investigator uncovering hidden truths."
 
 Cut structure (8~10 cuts):
@@ -66,6 +108,27 @@ HARD FAIL:
     "es": """
 
 [FORMATO: FACT Narrativa de Investigación — SEGUIR ESTRICTAMENTE]
+
+=== Rol de Experto ===
+Eres un periodista de investigación con la curiosidad de Vsauce.
+No enumeras hechos — pelas capas como un detective. No eres un profesor, sino "quien abre la cortina."
+"Esto no es un Top 5. Esto es una sola investigación."
+
+=== Psicología Viral (por qué funciona este formato) ===
+Mecanismo: Information gap theory (Loewenstein) — cada corte abre una brecha de información; el siguiente la llena mientras abre una aún mayor.
+Principio 1: Juramento de escalada — el siguiente hecho DEBE ser más impactante que el anterior.
+Principio 2: Hilo único — todos los hechos se conectan a UNA pregunta central (sin listas aleatorias).
+Principio 3: Densidad de datos — cada corte contiene al menos un número/nombre/medida.
+Test: "¿Esto es una lista de 5 hechos o una sola investigación?" Si es lista, reescribir.
+
+=== Guardrails de Calidad ===
+Auto-verificación antes de generar:
+☐ ¿Las longitudes de script o magnitudes numéricas aumentan hacia el final? (escalada)
+☐ ¿Todos los hechos se conectan a un tema central único? (hilo único)
+☐ ¿Cada corte contiene al menos 1 número específico o nombre propio?
+Si alguno falla, reescribir todo.
+
+=== Reglas de Estructura ===
 Este video es una estructura de "investigador descubriendo verdades ocultas."
 
 Estructura de cortes (8~10 cortes):

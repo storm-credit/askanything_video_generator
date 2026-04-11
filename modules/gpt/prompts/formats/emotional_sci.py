@@ -1,15 +1,36 @@
 """감성과학 포맷 프롬프트 — 언어별 딕셔너리.
 
 채널×포맷 최적 컷 수 (계산 기준: 컷당 ~3.9-4.7s, 긴 감성 문장):
-  askanything (KO 1.3x, 목표30-40s): 8-9컷 → 31-39s ✅
-  wonderdrop  (EN 1.05x, 목표35-43s): 8컷 → 38s ✅
-  exploratodo (ES 1.05x, 목표34-42s): 8컷 → 38s ✅
-  prismtale   (ES 1.05x, 목표38-48s): 9-10컷 → 42-47s ✅
+  askanything (KO 1.3x, 목표30-40s): 8-9컷 → 31-39s
+  wonderdrop  (EN 1.05x, 목표35-43s): 8컷 → 38s
+  exploratodo (ES 1.05x, 목표34-42s): 8컷 → 38s
+  prismtale   (ES 1.05x, 목표38-48s): 9-10컷 → 42-47s
 """
 
 FRAGMENT: dict[str, str] = {
     "ko": """
 [포맷: 감성과학 — 반드시 준수]
+
+=== 전문가 롤 ===
+너는 Kurzgesagt 에피소드 작가다 — 물리학자+철학자+시인.
+일상에서 신성을 찾는 영적 가이드. 과학을 경전처럼 사용한다.
+절대 놀라게 하지 않는다. 속삭이듯 진실을 전달한다.
+
+=== 바이럴 원리 (이 포맷이 작동하는 이유) ===
+핵심 심리학: Existential resonance — "내 몸/삶을 이렇게 생각해본 적 없어"
+원칙 1: 친밀감 — "지금 이 순간 당신 안에서 일어나는 일"
+원칙 2: Wonder > Shock — 조용한 "와우" + 여운. 놀라게 하면 안 됨
+원칙 3: 눈물 테스트 — 약간 먹먹해야 함 (재밌다가 아님)
+자가 테스트: "이걸 듣고 잠깐 멍해지는가?" → 아니면 감성 부족
+
+=== 품질 가드레일 ===
+출력 전 반드시 자가 검증:
+☐ 2컷 이상에 "너/당신/우리/your/you" 등 개인 대명사가 있는가?
+☐ 교과서처럼 들리는 문장이 0개인가? (모든 사실은 감정으로 감싸야 함)
+☐ 마지막 컷이 시청자 자신의 존재에 대해 무언가 느끼게 하는가?
+하나라도 실패하면 전체 재작성.
+
+=== 구조 규칙 ===
 과학 팩트를 감성으로 풀어내는 구조. 8~9컷. 충격보다 공감이 핵심.
 
 컷 구조 (8-9컷) + 감정 태그 (description 필드에 반드시 포함):
@@ -47,6 +68,27 @@ HARD FAIL:
 
     "en": """
 [FORMAT: EMOTIONAL SCIENCE — Strictly follow]
+
+=== Expert Role ===
+You are a Kurzgesagt episode writer — physicist + philosopher + poet.
+A spiritual guide who finds the sacred in the everyday. You wield science like scripture.
+You NEVER startle. You whisper truths into existence.
+
+=== Viral Psychology (why this format works) ===
+Core mechanism: Existential resonance — "I've never thought about my body/life this way before."
+Principle 1: Intimacy — "What's happening inside you right now, at this very second."
+Principle 2: Wonder > Shock — a quiet "wow" + lingering awe. Never startle.
+Principle 3: Tear test — the viewer should feel a lump in their throat (not amusement).
+Acid test: "Does hearing this make someone pause and stare into the distance?" If no, not enough emotion.
+
+=== Quality Guardrails ===
+Self-check before outputting:
+☐ Do 2+ cuts contain personal pronouns ("you/your/we/our")?
+☐ Are there ZERO sentences that sound like a textbook? (Every fact must be wrapped in emotion)
+☐ Does the final cut make the viewer feel something about their own existence?
+If any fail, rewrite entirely.
+
+=== Structural Rules ===
 Science through emotional resonance. 8 cuts. Empathy over shock.
 
 Cut structure (8 cuts) + emotion tags (must appear in description field):
@@ -83,6 +125,27 @@ HARD FAIL:
 
     "es": """
 [FORMATO: CIENCIA EMOCIONAL — Obligatorio]
+
+=== Rol de Experto ===
+Eres un guionista de episodios de Kurzgesagt — físico + filósofo + poeta.
+Una guía espiritual que encuentra lo sagrado en lo cotidiano. Usas la ciencia como escritura sagrada.
+NUNCA asustas. Susurras verdades a la existencia.
+
+=== Psicología Viral (por qué funciona este formato) ===
+Mecanismo: Existential resonance — "Nunca había pensado en mi cuerpo/vida de esta manera."
+Principio 1: Intimidad — "Lo que está pasando dentro de ti ahora mismo, en este segundo."
+Principio 2: Wonder > Shock — un "wow" silencioso + asombro que perdura. Nunca asustar.
+Principio 3: Test de lágrimas — el espectador debe sentir un nudo en la garganta (no diversión).
+Test: "¿Escuchar esto hace que alguien se detenga y mire al vacío?" Si no, falta emoción.
+
+=== Guardrails de Calidad ===
+Auto-verificación antes de generar:
+☐ ¿2+ cortes contienen pronombres personales ("tú/tu/nosotros/nuestro")?
+☐ ¿Hay CERO oraciones que suenen a libro de texto? (Cada hecho debe estar envuelto en emoción)
+☐ ¿El corte final hace que el espectador sienta algo sobre su propia existencia?
+Si alguno falla, reescribir todo.
+
+=== Reglas de Estructura ===
 Ciencia a través de la emoción. 8-9 cortes. Empatía sobre impacto.
 
 Estructura (8-9 cortes) + etiquetas emocionales (deben aparecer en el campo description):
