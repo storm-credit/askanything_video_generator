@@ -72,6 +72,7 @@ class ImageAgent(BaseAgent):
                         from modules.orchestrator.agents.image_validator import validate_and_retry
                         img_path = validate_and_retry(
                             img_path, cut["prompt"], i, ctx.topic_folder,
+                            api_key=ctx.gemini_keys_override,
                             image_engine=ctx.image_engine,
                             image_model=ctx.image_model,
                             gemini_keys=ctx.gemini_keys_override,

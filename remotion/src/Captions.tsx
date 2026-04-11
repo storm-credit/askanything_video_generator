@@ -66,7 +66,7 @@ const calcCJKFontSize = (words: { word: string }[], base: number): number => {
   const gapPx = Math.max(words.length - 1, 0) * 12; // word gap 12px
   const availWidth = EFFECTIVE_WIDTH - gapPx;
   const maxByWidth = Math.floor(availWidth / Math.max(totalChars * 1.02, 1));
-  return Math.max(64, Math.min(base, maxByWidth));
+  return Math.max(72, Math.min(base, maxByWidth));
 };
 
 const calcLatinFontSize = (words: { word: string }[], base: number): number => {

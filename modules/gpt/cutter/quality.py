@@ -193,6 +193,15 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
             failures.append("FORMAT_SCALE: 컷1 [SHOCK] 태그 없음 — 스케일 충격 선언 필수")
+        # 크기/배수 수치 검증: 최소 2컷에 숫자 비교 표현 필요
+        import re as _re
+        scale_number_cuts = 0
+        for c in cuts:
+            text = c.get("script", c.get("text", ""))
+            if _re.search(r'\d+\s*(배|times|x|km|m|cm|톤|ton|kg|억|만|조|light.?year|광년)', text, _re.IGNORECASE):
+                scale_number_cuts += 1
+        if scale_number_cuts < 2:
+            failures.append(f"FORMAT_SCALE: 크기/배수 수치 {scale_number_cuts}컷 (최소 2컷 이상 스케일 수치 필요)")
 
     elif fmt_type == "PARADOX":
         # 컷1 [SHOCK] 필수

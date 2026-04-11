@@ -398,7 +398,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                         video_count=ctx.video_count,
                         tts_chars=ctx.tts_chars,
                     )
-                    notify_success(channel, f"[{channel}] {ctx.title}", video_url=yt_url)
+                    notify_success(channel, ctx.title, video_url=yt_url)
                     notify_cost(channel, ctx.title, cost_entry, video_url=yt_url,
                                 format_type=job.get("format_type", ""))
                 except Exception:

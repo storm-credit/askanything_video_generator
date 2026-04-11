@@ -103,7 +103,7 @@ def generate_video_from_image(
     prompt: str,
     index: int,
     topic_folder: str,
-    engine: str = "kling",
+    engine: str = "veo3",
     google_api_key: str = None,
     description: str = "",
     veo_model: str | None = None,

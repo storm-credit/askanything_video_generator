@@ -26,7 +26,16 @@ def upload_video(
     publish_at: 예약 공개 시간 (ISO 8601, e.g. "2026-03-20T15:00:00Z").
                설정 시 privacyStatus가 자동으로 "private"으로 변경됩니다.
     """
+    import re as _re
     from datetime import datetime, timezone
+
+    # 해시태그 정제: #쇼츠/#Shorts 금지, 최대 5개
+    _BANNED_TAGS = {"#쇼츠", "#shorts", "#Shorts"}
+    if tags:
+        tags = [t for t in tags if t not in _BANNED_TAGS][:5]
+    # 설명에서 해시태그 제거
+    if description and "#" in description:
+        description = _re.sub(r"\s*#\S+", "", description).strip()
 
     creds = _get_credentials(channel_id)
     if not creds:
