@@ -273,7 +273,7 @@ def _validate_narrative_arc(cuts: list[dict], lang: str = "ko") -> list[str]:
     5. RELEASE: WONDER/CALM/IDENTITY 최소 1개
     """
     _EMOTION_RE = re.compile(
-        r'\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM)\]', re.IGNORECASE
+        r'\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM|LOOP)\]', re.IGNORECASE
     )
     emotions: list[str | None] = []
     for cut in cuts:

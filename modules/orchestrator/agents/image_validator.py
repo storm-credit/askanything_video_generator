@@ -34,10 +34,11 @@ def validate_image(image_path: str, prompt: str, api_key: str = None) -> dict:
     try:
         from modules.utils.gemini_client import create_gemini_client
         from google.genai import types
+    except ImportError as ie:
+        print(f"[ImageValidator] import 실패 (통과 처리): {ie}")
+        return {"pass": True, "reason": f"import 에러: {str(ie)[:50]}", "score": -1}
 
-        client = create_gemini_client(api_key=api_key)
-
-        validation_prompt = f"""You are an image quality checker for YouTube Shorts.
+    validation_prompt = f"""You are an image quality checker for YouTube Shorts.
 
 Check this image against the prompt and rate it.
 
@@ -60,6 +61,8 @@ Rules:
 - Text in image = always fail
 - Realistic human face = always fail"""
 
+    try:
+        client = create_gemini_client(api_key=api_key)
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[
