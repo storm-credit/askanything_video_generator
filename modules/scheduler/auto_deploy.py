@@ -369,8 +369,10 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 consecutive_tts_fails = 0  # 성공 시 카운터 리셋
                 task_result["video_path"] = str(ctx.video_paths) if ctx.video_paths else None
                 task_result["youtube"] = {"url": yt_url} if yt_url else None
-                task_result["format_type"] = job.get("format_type", "FACT")
+                task_result["format_type"] = _fmt or job.get("format_type", "FACT")
                 _deploy_status["completed"] += 1
+                _deploy_status["results"].append(task_result)
+                _save_state()
                 print(f"  ✅ 완료: {channel} — '{ctx.title}'")
                 # Day 파일 체크박스: 같은 topic_group의 모든 채널이 완료되면 ✅ 표시
                 if day_file_path:
@@ -378,9 +380,9 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     if topic_group:
                         # 이 topic_group에서 예상 채널 수
                         group_total = sum(1 for s in schedule if s.get("topic_group") == topic_group)
-                        # 기존 결과에서 성공 수 (현재 포함)
+                        # 기존 결과에서 성공 수 (현재 결과 이미 추가됨)
                         group_success = sum(1 for r in _deploy_status["results"] if r.get("topic_group") == topic_group and r.get("status") == "success")
-                        if group_success + 1 >= group_total:
+                        if group_success >= group_total:
                             try:
                                 from modules.utils.obsidian_parser import tick_topic_done
                                 if tick_topic_done(day_file_path, topic_group):
@@ -400,7 +402,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     )
                     notify_success(channel, f"[{channel}] {ctx.title}", video_url=yt_url)
                     notify_cost(channel, ctx.title, cost_entry, video_url=yt_url,
-                                format_type=job.get("format_type", ""))
+                                format_type=_fmt or job.get("format_type", ""))
                 except Exception:
                     pass
 
@@ -459,7 +461,9 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     except Exception:
                         pass
 
-            _deploy_status["results"].append(task_result)
+            # 실패 시만 여기서 추가 (성공은 체크박스 로직 전에 이미 추가됨)
+            if task_result.get("status") != "success":
+                _deploy_status["results"].append(task_result)
             _save_state()  # 매 토픽 완료 후 상태 저장
 
     finally:

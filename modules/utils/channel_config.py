@@ -63,6 +63,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "IF":            {"min": 10, "max": 11},  # ~3.7s/컷 → 10컷=37s
             "EMOTIONAL_SCI": {"min": 9,  "max": 9},   # ~4.3s/컷 → 9컷=39s (단어수 상향)
             "FACT":          {"min": 9,  "max": 10},  # ~3.5s/컷 → 9컷=32s (EN 단어수 축소)
+            "COUNTDOWN":     {"min": 8,  "max": 10},  # ~3.5s/컷 → 8컷=28s
             "MYSTERY":       {"min": 8,  "max": 9},
             "SCALE":         {"min": 7,  "max": 9},
             "PARADOX":       {"min": 8,  "max": 8},   # ~4.2s/컷 → 8컷=34s (단어수 상향)

@@ -25,15 +25,6 @@ def load_system_prompt(lang: str, channel: str | None = None) -> str:
     """언어/채널에 맞는 시스템 프롬프트를 파일에서 로드.
     캐시 무효화: load_system_prompt.cache_clear() 호출
     """
-    """언어/채널에 맞는 시스템 프롬프트를 파일에서 로드.
-
-    Args:
-        lang: 언어 코드 ("ko", "en", "es" 등)
-        channel: 채널명 (ES 분기에 사용)
-
-    Returns:
-        시스템 프롬프트 문자열
-    """
     if lang == "ko":
         key = "ko"
     elif lang == "en":

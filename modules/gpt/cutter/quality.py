@@ -69,7 +69,7 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
 
     # 3-b) [LOOP] 태그 공통 검증 — 마지막 컷에 [LOOP] 존재 필수 (EMOTIONAL_SCI 제외)
     fmt_type = (cuts[0].get("format_type", "") or "").upper() if cuts else ""
-    if fmt_type and fmt_type != "EMOTIONAL_SCI":
+    if fmt_type and fmt_type not in ("EMOTIONAL_SCI", "MYSTERY"):
         last_desc = cuts[-1].get("description", cuts[-1].get("text", ""))
         if "LOOP" not in last_desc.upper():
             failures.append(f"LOOP_MISSING: 마지막 컷에 [LOOP] 태그 없음 — 루프 엔딩 필수 ({fmt_type})")
@@ -193,6 +193,14 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
             failures.append("FORMAT_SCALE: 컷1 [SHOCK] 태그 없음 — 스케일 충격 선언 필수")
+        # 수치/배율 밀도 검증 — 수치 없는 컷 2개 이상 → FAIL
+        import re as _re
+        cuts_without_scale = sum(
+            1 for c in cuts
+            if not _re.search(r'\d', c.get("script", ""))
+        )
+        if cuts_without_scale >= 2:
+            failures.append(f"FORMAT_SCALE: 수치 없는 컷 {cuts_without_scale}개 (최대 1개 허용)")
 
     elif fmt_type == "PARADOX":
         # 컷1 [SHOCK] 필수
@@ -273,7 +281,7 @@ def _validate_narrative_arc(cuts: list[dict], lang: str = "ko") -> list[str]:
     5. RELEASE: WONDER/CALM/IDENTITY 최소 1개
     """
     _EMOTION_RE = re.compile(
-        r'\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM)\]', re.IGNORECASE
+        r'\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM|LOOP)\]', re.IGNORECASE
     )
     emotions: list[str | None] = []
     for cut in cuts:

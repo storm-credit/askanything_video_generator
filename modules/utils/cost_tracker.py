@@ -72,6 +72,11 @@ def _llm_price(model: str) -> dict:
     for key in PRICE:
         if key.startswith("gemini") and m.startswith(key):
             return PRICE[key]
+    # GPT/Claude 폴백
+    if m.startswith("gpt-4o") or m.startswith("gpt-4.1"):
+        return {"input": 2.50 / 1_000_000, "output": 10.0 / 1_000_000}
+    if m.startswith("claude"):
+        return {"input": 3.00 / 1_000_000, "output": 15.0 / 1_000_000}
     return PRICE["gemini-2.5-flash"]
 
 
@@ -124,7 +129,7 @@ class DailyCost:
 
     def total_usd(self) -> float:
         return sum(
-            ch["llm_usd"] + ch["image_usd"] + ch["video_usd"] + ch["tts_usd"]
+            ch["llm_usd"] + ch["image_usd"] + ch["video_usd"] + ch["tts_usd"] + ch.get("whisper_usd", 0.0)
             for ch in self.channels.values()
         )
 
@@ -192,11 +197,12 @@ def get_daily_summary(date: Optional[str] = None) -> Optional[dict]:
 
 def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
     """단일 영상 완료 시 텔레그램 메시지 (원화 표)."""
-    llm_krw   = usd_to_krw(entry["llm_usd"])
-    img_krw   = usd_to_krw(entry["image_usd"])
-    vid_krw   = usd_to_krw(entry["video_usd"])
-    tts_krw   = usd_to_krw(entry["tts_usd"])
-    total_krw = usd_to_krw(entry["total_usd"])
+    llm_krw     = usd_to_krw(entry["llm_usd"])
+    img_krw     = usd_to_krw(entry["image_usd"])
+    vid_krw     = usd_to_krw(entry["video_usd"])
+    tts_krw     = usd_to_krw(entry["tts_usd"])
+    whisper_krw = usd_to_krw(entry.get("whisper_usd", 0.0))
+    total_krw   = usd_to_krw(entry["total_usd"])
 
     img_cnt = entry["image_count"]
     vid_cnt = entry["video_count"]
@@ -211,7 +217,8 @@ def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
         f"{'LLM':<10}{'':<8}{llm_krw:>6,}원",
         f"{'Imagen4':<10}{img_cnt}장{'':<4}{img_krw:>6,}원",
         f"{'Veo3':<10}{vid_cnt}클립{'':<3}{vid_krw:>6,}원",
-        f"{'ElevenLabs':<10}{tts_c}자{'':<3}{tts_krw:>6,}원",
+        f"{'TTS':<10}{tts_c}자{'':<3}{tts_krw:>6,}원",
+        f"{'Whisper':<10}{'':<8}{whisper_krw:>6,}원",
         "─────────────────────",
         f"{'합계':<10}{'':<8}{total_krw:>6,}원",
     ]

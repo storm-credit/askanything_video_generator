@@ -100,7 +100,7 @@ async def _scheduler_loop():
     print(f"[크론] 스케줄러 시작 ({len(_jobs)}개 작업)")
 
     # 헬스체크 — 등록된 잡 수 확인 + 텔레그램 알림
-    expected_jobs = 5  # deploy, topics, stats, playlists, daily_cost
+    expected_jobs = 6  # deploy, topics, stats, playlists, daily_cost, morning_briefing
     if len(_jobs) < expected_jobs:
         try:
             from modules.utils.notify import notify_warning
