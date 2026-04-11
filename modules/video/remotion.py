@@ -112,6 +112,7 @@ def _prepare_public_dir(
         try:
             os.link(abs_src, dst)
         except OSError:
+            print(f"[Remotion] hardlink 실패, 복사로 전환: {os.path.basename(abs_src)}")
             try:
                 shutil.copy2(abs_src, dst)
             except Exception as e:

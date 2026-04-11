@@ -743,7 +743,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     if _skip_verify or _skip_polish or _skip_visual_director:
         return cuts, topic_folder, title, tags, video_description, fact_context
 
-    return cuts, topic_folder, title, tags, video_description
+    return cuts, topic_folder, title, tags, video_description, ""
 
 
 def _verify_subject_match(cuts: list[dict], topic: str,
@@ -1126,13 +1126,10 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
     academic_patterns_ko = ["연구에 따르면", "과학자들이 발견", "에 의하면", "것으로 밝혀", "것으로 알려져", "분석에 따르면", "논문에 따르면"]
     academic_patterns_en = ["according to", "studies show", "researchers found", "scientists discovered", "research suggests", "a study published"]
     academic_patterns_es = ["según estudios", "los científicos descubrieron", "investigaciones demuestran", "un estudio publicado"]
-    all_scripts_combined = " ".join(c.get("script", "") for c in cuts).lower()
     for pat in academic_patterns_ko + academic_patterns_en + academic_patterns_es:
-        if pat.lower() in all_scripts_combined:
-            # 어떤 컷에서 발견됐는지 찾기
-            for ci, c in enumerate(cuts):
-                if pat.lower() in c.get("script", "").lower():
-                    failures.append(f"ACADEMIC_TONE: Cut {ci+1}에 학술체 '{pat}' — '{c['script'][:50]}'")
+        for ci, c in enumerate(cuts):
+            if pat.lower() in c.get("script", "").lower():
+                failures.append(f"ACADEMIC_TONE: Cut {ci+1}에 학술체 '{pat}' — '{c['script'][:50]}'")
 
     # 6) 포맷별 구조 검증 (format_type이 cuts에 첨부된 경우)
     fmt_type = (cuts[0].get("format_type") or "").upper() if cuts else ""

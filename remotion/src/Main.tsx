@@ -357,6 +357,9 @@ export const Main: React.FC<{
     return { startFrames: frames, contentEndFrame: acc, totalFrames: acc + outroFrames };
   }, [cuts, introFrames, outroFrames]);
 
+  // Precompute emotions per cut — avoid calling extractEmotion twice per cut in render
+  const cutEmotions = useMemo(() => cuts.map(extractEmotion), [cuts]);
+
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
       {/* 브랜드 인트로 (있을 때만) */}
@@ -377,7 +380,7 @@ export const Main: React.FC<{
 
         const visualSrc = cut.visual_path.startsWith('http') ? cut.visual_path : staticFile(cut.visual_path);
         const isVideo = isVideoPath(visualSrc);
-        const emotion = extractEmotion(cut);
+        const emotion = cutEmotions[index];
 
         return (
           <Sequence key={`v-${index}`} from={visualStart} durationInFrames={visualDuration}>
@@ -403,7 +406,7 @@ export const Main: React.FC<{
       {cuts.map((cut, index) => {
         const startFrame = startFrames[index];
         const audioSrc = cut.audio_path.startsWith('http') ? cut.audio_path : staticFile(cut.audio_path);
-        const emotion = extractEmotion(cut);
+        const emotion = cutEmotions[index];
 
         return (
           <Sequence key={`a-${index}`} from={startFrame} durationInFrames={cut.duration_in_frames}>

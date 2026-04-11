@@ -48,7 +48,7 @@ const isEmphasisWord = (word: string): boolean => {
   if (EMPHASIS_PATTERNS.test(clean)) return true;
   if (/^\d/.test(clean)) return true;
   if (clean.length >= 7 && /^[a-z]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;
-  if (clean.length >= 4 && /^[\uAC00-\uD7A3]+$/.test(clean)) return true;
+  if (clean.length >= 5 && /^[\uAC00-\uD7A3]+$/.test(clean)) return true;
   if (/^[\u30A0-\u30FF]{3,}$/.test(clean)) return true;
   if (clean.length >= 4 && /^[\u4E00-\u9FFF]+$/.test(clean)) return true;
   if (clean.length >= 8 && /^[a-zA-Z\u00C0-\u024F]+$/.test(clean) && !EN_STOPWORDS.has(clean)) return true;

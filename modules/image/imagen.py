@@ -155,20 +155,6 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 if not image_bytes:
                     raise ValueError("이미지 생성 결과가 비어 있습니다.")
 
-                # Vision 검증: 생성된 이미지가 프롬프트와 일치하는지 확인
-                verify_key = get_google_key(service="gemini", exclude=tried_keys) or final_api_key
-                if not _verify_image_matches_prompt(image_bytes, enhanced_prompt, verify_key):
-                    if not hasattr(generate_image_imagen, '_vision_retries'):
-                        generate_image_imagen._vision_retries = {}
-                    retry_key = f"{topic_folder}:{index}"
-                    retry_count = generate_image_imagen._vision_retries.get(retry_key, 0)
-                    if retry_count < MAX_VISION_VERIFY_RETRIES:
-                        generate_image_imagen._vision_retries[retry_key] = retry_count + 1
-                        print(f"  [Vision 불일치] 컷 {index+1} 이미지가 프롬프트와 불일치 → 재생성...")
-                        continue  # 같은 키로 재시도
-                    else:
-                        print(f"  [Vision 불일치] 컷 {index+1} 재생성 후에도 불일치 — 결과 유지")
-
                 image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
                 target_size = (1080, 1920)
                 fitted_image = ImageOps.fit(image, target_size, method=Image.LANCZOS, centering=(0.5, 0.5))
