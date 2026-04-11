@@ -160,9 +160,10 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 if not _verify_image_matches_prompt(image_bytes, enhanced_prompt, verify_key):
                     if not hasattr(generate_image_imagen, '_vision_retries'):
                         generate_image_imagen._vision_retries = {}
-                    retry_count = generate_image_imagen._vision_retries.get(index, 0)
+                    retry_key = f"{topic_folder}:{index}"
+                    retry_count = generate_image_imagen._vision_retries.get(retry_key, 0)
                     if retry_count < MAX_VISION_VERIFY_RETRIES:
-                        generate_image_imagen._vision_retries[index] = retry_count + 1
+                        generate_image_imagen._vision_retries[retry_key] = retry_count + 1
                         print(f"  [Vision 불일치] 컷 {index+1} 이미지가 프롬프트와 불일치 → 재생성...")
                         continue  # 같은 키로 재시도
                     else:

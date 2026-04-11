@@ -256,15 +256,25 @@ async def run_auto_deploy(target_date: datetime | None = None,
     # 5. 배포 시작 — 이전 완료 토픽 로드
     date_str = target_date.strftime("%Y-%m-%d")
     completed_keys = _load_state(date_str)
+    # Preserve previous results for crash recovery
+    _prev_results = []
+    try:
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            if prev.get("current_date") == date_str:
+                _prev_results = [r for r in prev.get("results", []) if r.get("status") == "success"]
+    except Exception:
+        pass
 
     _deploy_status = {
         "running": True,
         "current_date": date_str,
         "total": len(schedule),
-        "completed": 0,
+        "completed": len(completed_keys),
         "failed": 0,
         "current_task": None,
-        "results": [],
+        "results": _prev_results,
         "started_at": datetime.now(KST).isoformat(),
         "finished_at": None,
     }
@@ -299,6 +309,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 "error": None,
                 "video_path": None,
             }
+            task_result["_retries"] = item.get("_retries", 0)
 
             try:
                 # v2 오케스트라: 전체 파이프라인을 에이전트 시스템으로 실행
@@ -427,10 +438,10 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     from modules.utils.cost_tracker import record_generation_cost
                     record_generation_cost(
                         channel=channel, success=False,
-                        llm_usd=ctx.total_cost() if "ctx" in dir() else 0.0,
-                        image_count=ctx.image_count if "ctx" in dir() else 0,
-                        video_count=ctx.video_count if "ctx" in dir() else 0,
-                        tts_chars=ctx.tts_chars if "ctx" in dir() else 0,
+                        llm_usd=getattr(ctx, 'total_cost', lambda: 0.0)() if 'ctx' in locals() else 0.0,
+                        image_count=getattr(ctx, 'image_count', 0) if 'ctx' in locals() else 0,
+                        video_count=getattr(ctx, 'video_count', 0) if 'ctx' in locals() else 0,
+                        tts_chars=getattr(ctx, 'tts_chars', 0) if 'ctx' in locals() else 0,
                     )
                 except Exception:
                     pass

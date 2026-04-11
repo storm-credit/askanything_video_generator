@@ -381,7 +381,7 @@ def upload_video(
             print(f"   [포맷 재생목록] 추가 실패 (업로드는 성공): {e}")
 
     # 시리즈별 재생목록 추가
-    if series_id and series_title:
+    if series_title:
         try:
             add_to_series_playlist(video_id, series_id, series_title, channel_id, channel)
         except Exception as e:
@@ -759,7 +759,7 @@ def add_to_format_playlist(video_id: str, format_type: str | None,
 def add_to_series_playlist(video_id: str, series_id: str | None, series_title: str | None,
                            channel_id: str, channel: str = "") -> str | None:
     """시리즈별 재생목록에 영상 추가. 없으면 자동 생성."""
-    if not series_id or not series_title:
+    if not series_title:
         return None
 
     try:
@@ -773,7 +773,10 @@ def add_to_series_playlist(video_id: str, series_id: str | None, series_title: s
         cache_key = f"{channel_id}_series"
         series_map = cache.get(cache_key, {})
 
-        playlist_id = series_map.get(series_id)
+        # series_id가 None이면 series_title을 캐시 키로 사용
+        series_cache_key = series_id if series_id else series_title
+
+        playlist_id = series_map.get(series_cache_key)
         if not playlist_id:
             # 기존 재생목록 검색
             resp = youtube.playlists().list(part="snippet", mine=True, maxResults=50).execute()
@@ -787,7 +790,7 @@ def add_to_series_playlist(video_id: str, series_id: str | None, series_title: s
                 body = {
                     "snippet": {
                         "title": series_title,
-                        "description": f"시리즈: {series_id}",
+                        "description": f"시리즈: {series_id or series_title}",
                     },
                     "status": {"privacyStatus": "public"},
                 }
@@ -796,7 +799,7 @@ def add_to_series_playlist(video_id: str, series_id: str | None, series_title: s
                 print(f"  ✅ 시리즈 재생목록 생성: {series_title} ({playlist_id})")
 
             # 캐시 저장
-            series_map[series_id] = playlist_id
+            series_map[series_cache_key] = playlist_id
             cache[cache_key] = series_map
             _save_ext_playlist_cache(cache)
 

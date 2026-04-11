@@ -125,7 +125,7 @@ def log_failure(channel: str, topic: str, error_msg: str,
 def send_failure_telegram(entry: dict):
     """텔레그램으로 상세 실패 알림."""
     try:
-        from modules.utils.notify import send_telegram
+        from modules.utils.notify import _send as send_telegram
     except ImportError:
         print("[FailureAnalyzer] 텔레그램 모듈 없음")
         return

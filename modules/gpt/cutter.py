@@ -204,7 +204,7 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
     _last_gemini_request_time = _time.time()
 
     from google.genai import types
-    from modules.utils.gemini_client import create_gemini_client, get_backend_label
+    from modules.utils.gemini_client import create_gemini_client, get_backend_label, get_current_sa_key, mark_sa_key_blocked
     model_name = model_override or os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
     client = create_gemini_client(api_key=api_key)
 
@@ -461,6 +461,10 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             if is_retryable and llm_provider == "gemini":
                 mark_key_exhausted(current_key, service="gemini")
                 exhausted_keys.add(current_key)
+                # Vertex AI SA 키 블록 (429 시 자동 로테이션)
+                _sa_key = get_current_sa_key()
+                if _sa_key:
+                    mark_sa_key_blocked(_sa_key, block_seconds=60)
                 next_key = get_google_key(None, service="gemini", exclude=exhausted_keys)
 
                 if next_key and next_key not in exhausted_keys:

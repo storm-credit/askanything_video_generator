@@ -147,11 +147,6 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
                 os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
                 with open(output_path, "wb") as f:
                     f.write(resp.content)
-                try:
-                    from modules.utils.audio import normalize_audio_lufs
-                    normalize_audio_lufs(output_path)
-                except Exception as norm_err:
-                    print(f"  [Qwen3-TTS] LUFS 정규화 건너뜀: {norm_err}")
                 print(f"OK [Qwen3-TTS] 컷 음성 생성 완료! ({len(resp.content)//1024}KB)")
                 return output_path
             else:

@@ -283,7 +283,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         print(f"[Remotion 보안 오류] topic_folder가 비어 있거나 경로 이탈 시도: {folder_name}")
         return None
 
-    camera = camera_style if camera_style in ("auto", "dynamic", "gentle", "static") else "dynamic"
+    camera = camera_style if camera_style in ("auto", "dynamic", "gentle", "static", "cinematic") else "dynamic"
 
     # 최소 public dir 생성 (필요한 파일만 ASCII 이름으로)
     pub_dir, path_map = _prepare_public_dir(

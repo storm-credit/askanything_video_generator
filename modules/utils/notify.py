@@ -12,8 +12,8 @@ import json
 import requests
 from datetime import datetime
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8216083122:AAH1RgfXUGvfDJPSWz7NRjTDwOzNOprfNng")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "1703019448")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # 채널별 이모지

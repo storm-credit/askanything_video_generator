@@ -24,6 +24,7 @@ _sa_key_files: list[str] = []
 _current_sa_idx = 0
 _sa_lock = threading.Lock()
 _sa_blocked: dict[int, float] = {}  # idx → unblock_time
+_last_used_sa_key: str | None = None  # 마지막으로 선택된 SA 키 파일 경로
 
 
 def _get_backend() -> str:
@@ -62,7 +63,7 @@ def _discover_sa_keys() -> list[str]:
 
 def _get_next_sa_key() -> str | None:
     """다음 사용 가능한 SA 키 파일 반환. 429 블록된 키 스킵."""
-    global _current_sa_idx
+    global _current_sa_idx, _last_used_sa_key
     keys = _discover_sa_keys()
     if not keys:
         return None
@@ -75,6 +76,7 @@ def _get_next_sa_key() -> str | None:
             blocked_until = _sa_blocked.get(idx, 0)
             if now >= blocked_until:
                 _current_sa_idx = idx + 1
+                _last_used_sa_key = keys[idx]
                 return keys[idx]
             _current_sa_idx += 1
 
@@ -85,7 +87,13 @@ def _get_next_sa_key() -> str | None:
             print(f"[Gemini Client] 모든 SA 키 블록됨, {wait:.0f}초 대기...")
             time.sleep(wait)
         _current_sa_idx = earliest_idx + 1
+        _last_used_sa_key = keys[earliest_idx]
         return keys[earliest_idx]
+
+
+def get_current_sa_key() -> str | None:
+    """마지막으로 사용된 SA 키 파일 경로 반환 — 429 시 mark_sa_key_blocked 호출용."""
+    return _last_used_sa_key
 
 
 def mark_sa_key_blocked(key_file: str, block_seconds: int = 60):

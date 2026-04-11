@@ -63,7 +63,7 @@ class AgentContext:
     video_model: str = "hero-only"
     voice_id: str | None = None
     voice_settings: dict | None = None
-    tts_speed: float = 0.9
+    tts_speed: float = 1.05
     camera_style: str = "auto"
     bgm_theme: str = "random"
     platforms: list[str] = field(default_factory=lambda: ["youtube"])
