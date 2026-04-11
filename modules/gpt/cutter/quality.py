@@ -67,6 +67,13 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
     if any(p in last_script.lower() for p in bad_cta):
         failures.append(f"LOOP_CTA: 마지막 컷에 빈 약속 CTA — '{last_script[:50]}'")
 
+    # 3-b) [LOOP] 태그 공통 검증 — 마지막 컷에 [LOOP] 존재 필수 (EMOTIONAL_SCI 제외)
+    fmt_type = (cuts[0].get("format_type", "") or "").upper() if cuts else ""
+    if fmt_type and fmt_type != "EMOTIONAL_SCI":
+        last_desc = cuts[-1].get("description", cuts[-1].get("text", ""))
+        if "LOOP" not in last_desc.upper():
+            failures.append(f"LOOP_MISSING: 마지막 컷에 [LOOP] 태그 없음 — 루프 엔딩 필수 ({fmt_type})")
+
     # 4) 이미지 임팩트 검증 — Cut 1에 시각적 키워드 있는지
     first_prompt = cuts[0].get("prompt", "").lower()
     impact_keywords = [
@@ -154,6 +161,14 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
             failures.append("FORMAT_IF: 컷1 [SHOCK] 태그 없음 — 가정 선언 컷 필수")
+        # 연쇄 결과 컷 최소 2개 (CHAIN/ESCALATE/BUILD 태그)
+        chain_tags = {"CHAIN", "ESCALATE", "BUILD"}
+        chain_count = sum(
+            1 for c in cuts
+            if any(t in (c.get("description", "") or c.get("text", "")).upper() for t in chain_tags)
+        )
+        if chain_count < 2:
+            failures.append(f"FORMAT_IF: 연쇄 결과 컷 {chain_count}개 (최소 2개 CHAIN/ESCALATE 필요)")
 
     elif fmt_type == "COUNTDOWN":
         # 컷1 [SHOCK] 필수
@@ -164,6 +179,14 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
         if not has_reveal:
             failures.append("FORMAT_COUNTDOWN: [REVEAL] 태그 없음 — 1위 공개 컷 필수")
+        # 순위 숫자 존재 검증 — 스크립트에 숫자가 최소 3개 컷에 있어야 (5위~1위)
+        import re as _re
+        cuts_with_numbers = sum(
+            1 for c in cuts
+            if _re.search(r'\d+\s*(?:위|등|번째|th|st|nd|rd|°|lugar)', c.get("script", ""), _re.IGNORECASE)
+        )
+        if cuts_with_numbers < 3:
+            failures.append(f"FORMAT_COUNTDOWN: 순위 표기 {cuts_with_numbers}컷 (최소 3컷 이상 순위 숫자 필요)")
 
     elif fmt_type == "SCALE":
         # 컷1 [SHOCK] 필수
@@ -189,6 +212,14 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
         if not has_reveal:
             failures.append("FORMAT_FACT: [REVEAL] 태그 없음 — 핵심 사실 공개 컷 필수")
+        # 수치/통계 밀도 검증 — 수치 없는 컷 3개 이상 → FAIL
+        import re as _re
+        cuts_without_numbers = sum(
+            1 for c in cuts
+            if not _re.search(r'\d', c.get("script", ""))
+        )
+        if cuts_without_numbers >= 3:
+            failures.append(f"FORMAT_FACT: 수치 없는 컷 {cuts_without_numbers}개 (최대 2개 허용)")
 
     elif fmt_type == "MYSTERY":
         # 컷1 [SHOCK] 필수
@@ -199,6 +230,16 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         last_desc = cuts[-1].get("description", cuts[-1].get("text", ""))
         if "LOOP" not in last_desc.upper():
             failures.append("FORMAT_MYSTERY: 마지막 컷 [LOOP] 태그 없음 — 열린 결말 필수")
+        # 마지막 컷 SHOCK/URGENCY 금지 — 열린 결말에 부적합
+        if any(t in last_desc.upper() for t in ("SHOCK", "URGENCY")):
+            failures.append("FORMAT_MYSTERY: 마지막 컷 [SHOCK/URGENCY] 금지 — 열린 결말에 부적합")
+        # 가설/이론 최소 2개 — [TENSION] 태그 2개 이상 필요
+        tension_count = sum(
+            1 for c in cuts
+            if "TENSION" in (c.get("description", "") or c.get("text", "")).upper()
+        )
+        if tension_count < 2:
+            failures.append(f"FORMAT_MYSTERY: 가설 {tension_count}개 (이론/가설 최소 2개 필요 — [TENSION] 컷)")
 
     # 7) 톤-채널 일치 검증
     if channel:
