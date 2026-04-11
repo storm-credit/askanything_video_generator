@@ -47,7 +47,7 @@ FRAGMENT: dict[str, str] = {
 - 컷11 [LOOP]:     새 가정 예고 (선택)
 
 문장 규칙:
-- 각 컷 1문장, 15자 이내
+- 각 컷 1문장, 20자 이내 — 군더더기 없이 핵심만
 - 연쇄 결과는 인과관계 명확하게
 
 이미지 프롬프트:
@@ -99,7 +99,7 @@ Cut structure (10-11 cuts):
 - Cut 11 [LOOP]:     New premise teaser (optional)
 
 Sentence rules:
-- One sentence per cut, 8 words max
+- One sentence per cut, 10 words max — each word must earn its place
 - Chain reactions must have clear cause and effect
 
 Image prompts:

@@ -90,7 +90,7 @@ Cut structure (7~8 cuts):
 - Cut 7  [LOOP]:    "There's another twist..." → hint at next paradox
 
 Script rules:
-- 1 sentence per cut, 8~14 words
+- 1 sentence per cut, 11~14 words — evidence-packed, no filler
 - Use transition words at reversal points: "But/However/Actually"
 - Minimum 1 study/paper/institution citation
 - Active declarative only
@@ -144,7 +144,7 @@ Estructura de cortes (7~8 cortes):
 - Corte 7  [LOOP]:    "Hay otro giro más..." → insinuar próxima paradoja
 
 Reglas de script:
-- 1 oración por corte, 8~16 palabras
+- 1 oración por corte, 12~16 palabras — con evidencia, sin relleno
 - Usar palabras de transición en puntos de reversión: "Pero/Sin embargo/En realidad"
 - Mínimo 1 cita de estudio/institución
 - Solo declarativo activo

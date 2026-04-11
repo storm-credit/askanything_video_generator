@@ -27,7 +27,7 @@ FRAGMENT: dict[str, str] = {
 === 구조 규칙 ===
 이 영상은 "숨겨진 사실을 파헤치는 조사관"의 구조다.
 
-컷 구조 (8~10컷):
+컷 구조 (8~11컷):
 - 컷1  [SHOCK]:   가장 충격적인 팩트 단도직입. 숫자/규모/시간 포함 필수.
                   "아무도 모르는 X의 진실" 구조 — 질문형 절대 금지
 - 컷2  [WONDER]:  배경 세계관 설정 — 왜 이게 존재하는가
@@ -79,7 +79,7 @@ If any fail, rewrite entirely.
 === Structural Rules ===
 This video is structured as an "investigator uncovering hidden truths."
 
-Cut structure (8~10 cuts):
+Cut structure (8~11 cuts):
 - Cut 1  [SHOCK]:   The most shocking fact, point-blank. MUST include number/scale/timeframe.
                     "The truth nobody talks about X" — NO questions
 - Cut 2  [WONDER]:  World-building — why does this exist
@@ -89,7 +89,7 @@ Cut structure (8~10 cuts):
 - Cut N  [LOOP]:    "There's something just as shocking..." / curiosity ignition loop
 
 Script rules:
-- 1 sentence per cut, 12~18 words (EN)
+- 1 sentence per cut, 8~12 words — data-dense, no filler
 - Minimum 1 statistic/proper noun/measurement per cut
 - No passive voice — active declarative only
 

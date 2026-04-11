@@ -89,9 +89,9 @@ Self-check before outputting:
 If any fail, rewrite entirely.
 
 === Structural Rules ===
-Science through emotional resonance. 8 cuts. Empathy over shock.
+Science through emotional resonance. 8-9 cuts. Empathy over shock.
 
-Cut structure (8 cuts) + emotion tags (must appear in description field):
+Cut structure (8-9 cuts) + emotion tags (must appear in description field):
 - Cut 1 [WONDER]:   Relatable everyday moment. "Have you ever ○○?"
 - Cut 2 [TENSION]:  The science — conversational, never textbook
 - Cut 3 [IDENTITY]: Human connection — "In other words, your body is ○○ right now"
