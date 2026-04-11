@@ -36,7 +36,7 @@ COPY blender/ blender/
 COPY preflight_check.py syntax_check.py ./
 
 # Create directories
-RUN mkdir -p assets brand client_secrets youtube_tokens tiktok_tokens
+RUN mkdir -p assets brand client_secrets youtube_tokens tiktok_tokens data
 
 EXPOSE 8004
 
