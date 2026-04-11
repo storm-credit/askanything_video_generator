@@ -29,9 +29,9 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         _hook_preset = _get_hook_preset(channel)
         _hook_lang = (_hook_preset or {}).get("language", "en")
         if _hook_lang == "ko":
-            # 한국어: 15자 초과 시 reject
-            if len(first_script.replace(" ", "")) > 15:
-                failures.append(f"HOOK_TOO_LONG: KO 훅 {len(first_script.replace(' ', ''))}자 (최대 15자) — '{first_script[:30]}'")
+            # 한국어: 20자 초과 시 reject (WHO_WINS/IF 등 포맷 프롬프트 20자 기준)
+            if len(first_script.replace(" ", "")) > 20:
+                failures.append(f"HOOK_TOO_LONG: KO 훅 {len(first_script.replace(' ', ''))}자 (최대 20자) — '{first_script[:30]}'")
         elif _hook_lang == "en":
             # 영어: 10단어 초과 시 reject
             word_count = len(first_script.split())
@@ -44,19 +44,20 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                 failures.append(f"HOOK_TOO_LONG: ES 훅 {word_count}단어 (최대 12) — '{first_script[:40]}'")
 
     # 2) 긴장 상승 검증 — 감정 태그 다양성
-    emotions = []
-    for c in cuts:
+    emotions: list[tuple[int, str]] = []  # (컷 인덱스, 태그)
+    for ci, c in enumerate(cuts):
         desc = c.get("text", "") or c.get("description", "")
-        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY"]:
+        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY", "LOOP", "CALM"]:
             if tag in desc.upper():
-                emotions.append(tag)
+                emotions.append((ci, tag))
                 break
-    if len(set(emotions)) < 3:
-        failures.append(f"TENSION_FLAT: 감정 태그 {len(set(emotions))}종류 (최소 3 필요)")
-    # 2연속 동일 감정 태그 체크
+    unique_tags = {t for _, t in emotions}
+    if len(unique_tags) < 3:
+        failures.append(f"TENSION_FLAT: 감정 태그 {len(unique_tags)}종류 (최소 3 필요)")
+    # 2연속 동일 감정 태그 체크 (실제 컷 번호 사용)
     for i in range(1, len(emotions)):
-        if emotions[i] == emotions[i-1]:
-            failures.append(f"EMOTION_REPEAT: 컷 {i}~{i+1} 동일 태그 [{emotions[i]}] 연속")
+        if emotions[i][1] == emotions[i-1][1]:
+            failures.append(f"EMOTION_REPEAT: 컷 {emotions[i-1][0]+1}~{emotions[i][0]+1} 동일 태그 [{emotions[i][1]}] 연속")
 
     # 3) 루프 연결 검증 — 마지막 컷이 미완성 문장인지
     last_script = cuts[-1].get("script", "")
@@ -89,10 +90,12 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
     academic_patterns_ko = ["연구에 따르면", "과학자들이 발견", "에 의하면", "것으로 밝혀", "것으로 알려져", "분석에 따르면", "논문에 따르면"]
     academic_patterns_en = ["according to", "studies show", "researchers found", "scientists discovered", "research suggests", "a study published"]
     academic_patterns_es = ["según estudios", "los científicos descubrieron", "investigaciones demuestran", "un estudio publicado"]
+    _academic_flagged: set[int] = set()
     for pat in academic_patterns_ko + academic_patterns_en + academic_patterns_es:
         for ci, c in enumerate(cuts):
-            if pat.lower() in c.get("script", "").lower():
+            if ci not in _academic_flagged and pat.lower() in c.get("script", "").lower():
                 failures.append(f"ACADEMIC_TONE: Cut {ci+1}에 학술체 '{pat}' — '{c['script'][:50]}'")
+                _academic_flagged.add(ci)
 
     # 6) 스크립트 내용 중복 감지 — 같은 팩트 반복 방지
     if len(cuts) >= 4:

@@ -23,10 +23,7 @@ export function useLocalSettings() {
   const [voiceId, setVoiceId] = useState(() => loadSetting("voiceId", "auto"));
   const [captionSize, setCaptionSize] = useState(() => loadSetting("captionSize", 54));
   const [captionY, setCaptionY] = useState(() => loadSetting("captionY", 38));
-  const [outputPath, setOutputPath] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem("askanything_output_path") || "";
-  });
+  const [outputPath, setOutputPath] = useState("");
 
   // localStorage → state restore (hydration, runs once)
   useEffect(() => {
@@ -53,6 +50,7 @@ export function useLocalSettings() {
     setVoiceId(_load("voiceId", "auto"));
     setCaptionSize(_load("captionSize", 54));
     setCaptionY(_load("captionY", 38));
+    try { setOutputPath(localStorage.getItem("askanything_output_path") || ""); } catch {}
   }, []);
 
   // Auto-save settings to localStorage

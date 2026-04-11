@@ -81,7 +81,7 @@ class GenerateRequest(BaseModel):
     @field_validator("language")
     @classmethod
     def valid_language(cls, v: str) -> str:
-        allowed = {"ko", "en", "de", "da", "no", "es", "fr", "pt", "it", "nl", "sv", "pl", "ru", "ja", "zh", "ar", "tr", "hi"}
+        allowed = {"ko", "en", "de", "da", "no", "es", "fr", "pt", "it", "nl", "sv", "pl", "ru", "ja", "zh", "ar", "tr", "hi", "auto"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 언어: {v}. 허용: {allowed}")
         return v
@@ -871,11 +871,17 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 비용 추적 (단일 생성 경로)
             try:
-                from modules.utils.cost_tracker import record_generation_cost
+                from modules.utils.cost_tracker import record_generation_cost, calc_llm_cost
                 _n_cuts = len(cuts) if cuts else 0
+                _llm_model = req.llmModel or "gemini-2.5-pro"
+                # LLM 토큰 추정: 시스템 프롬프트 ~2K + 출력 ~1K per cut
+                _est_input = 2000 + _n_cuts * 200
+                _est_output = _n_cuts * 300
+                _llm_usd = calc_llm_cost(_llm_model, _est_input, _est_output)
                 record_generation_cost(
                     channel=req.channel or "unknown",
                     success=True,
+                    llm_usd=_llm_usd,
                     image_count=_n_cuts,
                     video_count=1 if active_video_engine != "none" else 0,
                     tts_chars=sum(len(s) for s in scripts if s),

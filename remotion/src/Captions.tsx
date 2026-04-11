@@ -35,7 +35,7 @@ const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
   DISBELIEF: '#FF3B30',  // 빨강 — 불신
   IDENTITY:  '#34C759',  // 초록 — 공감/정체성
   CALM:      '#FFFFFF',  // 흰색 — 차분
-  LOOP:      '#A78BFA',  // 보라 — 루프 (다시 처음으로)
+  LOOP:      '#C084FC',  // 밝은 보라 — 루프 (다시 처음으로)
 };
 const DEFAULT_HIGHLIGHT = '#FFE600';
 
@@ -66,12 +66,14 @@ const calcCJKFontSize = (words: { word: string }[], base: number): number => {
   const gapPx = Math.max(words.length - 1, 0) * 12; // word gap 12px
   const availWidth = EFFECTIVE_WIDTH - gapPx;
   const maxByWidth = Math.floor(availWidth / Math.max(totalChars * 1.02, 1));
-  return Math.max(64, Math.min(base, maxByWidth));
+  return Math.max(72, Math.min(base, maxByWidth));
 };
 
 const calcLatinFontSize = (words: { word: string }[], base: number): number => {
   const totalChars = words.reduce((s, w) => s + w.word.length + 1, 0); // +1 for space
-  const maxByWidth = Math.floor(EFFECTIVE_WIDTH / Math.max(totalChars * 0.6, 1));
+  const gapPx = Math.max(words.length - 1, 0) * 12; // word gap 12px (CJK와 동일)
+  const availWidth = EFFECTIVE_WIDTH - gapPx;
+  const maxByWidth = Math.floor(availWidth / Math.max(totalChars * 0.6, 1));
   return Math.max(52, Math.min(base, maxByWidth));
 };
 

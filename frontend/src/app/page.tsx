@@ -429,7 +429,7 @@ export default function Home() {
 
       {/* Multi-channel generation panel */}
       <AnimatePresence>
-        {(sse.isGenerating && settings.selectedChannels.length >= 2 || Object.values(sse.channelResults).some(r => r.status === 'done')) && Object.keys(sse.channelResults).length > 0 && (
+        {((sse.isGenerating && settings.selectedChannels.length >= 2) || Object.values(sse.channelResults).some(r => r.status === 'done')) && Object.keys(sse.channelResults).length > 0 && (
           <MultiChannelPanel
             channelResults={sse.channelResults}
             channelPreviews={sse.channelPreviews}

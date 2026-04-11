@@ -35,7 +35,7 @@ PRICE = {
     "whisper":          0.006 / 60,   # per second ($0.006/min)
 }
 
-_DAILY_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "assets", ".daily_cost.json")
+_DAILY_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", ".daily_cost.json")
 _lock = threading.Lock()
 
 
@@ -196,11 +196,13 @@ def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
     img_krw   = usd_to_krw(entry["image_usd"])
     vid_krw   = usd_to_krw(entry["video_usd"])
     tts_krw   = usd_to_krw(entry["tts_usd"])
+    whisper_krw = usd_to_krw(entry.get("whisper_usd", 0.0))
     total_krw = usd_to_krw(entry["total_usd"])
 
     img_cnt = entry["image_count"]
     vid_cnt = entry["video_count"]
     tts_c   = entry["tts_chars"]
+    wh_secs = entry.get("whisper_secs", 0.0)
 
     lines = [
         f"<b>💰 생성 비용 — {channel}</b>",
@@ -212,6 +214,7 @@ def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
         f"{'Imagen4':<10}{img_cnt}장{'':<4}{img_krw:>6,}원",
         f"{'Veo3':<10}{vid_cnt}클립{'':<3}{vid_krw:>6,}원",
         f"{'ElevenLabs':<10}{tts_c}자{'':<3}{tts_krw:>6,}원",
+        f"{'Whisper':<10}{wh_secs:.0f}초{'':<3}{whisper_krw:>6,}원",
         "─────────────────────",
         f"{'합계':<10}{'':<8}{total_krw:>6,}원",
     ]

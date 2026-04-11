@@ -67,13 +67,19 @@ class UploadAgent(BaseAgent):
                 if plat == "youtube":
                     from modules.upload.youtube import upload_video as yt_upload
                     yield f"[UploadAgent] YouTube 업로드 시작... ({yt_privacy})\n"
+                    # description: LLM 생성 설명 우선, 없으면 스크립트 요약
+                    _yt_desc = ctx.description if ctx.description else "\n".join(s.strip() for s in ctx.scripts[:3] if s.strip())
+                    # 태그: 콘텐츠 태그 우선, 채널/언어는 빈 슬롯에만
+                    _content_tags = [t.lstrip("#") for t in (ctx.tags or [])][:3]
+                    _extra_tags = [ctx.channel, ctx.language]
+                    _yt_tags = (_content_tags + [t for t in _extra_tags if t])[:5]
                     yt_result = await loop.run_in_executor(
                         None,
                         lambda: yt_upload(
                             video_path=abs_video_path,
                             title=ctx.title,
-                            description="\n".join(s.strip() for s in ctx.scripts if s.strip()),
-                            tags=([t.lstrip("#") for t in ctx.tags] + [ctx.channel, ctx.language])[:5],
+                            description=_yt_desc,
+                            tags=_yt_tags,
                             privacy=yt_privacy,
                             channel_id=account_id,
                             publish_at=yt_publish_at,
