@@ -47,7 +47,7 @@ export function ChannelSelector({ settings, isGenerating }: ChannelSelectorProps
         })}
       </div>
       {/* Format selection */}
-      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+      <div className="flex items-center justify-center gap-1 sm:gap-1.5 flex-wrap">
         {[
           { value: "auto", label: "\uc790\ub3d9" },
           { value: "WHO_WINS", label: "WHO WINS" },
@@ -61,9 +61,10 @@ export function ChannelSelector({ settings, isGenerating }: ChannelSelectorProps
         ].map((fmt) => (
           <button
             key={fmt.value}
+            type="button"
             onClick={() => setFormatType(fmt.value)}
             disabled={isGenerating}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+            className={`px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-medium border transition-colors ${
               formatType === fmt.value
                 ? "bg-orange-500/20 border-orange-500/50 text-orange-300"
                 : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"

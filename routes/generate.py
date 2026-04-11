@@ -971,6 +971,7 @@ async def generate_video_v2(req: GenerateRequest):
         api_key_override=req.apiKey,
         elevenlabs_key=req.elevenlabsKey,
         gemini_keys_override=req.geminiKeys,
+        format_type=req.formatType,
     )
 
     orchestrator = MainOrchestrator()

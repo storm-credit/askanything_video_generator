@@ -119,8 +119,7 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                         f"({len(overlap)}/{min(len(words_i), len(words_j))}단어 일치)"
                     )
 
-    # 7) 포맷별 구조 검증 (format_type이 cuts에 첨부된 경우)
-    fmt_type = (cuts[0].get("format_type") or "").upper() if cuts else ""
+    # 7) 포맷별 구조 검증 (format_type은 line 71에서 이미 추출됨)
 
     if fmt_type == "WHO_WINS":
         # 컷1 반드시 [SHOCK]
@@ -183,7 +182,7 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         import re as _re
         cuts_with_numbers = sum(
             1 for c in cuts
-            if _re.search(r'\d+\s*(?:위|등|번째|th|st|nd|rd|°|lugar)', c.get("script", ""), _re.IGNORECASE)
+            if _re.search(r'\d+\s*(?:위|등|번째|th|st|nd|rd|°|lugar|er[oa]?|t[oa]s?)', c.get("script", ""), _re.IGNORECASE)
         )
         if cuts_with_numbers < 3:
             failures.append(f"FORMAT_COUNTDOWN: 순위 표기 {cuts_with_numbers}컷 (최소 3컷 이상 순위 숫자 필요)")
