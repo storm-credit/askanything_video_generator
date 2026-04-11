@@ -50,45 +50,8 @@ def _cleanup_sessions():
     cleanup_sessions()
 
 
-# ── 자동 음성 선택 ────────────────────────────────────────────────
-
-# ElevenLabs premade voice IDs
-_VOICE_MAP = {
-    "eric":    "cjVigY5qzO86Huf0OWal",
-    "adam":    "pNInz6obpgDQGcFmaJgB",
-    "brian":   "nPczCjzI2devNBz1zQrb",
-    "bill":    "pqHfZKP75CvOlQylNhV4",
-    "daniel":  "onwK4e9ZLuTAKqWW03F9",
-    "rachel":  "21m00Tcm4TlvDq8ikWAM",
-    "sarah":   "EXAVITQu4vr4xnSDxMaL",
-    "matilda": "XrExE9yKIg1WjnnlVkGX",
-    "charlie": "IKne3meq5aSn9XLyUdCD",
-    "antoni":  "ErXwobaYiN019PkySvjV",
-    "george":  "JBFqnCBsd6RMkjVDRZzb",
-}
-
-_VOICE_ID_TO_NAME = {v: k.capitalize() for k, v in _VOICE_MAP.items()}
-
-_TONE_RULES: list[tuple[list[str], str]] = [
-    (["공포", "호러", "귀신", "유령", "살인", "미스터리", "괴담", "소름", "horror", "ghost", "murder", "creepy", "dark", "죽음", "저주", "심령", "폐허"], "george"),
-    (["웃긴", "유머", "밈", "meme", "funny", "코미디", "개그", "ㅋㅋ", "레전드", "웃음", "드립", "짤"], "charlie"),
-    (["과학", "기술", "AI", "인공지능", "우주", "NASA", "양자", "물리", "화학", "생물", "science", "tech", "quantum", "로봇", "컴퓨터", "프로그래밍"], "daniel"),
-    (["역사", "전쟁", "고대", "조선", "제국", "세계대전", "history", "ancient", "war", "왕조", "문명", "유적"], "bill"),
-    (["감동", "힐링", "동기부여", "motivation", "inspiring", "감성", "위로", "희망", "사랑", "인생", "명언"], "matilda"),
-    (["뉴스", "시사", "경제", "정치", "주식", "투자", "부동산", "금리", "인플레이션", "news", "economy", "stock", "비트코인", "코인"], "adam"),
-    (["자연", "동물", "여행", "바다", "산", "nature", "animal", "travel", "풍경", "safari", "ocean"], "sarah"),
-]
-
-
-def _auto_select_voice(topic: str, language: str = "ko") -> str:
-    """주제 키워드를 분석하여 최적의 ElevenLabs 음성을 자동 선택합니다."""
-    topic_lower = topic.lower()
-    for keywords, voice_name in _TONE_RULES:
-        for kw in keywords:
-            if kw.lower() in topic_lower:
-                print(f"[음성 자동 선택] '{kw}' 매칭 → {voice_name} ({_VOICE_MAP[voice_name][:12]}...)")
-                return _VOICE_MAP[voice_name]
-    return _VOICE_MAP["eric"]
+# ── 음성 선택 → services/ ────────────────────────────────────────
+from services.voice import auto_select_voice as _auto_select_voice, VOICE_MAP as _VOICE_MAP
 
 
 # ── Pydantic 모델 ─────────────────────────────────────────────────

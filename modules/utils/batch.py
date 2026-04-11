@@ -16,7 +16,7 @@ import threading
 from datetime import datetime
 from typing import Any
 
-DB_PATH = os.path.join("assets", "batch_queue.db")
+DB_PATH = os.path.join("data", "batch_queue.db")
 _lock = threading.Lock()
 _db_initialized = False
 
