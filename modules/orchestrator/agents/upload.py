@@ -73,7 +73,7 @@ class UploadAgent(BaseAgent):
                             video_path=abs_video_path,
                             title=ctx.title,
                             description="\n".join(s.strip() for s in ctx.scripts if s.strip()),
-                            tags=[t.lstrip("#") for t in ctx.tags] + [ctx.channel, ctx.language],
+                            tags=([t.lstrip("#") for t in ctx.tags] + [ctx.channel, ctx.language])[:5],
                             privacy=yt_privacy,
                             channel_id=account_id,
                             publish_at=yt_publish_at,

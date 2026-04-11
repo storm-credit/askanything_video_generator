@@ -107,9 +107,10 @@ class GenerateRequest(BaseModel):
     language: str = "ko"
     cameraStyle: str = "auto"
     bgmTheme: str = "random"
+    formatType: str | None = None  # 포맷 타입: WHO_WINS, IF, EMOTIONAL_SCI, FACT, COUNTDOWN, SCALE, PARADOX, MYSTERY
     channel: str | None = None  # 채널별 인트로/아웃트로: "askanything", "wonderdrop" 등
     platforms: list[str] = ["youtube"]  # 렌더 플랫폼: "youtube", "tiktok", "reels"
-    ttsSpeed: float = 0.9  # TTS 속도: 0.7(느림) ~ 1.0(기본) ~ 1.2(빠름)
+    ttsSpeed: float = 1.05  # TTS 속도: 0.7(느림) ~ 1.05(기본) ~ 1.3(빠름)
     voiceId: str | None = None  # ElevenLabs 음성 ID
     captionSize: int = Field(48, ge=32, le=72)  # 자막 폰트 크기 (px)
     captionY: int = Field(28, ge=10, le=50)  # 자막 높이 (%): 하단 기준
@@ -461,6 +462,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     channel=req.channel,
                     llm_model=llm_model_override,
                     reference_url=ref_url,
+                    format_type=req.formatType,
                 ),
             )
 

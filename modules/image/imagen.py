@@ -14,7 +14,6 @@ from modules.utils.project_quota import quota_manager
 
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수
 MAX_PROJECT_RETRIES = 5  # 프로젝트 전환 최대 횟수
-MAX_VISION_VERIFY_RETRIES = 1  # 이미지-프롬프트 불일치 시 재생성 횟수
 
 
 

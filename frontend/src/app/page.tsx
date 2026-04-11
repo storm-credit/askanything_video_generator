@@ -44,6 +44,7 @@ export default function Home() {
   const [language, setLanguage] = useState(() => loadSetting("language", "ko"));
   const [cameraStyle, setCameraStyle] = useState(() => loadSetting("cameraStyle", "cinematic"));
   const [bgmTheme, setBgmTheme] = useState(() => loadSetting("bgmTheme", "random"));
+  const [formatType, setFormatType] = useState(() => loadSetting("formatType", "auto"));
 
   // 오늘 할 일 모달
   const [showTodayModal, setShowTodayModal] = useState(false);
@@ -87,6 +88,7 @@ export default function Home() {
     saveSetting("language", language);
     saveSetting("cameraStyle", cameraStyle);
     saveSetting("bgmTheme", bgmTheme);
+    saveSetting("formatType", formatType);
     saveSetting("channel", channel);
     saveSetting("selectedChannels", selectedChannels);
     saveSetting("platforms", platforms);
@@ -95,7 +97,7 @@ export default function Home() {
     saveSetting("captionSize", captionSize);
     saveSetting("captionY", captionY);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qualityPreset, llmProvider, llmModel, imageEngine, imageModel, videoEngine, videoModel, testMode, language, cameraStyle, bgmTheme, channel, selectedChannels, platforms, ttsSpeed, voiceId, captionSize, captionY]);
+  }, [qualityPreset, llmProvider, llmModel, imageEngine, imageModel, videoEngine, videoModel, testMode, language, cameraStyle, bgmTheme, formatType, channel, selectedChannels, platforms, ttsSpeed, voiceId, captionSize, captionY]);
 
   // localStorage → state 복원 (hydration 후 1회만 실행)
   useEffect(() => {
@@ -114,6 +116,7 @@ export default function Home() {
     setLanguage(_load("language", "ko"));
     setCameraStyle(_load("cameraStyle", "cinematic"));
     setBgmTheme(_load("bgmTheme", "random"));
+    setFormatType(_load("formatType", "auto"));
     setChannel(_load("channel", ""));
     setSelectedChannels(_load("selectedChannels", []));
     setPlatforms(_load("platforms", ["youtube"]));
@@ -214,7 +217,7 @@ export default function Home() {
       setSavedSessions(data.sessions || []);
       setSelectedFolders(new Set());
       setShowSessionBrowser(true);
-    } catch { alert("세션 목록 로드 실패"); }
+    } catch { setErrorMessage("세션 목록 로드 실패"); }
   };
 
   // 세션 복원
@@ -249,7 +252,7 @@ export default function Home() {
           if (data.recommendedVideoModel) setVideoModel(data.recommendedVideoModel);
         }
       }
-      if (Object.keys(newPreviews).length === 0) { alert("세션 복원 실패"); return; }
+      if (Object.keys(newPreviews).length === 0) { setErrorMessage("세션 복원 실패"); return; }
       if (Object.keys(newPreviews).length === 1 && !Object.values(newPreviews)[0].channel) {
         setPreviewData(Object.values(newPreviews)[0]);
       } else {
@@ -264,7 +267,7 @@ export default function Home() {
       setTopic(lastTitle);
       setPreviewMode(true);
       setShowSessionBrowser(false);
-    } catch (e) { console.error("세션 복원 오류:", e); alert("세션 복원 중 오류: " + (e instanceof Error ? e.message : String(e))); }
+    } catch (e) { console.error("세션 복원 오류:", e); setErrorMessage("세션 복원 중 오류: " + (e instanceof Error ? e.message : String(e))); }
   };
 
   // 이미지 재생성 핸들러 (모델 선택 가능)
@@ -278,7 +281,7 @@ export default function Home() {
       });
       let json: Record<string, unknown>;
       try { json = await res.json(); } catch { json = { error: "서버 응답 파싱 실패" }; }
-      if (!res.ok) { alert((json.error as string) || "이미지 재생성 실패"); return; }
+      if (!res.ok) { setErrorMessage((json.error as string) || "이미지 재생성 실패"); return; }
       const newUrl = (json.image_url as string) + `?t=${Date.now()}`;
       if (channel) {
         setChannelPreviews(prev => {
@@ -291,15 +294,15 @@ export default function Home() {
       } else {
         setPreviewData(prev => prev ? { ...prev, cuts: prev.cuts.map(c => c.index === cutIndex ? { ...c, image_url: newUrl } : c) } : prev);
       }
-    } catch { alert("이미지 재생성 중 오류 발생"); }
+    } catch { setErrorMessage("이미지 재생성 중 오류 발생"); }
     finally { setRegeneratingCut(null); }
   };
 
   // 이미지 교체 핸들러
   const replaceImage = async (file: File, cutIndex: number, sessionId: string, channel?: string) => {
     const ALLOWED = ["image/png", "image/jpeg", "image/webp"];
-    if (!ALLOWED.includes(file.type)) { alert("PNG, JPG, WEBP 파일만 가능합니다."); return; }
-    if (file.size > 20 * 1024 * 1024) { alert("파일 크기가 20MB를 초과합니다."); return; }
+    if (!ALLOWED.includes(file.type)) { setErrorMessage("PNG, JPG, WEBP 파일만 가능합니다."); return; }
+    if (file.size > 20 * 1024 * 1024) { setErrorMessage("파일 크기가 20MB를 초과합니다."); return; }
     setReplacingCut(cutIndex);
     try {
       const fd = new FormData();
@@ -308,7 +311,7 @@ export default function Home() {
       fd.append("file", file);
       const res = await fetch(`${API_BASE}/api/replace-image`, { method: "POST", body: fd });
       const json = await res.json();
-      if (!res.ok) { alert(json.error || "이미지 교체 실패"); return; }
+      if (!res.ok) { setErrorMessage(json.error || "이미지 교체 실패"); return; }
       // 미리보기 데이터 업데이트
       const newUrl = json.image_url + `?t=${Date.now()}`;
       if (channel) {
@@ -322,7 +325,7 @@ export default function Home() {
       } else {
         setPreviewData(prev => prev ? { ...prev, cuts: prev.cuts.map(c => c.index === cutIndex ? { ...c, image_url: newUrl } : c) } : prev);
       }
-    } catch (e) { alert("이미지 교체 중 오류 발생"); }
+    } catch (e) { setErrorMessage("이미지 교체 중 오류 발생"); }
     finally { setReplacingCut(null); }
   };
 
@@ -560,6 +563,7 @@ export default function Home() {
           outputPath: outputPath.trim() || undefined,
           cameraStyle,
           bgmTheme,
+          formatType: formatType !== "auto" ? formatType : undefined,
           channel: channel || undefined,
           platforms,
           ttsSpeed,
@@ -714,6 +718,7 @@ export default function Home() {
           geminiKeys: geminiKeysStr,
           outputPath: outputPath.trim() || undefined,
           cameraStyle, bgmTheme,
+          formatType: formatType !== "auto" ? formatType : undefined,
           channel: ch,
           platforms: preset.platforms,
           ttsSpeed: preset.ttsSpeed,
@@ -1117,6 +1122,7 @@ export default function Home() {
           videoEngine,
           cameraStyle,
           bgmTheme,
+          formatType: formatType !== "auto" ? formatType : undefined,
           channel: ch,
           platforms: preset?.platforms ?? platforms,
           captionSize: preset?.captionSize ?? captionSize,
@@ -1189,7 +1195,7 @@ export default function Home() {
         body: JSON.stringify({ folder, topic: topic || preview.title, lang, channel: tab }),
       });
       const data = await res.json();
-      if (data.error) { alert(data.error); return; }
+      if (data.error) { setErrorMessage(data.error); return; }
       // 프리뷰 업데이트
       const updatedCuts = preview.cuts.map((cut: any, i: number) => ({
         ...cut,
@@ -1202,7 +1208,7 @@ export default function Home() {
         [tab]: { ...preview, title: data.title || preview.title, cuts: updatedCuts },
       }));
     } catch (e) {
-      alert("스크립트 생성 중 오류");
+      setErrorMessage("스크립트 생성 중 오류");
     } finally {
       setGeneratingScripts(false);
     }
@@ -1258,6 +1264,7 @@ export default function Home() {
             videoEngine,
             cameraStyle,
             bgmTheme,
+            formatType: formatType !== "auto" ? formatType : undefined,
             channel: channel || undefined,
             platforms,
             captionSize,
@@ -1577,10 +1584,10 @@ export default function Home() {
                         setTodayNextDate(data.next_date || null);
                         setShowTodayModal(true);
                       } else {
-                        alert(`⚠️ ${data.message || "오늘 주제를 찾을 수 없습니다"}`);
+                        setErrorMessage(data.message || "오늘 주제를 찾을 수 없습니다");
                       }
                     } catch (e) {
-                      alert("오늘 할 일 불러오기 실패: 서버 연결을 확인하세요.");
+                      setErrorMessage("오늘 할 일 불러오기 실패: 서버 연결을 확인하세요.");
                     }
                   }}
                   className="bg-emerald-600 text-white hover:bg-emerald-500 font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm flex items-center gap-1.5"
@@ -1683,8 +1690,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 채널 선택 (별도 행) */}
-            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
+            {/* 채널 선택 + 포맷 선택 (별도 행) */}
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3 space-y-2.5">
               <div className="flex items-center justify-center gap-1.5 flex-wrap">
                 <Tv className="w-3.5 h-3.5 text-purple-400" />
                 {Object.entries(CHANNEL_PRESETS).map(([key, preset]) => {
@@ -1728,6 +1735,33 @@ export default function Home() {
                     </button>
                   );
                 })}
+              </div>
+              {/* 포맷 선택 */}
+              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                {[
+                  { value: "auto", label: "자동" },
+                  { value: "WHO_WINS", label: "WHO WINS" },
+                  { value: "COUNTDOWN", label: "COUNTDOWN" },
+                  { value: "SCALE", label: "SCALE" },
+                  { value: "IF", label: "IF" },
+                  { value: "FACT", label: "FACT" },
+                  { value: "MYSTERY", label: "MYSTERY" },
+                  { value: "PARADOX", label: "PARADOX" },
+                  { value: "EMOTIONAL_SCI", label: "EMOTIONAL" },
+                ].map((fmt) => (
+                  <button
+                    key={fmt.value}
+                    onClick={() => setFormatType(fmt.value)}
+                    disabled={isGenerating}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                      formatType === fmt.value
+                        ? "bg-orange-500/20 border-orange-500/50 text-orange-300"
+                        : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                    }`}
+                  >
+                    {fmt.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -1796,6 +1830,7 @@ export default function Home() {
                     <span className="text-[10px] font-medium text-gray-400">카메라</span>
                   </div>
                   <select value={cameraStyle} onChange={(e) => setCameraStyle(e.target.value)} disabled={isGenerating} aria-label="카메라 스타일 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-sky-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <option value="cinematic" className="bg-gray-900">시네마틱</option>
                     <option value="auto" className="bg-gray-900">자동 (감정 기반)</option>
                     <option value="dynamic" className="bg-gray-900">역동적</option>
                     <option value="gentle" className="bg-gray-900">부드러운</option>
