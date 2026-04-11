@@ -51,6 +51,68 @@ _deploy_status: dict[str, Any] = {
 
 STATE_FILE = os.path.join("assets", "_deploy_state.json")
 
+# TTS 연속 실패 시 조기 중단 임계값
+MAX_CONSECUTIVE_TTS_FAILS = 2
+
+
+def _preflight_tts() -> bool:
+    """TTS 서버 헬스체크 — 배치 시작 전 연결 확인."""
+    import requests
+    tts_url = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
+    try:
+        resp = requests.get(f"{tts_url}/health", timeout=5)
+        if resp.status_code == 200:
+            print("[사전 체크] ✅ TTS 서버 정상")
+            return True
+    except Exception:
+        pass
+    # /health 없으면 root 체크
+    try:
+        resp = requests.get(tts_url, timeout=5)
+        if resp.status_code < 500:
+            print("[사전 체크] ✅ TTS 서버 응답 확인")
+            return True
+    except Exception:
+        pass
+    print("[사전 체크] ❌ TTS 서버 연결 불가")
+    return False
+
+
+def _notify_batch_abort(reason: str):
+    """배치 중단 알림 — Telegram."""
+    try:
+        from modules.utils.notify import _send
+        _send(f"🛑 <b>배치 중단</b>\n{reason}\n⏰ {datetime.now(KST).strftime('%H:%M')}")
+    except Exception:
+        print(f"[배치 중단] {reason}")
+
+
+def _reorder_by_topic_group(schedule: list[dict]) -> list[dict]:
+    """주제별 그룹핑 — 같은 주제의 채널을 연속 배치.
+
+    기존: publish_at 시간순 (채널 뒤섞임)
+    변경: 주제1(4채널) → 주제2(4채널) → 주제3(4채널)
+    채널 순서: askanything → wonderdrop → exploratodo → prismtale
+    """
+    channel_order = {"askanything": 0, "wonderdrop": 1, "exploratodo": 2, "prismtale": 3}
+    groups: dict[str, list[dict]] = {}
+    group_order: list[str] = []
+
+    for item in schedule:
+        key = item.get("topic_group", item.get("topic", "unknown"))
+        if key not in groups:
+            groups[key] = []
+            group_order.append(key)
+        groups[key].append(item)
+
+    reordered = []
+    for key in group_order:
+        items = sorted(groups[key], key=lambda x: channel_order.get(x.get("channel", ""), 99))
+        reordered.extend(items)
+
+    print(f"[스케줄] 주제별 그룹핑: {len(group_order)}주제 × {len(schedule)//max(len(group_order),1)}채널")
+    return reordered
+
 
 def _save_state():
     """배포 상태를 파일로 저장 — 원자적 쓰기 (크래시 안전)."""
@@ -182,7 +244,16 @@ async def run_auto_deploy(target_date: datetime | None = None,
             ],
         }
 
-    # 3. 배포 시작 — 이전 완료 토픽 로드
+    # 3. 사전 헬스체크 — TTS 서버 연결 확인
+    tts_ok = _preflight_tts()
+    if not tts_ok:
+        _notify_batch_abort("TTS 서버(Qwen3) 연결 불가 — 배치 중단")
+        return {"success": False, "message": "TTS 서버 연결 불가. Docker 확인 필요."}
+
+    # 4. 주제별 그룹핑 — 같은 주제의 채널들을 연속 처리
+    schedule = _reorder_by_topic_group(schedule)
+
+    # 5. 배포 시작 — 이전 완료 토픽 로드
     date_str = target_date.strftime("%Y-%m-%d")
     completed_keys = _load_state(date_str)
 
@@ -198,6 +269,8 @@ async def run_auto_deploy(target_date: datetime | None = None,
         "finished_at": None,
     }
     _save_state()
+
+    consecutive_tts_fails = 0  # TTS 연속 실패 카운터
 
     try:
         loop = asyncio.get_running_loop()
@@ -282,6 +355,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                         print(f"  {msg.rstrip()}")
 
                 task_result["status"] = "success"
+                consecutive_tts_fails = 0  # 성공 시 카운터 리셋
                 task_result["video_path"] = str(ctx.video_paths) if ctx.video_paths else None
                 task_result["youtube"] = {"url": yt_url} if yt_url else None
                 task_result["format_type"] = job.get("format_type", "FACT")
@@ -338,6 +412,16 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 task_result["format_type"] = job.get("format_type", "FACT")
                 _deploy_status["failed"] += 1
                 print(f"  ❌ 실패: {channel} — '{topic}': {e}")
+
+                # TTS 전체 실패 감지 → 연속 실패 시 배치 조기 중단
+                if "오디오 실패" in err_str and "전체" in err_str or err_str.count("오디오 실패") > 0:
+                    consecutive_tts_fails += 1
+                    if consecutive_tts_fails >= MAX_CONSECUTIVE_TTS_FAILS:
+                        _notify_batch_abort(f"TTS {consecutive_tts_fails}회 연속 실패 — 서버 문제 추정, 배치 중단")
+                        _deploy_status["results"].append(task_result)
+                        raise RuntimeError(f"TTS {consecutive_tts_fails}회 연속 실패 — 조기 중단")
+                else:
+                    consecutive_tts_fails = 0  # TTS 이외 에러면 리셋
                 # 실패 시에도 부분 비용 기록
                 try:
                     from modules.utils.cost_tracker import record_generation_cost
