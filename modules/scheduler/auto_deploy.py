@@ -6,6 +6,14 @@
   3. 주제별 cutter.py → 이미지 → TTS → 렌더링
   4. YouTube 예약 업로드 (publishAt)
 
+시간 설계:
+  배치 실행: KST 02:00~06:00 (새벽 — API 사용량 최소, 429 회피)
+  예약 공개: 채널별 피크 타임 (time_planner.py CHANNEL_WINDOWS)
+    - askanything: KST 21~23:30 (한국 저녁)
+    - wonderdrop:  KST 08~11 = EST 19~22 (미국 저녁)
+    - exploratodo: KST 10~13 = CST 20~23 (멕시코 저녁)
+    - prismtale:   KST 08~11 = EST 19~22 (US 히스패닉 저녁)
+
 사용법:
   # API 엔드포인트
   POST /api/scheduler/run          → 오늘 Day 파일 자동 배포

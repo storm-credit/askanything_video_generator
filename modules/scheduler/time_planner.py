@@ -9,27 +9,28 @@ from typing import Any
 KST = timezone(timedelta(hours=9))
 
 # 채널별 최적 업로드 시간 윈도우 (KST 기준)
-# 시청자 현지 시간 피크에 맞춤
+# ※ 이 시간은 YouTube publishAt (예약 공개 시간) — 시청자 피크에 맞춤
+# ※ 배치(영상 생성)는 새벽 2~6시에 별도 실행, 여기서는 공개 시간만 제어
 CHANNEL_WINDOWS = {
     "askanything": {
-        "start": dt_time(18, 0),   # KST 18:00 — 한국 퇴근
-        "end": dt_time(21, 0),     # KST 21:00
-        "min_interval_min": 45,    # Veo3 Hero Only 기준 여유 확보    # 최소 간격 30분
+        "start": dt_time(21, 0),   # KST 21:00 — 한국 저녁 프라임 (21~24시 피크)
+        "end": dt_time(23, 30),    # KST 23:30
+        "min_interval_min": 45,
     },
     "wonderdrop": {
-        "start": dt_time(6, 0),    # KST 06:00 = EST 17:00
-        "end": dt_time(9, 0),      # KST 09:00
-        "min_interval_min": 45,    # Veo3 Hero Only 기준 여유 확보
+        "start": dt_time(8, 0),    # KST 08:00 = EST 19:00 — 미국 저녁 프라임
+        "end": dt_time(11, 0),     # KST 11:00 = EST 22:00
+        "min_interval_min": 45,
     },
     "exploratodo": {
-        "start": dt_time(9, 0),    # KST 09:00 = CST 19:00
-        "end": dt_time(12, 0),     # KST 12:00
-        "min_interval_min": 45,    # Veo3 Hero Only 기준 여유 확보
+        "start": dt_time(10, 0),   # KST 10:00 = CST 20:00 — 멕시코 저녁 프라임
+        "end": dt_time(13, 0),     # KST 13:00 = CST 23:00
+        "min_interval_min": 45,
     },
     "prismtale": {
-        "start": dt_time(7, 0),    # KST 07:00 = EST 18:00
-        "end": dt_time(10, 0),     # KST 10:00
-        "min_interval_min": 45,    # Veo3 Hero Only 기준 여유 확보
+        "start": dt_time(8, 0),    # KST 08:00 = EST 19:00 — US 히스패닉 저녁
+        "end": dt_time(11, 0),     # KST 11:00 = EST 22:00
+        "min_interval_min": 45,
     },
 }
 
