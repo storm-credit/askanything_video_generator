@@ -17,34 +17,6 @@ MAX_PROJECT_RETRIES = 5  # 프로젝트 전환 최대 횟수
 MAX_VISION_VERIFY_RETRIES = 1  # 이미지-프롬프트 불일치 시 재생성 횟수
 
 
-def _verify_image_matches_prompt(image_bytes: bytes, prompt: str, api_key: str) -> bool:
-    """Gemini Vision으로 생성된 이미지가 프롬프트와 일치하는지 검증."""
-    try:
-        from google.genai import types
-        from modules.utils.gemini_client import create_gemini_client
-        import base64
-
-        # 프롬프트에서 핵심 피사체 추출 (첫 50자)
-        subject_hint = prompt.replace(MASTER_STYLE, "").strip()[:100]
-
-        client = create_gemini_client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-                f"Does this image match this description? '{subject_hint}'\nAnswer ONLY 'yes' or 'no'.",
-            ],
-            config={"http_options": types.HttpOptions(timeout=15_000)},
-        )
-        answer = (response.text or "").strip().lower()
-        matched = answer.startswith("yes")
-        if not matched:
-            print(f"  [Vision 검증] 불일치 — Gemini 응답: '{answer}'")
-        return matched
-    except Exception as e:
-        print(f"  [Vision 검증] API 에러 (통과 처리): {e}")
-        return True  # API 에러 시만 통과 — 검증 결과 "no"는 False 반환
-
 
 def generate_image_with_quota(prompt: str, index: int, topic_folder: str = "default_topic",
                               model_override: str | None = None, topic: str = "") -> str:
