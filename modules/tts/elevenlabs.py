@@ -82,7 +82,7 @@ EMOTION_SPEED_FACTOR: dict[str, float] = {
     "REVEAL":    1.02,   # 결과 강조 — 거의 기본 (늘어짐 방지)
     "WONDER":    1.00,   # 경이감 — 기본 속도 유지
     "IDENTITY":  1.00,   # 공감/감성 — 기본 속도 유지
-    "CALM":      0.97,   # 차분함 — 미세하게만 느리게 (슬로우 방지)
+    "CALM":      1.00,   # 차분함 — 기본 속도 유지 (0.97은 체감 불가 + 규칙 위반)
 }
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")

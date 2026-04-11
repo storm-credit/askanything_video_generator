@@ -126,14 +126,15 @@ def create_gemini_client(api_key: str | None = None):
             project = sa_data.get("project_id", os.getenv("VERTEX_PROJECT", ""))
             location = os.getenv("VERTEX_LOCATION", "us-central1")
 
-            # GOOGLE_APPLICATION_CREDENTIALS 임시 설정
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = sa_key_file
-
-            return genai.Client(
-                vertexai=True,
-                project=project,
-                location=location,
-            )
+            # GOOGLE_APPLICATION_CREDENTIALS + Client 생성을 lock 안에서 원자적 실행
+            with _sa_lock:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = sa_key_file
+                client = genai.Client(
+                    vertexai=True,
+                    project=project,
+                    location=location,
+                )
+            return client
         else:
             # SA 키 없으면 기본 ADC
             project = os.getenv("VERTEX_PROJECT", "")

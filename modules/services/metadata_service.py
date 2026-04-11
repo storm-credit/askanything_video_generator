@@ -24,32 +24,32 @@ class MetadataService:
 
     def _build_askanything(self, d: Dict) -> Dict:
         title = d.get("title_ko", d.get("title", d.get("topic", "")))
-        desc = d.get("desc_ko", d.get("description", f"{title}\n#쇼츠 #과학 #신기한사실"))
-        tags = d.get("tags_ko", d.get("tags", ["쇼츠", "과학"]))
+        desc = d.get("desc_ko", d.get("description", f"{title}\n#과학 #신기한사실"))
+        tags = d.get("tags_ko", d.get("tags", ["과학", "신기한사실"]))
         if isinstance(tags, str):
             tags = [t.strip().lstrip("#") for t in tags.split() if t.strip()]
         return {"title": self._trim(title, 60), "description": desc, "tags": tags, "language": "ko", "category_id": "27"}
 
     def _build_wonderdrop(self, d: Dict) -> Dict:
         title = d.get("title_en", d.get("title", d.get("topic", "")))
-        desc = d.get("desc_en", d.get("description", f"{title}\n#science #facts #shorts"))
-        tags = d.get("tags_en", d.get("tags", ["science", "facts", "shorts"]))
+        desc = d.get("desc_en", d.get("description", f"{title}\n#science #facts"))
+        tags = d.get("tags_en", d.get("tags", ["science", "facts"]))
         if isinstance(tags, str):
             tags = [t.strip().lstrip("#") for t in tags.split() if t.strip()]
         return {"title": self._trim(title, 70), "description": desc, "tags": tags, "language": "en", "category_id": "27"}
 
     def _build_exploratodo(self, d: Dict) -> Dict:
         title = d.get("title_es", d.get("title", d.get("topic", "")))
-        desc = d.get("desc_es", d.get("description", f"{title}\n#ciencia #datos #shorts"))
-        tags = d.get("tags_es", d.get("tags", ["ciencia", "datos", "shorts"]))
+        desc = d.get("desc_es", d.get("description", f"{title}\n#ciencia #datos"))
+        tags = d.get("tags_es", d.get("tags", ["ciencia", "datos"]))
         if isinstance(tags, str):
             tags = [t.strip().lstrip("#") for t in tags.split() if t.strip()]
         return {"title": self._trim(title, 70), "description": desc, "tags": tags, "language": "es", "category_id": "27"}
 
     def _build_prismtale(self, d: Dict) -> Dict:
         title = d.get("title_es_us", d.get("title_es", d.get("title", d.get("topic", ""))))
-        desc = d.get("desc_es_us", d.get("desc_es", d.get("description", f"{title}\n#ciencia #misterio #shorts")))
-        tags = d.get("tags_es_us", d.get("tags_es", d.get("tags", ["ciencia", "misterio", "shorts"])))
+        desc = d.get("desc_es_us", d.get("desc_es", d.get("description", f"{title}\n#ciencia #misterio")))
+        tags = d.get("tags_es_us", d.get("tags_es", d.get("tags", ["ciencia", "misterio"])))
         if isinstance(tags, str):
             tags = [t.strip().lstrip("#") for t in tags.split() if t.strip()]
         return {"title": self._trim(title, 70), "description": desc, "tags": tags, "language": "es", "category_id": "27"}

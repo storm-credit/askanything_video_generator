@@ -221,7 +221,7 @@ def _score_scroll_stop(image_path: str, script: str, api_key: str) -> float:
 
         client = create_gemini_client(api_key=_key)
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=[
                 _gtypes.Part.from_bytes(data=image_bytes, mime_type="image/png"),
                 f"""Rate this YouTube Shorts thumbnail's scroll-stop power on 0.0-1.0.
