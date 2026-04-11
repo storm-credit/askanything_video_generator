@@ -98,8 +98,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "format_cuts": {
             "WHO_WINS":      {"min": 11, "max": 11},  # ~2.8s/컷 → 11컷=31s
             "IF":            {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
-            "EMOTIONAL_SCI": {"min": 8,  "max": 9},   # ~4.7s/컷 → 8컷=38s
-            "FACT":             {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
+            "FACT":          {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
             "PARADOX":       {"min": 7,  "max": 8},
             "SCALE":         {"min": 7,  "max": 9},
             "COUNTDOWN":     {"min": 8,  "max": 10},

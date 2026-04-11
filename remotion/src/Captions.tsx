@@ -23,7 +23,7 @@ const EN_STOPWORDS = new Set([
   'getting', 'looking', 'turning', 'making', 'having', 'being', 'going',
 ]);
 
-type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM';
+type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM' | 'LOOP';
 
 // 감정별 강조색 — 포맷별 몰입감 강화
 const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
@@ -35,6 +35,7 @@ const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
   DISBELIEF: '#FF3B30',  // 빨강 — 불신
   IDENTITY:  '#34C759',  // 초록 — 공감/정체성
   CALM:      '#FFFFFF',  // 흰색 — 차분
+  LOOP:      '#A78BFA',  // 보라 — 루프 (다시 처음으로)
 };
 const DEFAULT_HIGHLIGHT = '#FFE600';
 

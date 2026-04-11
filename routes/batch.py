@@ -102,7 +102,7 @@ async def batch_start():
                     for _attempt in range(max(count_google_keys(), 1)):
                         llm_key = get_google_key(None, service="gemini", exclude=_excluded) if job["llm_provider"] == "gemini" else None
                         try:
-                            cuts, topic_folder, title, _tags, _desc = await loop.run_in_executor(
+                            cuts, topic_folder, title, _tags, _desc, _fact_ctx = await loop.run_in_executor(
                                 None, lambda k=llm_key: generate_cuts(job["topic"], lang=job["language"], llm_provider=job["llm_provider"], llm_key_override=k)
                             )
                             break

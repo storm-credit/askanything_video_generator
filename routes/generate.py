@@ -35,7 +35,7 @@ router = APIRouter(tags=["generate"])
 
 
 # ── 음성 선택 + 키 검증 → services/ ──────────────────────────────
-from services.voice import auto_select_voice as _auto_select_voice, voice_name as _voice_name, resolve_voice, VOICE_MAP as _VOICE_MAP
+from services.voice import auto_select_voice as _auto_select_voice, voice_name as _voice_name
 from services.keys import validate_keys as _validate_keys
 
 
@@ -331,7 +331,7 @@ async def generate_video_endpoint(req: GenerateRequest):
             else:
                 llm_key_for_request = get_google_key(llm_key_override, extra_keys=gemini_keys_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
-            cuts, topic_folder, video_title, video_tags, video_desc = await loop.run_in_executor(
+            cuts, topic_folder, video_title, video_tags, video_desc, _fact_ctx = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
                     _topic,

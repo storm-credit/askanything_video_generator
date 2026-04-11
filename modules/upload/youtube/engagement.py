@@ -7,7 +7,7 @@ from .playlists import _detect_category, _get_playlist_lang, ensure_playlists, C
 def _build_related_comment(video_id: str, title: str, tags: list[str],
                            channel_id: str = None, channel: str = None) -> str | None:
     """같은 카테고리의 과거 영상 2-3개를 찾아 고정 댓글 텍스트 생성."""
-    category = _detect_category(title, tags)
+    category = _detect_category(title, tags, channel=channel)
     if not category:
         return None
 
