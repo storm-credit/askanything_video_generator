@@ -58,7 +58,7 @@ MAX_CONSECUTIVE_TTS_FAILS = 2
 def _preflight_tts() -> bool:
     """TTS 서버 헬스체크 — 배치 시작 전 연결 확인."""
     import requests
-    tts_url = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
+    tts_url = os.getenv("QWEN3_TTS_URL", "http://localhost:8010")
     try:
         resp = requests.get(f"{tts_url}/health", timeout=5)
         if resp.status_code == 200:

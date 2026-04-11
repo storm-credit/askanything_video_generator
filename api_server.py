@@ -74,8 +74,13 @@ async def _lifespan(app):
         notify_daily_cost()
     add_daily("일일 비용 결산", 22, 0, _cron_daily_cost)
 
+    def _cron_morning_briefing():
+        from modules.utils.notify import notify_morning_briefing
+        notify_morning_briefing()
+    add_daily("모닝 브리핑", 8, 0, _cron_morning_briefing)
+
     cron_start()
-    print(f"[크론] 5개 작업 등록 완료")
+    print(f"[크론] 6개 작업 등록 완료")
 
     yield
     cut_executor.shutdown(wait=False)
