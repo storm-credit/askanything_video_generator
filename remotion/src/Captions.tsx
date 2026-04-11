@@ -116,7 +116,7 @@ export const Captions: React.FC<{
   }, [wordTimestamps]);
 
   const visiblePhrase = useMemo(() => {
-    return phrases.find(p => currentTime >= p.start - 0.05 && currentTime < p.end + 0.05) ?? null;
+    return phrases.find(p => currentTime >= p.start && currentTime < p.end + 0.05) ?? null;
   }, [phrases, currentTime]);
 
   const visibleWords = visiblePhrase?.words ?? [];

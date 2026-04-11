@@ -10,7 +10,9 @@
 import os
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+_KST = timezone(timedelta(hours=9))
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
@@ -62,7 +64,7 @@ def notify_success(channel: str, topic: str, video_url: str = None):
         f"━━━━━━━━━━━━━━━\n"
         f"{emoji} <b>{channel}</b>\n"
         f"📌 {topic}\n"
-        f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"⏰ {datetime.now(_KST).strftime('%Y-%m-%d %H:%M')} KST",
         buttons=url_btn,
     )
 
@@ -80,7 +82,7 @@ def notify_failure(channel: str, topic: str, error: str = ""):
         f"📌 {topic}\n"
         f"💥 <code>{err}</code>\n"
         f"🔄 웹 UI에서 재수행 가능\n"
-        f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"⏰ {datetime.now(_KST).strftime('%Y-%m-%d %H:%M')} KST",
     )
 
 
@@ -92,7 +94,7 @@ def notify_warning(context: str, message: str):
         f"━━━━━━━━━━━━━━━\n"
         f"📍 {context}\n"
         f"{message}\n"
-        f"⏰ {datetime.now().strftime('%H:%M')}",
+        f"⏰ {datetime.now(_KST).strftime('%H:%M')} KST",
         silent=True,
     )
 
@@ -139,7 +141,7 @@ def notify_deploy_summary(total: int, completed: int, failed: int, date: str):
         f"📅 {date}\n"
         f"{bar}\n"
         f"✅ {completed}  ❌ {failed}  📦 {total}\n"
-        f"⏰ {datetime.now().strftime('%H:%M')}",
+        f"⏰ {datetime.now(_KST).strftime('%H:%M')} KST",
     )
 
 

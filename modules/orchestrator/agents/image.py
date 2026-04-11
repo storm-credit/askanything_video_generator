@@ -30,7 +30,7 @@ class ImageAgent(BaseAgent):
         ctx.visual_paths = [None] * len(ctx.cuts)
         ctx.cut1_ab_variants = []
 
-        image_label = "Imagen 4" if ctx.image_engine == "imagen" else "DALL-E"
+        image_label = "Imagen 4" if ctx.image_engine == "imagen" else ("Gemini Nano" if ctx.image_engine == "nano_banana" else "DALL-E")
         yield f"[ImageAgent] {len(ctx.cuts)}컷 이미지 생성 시작 ({image_label})...\n"
 
         image_semaphore = threading.Semaphore(3)

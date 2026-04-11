@@ -60,6 +60,7 @@ export function ChannelSelector({ settings, isGenerating }: ChannelSelectorProps
           { value: "EMOTIONAL_SCI", label: "EMOTIONAL" },
         ].map((fmt) => (
           <button
+            type="button"
             key={fmt.value}
             onClick={() => setFormatType(fmt.value)}
             disabled={isGenerating}
