@@ -409,10 +409,14 @@ async def generate_video_endpoint(req: GenerateRequest):
             if req.channel:
                 _ch_preset = get_channel_preset(req.channel)
                 if _ch_preset:
-                    if _ch_preset.get("tts_speed"):
+                    if _ch_preset.get("tts_speed") is not None:
                         req.ttsSpeed = _ch_preset["tts_speed"]
                     if req.cameraStyle == "auto" and _ch_preset.get("camera_style"):
                         req.cameraStyle = _ch_preset["camera_style"]
+                    if _ch_preset.get("caption_size"):
+                        req.captionSize = _ch_preset["caption_size"]
+                    if _ch_preset.get("caption_y"):
+                        req.captionY = _ch_preset["caption_y"]
 
             # 비디오 엔진 변수 초기화 (아래에서 키 선택·사전 검증에 사용)
             active_video_engine = video_engine
@@ -944,7 +948,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                                 lambda: yt_upload(
                                     video_path=abs_video_path,
                                     title=video_title,
-                                    description="\n".join(s.strip() for s in scripts if s.strip()) + "\n\n" + " ".join(video_tags),
+                                    description="\n".join(s.strip() for s in scripts if s.strip()),
                                     tags=[t.lstrip("#") for t in video_tags] + [req.channel, language],
                                     privacy=yt_privacy,
                                     channel_id=account_id,
@@ -982,6 +986,20 @@ async def generate_video_endpoint(req: GenerateRequest):
                     except Exception as upload_err:
                         safe_err = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(upload_err)[:150])
                         yield {"data": f"WARN|{plat.upper()} 업로드 실패: {safe_err}\n"}
+
+            # 비용 추적 (단일 생성 경로)
+            try:
+                from modules.utils.cost_tracker import record_generation_cost
+                _n_cuts = len(cuts) if cuts else 0
+                record_generation_cost(
+                    channel=req.channel or "unknown",
+                    success=True,
+                    image_count=_n_cuts,
+                    video_count=1 if active_video_engine != "none" else 0,
+                    tts_chars=sum(len(s) for s in scripts if s),
+                )
+            except Exception:
+                pass  # 비용 기록 실패가 파이프라인을 중단하면 안 됨
 
             yield {"data": f"DONE|{relative_video_path}|{thumb_relative}\n"}
 
@@ -1027,13 +1045,19 @@ async def generate_video_v2(req: GenerateRequest):
     camera_style = req.cameraStyle
     voice_id = req.voiceId
     voice_settings = None
+    caption_size = req.captionSize
+    caption_y = req.captionY
     if req.channel:
         _ch_preset = get_channel_preset(req.channel)
         if _ch_preset:
-            if _ch_preset.get("tts_speed"):
+            if _ch_preset.get("tts_speed") is not None:
                 tts_speed = _ch_preset["tts_speed"]
             if camera_style == "auto" and _ch_preset.get("camera_style"):
                 camera_style = _ch_preset["camera_style"]
+            if _ch_preset.get("caption_size"):
+                caption_size = _ch_preset["caption_size"]
+            if _ch_preset.get("caption_y"):
+                caption_y = _ch_preset["caption_y"]
             if not voice_id:
                 voice_id = _ch_preset.get("voice_id")
                 voice_settings = _ch_preset.get("voice_settings")
@@ -1056,8 +1080,8 @@ async def generate_video_v2(req: GenerateRequest):
         camera_style=camera_style,
         bgm_theme=req.bgmTheme,
         platforms=req.platforms,
-        caption_size=req.captionSize,
-        caption_y=req.captionY,
+        caption_size=caption_size,
+        caption_y=caption_y,
         publish_mode=req.publishMode,
         scheduled_time=req.scheduledTime,
         workflow_mode=req.workflowMode,

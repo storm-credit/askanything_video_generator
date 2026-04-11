@@ -672,8 +672,7 @@ def add_to_playlist(video_id: str, title: str, tags: list[str],
                 },
             },
         ).execute()
-        lang = _get_playlist_lang(channel)
-        playlist_name = PLAYLIST_CATEGORIES[category].get(lang, category)
+        playlist_name = CHANNEL_PLAYLISTS.get(channel, {}).get(category, category)
         print(f"OK [재생목록] '{title}' → {playlist_name}")
         return playlist_id
     except Exception as e:

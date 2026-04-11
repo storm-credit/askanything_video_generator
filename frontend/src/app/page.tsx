@@ -69,7 +69,7 @@ export default function Home() {
   type ChannelStatus = { progress: number; logs: string[]; status: 'idle' | 'generating' | 'done' | 'error'; videoUrl?: string; errorMsg?: string; genId?: string };
   const [channelResults, setChannelResults] = useState<Record<string, ChannelStatus>>({});
   const multiAbortRefs = useRef<Record<string, AbortController>>({});
-  const [ttsSpeed, setTtsSpeed] = useState(() => loadSetting("ttsSpeed", 1.05));
+  const [ttsSpeed, setTtsSpeed] = useState(() => loadSetting("ttsSpeed", 1.3));
   const [voiceId, setVoiceId] = useState(() => loadSetting("voiceId", "auto"));
   const [captionSize, setCaptionSize] = useState(() => loadSetting("captionSize", 54));
   const [captionY, setCaptionY] = useState(() => loadSetting("captionY", 38));
@@ -112,12 +112,12 @@ export default function Home() {
     setVideoModel(_load("videoModel", ""));
     setTestMode(_load("testMode", false));
     setLanguage(_load("language", "ko"));
-    setCameraStyle(_load("cameraStyle", "auto"));
+    setCameraStyle(_load("cameraStyle", "cinematic"));
     setBgmTheme(_load("bgmTheme", "random"));
     setChannel(_load("channel", ""));
     setSelectedChannels(_load("selectedChannels", []));
     setPlatforms(_load("platforms", ["youtube"]));
-    setTtsSpeed(_load("ttsSpeed", 0.9));
+    setTtsSpeed(_load("ttsSpeed", 1.3));
     setVoiceId(_load("voiceId", "auto"));
     setCaptionSize(_load("captionSize", 54));
     setCaptionY(_load("captionY", 35));
@@ -1232,9 +1232,12 @@ export default function Home() {
         for (const ch of channels) {
           await renderForChannel(ch, channelPreviews[ch], editedScriptsMap[ch] || {}, abortController.signal);
         }
-        const results = Object.values(renderResults);
-        const doneCount = results.filter(r => r.status === 'done').length;
-        if (doneCount > 0) setSuccessMessage(`${doneCount}/${channels.length} 채널 렌더링 완료!`);
+        setRenderResults(prev => {
+          const results = Object.values(prev);
+          const doneCount = results.filter(r => r.status === 'done').length;
+          if (doneCount > 0) setSuccessMessage(`${doneCount}/${channels.length} 채널 렌더링 완료!`);
+          return prev;
+        });
         setPreviewMode(false);
         setChannelPreviews({});
       } else {
@@ -1736,13 +1739,13 @@ export default function Home() {
                     <Brain className="w-3.5 h-3.5 text-violet-400" />
                     <span className="text-[10px] font-medium text-gray-400">기획</span>
                   </div>
-                  <select value={llmProvider} onChange={(e) => { setLlmProvider(e.target.value); setLlmModel(""); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="LLM 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                  <select value={llmProvider} onChange={(e) => { setLlmProvider(e.target.value); setLlmModel(""); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="LLM 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                     <option value="gemini" className="bg-gray-900">Gemini</option>
                     <option value="openai" className="bg-gray-900">GPT</option>
                     <option value="claude" className="bg-gray-900">Claude</option>
                   </select>
                   {LLM_MODELS[llmProvider]?.length > 1 && (
-                    <select value={llmModel} onChange={(e) => { setLlmModel(e.target.value); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="LLM 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <select value={llmModel} onChange={(e) => { setLlmModel(e.target.value); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="LLM 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                       {LLM_MODELS[llmProvider].map((m) => (<option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>))}
                     </select>
                   )}
@@ -1752,13 +1755,13 @@ export default function Home() {
                     <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
                     <span className="text-[10px] font-medium text-gray-400">이미지</span>
                   </div>
-                  <select value={imageEngine} onChange={(e) => { setImageEngine(e.target.value); setImageModel(""); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="이미지 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                  <select value={imageEngine} onChange={(e) => { setImageEngine(e.target.value); setImageModel(""); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="이미지 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                     <option value="imagen" className="bg-gray-900">Imagen</option>
                     <option value="nano_banana" className="bg-gray-900">Nano Banana</option>
                     <option value="dalle" className="bg-gray-900">DALL-E</option>
                   </select>
                   {IMAGE_MODELS[imageEngine]?.length > 1 && (
-                    <select value={imageModel} onChange={(e) => { setImageModel(e.target.value); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="이미지 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <select value={imageModel} onChange={(e) => { setImageModel(e.target.value); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="이미지 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                       {IMAGE_MODELS[imageEngine].map((m) => (<option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>))}
                     </select>
                   )}
@@ -1768,7 +1771,7 @@ export default function Home() {
                     <Film className="w-3.5 h-3.5 text-rose-400" />
                     <span className="text-[10px] font-medium text-gray-400">비디오</span>
                   </div>
-                  <select value={videoEngine} onChange={(e) => { setVideoEngine(e.target.value); setVideoModel(""); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="비디오 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                  <select value={videoEngine} onChange={(e) => { setVideoEngine(e.target.value); setVideoModel(""); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="비디오 엔진 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                     <option value="veo3" className="bg-gray-900">Veo 3</option>
                     <option value="sora2" className="bg-gray-900">Sora 2</option>
                     <option value="kling" className="bg-gray-900">Kling</option>
@@ -1776,7 +1779,7 @@ export default function Home() {
                     <option value="none" className="bg-gray-900">없음</option>
                   </select>
                   {VIDEO_MODELS[videoEngine]?.length > 1 && (
-                    <select value={videoModel} onChange={(e) => { setVideoModel(e.target.value); setQualityPreset("custom"); }} disabled={isGenerating} aria-label="비디오 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
+                    <select value={videoModel} onChange={(e) => { setVideoModel(e.target.value); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="비디오 모델 선택" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
                       {VIDEO_MODELS[videoEngine].map((m) => (<option key={m.value} value={m.value} className="bg-gray-900">{m.label}</option>))}
                     </select>
                   )}

@@ -428,7 +428,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     current_key = final_api_key
     cuts: list[dict[str, Any]] = []
     title: str = ""
-    tags: list[str] = ["#Shorts"]
+    tags: list[str] = []
     last_error: Exception | None = None
 
     if llm_provider == "gemini":
@@ -564,9 +564,12 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     if not title:
         title = _topic_title
 
-    # tags 기본값 보장
+    # tags 기본값 보장 + #Shorts/#쇼츠 금지 + 5개 제한
     if not tags or not isinstance(tags, list):
-        tags = ["#Shorts"]
+        tags = []
+    _BANNED_TAG_STEMS = {"shorts", "쇼츠"}
+    tags = [t for t in tags if t.lower().lstrip("#") not in _BANNED_TAG_STEMS]
+    tags = tags[:5]
 
     # ── 3단계 검증 파이프라인 (최대 1회 재검증, 무한 루프 방지) ──
     # v2 오케스트라: _skip_verify=True면 QualityAgent가 별도 실행

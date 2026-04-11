@@ -192,7 +192,7 @@ If the topic risks becoming a list of unconnected facts, use Pattern D (investig
 [Golden Example — Topic: "What happens in the deep ocean" (full 9-cut emotional arc)]
 {
   "title": "The Deep Sea Will Blow Your Mind",
-  "tags": ["#Shorts", "#DeepSea", "#Ocean", "#Science"],
+  "tags": ["#DeepSea", "#Ocean", "#Science", "#MarineLife"],
   "cuts": [
     {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "Ocean pressure equals fifty elephants on your fingernail."},
     {"description": "Massive bioluminescent jellyfish glowing in total darkness [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "But down there creatures make their own light with zero sunlight."},
@@ -253,4 +253,4 @@ STEP 3 — Each cut serves ONLY its role
     }
   ]
 }
-[Tag Rules] tags array MUST include #Shorts + 3-4 topic-specific hashtags (total 4-5).
+[Tag Rules] tags array: 3-5 topic-specific hashtags (max 5 total). NEVER include #Shorts/#shorts (YouTube auto-classifies Shorts).

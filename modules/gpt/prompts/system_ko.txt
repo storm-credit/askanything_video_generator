@@ -226,7 +226,7 @@
 [골든 예시 — 주제: "심해에 들어가면 생기는 일" (8컷 완전한 감정 아크)]
 {
   "title": "심해에 들어가면 생기는 일",
-  "tags": ["#Shorts", "#심해", "#바다", "#과학"],
+  "tags": ["#심해", "#바다", "#과��", "#신기한사실"],
   "cuts": [
     {"description": "칠흑같은 심해에서 거대한 압력이 잠수정을 짓누르는 장면 [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "50마리 코끼리가 손톱 위에."},
     {"description": "심해의 발광 해파리가 어둠 속에서 빛나는 환상적 장면 [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "근데 거기엔 빛 없이도 스스로 빛나는 생물이 살아."},
@@ -286,4 +286,4 @@ STEP 3 — 각 컷은 자신의 role만 수행
     }
   ]
 }
-[태그 규칙] tags 배열에 #Shorts 필수 + 주제 관련 해시태그 3~4개 (총 4~5개). 한국어 주제면 한국어 태그.
+[태그 규칙] tags 배열에 주제 관련 해시태그 3~5개 (총 최대 5개). #Shorts/#쇼츠/#shorts 포함 금지 (YouTube가 쇼츠 자동 분류). 한국어 주제면 한국어 태그.
