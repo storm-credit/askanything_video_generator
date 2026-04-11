@@ -34,59 +34,9 @@ from routes.shared import (
 router = APIRouter(tags=["generate"])
 
 
-# ── 음성 자동 선택 유틸리티 ──────────────────────────────────────
-
-# 로컬 VOICE_MAP: ID 기반 (api_server.py 원본 형태)
-_VOICE_MAP = {
-    "eric":    "cjVigY5qzO86Huf0OWal",  # 차분/다큐
-    "adam":    "pNInz6obpgDQGcFmaJgB",  # 깊은/권위
-    "brian":   "nPczCjzI2devNBz1zQrb",  # 내레이션
-    "bill":    "pqHfZKP75CvOlQylNhV4",  # 다큐/진지
-    "daniel":  "onwK4e9ZLuTAKqWW03F9",  # 뉴스/정보
-    "rachel":  "21m00Tcm4TlvDq8ikWAM",  # 차분/여성
-    "sarah":   "EXAVITQu4vr4xnSDxMaL",  # 부드러운
-    "matilda": "XrExE9yKIg1WjnnlVkGX",  # 따뜻한
-    "charlie": "IKne3meq5aSn9XLyUdCD",  # 유머/캐주얼
-    "antoni":  "ErXwobaYiN019PkySvjV",  # 만능
-    "george":  "JBFqnCBsd6RMkjVDRZzb",  # 거친/공포
-}
-
-_VOICE_ID_TO_NAME = {v: k.capitalize() for k, v in _VOICE_MAP.items()}
-
-# 주제 키워드 → 최적 음성 매핑 (우선순위 순)
-_TONE_RULES: list[tuple[list[str], str]] = [
-    # 공포/미스터리/범죄
-    (["공포", "호러", "귀신", "유령", "살인", "미스터리", "괴담", "소름", "horror", "ghost", "murder", "creepy", "dark", "죽음", "저주", "심령", "폐허"], "george"),
-    # 유머/재미/밈
-    (["웃긴", "유머", "밈", "meme", "funny", "코미디", "개그", "ㅋㅋ", "레전드", "웃음", "드립", "짤"], "charlie"),
-    # 과학/기술/교육
-    (["과학", "기술", "AI", "인공지능", "우주", "NASA", "양자", "물리", "화학", "생물", "science", "tech", "quantum", "로봇", "컴퓨터", "프로그래밍"], "daniel"),
-    # 역사/다큐
-    (["역사", "전쟁", "고대", "조선", "제국", "세계대전", "history", "ancient", "war", "왕조", "문명", "유적"], "bill"),
-    # 감성/힐링/동기부여
-    (["감동", "힐링", "동기부여", "motivation", "inspiring", "감성", "위로", "희망", "사랑", "인생", "명언"], "matilda"),
-    # 뉴스/시사/경제
-    (["뉴스", "시사", "경제", "정치", "주식", "투자", "부동산", "금리", "인플레이션", "news", "economy", "stock", "비트코인", "코인"], "adam"),
-    # 자연/동물/여행
-    (["자연", "동물", "여행", "바다", "산", "nature", "animal", "travel", "풍경", "safari", "ocean"], "sarah"),
-]
-
-
-def _auto_select_voice(topic: str, language: str = "ko") -> str:
-    """주제 키워드를 분석하여 최적의 ElevenLabs 음성을 자동 선택합니다."""
-    topic_lower = topic.lower()
-    for keywords, voice_name in _TONE_RULES:
-        for kw in keywords:
-            if kw.lower() in topic_lower:
-                print(f"[음성 자동 선택] '{kw}' 매칭 → {voice_name} ({_VOICE_MAP[voice_name][:12]}...)")
-                return _VOICE_MAP[voice_name]
-    # 기본값: Eric (차분한 다큐 톤, 만능)
-    return _VOICE_MAP["eric"]
-
-
-def _voice_name(voice_id: str) -> str:
-    """음성 ID를 이름으로 변환합니다."""
-    return _VOICE_ID_TO_NAME.get(voice_id, voice_id[:12] + "...")
+# ── 음성 선택 + 키 검증 → services/ ──────────────────────────────
+from services.voice import auto_select_voice as _auto_select_voice, voice_name as _voice_name, resolve_voice, VOICE_MAP as _VOICE_MAP
+from services.keys import validate_keys as _validate_keys
 
 
 # ── Pydantic 모델 ────────────────────────────────────────────────
@@ -170,76 +120,6 @@ class GenerateRequest(BaseModel):
 
 class AnalyzeShortsRequest(BaseModel):
     url: str = Field(..., min_length=5)
-
-
-# ── 키 검증 헬퍼 ─────────────────────────────────────────────────
-
-def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | None, video_engine: str,
-                    image_engine: str = "imagen", llm_provider: str = "gemini", llm_key_override: str | None = None) -> list[str]:
-    """파이프라인 시작 전 필수 키 검증. 누락된 키 이름 목록을 반환."""
-    from modules.utils.keys import get_google_key
-
-    errors = []
-
-    # OpenAI 키: DALL-E/GPT/Sora2 선택 시 필수, Whisper 자막은 경고만
-    openai_key = api_key_override or os.getenv("OPENAI_API_KEY", "")
-    openai_missing = not openai_key or openai_key.startswith("sk-proj-YOUR")
-    openai_needed_for = []
-    if llm_provider == "openai":
-        openai_needed_for.append("GPT 기획")
-    if image_engine == "dalle":
-        openai_needed_for.append("DALL-E 이미지")
-    if video_engine == "sora2":
-        openai_needed_for.append("Sora2 비디오")
-
-    if openai_missing and openai_needed_for:
-        openai_needed_for.append("Whisper 자막")
-        errors.append(f"OPENAI_API_KEY ({' + '.join(openai_needed_for)}에 필수)")
-    elif openai_missing:
-        # Whisper만 필요 — Gemini 기반 구성에서는 경고만 (자막 없이 진행 가능)
-        print("  [경고] OPENAI_API_KEY 미설정 — Whisper 자막 타임스탬프 사용 불가")
-
-    # Imagen / Nano Banana 사용 시 Google 키 필요
-    if image_engine in ("imagen", "nano_banana"):
-        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
-        if not gemini_key:
-            errors.append("GEMINI_API_KEY (이미지 생성에 필수)")
-
-    # LLM 프로바이더별 키 검증
-    if llm_provider == "gemini":
-        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "")
-        if not gemini_key:
-            errors.append("GEMINI_API_KEY (Gemini 기획 엔진에 필수)")
-    elif llm_provider == "claude":
-        claude_key = llm_key_override or os.getenv("ANTHROPIC_API_KEY", "")
-        if not claude_key:
-            errors.append("ANTHROPIC_API_KEY (Claude 기획 엔진에 필수)")
-
-    # Qwen3 TTS 엔진 사용 시 ElevenLabs 키 불필요
-    _tts_engine = os.getenv("TTS_ENGINE", "qwen3").lower()
-    if _tts_engine != "qwen3":
-        elevenlabs_key = elevenlabs_key_override or os.getenv("ELEVENLABS_API_KEY", "")
-        if not elevenlabs_key or elevenlabs_key == "YOUR_ELEVENLABS_API_KEY_HERE":
-            errors.append("ELEVENLABS_API_KEY (TTS 음성 생성에 필수)")
-
-    # Veo 3: Google API 직접 연동 (GEMINI_API_KEYS 로테이션)
-    if video_engine == "veo3":
-        google_key = llm_key_override or get_google_key() or ""
-        if not google_key:
-            errors.append("GEMINI_API_KEY 또는 GEMINI_API_KEYS (Veo 3 비디오 엔진에 필수)")
-
-    # Kling: 직접 API
-    if video_engine == "kling":
-        kling_ak = os.getenv("KLING_ACCESS_KEY", "")
-        if not kling_ak or kling_ak.startswith("YOUR"):
-            errors.append("KLING_ACCESS_KEY (Kling 비디오 엔진에 필수)")
-
-    if video_engine == "sora2":
-        openai_check = api_key_override or os.getenv("OPENAI_API_KEY", "")
-        if not openai_check or openai_check.startswith("sk-proj-YOUR"):
-            errors.append("OPENAI_API_KEY (Sora 2 비디오 엔진에 필수)")
-
-    return errors
 
 
 # ── 엔드포인트 ────────────────────────────────────────────────────
