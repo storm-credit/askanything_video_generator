@@ -183,7 +183,6 @@ export const Captions: React.FC<{
                   letterSpacing: '-0.5px',
                   display: 'inline-block',
                   opacity,
-                  transition: 'color 0.05s ease',
                 }}
               >
                 {w.word}
@@ -241,7 +240,6 @@ export const Captions: React.FC<{
                 paintOrder: 'stroke fill',
                 lineHeight: '1.3',
                 display: 'inline-block',
-                transition: 'color 0.05s ease',
               }}
             >
               {displayWord}

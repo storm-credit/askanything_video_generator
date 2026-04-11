@@ -388,6 +388,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
                 "cameraStyle": camera,
                 "captionSize": caption_size,
                 "captionY": caption_y,
+                "channel": channel,
             }
 
             props_path = os.path.join(output_dir, f"remotion_props{suffix}.json")

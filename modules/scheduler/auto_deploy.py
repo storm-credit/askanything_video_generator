@@ -387,7 +387,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                         video_count=ctx.video_count,
                         tts_chars=ctx.tts_chars,
                     )
-                    notify_success(channel, ctx.title, video_url=yt_url)
+                    notify_success(channel, f"[{channel}] {ctx.title}", video_url=yt_url)
                     notify_cost(channel, ctx.title, cost_entry, video_url=yt_url,
                                 format_type=job.get("format_type", ""))
                 except Exception:
@@ -414,7 +414,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 print(f"  ❌ 실패: {channel} — '{topic}': {e}")
 
                 # TTS 전체 실패 감지 → 연속 실패 시 배치 조기 중단
-                if "오디오 실패" in err_str and "전체" in err_str or err_str.count("오디오 실패") > 0:
+                if "오디오 실패" in err_str:
                     consecutive_tts_fails += 1
                     if consecutive_tts_fails >= MAX_CONSECUTIVE_TTS_FAILS:
                         _notify_batch_abort(f"TTS {consecutive_tts_fails}회 연속 실패 — 서버 문제 추정, 배치 중단")
