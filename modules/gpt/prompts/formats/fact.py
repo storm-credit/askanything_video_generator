@@ -89,7 +89,7 @@ Cut structure (8~11 cuts):
 - Cut N  [LOOP]:    "There's something just as shocking..." / curiosity ignition loop
 
 Script rules:
-- 1 sentence per cut, 12~18 words (EN)
+- 1 sentence per cut, 8~12 words — data-dense, no filler
 - Minimum 1 statistic/proper noun/measurement per cut
 - No passive voice — active declarative only
 
