@@ -104,16 +104,16 @@ def align_words_with_script(whisper_words: list[dict], script: str, lang: str = 
     # 차이 2 이상은 LCS 정렬로 (잘못된 타임스탬프 보간 방지)
     if abs(len(script_words) - len(whisper_words)) <= 1:
         aligned = []
-        # Whisper > Script: script 단어 수만큼만 사용 (Whisper 잉여 단어 드롭)
-        # Whisper < Script: 마지막 Whisper 타임스탬프로 나머지 보간
-        n = max(len(script_words), len(whisper_words))
         last_w = whisper_words[-1]
-        for i in range(n):
-            w = whisper_words[i] if i < len(whisper_words) else last_w
-            text = script_words[i] if i < len(script_words) else None
-            if text is None:
-                break  # script 범위 초과 → 드롭
-            aligned.append({"word": text, "start": w["start"], "end": w["end"]})
+        for i in range(len(script_words)):
+            if i < len(whisper_words):
+                w = whisper_words[i]
+                aligned.append({"word": script_words[i], "start": w["start"], "end": w["end"]})
+            else:
+                # script가 더 많을 때: 마지막 Whisper end 이후로 보간
+                extra_start = last_w["end"]
+                extra_dur = max(last_w["end"] - last_w["start"], 0.2)
+                aligned.append({"word": script_words[i], "start": extra_start, "end": extra_start + extra_dur})
         return aligned
 
     # ── Case 2: LCS 앵커 정렬 + 보간 ────────────────────────────────────

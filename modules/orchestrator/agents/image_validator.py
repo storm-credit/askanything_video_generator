@@ -35,6 +35,9 @@ def validate_image(image_path: str, prompt: str, api_key: str = None) -> dict:
         from modules.utils.gemini_client import create_gemini_client
         from google.genai import types
 
+        # api_key가 쉼표 구분 다중 키일 수 있음 → 첫 번째 키만 사용
+        if api_key and "," in str(api_key):
+            api_key = str(api_key).split(",")[0].strip()
         client = create_gemini_client(api_key=api_key)
 
         validation_prompt = f"""You are an image quality checker for YouTube Shorts.

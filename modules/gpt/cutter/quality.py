@@ -235,11 +235,8 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
             failures.append("FORMAT_MYSTERY: 컷1 [SHOCK] 태그 없음 — 미스터리 선언 필수")
-        # 열린 결말: 마지막 컷이 단정적이면 안 됨 — [LOOP] 필수
-        last_desc = cuts[-1].get("description", cuts[-1].get("text", ""))
-        if "LOOP" not in last_desc.upper():
-            failures.append("FORMAT_MYSTERY: 마지막 컷 [LOOP] 태그 없음 — 열린 결말 필수")
         # 마지막 컷 SHOCK/URGENCY 금지 — 열린 결말에 부적합
+        # 참고: [LOOP] 검증은 L70-75 공통 블록에서 처리 (중복 제거됨)
         if any(t in last_desc.upper() for t in ("SHOCK", "URGENCY")):
             failures.append("FORMAT_MYSTERY: 마지막 컷 [SHOCK/URGENCY] 금지 — 열린 결말에 부적합")
         # 가설/이론 최소 2개 — [TENSION] 태그 2개 이상 필요
