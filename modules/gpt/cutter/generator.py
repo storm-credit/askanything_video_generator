@@ -23,7 +23,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   reference_url: str | None = None,
                   format_type: str | None = None,
                   *, _skip_verify: bool = False, _skip_visual_director: bool = False,
-                  _skip_polish: bool = False) -> tuple[list[dict[str, Any]], str, str, list[str]]:
+                  _skip_polish: bool = False) -> tuple[list[dict[str, Any]], str, str, list[str], str, str]:
     # YouTube 자막 포함된 topic에서 제목/자막 분리
     _topic_title, _topic_content = _split_yt_topic(topic)
     if not _topic_title:
