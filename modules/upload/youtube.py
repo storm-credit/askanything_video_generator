@@ -367,7 +367,7 @@ def upload_video(
 
     # 재생목록 자동 추가
     try:
-        playlist_id = add_to_playlist(video_id, title, tags or [], channel_id)
+        playlist_id = add_to_playlist(video_id, title, tags or [], channel_id, channel=channel)
         if playlist_id:
             result["playlist_id"] = playlist_id
     except Exception as e:

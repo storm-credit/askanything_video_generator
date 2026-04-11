@@ -72,8 +72,7 @@ class UploadAgent(BaseAgent):
                         lambda: yt_upload(
                             video_path=abs_video_path,
                             title=ctx.title,
-                            description="\n".join(s.strip() for s in ctx.scripts if s.strip())
-                                        + "\n\n" + " ".join(ctx.tags),
+                            description="\n".join(s.strip() for s in ctx.scripts if s.strip()),
                             tags=[t.lstrip("#") for t in ctx.tags] + [ctx.channel, ctx.language],
                             privacy=yt_privacy,
                             channel_id=account_id,

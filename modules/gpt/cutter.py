@@ -1131,7 +1131,32 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
             if pat.lower() in c.get("script", "").lower():
                 failures.append(f"ACADEMIC_TONE: Cut {ci+1}에 학술체 '{pat}' — '{c['script'][:50]}'")
 
-    # 6) 포맷별 구조 검증 (format_type이 cuts에 첨부된 경우)
+    # 6) 스크립트 내용 중복 감지 — 같은 팩트 반복 방지
+    if len(cuts) >= 4:
+        scripts = [c.get("script", "") for c in cuts]
+        for i in range(len(scripts)):
+            if not scripts[i]:
+                continue
+            words_i = set(re.sub(r"[^\w\s]", "", scripts[i].lower()).split())
+            words_i.discard("")
+            if len(words_i) < 3:
+                continue
+            for j in range(i + 1, len(scripts)):
+                if not scripts[j]:
+                    continue
+                words_j = set(re.sub(r"[^\w\s]", "", scripts[j].lower()).split())
+                words_j.discard("")
+                if len(words_j) < 3:
+                    continue
+                overlap = words_i & words_j
+                ratio = len(overlap) / min(len(words_i), len(words_j))
+                if ratio > 0.65:
+                    failures.append(
+                        f"CONTENT_REPEAT: 컷{i+1}↔컷{j+1} 내용 65%+ 중복 "
+                        f"({len(overlap)}/{min(len(words_i), len(words_j))}단어 일치)"
+                    )
+
+    # 7) 포맷별 구조 검증 (format_type이 cuts에 첨부된 경우)
     fmt_type = (cuts[0].get("format_type") or "").upper() if cuts else ""
 
     if fmt_type == "WHO_WINS":
