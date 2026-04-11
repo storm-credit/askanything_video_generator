@@ -191,7 +191,7 @@ ONLY output scripts that were changed. Keep same length range."""
         import json as _json
         raw = _request_gemini_freeform(api_key, prompt, model)
         from modules.gpt.cutter.parser import _extract_json
-        rewrites = _json.loads(_extract_json(raw))
+        rewrites = _extract_json(raw)
         if isinstance(rewrites, list):
             for rw in rewrites:
                 idx = rw.get("cut", 0) - 1

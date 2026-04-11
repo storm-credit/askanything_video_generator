@@ -113,7 +113,7 @@ class DailyCost:
         if channel not in self.channels:
             self.channels[channel] = {
                 "success": 0, "failed": 0,
-                "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0,
+                "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0, "whisper_usd": 0.0,
                 "image_count": 0, "video_count": 0, "tts_chars": 0,
             }
         ch = self.channels[channel]
@@ -123,6 +123,7 @@ class DailyCost:
         ch["image_usd"] += entry.get("image_usd", 0.0)
         ch["video_usd"] += entry.get("video_usd", 0.0)
         ch["tts_usd"] += entry.get("tts_usd", 0.0)
+        ch["whisper_usd"] += entry.get("whisper_usd", 0.0)
         ch["image_count"] += entry.get("image_count", 0)
         ch["video_count"] += entry.get("video_count", 0)
         ch["tts_chars"] += entry.get("tts_chars", 0)

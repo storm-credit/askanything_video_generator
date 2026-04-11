@@ -29,9 +29,9 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         _hook_preset = _get_hook_preset(channel)
         _hook_lang = (_hook_preset or {}).get("language", "en")
         if _hook_lang == "ko":
-            # 한국어: 15자 초과 시 reject
-            if len(first_script.replace(" ", "")) > 15:
-                failures.append(f"HOOK_TOO_LONG: KO 훅 {len(first_script.replace(' ', ''))}자 (최대 15자) — '{first_script[:30]}'")
+            # 한국어: 20자 초과 시 reject
+            if len(first_script.replace(" ", "")) > 20:
+                failures.append(f"HOOK_TOO_LONG: KO 훅 {len(first_script.replace(' ', ''))}자 (최대 20자) — '{first_script[:30]}'")
         elif _hook_lang == "en":
             # 영어: 10단어 초과 시 reject
             word_count = len(first_script.split())

@@ -26,7 +26,7 @@ FRAGMENT: dict[str, str] = {
 [포맷: PARADOX 역설 반전 — 반드시 준수]
 이 영상은 "당연하다고 생각한 것을 뒤집는" 구조다. 패턴 인터럽트가 핵심.
 
-컷 구조 (7~8컷):
+컷 구조 (7~9컷):
 - 컷1  [SHOCK]:   통념 충격 — "우리가 완전히 잘못 알고 있는 X" 질문형 금지.
 - 컷2  [WONDER]:  일반 상식 제시 — "모두가 이렇게 알고 있다"
 - 컷3  [TENSION]: 반전 1 — "하지만 실제로는 반대다." 구체적 근거 포함.
@@ -80,7 +80,7 @@ If any check fails, rewrite everything.
 [FORMAT: PARADOX Reversal — STRICTLY FOLLOW]
 This video "flips what you thought was obvious." Pattern interrupt is the core.
 
-Cut structure (7~8 cuts):
+Cut structure (7~9 cuts):
 - Cut 1  [SHOCK]:   Challenge common belief — "Everything you know about X is wrong." NO questions.
 - Cut 2  [WONDER]:  Present conventional wisdom — "Everyone believes this"
 - Cut 3  [TENSION]: Reversal 1 — "But the reality is the opposite." Include specific evidence.
@@ -134,7 +134,7 @@ Si falla cualquier verificación, reescribir todo.
 [FORMATO: PARADOX Reversión — SEGUIR ESTRICTAMENTE]
 Este video "voltea lo que creías obvio." La interrupción de patrón es el núcleo.
 
-Estructura de cortes (7~8 cortes):
+Estructura de cortes (7~9 cortes):
 - Corte 1  [SHOCK]:   Desafiar creencia común — "Todo lo que sabes sobre X está mal." SIN preguntas.
 - Corte 2  [WONDER]:  Presentar sabiduría convencional — "Todos creen esto"
 - Corte 3  [TENSION]: Reversión 1 — "Pero la realidad es lo opuesto." Evidencia específica.

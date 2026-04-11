@@ -86,6 +86,7 @@ def calculate_schedule(topics: list[dict],
                 "title": ch_title,
                 "format_type": format_type,
                 "topic_group": topic_name,
+                "series_title": topic.get("series_title"),
             })
 
     # 채널별 시간 분배

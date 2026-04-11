@@ -85,7 +85,7 @@ EMOTION_SPEED_FACTOR: dict[str, float] = {
     "CALM":      1.00,   # 차분함 — 기본 속도 유지 (0.97은 체감 불가 + 규칙 위반)
 }
 
-QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
+QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://localhost:8010")
 
 # ── 감정 태그 → ElevenLabs voice_settings 매핑 (폴백 시 감정 반영) ──
 EMOTION_TO_EL_SETTINGS = {

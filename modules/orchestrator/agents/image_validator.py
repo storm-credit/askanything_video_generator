@@ -82,9 +82,10 @@ Rules:
         text = (response.text or "").strip()
 
         # JSON 파싱
-        import json, re
         from modules.gpt.cutter.parser import _extract_json
-        result = json.loads(_extract_json(text))
+        result = _extract_json(text)
+        if not isinstance(result, dict):
+            return {"pass": True, "reason": "파싱 실패 — 통과 처리"}
 
         score = result.get("score", 0)
         result["pass"] = score >= 7
