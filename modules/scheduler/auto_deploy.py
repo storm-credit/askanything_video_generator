@@ -49,7 +49,7 @@ _deploy_status: dict[str, Any] = {
     "finished_at": None,
 }
 
-STATE_FILE = os.path.join("assets", "_deploy_state.json")
+STATE_FILE = os.path.join("data", "_deploy_state.json")
 
 # TTS 연속 실패 시 조기 중단 임계값
 MAX_CONSECUTIVE_TTS_FAILS = 2

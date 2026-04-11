@@ -51,7 +51,7 @@ def _cleanup_sessions():
 
 
 # ── 음성 선택 → services/ ────────────────────────────────────────
-from services.voice import auto_select_voice as _auto_select_voice, VOICE_MAP as _VOICE_MAP
+from services.voice import auto_select_voice as _auto_select_voice
 
 
 # ── Pydantic 모델 ─────────────────────────────────────────────────
@@ -188,7 +188,7 @@ async def prepare_endpoint(req: PrepareRequest):
 
             yield {"data": f"[기획] '{prep_topic.split(chr(10))[0]}' 스크립트 생성 중...\n"}
 
-            cuts, topic_folder, video_title, video_tags, video_desc = await loop.run_in_executor(
+            cuts, topic_folder, video_title, video_tags, video_desc, _fact_ctx = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
                     prep_topic, api_key_override=req.apiKey, lang=req.language,
@@ -1010,7 +1010,7 @@ async def generate_scripts(req: GenerateScriptsRequest):
 
     try:
         from modules.gpt.cutter import generate_cuts
-        cuts_list, _folder, title, tags, _desc = generate_cuts(topic, lang=req.lang, channel=req.channel, llm_provider="gemini")
+        cuts_list, _folder, title, tags, _desc, _fact_ctx = generate_cuts(topic, lang=req.lang, channel=req.channel, llm_provider="gemini")
 
         # 이미지 수에 맞춤
         img_count = len(glob.glob(os.path.join(folder_path, "images", "cut_*.png")))

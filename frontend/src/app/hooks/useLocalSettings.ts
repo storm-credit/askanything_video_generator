@@ -40,7 +40,7 @@ export function useLocalSettings() {
     setImageEngine(_load("imageEngine", "imagen"));
     setImageModel(_load("imageModel", ""));
     setVideoEngine(_load("videoEngine", "veo3"));
-    setVideoModel(_load("videoModel", ""));
+    setVideoModel(_load("videoModel", "hero-only"));
     setTestMode(_load("testMode", false));
     setLanguage(_load("language", "ko"));
     setCameraStyle(_load("cameraStyle", "cinematic"));
@@ -52,7 +52,7 @@ export function useLocalSettings() {
     setTtsSpeed(_load("ttsSpeed", 1.3));
     setVoiceId(_load("voiceId", "auto"));
     setCaptionSize(_load("captionSize", 54));
-    setCaptionY(_load("captionY", 35));
+    setCaptionY(_load("captionY", 38));
   }, []);
 
   // Auto-save settings to localStorage

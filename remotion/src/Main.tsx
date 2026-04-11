@@ -17,11 +17,11 @@ type CutProps = {
   word_timestamps: WordProps[];
   duration_in_frames: number;
   description?: string;
-  emotion?: 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM';
+  emotion?: 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM' | 'LOOP';
 };
 
 // Extract [EMOTION] tag from cut description field
-const EMOTION_TAGS = new Set(['SHOCK', 'WONDER', 'TENSION', 'REVEAL', 'URGENCY', 'DISBELIEF', 'IDENTITY', 'CALM']);
+const EMOTION_TAGS = new Set(['SHOCK', 'WONDER', 'TENSION', 'REVEAL', 'URGENCY', 'DISBELIEF', 'IDENTITY', 'CALM', 'LOOP']);
 const extractEmotion = (cut: CutProps): EmotionTag | undefined => {
   if (cut.emotion && EMOTION_TAGS.has(cut.emotion)) return cut.emotion as EmotionTag;
   if (!cut.description) return undefined;
@@ -77,7 +77,7 @@ const CAMERA_PRESETS: Record<Exclude<CameraStyle, 'auto'>, KenBurnsPreset[]> = {
 };
 
 // Emotion → camera preset mapping (overrides round-robin when emotion tag present)
-type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM';
+type EmotionTag = 'SHOCK' | 'WONDER' | 'TENSION' | 'REVEAL' | 'URGENCY' | 'DISBELIEF' | 'IDENTITY' | 'CALM' | 'LOOP';
 const EMOTION_CAMERA: Record<EmotionTag, KenBurnsPreset> = {
   // SHOCK: 빠른 가속 줌인 — 충격 순간 카메라가 반응하는 느낌
   SHOCK:     { startScale: 1.0, endScale: 1.2, startX: 0, endX: -4, startY: 0, endY: -3, easing: 'easeIn' },
@@ -95,6 +95,8 @@ const EMOTION_CAMERA: Record<EmotionTag, KenBurnsPreset> = {
   IDENTITY:  { startScale: 1.0, endScale: 1.03, startX: 0, endX: 0, startY: -0.5, endY: 0.5, easing: 'easeInOut' },
   // CALM: 거의 정지 — 여백과 호흡
   CALM:      { startScale: 1.0, endScale: 1.02, startX: 0, endX: 0, startY: 0, endY: 0, easing: 'easeInOut' },
+  // LOOP: 부드러운 줌아웃 — 다시 처음으로 돌아가는 느낌
+  LOOP:      { startScale: 1.08, endScale: 1.0, startX: 1, endX: -1, startY: 0.5, endY: -0.5, easing: 'easeOut' },
 };
 
 const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: number; cameraStyle?: CameraStyle; emotion?: EmotionTag }> = ({ src, durationInFrames, index, cameraStyle = 'dynamic', emotion }) => {

@@ -395,7 +395,7 @@ export default function Home() {
                 <div
                   className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 cursor-pointer hover:bg-white/10 transition-colors"
                   onClick={() => {
-                    const path = prompt("\uc601\uc0c1 \uc800\uc7a5 \uacbd\ub85c (\ube44\uc6b0\uba74 \uae30\ubcf8 assets/ \uc0ac\uc6a9):", settings.outputPath);
+                    const path = typeof window !== "undefined" ? window.prompt("영상 저장 경로 (비우면 기본 assets/ 사용):", settings.outputPath) : null;
                     if (path !== null) settings.setOutputPath(path);
                   }}
                   title={settings.outputPath || "\uae30\ubcf8 \uacbd\ub85c (assets/)"}

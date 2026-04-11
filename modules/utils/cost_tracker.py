@@ -142,7 +142,7 @@ def record_generation_cost(
     image_usd = calc_image_cost(image_count)
     video_usd = calc_video_cost(video_count)
     tts_usd = calc_tts_cost(tts_chars)
-    whisper_usd = whisper_secs * UNIT_COST["whisper"]
+    whisper_usd = whisper_secs * PRICE["whisper"]
     total_usd = llm_usd + image_usd + video_usd + tts_usd + whisper_usd
 
     entry = {
@@ -236,7 +236,7 @@ def build_daily_summary_text(date: Optional[str] = None) -> str:
     grand_usd = 0.0
 
     for ch, info in data.items():
-        ch_usd = info["llm_usd"] + info["image_usd"] + info["video_usd"] + info["tts_usd"]
+        ch_usd = info["llm_usd"] + info["image_usd"] + info["video_usd"] + info["tts_usd"] + info.get("whisper_usd", 0.0)
         ch_krw = usd_to_krw(ch_usd)
         em = EMOJI.get(ch, "📺")
         rows.append(
