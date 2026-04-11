@@ -57,7 +57,7 @@ const isEmphasisWord = (word: string): boolean => {
 
 // 동적 폰트 크기 — 구(phrase) 총 글자 수 기반 자동 축소 (넘침 방지)
 // 가용 너비: 1080 × 0.90 = 972px
-// 실효 폭 = 1080 * 0.9 - padding(44px) - gap(16px) = 912px
+// 실효 폭 = 1080 * 0.9 - padding(44px) - gap(12px per word gap) ≈ 912px
 // KO: bold CJK 글자당 ~1.02em, EN: 글자당 ~0.6em
 const EFFECTIVE_WIDTH = 912;
 const calcCJKFontSize = (words: { word: string }[], base: number): number => {

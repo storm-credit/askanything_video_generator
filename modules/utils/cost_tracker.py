@@ -136,12 +136,14 @@ def record_generation_cost(
     image_count: int = 0,
     video_count: int = 0,
     tts_chars: int = 0,
+    whisper_secs: float = 0.0,
 ) -> dict:
     """한 영상 생성 결과를 일별 집계에 저장. 해당 영상의 비용 dict 반환."""
     image_usd = calc_image_cost(image_count)
     video_usd = calc_video_cost(video_count)
     tts_usd = calc_tts_cost(tts_chars)
-    total_usd = llm_usd + image_usd + video_usd + tts_usd
+    whisper_usd = whisper_secs * UNIT_COST["whisper"]
+    total_usd = llm_usd + image_usd + video_usd + tts_usd + whisper_usd
 
     entry = {
         "success": 1 if success else 0,
@@ -150,9 +152,11 @@ def record_generation_cost(
         "image_usd": image_usd,
         "video_usd": video_usd,
         "tts_usd": tts_usd,
+        "whisper_usd": whisper_usd,
         "image_count": image_count,
         "video_count": video_count,
         "tts_chars": tts_chars,
+        "whisper_secs": whisper_secs,
         "total_usd": total_usd,
     }
 
@@ -164,14 +168,15 @@ def record_generation_cost(
         if channel not in data[today]:
             data[today][channel] = {
                 "success": 0, "failed": 0,
-                "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0,
-                "image_count": 0, "video_count": 0, "tts_chars": 0,
+                "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0, "whisper_usd": 0.0,
+                "image_count": 0, "video_count": 0, "tts_chars": 0, "whisper_secs": 0.0,
             }
         ch = data[today][channel]
         for k in ("success", "failed", "image_count", "video_count", "tts_chars"):
             ch[k] += entry[k]
-        for k in ("llm_usd", "image_usd", "video_usd", "tts_usd"):
-            ch[k] += entry[k]
+        ch["whisper_secs"] = ch.get("whisper_secs", 0.0) + entry["whisper_secs"]
+        for k in ("llm_usd", "image_usd", "video_usd", "tts_usd", "whisper_usd"):
+            ch[k] += entry.get(k, 0.0)
         _save_daily(data)
 
     return entry

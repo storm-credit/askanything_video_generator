@@ -68,7 +68,7 @@ CHANNEL_VOICE_DESC = {
     "askanything": "Korean male, fast steady narration, same energy throughout",
     "wonderdrop": "English male, confident steady narration, same energy throughout",
     "exploratodo": "Spanish male, energetic steady narration, same energy throughout",
-    "prismtale": "Spanish female, calm steady narration, same energy throughout",
+    "prismtale": "Spanish male, calm steady narration, same energy throughout",
 }
 
 # ── 감정 태그 → TTS speed 배율 (채널 기본 speed에 곱함) ──
@@ -291,12 +291,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                         time.sleep(_backoff_delay(attempt))
                         continue
                     return None
-                # LUFS 정규화 (Qwen3와 동일 기준 -14 LUFS)
-                try:
-                    from modules.utils.audio import normalize_audio_lufs
-                    normalize_audio_lufs(audio_path)
-                except Exception as norm_err:
-                    print(f"  [ElevenLabs] LUFS 정규화 건너뜀: {norm_err}")
+                # LUFS 정규화는 호출자(TTSAgent/generate.py)에서 단일 지점으로 처리
                 print(f"OK [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 음성 생성 완료!")
                 return audio_path
 
