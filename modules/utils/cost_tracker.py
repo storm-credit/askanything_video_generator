@@ -20,7 +20,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 KST = timezone(timedelta(hours=9))
-EXCHANGE_RATE = 1_380  # KRW per USD
+EXCHANGE_RATE = int(os.getenv("EXCHANGE_RATE", "1380"))  # KRW per USD
 
 # ── 단가 테이블 (USD) ──
 PRICE = {
@@ -32,6 +32,7 @@ PRICE = {
     "imagen4":          0.04,   # per image
     "veo3":             0.50,   # per clip
     "elevenlabs":       0.30 / 1_000,  # per char
+    "whisper":          0.006 / 60,   # per second ($0.006/min)
 }
 
 _DAILY_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "assets", ".daily_cost.json")

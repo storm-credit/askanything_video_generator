@@ -129,9 +129,9 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // 배포 모드: 생성만 (업로드는 모달에서 수동)
-  const [publishMode] = useState<"realtime" | "private" | "scheduled" | "local">("local");
-  const [scheduledTime, setScheduledTime] = useState("");
+  // 배포 모드: 항상 local (업로드는 모달에서 수동)
+  const publishMode = "local" as const;
+  const scheduledTime = "";
 
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

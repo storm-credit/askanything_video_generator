@@ -219,6 +219,7 @@ def _render_single(props_data: dict, props_json_path: str, video_path: str, remo
 # 플랫폼별 렌더링 설정
 # youtube: 인트로 + 아웃트로 + 제목 오버레이 포함
 # tiktok/reels: 인트로/아웃트로/제목 없이 본편만
+# 쇼츠(30-60초)에서 인트로/아웃트로는 시청 이탈 유발 → 의도적 비활성
 PLATFORM_CONFIGS = {
     "youtube": {"intro": False, "outro": False, "title": True},
     "tiktok":  {"intro": False, "outro": False, "title": True},

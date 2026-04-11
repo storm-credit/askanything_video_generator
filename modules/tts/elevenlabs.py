@@ -132,7 +132,6 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
         print(f"  [Qwen3-TTS 경고] 미지원 speaker '{speaker}' → 'eric' 폴백")
         speaker = "eric"
 
-    import time as _time
     MAX_RETRIES = 3
     for attempt in range(MAX_RETRIES):
         try:
@@ -158,7 +157,7 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
         if attempt < MAX_RETRIES - 1:
             wait = 2 ** (attempt + 1)
             print(f"  [Qwen3-TTS] {wait}초 후 재시도...")
-            _time.sleep(wait)
+            time.sleep(wait)
 
     return None
 
