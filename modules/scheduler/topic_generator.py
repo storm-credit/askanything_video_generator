@@ -475,8 +475,11 @@ def generate_weekly_topics(start_date: datetime, days: int = 7,
         filename = f"Day {day_num} ({date_str}).md"
         filepath = os.path.join(DAY_FILES_DIR, filename)
 
-        with open(filepath, "w", encoding="utf-8") as f:
+        import tempfile
+        fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(block)
+        os.replace(tmp_path, filepath)
         saved_files.append(filename)
         print(f"  [토픽 생성] {filename} 저장 완료")
 

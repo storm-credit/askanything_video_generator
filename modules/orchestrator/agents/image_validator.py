@@ -83,9 +83,8 @@ Rules:
 
         # JSON 파싱
         import json, re
-        text = re.sub(r"```json\s*", "", text)
-        text = re.sub(r"```\s*$", "", text)
-        result = json.loads(text)
+        from modules.gpt.cutter.parser import _extract_json
+        result = json.loads(_extract_json(text))
 
         score = result.get("score", 0)
         result["pass"] = score >= 7
