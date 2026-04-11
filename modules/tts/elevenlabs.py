@@ -75,27 +75,20 @@ CHANNEL_VOICE_DESC = {
 # ── 감정 태그 → TTS speed 배율 (채널 기본 speed에 곱함) ──
 # 채널 기본 speed (예: 1.3) × 감정 배율 → 최종 speed
 # 최소 0.80, 최대 1.50 클램프
-EMOTION_SPEED_FACTOR: dict[str, float] = {
-    "SHOCK":     1.12,   # 빠르고 긴박 — 충격적 사실 전달
-    "URGENCY":   1.10,   # 급박한 상황
-    "DISBELIEF": 1.08,   # 황당함 — 살짝 빠른 반응
-    "TENSION":   1.05,   # 약간 빠름 — 긴장감 유지
-    "REVEAL":    1.02,   # 결과 강조 — 거의 기본 (늘어짐 방지)
-    "WONDER":    1.00,   # 경이감 — 기본 속도 유지
-    "IDENTITY":  1.00,   # 공감/감성 — 기본 속도 유지
-    "CALM":      1.00,   # 차분함 — 기본 속도 유지 (0.97은 체감 불가 + 규칙 위반)
-    "LOOP":      1.05,   # 루프 — 살짝 빠르게 호기심 유도
-}
+# 2단계 speed: FAST(긴박 감정) vs NORMAL(나머지) — 미세 차이 제거로 톤 일관성 확보
+_FAST_EMOTIONS = frozenset({"SHOCK", "URGENCY", "DISBELIEF"})
+EMOTION_SPEED_FACTOR: dict[str, float] = {e: 1.10 for e in _FAST_EMOTIONS}
+# NORMAL 감정은 기본 1.00 (dict에 없으면 .get(emotion, 1.0)으로 폴백)
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
 
 # ── 감정 태그 → ElevenLabs voice_settings 매핑 (폴백 시 감정 반영) ──
 EMOTION_TO_EL_SETTINGS = {
-    "SHOCK":     {"stability": 0.25, "style": 0.45},
+    "SHOCK":     {"stability": 0.30, "style": 0.45},
     "WONDER":    {"stability": 0.40, "style": 0.30},
     "TENSION":   {"stability": 0.30, "style": 0.40},
     "REVEAL":    {"stability": 0.50, "style": 0.35},
-    "URGENCY":   {"stability": 0.20, "style": 0.50},
+    "URGENCY":   {"stability": 0.30, "style": 0.50},
     "DISBELIEF": {"stability": 0.30, "style": 0.40},
     "IDENTITY":  {"stability": 0.55, "style": 0.20},
     "CALM":      {"stability": 0.65, "style": 0.15},
@@ -121,10 +114,11 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
     # 감정 태그 → voice_desc 앞에 합성 (사용자 지정 > 감정 합성 > 채널 기본)
     if voice_desc:
         final_desc = voice_desc
-    elif emotion and emotion in EMOTION_VOICE_DESC:
-        emotion_prefix = EMOTION_VOICE_DESC[emotion]
-        final_desc = f"{emotion_prefix}, {base_desc}"
-        print(f"  [TTS 감정] {emotion} → voice_desc 합성")
+    elif emotion and emotion in EMOTION_VOICE_DESC and emotion not in ("CALM", "WONDER", "IDENTITY"):
+        # 채널 앵커 우선 + 감정 힌트 후방 (화자 일관성 유지)
+        emotion_hint = EMOTION_VOICE_DESC[emotion]
+        final_desc = f"{base_desc}, with {emotion_hint}"
+        print(f"  [TTS 감정] {emotion} → 채널 앵커 + 감정 힌트")
     else:
         final_desc = base_desc
 
@@ -209,8 +203,12 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         result = _generate_qwen3(text, wav_path, language, emotion=emotion, channel=channel, speed=speed)
         if result:
             return result
-        print(f"[TTS] Qwen3 실패")
-        return None  # ElevenLabs 폴백 비활성화 — Qwen3 전용 운영
+        # Qwen3 실패 → ElevenLabs 폴백 시도 (키 있을 때만)
+        _el_key = api_key_override or os.getenv("ELEVENLABS_API_KEY", "")
+        if not _el_key or _el_key == "YOUR_ELEVENLABS_API_KEY_HERE":
+            print(f"[TTS] Qwen3 실패 + ElevenLabs 키 없음 → TTS 불가")
+            return None
+        print(f"[TTS] Qwen3 실패 → ElevenLabs 폴백 시도")
 
     api_key = api_key_override or os.getenv("ELEVENLABS_API_KEY")
     if not api_key or api_key == "YOUR_ELEVENLABS_API_KEY_HERE":

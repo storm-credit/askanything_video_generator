@@ -39,9 +39,17 @@ const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
 };
 const DEFAULT_HIGHLIGHT = '#FFE600';
 
-const getEmotionColor = (emotion?: string): string => {
-  if (!emotion) return DEFAULT_HIGHLIGHT;
-  return EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag] ?? DEFAULT_HIGHLIGHT;
+// 채널 브랜드 색상 — 피드에서 채널 인식 일관성 확보
+const CHANNEL_BRAND_COLOR: Record<string, string> = {
+  askanything: '#FFE600',  // 노랑
+  wonderdrop:  '#00D4FF',  // 하늘
+  exploratodo: '#FF6B35',  // 오렌지
+  prismtale:   '#C084FC',  // 보라
+};
+
+const getHighlightColor = (channel?: string): string => {
+  if (channel && CHANNEL_BRAND_COLOR[channel]) return CHANNEL_BRAND_COLOR[channel];
+  return DEFAULT_HIGHLIGHT;
 };
 
 const isEmphasisWord = (word: string): boolean => {
@@ -134,7 +142,7 @@ export const Captions: React.FC<{
   // captionY → paddingBottom (captionY=50→35%, captionY=38→42%, captionY=28→46%)
   const bottomPadding = `${Math.round(60 - captionY * 0.5)}%`;
 
-  const highlightColor = getEmotionColor(emotion);
+  const highlightColor = getHighlightColor(channel);
 
   if (visibleWords.length === 0) return null;
 
