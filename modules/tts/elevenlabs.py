@@ -80,7 +80,7 @@ _FAST_EMOTIONS = frozenset({"SHOCK", "URGENCY", "DISBELIEF"})
 EMOTION_SPEED_FACTOR: dict[str, float] = {e: 1.10 for e in _FAST_EMOTIONS}
 # NORMAL 감정은 기본 1.00 (dict에 없으면 .get(emotion, 1.0)으로 폴백)
 
-QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
+QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://localhost:8010")
 
 # ── 감정 태그 → ElevenLabs voice_settings 매핑 (폴백 시 감정 반영) ──
 EMOTION_TO_EL_SETTINGS = {
