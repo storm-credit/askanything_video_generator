@@ -190,7 +190,7 @@ Cortes 7-8: CLÍMAX + Loop
 [Ejemplo dorado — Tema: "Datos increíbles sobre los pulpos" (arco emocional completo de 8 cortes)]
 {
   "title": "Los pulpos son más extraños de lo que crees",
-  "tags": ["#Shorts", "#Pulpos", "#DatosCuriosos", "#Animales", "#Ciencia"],
+  "tags": ["#Pulpos", "#DatosCuriosos", "#Animales", "#Ciencia"],
   "cuts": [
     {"description": "A vibrant colorful octopus showing its three hearts glowing [SHOCK]", "image_prompt": "A vibrant colorful octopus with three glowing hearts visible through translucent body, underwater scene with bright coral reef, neon blue and purple lighting, macro lens close-up", "script": "Los pulpos tienen 3 corazones. Sí, tres."},
     {"description": "Octopus arm moving independently with its own brain [WONDER]", "image_prompt": "An octopus tentacle reaching out independently, glowing neural pathways visible inside the arm, dark ocean background with bioluminescent particles, dramatic side lighting", "script": "Y cada brazo tiene su propio cerebro."},
@@ -250,4 +250,4 @@ PASO 3 — Cada corte cumple SOLO su rol
     }
   ]
 }
-[Reglas de tags] El array tags DEBE incluir #Shorts + 3-4 hashtags en español relacionados con el tema (total 4-5). Usar tags populares en Latinoamérica.
+[Reglas de tags] El array tags: 3-5 hashtags en español relacionados con el tema (máximo 5 total). NUNCA incluir #Shorts/#shorts (YouTube clasifica Shorts automáticamente). Usar tags populares en Latinoamérica.

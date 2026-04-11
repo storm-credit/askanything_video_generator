@@ -32,7 +32,7 @@ class VisualDirectorAgent(BaseAgent):
         try:
             ctx.cuts = await loop.run_in_executor(None, lambda:
                 _enhance_image_prompts(ctx.cuts, topic_title,
-                    ctx.language, key, ctx.channel))
+                    ctx.language, key, ctx.channel, ctx.format_type))
 
             # 비주얼 디렉터 후 주제 일치 재검증 (무관 피사체 방지)
             ctx.cuts = await loop.run_in_executor(None, lambda:

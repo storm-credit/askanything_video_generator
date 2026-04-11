@@ -66,7 +66,7 @@ FORMAT_CUT_GUIDE: dict[str, dict[str, int]] = {
     "WHO_WINS":      {"min": 11, "max": 11, "ideal": 11},  # 반드시 11컷 (_validate_cuts와 일치)
     "IF":                {"min": 10, "max": 11, "ideal": 10},
     "EMOTIONAL_SCI":     {"min": 8,  "max": 9,  "ideal": 8},
-    "FACT":              {"min": 8,  "max": 10, "ideal": 9},
+    "FACT":              {"min": 8,  "max": 11, "ideal": 10},
     "COUNTDOWN":         {"min": 8,  "max": 10, "ideal": 9},
     "SCALE":             {"min": 7,  "max": 9,  "ideal": 8},
     "PARADOX":           {"min": 7,  "max": 8,  "ideal": 7},

@@ -324,6 +324,8 @@ def get_today_topics(channel: str | None = None,
             groups[key] = {
                 "topic_group": key,
                 "topic_tag": j.get("topic_tag", "공통"),
+                "format_type": j.get("format_type", "FACT"),
+                "series_title": j.get("series_title"),
                 "channels": {},
             }
         groups[key]["channels"][j["channel"]] = {

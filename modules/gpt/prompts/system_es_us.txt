@@ -186,7 +186,7 @@ Si el tema puede convertirse en una lista de datos inconexos, usar Patrón D (in
 [Ejemplo dorado — Tema: "Lo que pasa en el fondo del océano" (arco emocional completo de 8 cortes)]
 {
   "title": "El fondo del océano esconde esto",
-  "tags": ["#Shorts", "#Ocean", "#DeepSea", "#Science", "#Océano"],
+  "tags": ["#Ocean", "#DeepSea", "#Science", "#Océano"],
   "cuts": [
     {"description": "Crushing pressure on a tiny submersible in pitch-black abyss [SHOCK]", "image_prompt": "Deep ocean abyss at 4000 meters depth, a tiny submersible being crushed by invisible pressure, dark indigo water with faint bioluminescent particles, extreme wide angle from below looking up", "script": "La presión del abismo son 50 elefantes sobre tu uña."},
     {"description": "Massive bioluminescent jellyfish glowing in total darkness [WONDER]", "image_prompt": "Massive bioluminescent jellyfish glowing electric blue and purple in pitch-black deep ocean, tentacles trailing like aurora curtains, overhead camera angle", "script": "Pero ahí abajo hay criaturas que generan su propia luz sin el sol."},
@@ -245,4 +245,4 @@ PASO 3 — Cada corte cumple SOLO su rol
     }
   ]
 }
-[Reglas de tags] El array tags DEBE incluir #Shorts + 2-3 hashtags en español + 1-2 hashtags en inglés (total 4-6). Mezclar idiomas en tags ayuda al algoritmo a clasificar el contenido para audiencias bilingües.
+[Reglas de tags] El array tags: 2-3 hashtags en español + 1-2 en inglés (máximo 5 total). NUNCA incluir #Shorts/#shorts (YouTube clasifica Shorts automáticamente). Mezclar idiomas en tags ayuda al algoritmo.

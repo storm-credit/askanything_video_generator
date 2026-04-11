@@ -39,7 +39,7 @@ def _lcs_anchors(src: list[str], tgt: list[str]) -> list[tuple[int, int]]:
             anchors.append((i - 1, j - 1))
             i -= 1
             j -= 1
-        elif dp[i - 1][j] >= dp[i][j - 1]:
+        elif dp[i - 1][j] > dp[i][j - 1]:
             i -= 1
         else:
             j -= 1
