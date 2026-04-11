@@ -874,9 +874,9 @@ async def generate_video_endpoint(req: GenerateRequest):
                 from modules.utils.cost_tracker import record_generation_cost, calc_llm_cost
                 _n_cuts = len(cuts) if cuts else 0
                 _llm_model = req.llmModel or "gemini-2.5-pro"
-                # LLM 토큰 추정: 시스템 프롬프트 ~2K + 출력 ~1K per cut
-                _est_input = 2000 + _n_cuts * 200
-                _est_output = _n_cuts * 300
+                # LLM 토큰 추정: 시스템 프롬프트 ~10K + 검증/강화 ~5K, 출력 ~500/cut
+                _est_input = 15000 + _n_cuts * 500
+                _est_output = _n_cuts * 500
                 _llm_usd = calc_llm_cost(_llm_model, _est_input, _est_output)
                 record_generation_cost(
                     channel=req.channel or "unknown",

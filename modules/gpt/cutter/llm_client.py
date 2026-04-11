@@ -181,6 +181,9 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
             ),
         )
     except Exception:
+        # 캐시 생성 후 generate 실패 → 캐시 정리
+        with _gemini_cache_lock:
+            _gemini_cache.pop(cache_key, None)
         # 캐시 미지원 모델이거나 에러 → 일반 요청
         response = client.models.generate_content(
             model=model_name,

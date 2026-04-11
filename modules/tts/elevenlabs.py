@@ -61,6 +61,7 @@ EMOTION_VOICE_DESC = {
     "DISBELIEF": "incredulous, sharp questioning, emphatic tone",
     "IDENTITY": "proud, warm, direct, engaging connection",
     "CALM": "composed, clear, steady, direct delivery",
+    "LOOP": "intriguing, mysterious, hinting, compelling hook",
 }
 
 # ── 채널 → Qwen3 기본 voice_desc ──
@@ -83,6 +84,7 @@ EMOTION_SPEED_FACTOR: dict[str, float] = {
     "WONDER":    1.00,   # 경이감 — 기본 속도 유지
     "IDENTITY":  1.00,   # 공감/감성 — 기본 속도 유지
     "CALM":      1.00,   # 차분함 — 기본 속도 유지 (0.97은 체감 불가 + 규칙 위반)
+    "LOOP":      1.05,   # 루프 — 살짝 빠르게 호기심 유도
 }
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://host.docker.internal:8010")
@@ -97,6 +99,7 @@ EMOTION_TO_EL_SETTINGS = {
     "DISBELIEF": {"stability": 0.30, "style": 0.40},
     "IDENTITY":  {"stability": 0.55, "style": 0.20},
     "CALM":      {"stability": 0.65, "style": 0.15},
+    "LOOP":      {"stability": 0.35, "style": 0.30},
 }
 
 

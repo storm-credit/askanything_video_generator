@@ -182,10 +182,9 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         if not has_reveal:
             failures.append("FORMAT_COUNTDOWN: [REVEAL] 태그 없음 — 1위 공개 컷 필수")
         # 순위 숫자 존재 검증 — 스크립트에 숫자가 최소 3개 컷에 있어야 (5위~1위)
-        import re as _re
         cuts_with_numbers = sum(
             1 for c in cuts
-            if _re.search(r'\d+\s*(?:위|등|번째|th|st|nd|rd|°|lugar|er[oa]?|t[oa]s?)', c.get("script", ""), _re.IGNORECASE)
+            if re.search(r'\d+\s*(?:위|등|번째|th|st|nd|rd|°|lugar|er[oa]?|t[oa]s?)', c.get("script", ""), re.IGNORECASE)
         )
         if cuts_with_numbers < 3:
             failures.append(f"FORMAT_COUNTDOWN: 순위 표기 {cuts_with_numbers}컷 (최소 3컷 이상 순위 숫자 필요)")
@@ -215,10 +214,9 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         if not has_reveal:
             failures.append("FORMAT_FACT: [REVEAL] 태그 없음 — 핵심 사실 공개 컷 필수")
         # 수치/통계 밀도 검증 — 수치 없는 컷 3개 이상 → FAIL
-        import re as _re
         cuts_without_numbers = sum(
             1 for c in cuts
-            if not _re.search(r'\d', c.get("script", ""))
+            if not re.search(r'\d', c.get("script", ""))
         )
         if cuts_without_numbers >= 3:
             failures.append(f"FORMAT_FACT: 수치 없는 컷 {cuts_without_numbers}개 (최대 2개 허용)")

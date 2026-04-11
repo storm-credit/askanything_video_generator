@@ -66,12 +66,24 @@ def _save_daily(data: dict):
 
 # ── 단가 조회 ──
 
+_LLM_PRICE_EXTRA = {
+    "gpt-4o":          {"input": 2.50 / 1_000_000, "output": 10.0 / 1_000_000},
+    "gpt-4o-mini":     {"input": 0.15 / 1_000_000, "output": 0.60 / 1_000_000},
+    "claude-opus":     {"input": 15.0 / 1_000_000, "output": 75.0 / 1_000_000},
+    "claude-sonnet":   {"input": 3.0 / 1_000_000,  "output": 15.0 / 1_000_000},
+    "claude-haiku":    {"input": 0.80 / 1_000_000, "output": 4.0 / 1_000_000},
+}
+
+
 def _llm_price(model: str) -> dict:
-    """모델명 prefix로 단가 반환. 없으면 Flash 기준."""
+    """모델명 prefix로 단가 반환. Gemini/GPT/Claude 지원. 없으면 Flash 기준."""
     m = model.lower()
     for key in PRICE:
         if key.startswith("gemini") and m.startswith(key):
             return PRICE[key]
+    for key, val in _LLM_PRICE_EXTRA.items():
+        if m.startswith(key):
+            return val
     return PRICE["gemini-2.5-flash"]
 
 
@@ -108,8 +120,8 @@ class DailyCost:
         if channel not in self.channels:
             self.channels[channel] = {
                 "success": 0, "failed": 0,
-                "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0,
-                "image_count": 0, "video_count": 0, "tts_chars": 0,
+                "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0, "whisper_usd": 0.0,
+                "image_count": 0, "video_count": 0, "tts_chars": 0, "whisper_secs": 0.0,
             }
         ch = self.channels[channel]
         ch["success"] += entry.get("success", 0)
@@ -118,13 +130,15 @@ class DailyCost:
         ch["image_usd"] += entry.get("image_usd", 0.0)
         ch["video_usd"] += entry.get("video_usd", 0.0)
         ch["tts_usd"] += entry.get("tts_usd", 0.0)
+        ch["whisper_usd"] += entry.get("whisper_usd", 0.0)
         ch["image_count"] += entry.get("image_count", 0)
         ch["video_count"] += entry.get("video_count", 0)
         ch["tts_chars"] += entry.get("tts_chars", 0)
+        ch["whisper_secs"] = ch.get("whisper_secs", 0.0) + entry.get("whisper_secs", 0.0)
 
     def total_usd(self) -> float:
         return sum(
-            ch["llm_usd"] + ch["image_usd"] + ch["video_usd"] + ch["tts_usd"]
+            ch["llm_usd"] + ch["image_usd"] + ch["video_usd"] + ch["tts_usd"] + ch.get("whisper_usd", 0.0)
             for ch in self.channels.values()
         )
 
