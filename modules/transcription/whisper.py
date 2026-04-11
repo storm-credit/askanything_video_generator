@@ -70,7 +70,7 @@ def _interpolate_segment(
         return []
     char_counts = [max(len(w), 1) for w in words]
     total_chars = sum(char_counts)
-    duration = max(t_end - t_start, 0.05 * len(words))
+    duration = max(t_end - t_start, 0.08 * len(words))
     t = t_start
     result = []
     for w, chars in zip(words, char_counts):

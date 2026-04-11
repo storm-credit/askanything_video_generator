@@ -28,8 +28,8 @@ CHANNEL_WINDOWS = {
         "min_interval_min": 45,
     },
     "prismtale": {
-        "start": dt_time(8, 0),    # KST 08:00 = EST 19:00 — US 히스패닉 저녁
-        "end": dt_time(11, 0),     # KST 11:00 = EST 22:00
+        "start": dt_time(9, 0),    # KST 09:00 = EST 20:00 — US 히스패닉 저녁 (wonderdrop +1h 오프셋)
+        "end": dt_time(12, 0),     # KST 12:00 = EST 23:00
         "min_interval_min": 45,
     },
 }

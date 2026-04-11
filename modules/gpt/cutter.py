@@ -1232,6 +1232,11 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         if reversal_count < 2:
             failures.append(f"FORMAT_PARADOX: 반전 {reversal_count}개 (최소 2단계 반전 필수)")
 
+    elif fmt_type == "FACT":
+        has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
+        if not has_reveal:
+            failures.append("FORMAT_FACT: [REVEAL] 태그 없음 — 핵심 ���실 공개 컷 필수")
+
     elif fmt_type == "MYSTERY":
         # 컷1 [SHOCK] 필수
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))

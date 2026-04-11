@@ -1329,7 +1329,10 @@ export default function Home() {
       const data = await res.json();
       if (data.auth_url) {
         window.open(data.auth_url, `${platform}_auth`, "width=600,height=700");
-        const poll = setInterval(async () => {
+        let pollId: ReturnType<typeof setInterval> | null = null;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const cleanup = () => { if (pollId) clearInterval(pollId); if (timeoutId) clearTimeout(timeoutId); };
+        pollId = setInterval(async () => {
           try {
             const check = await fetch(`${API_BASE}/api/${platform}/status`);
             const status = await check.json();
@@ -1337,16 +1340,13 @@ export default function Home() {
               if (platform === "youtube") setYtConnected(true);
               else if (platform === "tiktok") setTtConnected(true);
               else if (platform === "instagram") setIgConnected(true);
-              clearInterval(poll);
-              clearTimeout(timeout);
+              cleanup();
             }
           } catch {
-            // 연결 실패 시 폴링 중단
-            clearInterval(poll);
-            clearTimeout(timeout);
+            cleanup();
           }
         }, 2000);
-        const timeout = setTimeout(() => clearInterval(poll), 120000);
+        timeoutId = setTimeout(cleanup, 120000);
       } else if (data.error) {
         setUploadResult({ success: false, error: data.error });
       }
@@ -1710,7 +1710,7 @@ export default function Home() {
                             setPlatforms(ch.platforms);
                             setCaptionSize(ch.captionSize);
                             setCaptionY(ch.captionY);
-                            // cameraStyle은 사용자 설정 유지 (채널 변경 시 덮어쓰지 않음)
+                            if (ch.cameraStyle) setCameraStyle(ch.cameraStyle);
                             setVoiceId("auto");
                           }
                         } else if (newSelected.length === 0) {
@@ -1733,7 +1733,7 @@ export default function Home() {
 
             {/* AI 엔진 — 항상 표시 */}
             <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
                     <Brain className="w-3.5 h-3.5 text-violet-400" />
@@ -1789,7 +1789,7 @@ export default function Home() {
 
             {/* 연출 — 카메라 · BGM · 음성 */}
             <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
                     <Video className="w-3.5 h-3.5 text-sky-400" />
@@ -1837,7 +1837,7 @@ export default function Home() {
 
             {/* 자막 설정 — 슬라이더 */}
             <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
@@ -3096,7 +3096,7 @@ export default function Home() {
 
       {/* 오류 패널 */}
       <AnimatePresence>
-        {errorMessage && !isGenerating && (
+        {errorMessage && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -3144,7 +3144,7 @@ export default function Home() {
                           <h3 className="text-white font-bold text-sm">{ch}</h3>
                           <span className="text-[10px] text-gray-500">{s.total_videos || 0}개 영상</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-3 mb-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                           <div className="bg-white/5 rounded-lg p-2 text-center">
                             <p className="text-[10px] text-gray-500">총 조회</p>
                             <p className="text-white font-bold text-sm">{(s.total_views || 0).toLocaleString()}</p>

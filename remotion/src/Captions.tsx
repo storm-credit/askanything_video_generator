@@ -62,8 +62,10 @@ const isEmphasisWord = (word: string): boolean => {
 const EFFECTIVE_WIDTH = 912;
 const calcCJKFontSize = (words: { word: string }[], base: number): number => {
   const totalChars = words.reduce((s, w) => s + w.word.replace(/\s/g, '').length, 0);
-  const maxByWidth = Math.floor(EFFECTIVE_WIDTH / Math.max(totalChars * 1.02, 1));
-  return Math.max(48, Math.min(base, maxByWidth));
+  const gapPx = Math.max(words.length - 1, 0) * 12; // word gap 12px
+  const availWidth = EFFECTIVE_WIDTH - gapPx;
+  const maxByWidth = Math.floor(availWidth / Math.max(totalChars * 1.02, 1));
+  return Math.max(64, Math.min(base, maxByWidth));
 };
 
 const calcLatinFontSize = (words: { word: string }[], base: number): number => {
