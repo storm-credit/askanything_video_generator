@@ -429,7 +429,7 @@ export default function Home() {
 
       {/* Multi-channel generation panel */}
       <AnimatePresence>
-        {(sse.isGenerating && settings.selectedChannels.length >= 2 || Object.values(sse.channelResults).some(r => r.status === 'done')) && Object.keys(sse.channelResults).length > 0 && (
+        {((sse.isGenerating && settings.selectedChannels.length >= 2) || Object.values(sse.channelResults).some(r => r.status === 'done')) && Object.keys(sse.channelResults).length > 0 && (
           <MultiChannelPanel
             channelResults={sse.channelResults}
             channelPreviews={sse.channelPreviews}
@@ -503,7 +503,7 @@ export default function Home() {
 
       {/* Today modal */}
       <AnimatePresence>
-        <TodayModal
+        {showTodayModal && <TodayModal
           show={showTodayModal}
           onClose={() => setShowTodayModal(false)}
           todayTopics={todayTopics}
@@ -517,22 +517,22 @@ export default function Home() {
           setTodayPrevDate={setTodayPrevDate}
           setTodayNextDate={setTodayNextDate}
           onSelectTopic={handleSelectTodayTopic}
-        />
+        />}
       </AnimatePresence>
 
       {/* Session browser */}
       <AnimatePresence>
-        <SessionBrowser
+        {showSessionBrowser && <SessionBrowser
           show={showSessionBrowser}
           onClose={() => setShowSessionBrowser(false)}
           savedSessions={savedSessions}
           onRestore={(folders) => sse.restoreSession(folders, setTopic, setShowSessionBrowser)}
-        />
+        />}
       </AnimatePresence>
 
       {/* Upload modal */}
       <AnimatePresence>
-        <UploadModal
+        {showUploadModal && <UploadModal
           show={showUploadModal}
           onClose={() => setShowUploadModal(false)}
           generatedVideoPath={sse.generatedVideoPath}
@@ -542,17 +542,17 @@ export default function Home() {
           initialDescription={uploadInitialDesc}
           initialTags={uploadInitialTags}
           platformAuth={platformAuth}
-        />
+        />}
       </AnimatePresence>
 
       {/* Dashboard modal */}
       <AnimatePresence>
-        <DashboardModal
+        {showDashboard && <DashboardModal
           show={showDashboard}
           onClose={() => setShowDashboard(false)}
           dashboardData={dashboardData}
           dashboardLoading={dashboardLoading}
-        />
+        />}
       </AnimatePresence>
 
       {/* Error panel */}

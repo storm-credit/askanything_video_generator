@@ -27,6 +27,11 @@ export function UploadModal({
   const [uploadTitle, setUploadTitle] = useState(initialTitle);
   const [uploadDescription, setUploadDescription] = useState(initialDescription);
   const [uploadTags, setUploadTags] = useState(initialTags);
+
+  // props 변경 시 state 동기화 (modal 재오픈 시 새 값 반영)
+  React.useEffect(() => { setUploadTitle(initialTitle); }, [initialTitle]);
+  React.useEffect(() => { setUploadDescription(initialDescription); }, [initialDescription]);
+  React.useEffect(() => { setUploadTags(initialTags); }, [initialTags]);
   const [uploadPrivacy, setUploadPrivacy] = useState("private");
   const [ttPrivacy, setTtPrivacy] = useState("SELF_ONLY");
   const [uploading, setUploading] = useState(false);

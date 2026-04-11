@@ -35,7 +35,7 @@ PRICE = {
     "whisper":          0.006 / 60,   # per second ($0.006/min)
 }
 
-_DAILY_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "assets", ".daily_cost.json")
+_DAILY_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", ".daily_cost.json")
 _lock = threading.Lock()
 
 

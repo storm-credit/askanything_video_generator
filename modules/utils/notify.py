@@ -104,7 +104,7 @@ def notify_cost(channel: str, title: str, cost_entry: dict, video_url: str = "",
         from modules.utils.cost_tracker import build_cost_table_text
         text = build_cost_table_text(cost_entry, channel, title)
         if format_type:
-            fmt_emoji = {"WHO_WINS": "⚔️", "IF": "🌀", "EMOTIONAL_SCI": "💫", "FACT": "📡"}.get(format_type.upper(), "")
+            fmt_emoji = {"WHO_WINS": "⚔️", "IF": "🌀", "EMOTIONAL_SCI": "💫", "FACT": "📡", "COUNTDOWN": "🏆", "SCALE": "📏", "PARADOX": "🔄", "MYSTERY": "🔮"}.get(format_type.upper(), "")
             text = f"{fmt_emoji} [{format_type}]\n" + text
         if video_url:
             text += f'\n🔗 <a href="{video_url}">YouTube 보기</a>'
