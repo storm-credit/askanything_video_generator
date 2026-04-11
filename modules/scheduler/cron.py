@@ -14,10 +14,11 @@ from typing import Callable, Any
 
 KST = timezone(timedelta(hours=9))
 
-# 등록된 작업 목록
+# 등록된 작업 목록 — reload 시 중복 방지를 위해 매번 초기화
 _jobs: list[dict] = []
 _running = False
 _thread: threading.Thread | None = None
+_started_once = False  # reload 시 이전 스레드 감지용
 
 
 def _now_kst() -> datetime:
@@ -94,11 +95,12 @@ async def _run_job(job: dict):
 async def _scheduler_loop():
     """메인 스케줄러 루프 — 1분마다 체크."""
     global _running
-    _running = True
+    if not _running:
+        return  # start()에서 중지 신호를 받은 경우
     print(f"[크론] 스케줄러 시작 ({len(_jobs)}개 작업)")
 
     # 헬스체크 — 등록된 잡 수 확인 + 텔레그램 알림
-    expected_jobs = 4  # deploy, topics, stats, playlists
+    expected_jobs = 5  # deploy, topics, stats, playlists, daily_cost
     if len(_jobs) < expected_jobs:
         try:
             from modules.utils.notify import notify_warning
@@ -134,11 +136,19 @@ def _run_in_thread():
 
 
 def start():
-    """크론 스케줄러 시작 (백그라운드 스레드)."""
-    global _thread
+    """크론 스케줄러 시작 (백그라운드 스레드). reload 시 이전 스레드 중지."""
+    global _thread, _running, _started_once
+    # uvicorn reload 시 이전 스레드 정리
+    if _started_once:
+        _running = False  # 이전 스레드의 루프 중단 신호
+        import time
+        time.sleep(0.5)  # 이전 루프가 sleep 중이면 빠져나올 시간 확보
     if _thread and _thread.is_alive():
-        print("[크론] 이미 실행 중")
-        return
+        print("[크론] 이전 스레드 대기 중...")
+        _running = False
+        _thread.join(timeout=2)
+    _started_once = True
+    _running = True
     _thread = threading.Thread(target=_run_in_thread, daemon=True)
     _thread.start()
 
