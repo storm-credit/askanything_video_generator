@@ -34,10 +34,11 @@ def validate_image(image_path: str, prompt: str, api_key: str = None) -> dict:
     try:
         from modules.utils.gemini_client import create_gemini_client
         from google.genai import types
+    except ImportError as ie:
+        print(f"[ImageValidator] import 실패 (통과 처리): {ie}")
+        return {"pass": True, "reason": f"import 에러: {str(ie)[:50]}", "score": -1}
 
-        client = create_gemini_client(api_key=api_key)
-
-        validation_prompt = f"""You are an image quality checker for YouTube Shorts.
+    validation_prompt = f"""You are an image quality checker for YouTube Shorts.
 
 Check this image against the prompt and rate it.
 
@@ -60,6 +61,8 @@ Rules:
 - Text in image = always fail
 - Realistic human face = always fail"""
 
+    try:
+        client = create_gemini_client(api_key=api_key)
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[
@@ -92,7 +95,33 @@ Rules:
         return result
 
     except Exception as e:
-        # 검수 실패 시 통과 처리 (검수 때문에 전체가 멈추면 안 됨)
+        # 429 에러 시 1회 재시도
+        err_str = str(e)
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+            import time as _time
+            _time.sleep(5)
+            try:
+                from modules.utils.gemini_client import create_gemini_client as _retry_client
+                _retry = _retry_client(api_key=api_key)
+                _resp = _retry.models.generate_content(
+                    model="gemini-2.0-flash",
+                    contents=[
+                        types.Content(parts=[
+                            types.Part(text=validation_prompt),
+                            types.Part(inline_data=types.Blob(mime_type="image/png", data=base64.b64decode(img_data))),
+                        ])
+                    ],
+                    config=types.GenerateContentConfig(temperature=0.1, http_options=types.HttpOptions(timeout=30_000)),
+                )
+                _text = (_resp.text or "").strip()
+                _text = re.sub(r"```json\s*", "", _text)
+                _text = re.sub(r"```\s*$", "", _text)
+                _result = json.loads(_text)
+                _result["pass"] = _result.get("score", 0) >= 7
+                return _result
+            except Exception:
+                pass
+        # 최종 실패 시 통과 처리 (검수 때문에 전체가 멈추면 안 됨)
         print(f"[ImageValidator] 검수 실패 (통과 처리): {e}")
         return {"pass": True, "reason": f"검수 에러: {str(e)[:50]}", "score": -1}
 

@@ -45,7 +45,7 @@ function isVideoPath(path: string): boolean {
 // Ken Burns 효과 프리셋: 스타일별 그룹
 type EasingType = 'linear' | 'easeInOut' | 'easeIn' | 'easeOut' | 'easeInOutStrong';
 type KenBurnsPreset = { startScale: number; endScale: number; startX: number; endX: number; startY: number; endY: number; easing?: EasingType };
-type CameraStyle = 'auto' | 'dynamic' | 'gentle' | 'static';
+type CameraStyle = 'auto' | 'dynamic' | 'gentle' | 'static' | 'cinematic';
 
 // Easing 함수 맵 — 감정별 카메라 무빙 곡선 (선형 이동은 기계적, 비선형이 영화적)
 const EASING_FN: Record<EasingType, (t: number) => number> = {
@@ -73,6 +73,12 @@ const CAMERA_PRESETS: Record<Exclude<CameraStyle, 'auto'>, KenBurnsPreset[]> = {
   ],
   static: [
     { startScale: 1.0, endScale: 1.0, startX: 0, endX: 0, startY: 0, endY: 0, easing: 'linear' },
+  ],
+  cinematic: [
+    { startScale: 1.0, endScale: 1.12, startX: 0, endX: -2, startY: 0, endY: -1.5, easing: 'easeInOutStrong' },
+    { startScale: 1.1, endScale: 1.0, startX: -1.5, endX: 1.5, startY: -0.5, endY: 0.5, easing: 'easeInOutStrong' },
+    { startScale: 1.0, endScale: 1.08, startX: 1, endX: -1, startY: 0, endY: -1, easing: 'easeInOutStrong' },
+    { startScale: 1.06, endScale: 1.0, startX: 0, endX: 0, startY: 1, endY: -1, easing: 'easeInOutStrong' },
   ],
 };
 

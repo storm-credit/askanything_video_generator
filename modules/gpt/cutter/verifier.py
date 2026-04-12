@@ -109,7 +109,7 @@ def _verify_highness_structure(cuts: list[dict], topic: str,
     emotions = []
     for c in cuts:
         desc = c.get("text", "") or c.get("description", "")
-        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY"]:
+        for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY", "LOOP", "CALM"]:
             if tag in desc:
                 emotions.append(tag)
                 break
