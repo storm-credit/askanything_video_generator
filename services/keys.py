@@ -35,13 +35,13 @@ def validate_keys(
 
     # Imagen / Nano Banana 사용 시 Google 키 필요
     if image_engine in ("imagen", "nano_banana"):
-        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "") or get_google_key()
         if not gemini_key:
             errors.append("GEMINI_API_KEY (이미지 생성에 필수)")
 
     # LLM 프로바이더별 키 검증
     if llm_provider == "gemini":
-        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "")
+        gemini_key = llm_key_override or os.getenv("GEMINI_API_KEY", "") or get_google_key()
         if not gemini_key:
             errors.append("GEMINI_API_KEY (Gemini 기획 엔진에 필수)")
     elif llm_provider == "claude":
