@@ -68,7 +68,7 @@ FORMAT_CUT_GUIDE: dict[str, dict[str, int]] = {
     "EMOTIONAL_SCI":     {"min": 8,  "max": 9,  "ideal": 8},
     "FACT":              {"min": 8,  "max": 11, "ideal": 10},
     "COUNTDOWN":         {"min": 8,  "max": 10, "ideal": 9},
-    "SCALE":             {"min": 7,  "max": 9,  "ideal": 8},
+    "SCALE":             {"min": 8,  "max": 9,  "ideal": 9},
     "PARADOX":           {"min": 8,  "max": 9,  "ideal": 9},
     "MYSTERY":           {"min": 8,  "max": 9,  "ideal": 8},
 }

@@ -65,7 +65,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "FACT":          {"min": 9,  "max": 10},  # ~3.5s/컷 → 9컷=32s (EN 단어수 축소)
             "COUNTDOWN":     {"min": 8,  "max": 10},  # ~3.5s/컷 → 8컷=28s
             "MYSTERY":       {"min": 8,  "max": 9},
-            "SCALE":         {"min": 7,  "max": 9},
+            "SCALE":         {"min": 8,  "max": 9},
             "PARADOX":       {"min": 8,  "max": 9},   # FORMAT_CUT_GUIDE와 일치 (8~9컷)
         },
         "preferred_formats": ["FACT", "SCALE", "IF", "PARADOX", "EMOTIONAL_SCI", "MYSTERY"],
@@ -102,7 +102,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "IF":            {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
             "FACT":          {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
             "PARADOX":       {"min": 9,  "max": 9},   # 단어수 상향 → 9컷=38s
-            "SCALE":         {"min": 7,  "max": 9},
+            "SCALE":         {"min": 8,  "max": 9},
             "COUNTDOWN":     {"min": 8,  "max": 10},
         },
         "preferred_formats": ["IF", "WHO_WINS", "SCALE", "FACT", "COUNTDOWN", "PARADOX"],
@@ -141,6 +141,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
             "FACT":             {"min": 11, "max": 11},  # ~3.7s/컷 → 11컷=41s
             "MYSTERY":   {"min": 8,  "max": 9},
             "PARADOX":   {"min": 9,  "max": 9},   # 단어수 상향 → 9컷=44s
+            "SCALE":     {"min": 8,  "max": 9},
             "COUNTDOWN": {"min": 8,  "max": 10},
         },
         "preferred_formats": ["EMOTIONAL_SCI", "MYSTERY", "PARADOX", "FACT", "IF", "COUNTDOWN"],

@@ -91,7 +91,7 @@ Cut structure (7~9 cuts):
 - Cut 8  [LOOP]:    "What if we compare something else?" → new comparison hint
 
 Script rules:
-- 1 sentence per cut, 8~16 words
+- 1 sentence per cut, 10~16 words
 - EVERY cut MUST have numbers/multipliers/units (Nx, N meters, N light-years)
 - Comparison targets must be familiar (football field, Everest, Earth, etc.)
 - Active declarative only
@@ -145,7 +145,7 @@ Estructura de cortes (7~9 cortes):
 - Corte 8  [LOOP]:    "¿Y si lo comparamos con otra cosa?" → nueva comparación
 
 Reglas de script:
-- 1 oración por corte, 8~18 palabras
+- 1 oración por corte, 12~18 palabras
 - CADA corte DEBE tener números/multiplicadores/unidades
 - Objetivos de comparación deben ser familiares (campo de fútbol, Everest, etc.)
 - Solo declarativo activo
