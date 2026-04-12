@@ -51,17 +51,13 @@ def check_quota(api_key: str = None) -> dict | None:
     return None
 
 
-# ── 감정 태그 → Qwen3 voice_desc 매핑 ──
+# ── 감정 태그 → Qwen3 voice_desc 매핑 (2단계: FAST vs NORMAL) ──
+# FAST 감정만 힌트 추가, 나머지는 채널 앵커만 사용 → 톤 일관성 확보
+_FAST_HINT = "intense punchy delivery"
 EMOTION_VOICE_DESC = {
-    "SHOCK": "shocked, intense, urgent, breathless, punchy delivery",
-    "WONDER": "amazed, bright, energetic, clear articulation",
-    "TENSION": "tense, suspenseful, building energy, dark edge",
-    "REVEAL": "dramatic reveal, confident, strong emphasis",
-    "URGENCY": "urgent, pressing, time-critical, fast, punchy",
-    "DISBELIEF": "incredulous, sharp questioning, emphatic tone",
-    "IDENTITY": "proud, warm, direct, engaging connection",
-    "CALM": "composed, clear, steady, direct delivery",
-    "LOOP": "intriguing, mysterious, hinting, compelling hook",
+    "SHOCK": _FAST_HINT,
+    "URGENCY": _FAST_HINT,
+    "DISBELIEF": _FAST_HINT,
 }
 
 # ── 채널 → Qwen3 기본 voice_desc ──
@@ -82,17 +78,12 @@ EMOTION_SPEED_FACTOR: dict[str, float] = {e: 1.10 for e in _FAST_EMOTIONS}
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://localhost:8010")
 
-# ── 감정 태그 → ElevenLabs voice_settings 매핑 (폴백 시 감정 반영) ──
+# ── 감정 태그 → ElevenLabs voice_settings 매핑 (2단계: FAST vs 채널기본) ──
+_EL_FAST = {"stability": 0.30, "style": 0.45}
 EMOTION_TO_EL_SETTINGS = {
-    "SHOCK":     {"stability": 0.30, "style": 0.45},
-    "WONDER":    {"stability": 0.40, "style": 0.30},
-    "TENSION":   {"stability": 0.30, "style": 0.40},
-    "REVEAL":    {"stability": 0.50, "style": 0.35},
-    "URGENCY":   {"stability": 0.30, "style": 0.50},
-    "DISBELIEF": {"stability": 0.30, "style": 0.40},
-    "IDENTITY":  {"stability": 0.55, "style": 0.20},
-    "CALM":      {"stability": 0.65, "style": 0.15},
-    "LOOP":      {"stability": 0.35, "style": 0.30},
+    "SHOCK": _EL_FAST,
+    "URGENCY": _EL_FAST,
+    "DISBELIEF": _EL_FAST,
 }
 
 
@@ -111,14 +102,11 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
     """Qwen3-TTS HTTP API로 음성 생성."""
     # 채널 기본 voice_desc
     base_desc = CHANNEL_VOICE_DESC.get(channel, CHANNEL_VOICE_DESC.get("askanything", ""))
-    # 감정 태그 → voice_desc 앞에 합성 (사용자 지정 > 감정 합성 > 채널 기본)
+    # 감정 2단계: FAST(SHOCK/URGENCY/DISBELIEF) → 힌트 추가, 나머지 → 채널 앵커만
     if voice_desc:
         final_desc = voice_desc
-    elif emotion and emotion in EMOTION_VOICE_DESC and emotion not in ("CALM", "WONDER", "IDENTITY"):
-        # 채널 앵커 우선 + 감정 힌트 후방 (화자 일관성 유지)
-        emotion_hint = EMOTION_VOICE_DESC[emotion]
-        final_desc = f"{base_desc}, with {emotion_hint}"
-        print(f"  [TTS 감정] {emotion} → 채널 앵커 + 감정 힌트")
+    elif emotion and emotion in EMOTION_VOICE_DESC:
+        final_desc = f"{base_desc}, with {EMOTION_VOICE_DESC[emotion]}"
     else:
         final_desc = base_desc
 
