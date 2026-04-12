@@ -408,7 +408,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 return
 
             # 단계 2 & 3: 이미지와 TTS 병렬 처리 (Threading)
-            image_label = "Imagen 4" if image_engine == "imagen" else "DALL-E"
+            image_label = "Imagen 4" if image_engine == "imagen" else ("Gemini Nano" if image_engine == "nano_banana" else image_engine)
             # 음성 선택: 자동(주제 분석) > 프론트엔드 직접 선택 > 채널 설정 > 기본값
             channel_voice_id = None
             channel_voice_settings = None

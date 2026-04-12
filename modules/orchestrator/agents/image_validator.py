@@ -122,18 +122,27 @@ def validate_and_retry(image_path: str, prompt: str, cut_index: int,
     try:
         from modules.utils.keys import get_google_key
 
-        if image_engine == "imagen":
-            from modules.image.imagen import generate_image_imagen
-            img_key = get_google_key(None, service="imagen", extra_keys=gemini_keys)
-            new_path = generate_image_imagen(
-                prompt, cut_index, topic_folder, img_key,
-                model_override=image_model,
-                gemini_api_keys=gemini_keys,
-                topic=topic,
-            )
+        if image_engine in ("imagen", "nano_banana"):
+            if image_engine == "imagen":
+                from modules.image.imagen import generate_image_imagen
+                img_key = get_google_key(None, service="imagen", extra_keys=gemini_keys)
+                new_path = generate_image_imagen(
+                    prompt, cut_index, topic_folder, img_key,
+                    model_override=image_model,
+                    gemini_api_keys=gemini_keys,
+                    topic=topic,
+                )
+            else:
+                from modules.image.imagen import generate_image_nano_banana
+                nb_key = get_google_key(None, service="nano_banana", extra_keys=gemini_keys)
+                new_path = generate_image_nano_banana(
+                    prompt, cut_index, topic_folder, nb_key,
+                    gemini_api_keys=gemini_keys,
+                    topic=topic,
+                )
         else:
-            from modules.image.dalle import generate_image as generate_image_dalle
-            new_path = generate_image_dalle(prompt, cut_index, topic_folder, topic=topic)
+            print(f"  [ImageValidator] 미지원 엔진 '{image_engine}' — 재생성 스킵")
+            return img_path
 
         if new_path and os.path.exists(new_path):
             # 2차 검수

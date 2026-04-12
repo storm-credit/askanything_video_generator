@@ -353,7 +353,8 @@ def polish_scripts(cuts: list[dict[str, Any]], lang: str = "ko",
         if not content:
             return cuts, ["[polisher] LLM 응답 없음 — 원본 유지"]
 
-        data = json.loads(content) if isinstance(content, str) else content
+        from modules.gpt.cutter.parser import _extract_json
+        data = _extract_json(content) if isinstance(content, str) else content
         if not isinstance(data, dict):
             return cuts, ["[polisher] JSON 파싱 실패 — 원본 유지"]
 
