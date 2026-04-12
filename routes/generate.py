@@ -835,6 +835,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                                     privacy=yt_privacy,
                                     channel_id=account_id,
                                     publish_at=yt_publish_at,
+                                    format_type=req.formatType,
+                                    channel=req.channel or "",
                                 )
                             )
                             if yt_result.get("success"):
