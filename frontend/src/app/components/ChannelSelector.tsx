@@ -60,7 +60,6 @@ export function ChannelSelector({ settings, isGenerating }: ChannelSelectorProps
           { value: "EMOTIONAL_SCI", label: "EMOTIONAL", desc: "\uac10\uc131 \uacfc\ud559" },
         ].map((fmt) => (
           <button
-            type="button"
             key={fmt.value}
             type="button"
             title={fmt.desc}
