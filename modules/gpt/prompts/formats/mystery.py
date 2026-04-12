@@ -93,7 +93,7 @@ Cut structure (8~9 cuts):
 - Cut 8  [LOOP]:    "There's another mystery just like this..." → hint at next episode.
 
 Script rules:
-- 1 sentence per cut, 8~16 words
+- 1 sentence per cut, 10~16 words
 - Include specific dates/locations/people of the event
 - "Still unknown/unsolved" emphasis required
 - Active declarative only
@@ -149,7 +149,7 @@ Estructura de cortes (8~9 cortes):
 - Corte 8  [LOOP]:    "Hay otro misterio similar..." → insinuar próximo episodio.
 
 Reglas de script:
-- 1 oración por corte, 8~18 palabras
+- 1 oración por corte, 12~18 palabras
 - Incluir fechas/lugares/personas específicos del evento
 - Énfasis en "Aún desconocido/sin resolver" obligatorio
 - Solo declarativo activo

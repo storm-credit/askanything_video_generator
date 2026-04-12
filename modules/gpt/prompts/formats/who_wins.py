@@ -44,7 +44,7 @@ FRAGMENT: dict[str, str] = {
 - 컷11 [LOOP]:    "다음엔 ○○ vs ○○ 붙여봄"
 
 문장 규칙:
-- 각 컷 1문장, 20자 이내 — 군더더기 없이 핵심만
+- 각 컷 1문장, 20~28자 — 군더더기 없이 핵심만, 너무 짧으면 안 됨
 - 충격적이고 짧게 — 설명 금지
 
 이미지 프롬프트:
@@ -99,7 +99,7 @@ Cut structure (11 cuts required):
 - Cut 11 [LOOP]:    "Next: ○○ vs ○○"
 
 Sentence rules:
-- One sentence per cut, 10 words max — each word must earn its place. No filler.
+- One sentence per cut, 10~14 words — punchy but substantial. No filler.
 - Punchy and short — no explanations
 
 Image prompts:
@@ -154,7 +154,7 @@ Estructura (11 cortes obligatorio):
 - Corte 11 [LOOP]:    "Próximo: ○○ vs ○○"
 
 Reglas de texto:
-- Una oración por corte, máximo 10 palabras — cada palabra debe ganarse su lugar. Sin relleno.
+- Una oración por corte, 10~14 palabras — conciso pero sustancial. Sin relleno.
 - Directo y corto — sin explicaciones
 
 Reglas de image_prompt:

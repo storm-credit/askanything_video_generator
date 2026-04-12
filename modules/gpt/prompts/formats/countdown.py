@@ -93,7 +93,7 @@ Cut structure (8~10 cuts):
 - Cut 9  [LOOP]:    "Which TOP 5 comes next?" → curiosity ignition. Hint at next topic.
 
 Script rules:
-- 1 sentence per cut, 8~16 words
+- 1 sentence per cut, 10~16 words
 - MUST include rank number (5th, 4th... 1st)
 - Each rank: minimum 1 specific stat/name
 - Active declarative only — no passive voice
@@ -148,7 +148,7 @@ Estructura de cortes (8~10 cortes):
 - Corte 9  [LOOP]:    "¿Cuál será el siguiente TOP 5?" → ignición de curiosidad.
 
 Reglas de script:
-- 1 oración por corte, 8~18 palabras
+- 1 oración por corte, 12~18 palabras
 - DEBE incluir número de ranking (5°, 4°... 1°)
 - Cada ranking: mínimo 1 estadística/nombre específico
 - Solo declarativo activo — sin voz pasiva
