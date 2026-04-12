@@ -466,33 +466,16 @@ async def generate_video_endpoint(req: GenerateRequest):
                         else:
                             img_path = gen_image_fn(cut["prompt"], i, topic_folder, cut_image_key, topic=_topic)
                     except Exception as exc:
-                        # Imagen/Nano Banana 실패 → 폴백 체인
-                        if image_engine in ("imagen", "nano_banana"):
-                            fallback_from = "Imagen" if image_engine == "imagen" else "Nano Banana"
-                            # Imagen → Nano Banana 폴백 (nano_banana 엔진이면 스킵)
-                            if image_engine == "imagen":
-                                print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
-                                try:
-                                    _nb_key = get_google_key(llm_key_override, service="nano_banana", extra_keys=gemini_keys_override)
-                                    img_path = generate_image_nano_banana(cut["prompt"], i, topic_folder, _nb_key, gemini_api_keys=gemini_keys_override, topic=_topic)
-                                except Exception as nb_exc:
-                                    print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {nb_exc}")
-                                    exc = nb_exc  # DALL-E 폴백으로 계속
-                            else:
-                                print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {exc}")
-                            # DALL-E 폴백
-                            if not img_path:
-                                _dalle_fallback_key = api_key_override or os.getenv("OPENAI_API_KEY")
-                                if _dalle_fallback_key:
-                                    try:
-                                        img_path = generate_image_dalle(cut["prompt"], i, topic_folder, _dalle_fallback_key, topic=_topic)
-                                    except Exception as dalle_exc:
-                                        with errors_lock:
-                                            errors.append(f"이미지: 전체 폴백 실패: {dalle_exc}")
-                                        print(f"[컷 {i+1} DALL-E 폴백도 실패] {dalle_exc}")
-                                else:
-                                    with errors_lock:
-                                        errors.append(f"이미지: {fallback_from} 실패, DALL-E 키 없음")
+                        # 폴백 체인: Imagen → Nano Banana (DALL-E 미사용)
+                        if image_engine == "imagen":
+                            print(f"[컷 {i+1} Imagen 실패 → Nano Banana 폴백] {exc}")
+                            try:
+                                _nb_key = get_google_key(llm_key_override, service="nano_banana", extra_keys=gemini_keys_override)
+                                img_path = generate_image_nano_banana(cut["prompt"], i, topic_folder, _nb_key, gemini_api_keys=gemini_keys_override, topic=_topic)
+                            except Exception as nb_exc:
+                                with errors_lock:
+                                    errors.append(f"이미지: Imagen+Nano Banana 전체 실패: {nb_exc}")
+                                print(f"[컷 {i+1} Nano Banana도 실패] {nb_exc}")
                         else:
                             with errors_lock:
                                 errors.append(f"이미지: {exc}")
