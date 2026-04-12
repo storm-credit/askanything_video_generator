@@ -380,6 +380,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
           llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
           geminiKeys: (savedKeys["gemini"] || []).length > 0 ? savedKeys["gemini"].join(",") : undefined,
           imageEngine, language: preset.language, channel: ch,
+          formatType: formatType !== "auto" ? formatType : undefined,
           referenceUrl: detectedRefUrl, maxCuts: testMode ? 3 : undefined,
         }),
       }).then(async (response) => {
@@ -524,6 +525,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
             llmKey: llmProvider === "gemini" ? pickKey("gemini") : llmProvider === "claude" ? pickKey("claude_key") : undefined,
             geminiKeys: (savedKeys["gemini"] || []).length > 0 ? savedKeys["gemini"].join(",") : undefined,
             imageEngine, language, channel: channel || undefined,
+            formatType: formatType !== "auto" ? formatType : undefined,
             referenceUrl: detectedRefUrl, maxCuts: testMode ? 3 : undefined,
           }),
         });
