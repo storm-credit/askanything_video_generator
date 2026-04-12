@@ -77,7 +77,6 @@ class ImageAgent(BaseAgent):
                             image_model=ctx.image_model,
                             gemini_keys=ctx.gemini_keys_override,
                             topic=ctx.topic,
-                            api_key=key,
                         )
                 except Exception as exc:
                     # 폴백 체인: Imagen → Nano Banana
