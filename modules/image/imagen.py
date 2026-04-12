@@ -186,7 +186,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
 # ── Nano Banana (Gemini 네이티브 이미지 생성) — Imagen과 별도 쿼터 ──
 NANO_BANANA_MODELS = [
     "gemini-2.5-flash-image",            # 가장 빠름
-    "gemini-3.1-flash-image-preview",    # 기본 추천
+    "gemini-2.0-flash-image-generation", # 무료 폴백
 ]
 
 

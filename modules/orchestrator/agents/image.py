@@ -30,7 +30,7 @@ class ImageAgent(BaseAgent):
         ctx.visual_paths = [None] * len(ctx.cuts)
         ctx.cut1_ab_variants = []
 
-        image_label = "Imagen 4" if ctx.image_engine == "imagen" else "DALL-E"
+        image_label = "Imagen 4" if ctx.image_engine == "imagen" else ("Gemini Nano" if ctx.image_engine == "nano_banana" else "DALL-E")
         yield f"[ImageAgent] {len(ctx.cuts)}컷 이미지 생성 시작 ({image_label})...\n"
 
         image_semaphore = threading.Semaphore(3)
@@ -77,9 +77,10 @@ class ImageAgent(BaseAgent):
                             image_model=ctx.image_model,
                             gemini_keys=ctx.gemini_keys_override,
                             topic=ctx.topic,
+                            api_key=key,
                         )
                 except Exception as exc:
-                    # 폴백 체인: Imagen Standard → Nano Banana (DALL-E 제외)
+                    # 폴백 체인: Imagen → Nano Banana
                     if ctx.image_engine == "imagen":
                         print(f"[ImageAgent] 컷 {i+1} Imagen 실패 → Nano Banana 폴백: {exc}")
                         try:

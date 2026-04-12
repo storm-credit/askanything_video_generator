@@ -129,7 +129,6 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
         print(f"  [Qwen3-TTS 경고] 미지원 speaker '{speaker}' → 'eric' 폴백")
         speaker = "eric"
 
-    MAX_RETRIES = 3
     for attempt in range(MAX_RETRIES):
         try:
             resp = requests.post(

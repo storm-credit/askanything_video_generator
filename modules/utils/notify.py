@@ -10,7 +10,9 @@
 import os
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+_KST = timezone(timedelta(hours=9))
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
@@ -62,7 +64,7 @@ def notify_success(channel: str, topic: str, video_url: str = None):
         f"━━━━━━━━━━━━━━━\n"
         f"{emoji} <b>{channel}</b>\n"
         f"📌 {topic}\n"
-        f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"⏰ {datetime.now(_KST).strftime('%Y-%m-%d %H:%M')} KST",
         buttons=url_btn,
     )
 
@@ -80,7 +82,7 @@ def notify_failure(channel: str, topic: str, error: str = ""):
         f"📌 {topic}\n"
         f"💥 <code>{err}</code>\n"
         f"🔄 웹 UI에서 재수행 가능\n"
-        f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"⏰ {datetime.now(_KST).strftime('%Y-%m-%d %H:%M')} KST",
     )
 
 
@@ -92,7 +94,7 @@ def notify_warning(context: str, message: str):
         f"━━━━━━━━━━━━━━━\n"
         f"📍 {context}\n"
         f"{message}\n"
-        f"⏰ {datetime.now().strftime('%H:%M')}",
+        f"⏰ {datetime.now(_KST).strftime('%H:%M')} KST",
         silent=True,
     )
 
@@ -104,7 +106,7 @@ def notify_cost(channel: str, title: str, cost_entry: dict, video_url: str = "",
         from modules.utils.cost_tracker import build_cost_table_text
         text = build_cost_table_text(cost_entry, channel, title)
         if format_type:
-            fmt_emoji = {"WHO_WINS": "⚔️", "IF": "🌀", "EMOTIONAL_SCI": "💫", "FACT": "📡"}.get(format_type.upper(), "")
+            fmt_emoji = {"WHO_WINS": "⚔️", "IF": "🌀", "EMOTIONAL_SCI": "💫", "FACT": "📡", "COUNTDOWN": "🏆", "SCALE": "📏", "PARADOX": "🔄", "MYSTERY": "🔮"}.get(format_type.upper(), "")
             text = f"{fmt_emoji} [{format_type}]\n" + text
         if video_url:
             text += f'\n🔗 <a href="{video_url}">YouTube 보기</a>'
@@ -139,5 +141,82 @@ def notify_deploy_summary(total: int, completed: int, failed: int, date: str):
         f"📅 {date}\n"
         f"{bar}\n"
         f"✅ {completed}  ❌ {failed}  📦 {total}\n"
-        f"⏰ {datetime.now().strftime('%H:%M')}",
+        f"⏰ {datetime.now(_KST).strftime('%H:%M')} KST",
     )
+
+
+def notify_morning_briefing():
+    """☀️ 모닝 브리핑 — 어제 배포/비용/실패/성과 종합 리포트."""
+    from datetime import timedelta, timezone
+    KST = timezone(timedelta(hours=9))
+    yesterday = (datetime.now(KST) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    sections = [
+        f"☀️ <b>모닝 브리핑 — {yesterday}</b>",
+        "━━━━━━━━━━━━━━━━━━",
+    ]
+
+    # 1. 비용 결산
+    try:
+        from modules.utils.cost_tracker import get_daily_summary, usd_to_krw
+        cost = get_daily_summary(yesterday)
+        if cost:
+            total_success = total_failed = 0
+            grand_usd = 0.0
+            ch_lines = []
+            for ch, info in cost.items():
+                ch_usd = info["llm_usd"] + info["image_usd"] + info["video_usd"] + info["tts_usd"] + info.get("whisper_usd", 0.0)
+                em = CHANNEL_EMOJI.get(ch, "📺")
+                ch_lines.append(f"  {em} {ch[:10]:<12} ✅{info['success']} ❌{info['failed']}  {usd_to_krw(ch_usd):>6,}원")
+                total_success += info["success"]
+                total_failed += info["failed"]
+                grand_usd += ch_usd
+            sections.append(f"<b>📦 배포</b>  ✅{total_success} ❌{total_failed}  💰{usd_to_krw(grand_usd):,}원")
+            sections.extend(ch_lines)
+        else:
+            sections.append("📦 배포 데이터 없음")
+    except Exception as e:
+        sections.append(f"📦 비용 조회 실패: {e}")
+
+    # 2. 실패 요약
+    try:
+        from modules.orchestrator.agents.failure_analyzer import get_failure_summary
+        fails = get_failure_summary(yesterday)
+        if fails["total"] > 0:
+            types = ", ".join(f"{k}:{v}" for k, v in fails["by_type"].items())
+            sections.append(f"\n<b>💥 실패 {fails['total']}건</b>  ({types})")
+        else:
+            sections.append("\n💥 실패 0건")
+    except Exception:
+        pass
+
+    # 3. 성과 트렌드 (3일 vs 7일 평균 조회수)
+    try:
+        from modules.analytics.performance_tracker import get_daily_trend
+        sections.append("\n<b>📈 성과 (3d vs 7d 평균)</b>")
+        for ch in ["askanything", "wonderdrop", "exploratodo", "prismtale"]:
+            trend = get_daily_trend(ch, days=7)
+            if len(trend) >= 3:
+                avg_7d = sum(t.get("avg_views", 0) for t in trend) / len(trend)
+                avg_3d = sum(t.get("avg_views", 0) for t in trend[-3:]) / 3
+                delta = ((avg_3d - avg_7d) / avg_7d * 100) if avg_7d > 0 else 0
+                arrow = "📈" if delta >= 0 else "📉"
+                em = CHANNEL_EMOJI.get(ch, "📺")
+                sections.append(f"  {em} {ch[:10]:<12} {avg_3d:,.0f} {arrow}{delta:+.1f}%")
+    except Exception:
+        pass
+
+    # 4. 알림 이력
+    try:
+        alert_path = os.path.join("assets", "_analytics", "alerts", "last_run.json")
+        if os.path.exists(alert_path):
+            with open(alert_path, "r", encoding="utf-8") as f:
+                last_alert = json.load(f)
+            sent = last_alert.get("alerts_sent", 0)
+            if sent > 0:
+                sections.append(f"\n🚨 어제 알림 {sent}건 발송됨")
+    except Exception:
+        pass
+
+    sections.append(f"\n⏰ {datetime.now(KST).strftime('%H:%M')} KST")
+    _send("\n".join(sections))

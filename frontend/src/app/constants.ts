@@ -5,7 +5,7 @@ export const CHANNEL_PRESETS: Record<string, { label: string; flag: string; lang
   askanything: { label: "AskAnything", flag: "\ud83c\uddf0\ud83c\uddf7", language: "ko", ttsSpeed: 1.3, platforms: ["youtube"], captionSize: 58, captionY: 38, cameraStyle: "cinematic" },
   wonderdrop: { label: "WonderDrop", flag: "\ud83c\uddfa\ud83c\uddf8", language: "en", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "cinematic" },
   exploratodo: { label: "ExploraTodo", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "cinematic" },
-  prismtale: { label: "Prism Tale", flag: "\ud83c\uddfa\ud83c\uddf8", language: "es", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "cinematic" },
+  prismtale: { label: "Prism Tale", flag: "\ud83c\uddea\ud83c\uddf8", language: "es", ttsSpeed: 1.05, platforms: ["youtube"], captionSize: 54, captionY: 38, cameraStyle: "cinematic" },
 };
 
 // localStorage helpers

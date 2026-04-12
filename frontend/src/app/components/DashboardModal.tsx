@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
+import { CHANNEL_PRESETS } from "../constants";
 
 interface DashboardModalProps {
   show: boolean;
@@ -33,7 +34,7 @@ export function DashboardModal({ show, onClose, dashboardData, dashboardLoading 
               return (
                 <div key={ch} className="bg-white/5 border border-white/10 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-white font-bold text-sm">{ch}</h3>
+                    <h3 className="text-white font-bold text-sm">{(CHANNEL_PRESETS as any)[ch]?.label || ch}</h3>
                     <span className="text-[10px] text-gray-500">{s.total_videos || 0}{"\uac1c \uc601\uc0c1"}</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">

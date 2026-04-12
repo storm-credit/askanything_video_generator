@@ -141,14 +141,18 @@ export function PreviewPanel({
 
       <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
         {currentPreview.cuts.map((cut, i) => {
-          const emotionMatch = (cut.description || "").match(/\[(SHOCK|WONDER|TENSION|REVEAL|CALM)\]/);
+          const emotionMatch = (cut.description || "").match(/\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM|LOOP)\]/);
           const emotion = emotionMatch ? emotionMatch[1] : null;
           const emotionColors: Record<string, { bg: string; text: string; label: string }> = {
             SHOCK: { bg: "bg-red-500/20", text: "text-red-400", label: "\ucda9\uaca9" },
             WONDER: { bg: "bg-amber-500/20", text: "text-amber-400", label: "\uacbd\uc774" },
             TENSION: { bg: "bg-orange-500/20", text: "text-orange-400", label: "\uae34\uc7a5" },
             REVEAL: { bg: "bg-emerald-500/20", text: "text-emerald-400", label: "\ubc18\uc804" },
+            URGENCY: { bg: "bg-rose-500/20", text: "text-rose-400", label: "\uae34\ubc15" },
+            DISBELIEF: { bg: "bg-red-500/20", text: "text-red-300", label: "\ubd88\uc2e0" },
+            IDENTITY: { bg: "bg-green-500/20", text: "text-green-400", label: "\uacf5\uac10" },
             CALM: { bg: "bg-sky-500/20", text: "text-sky-400", label: "\uc5ec\uc6b4" },
+            LOOP: { bg: "bg-purple-500/20", text: "text-purple-400", label: "\ub8e8\ud504" },
           };
           const eColor = emotion ? emotionColors[emotion] : null;
 

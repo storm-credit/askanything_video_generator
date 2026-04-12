@@ -375,6 +375,9 @@ def tick_topic_done(file_path: str, topic_group: str) -> bool:
         return False
 
     updated = content[:match.start()] + match.group(1) + "✅ " + match.group(2) + content[match.end():]
-    with open(file_path, "w", encoding="utf-8") as f:
+    import tempfile
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(file_path), suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(updated)
+    os.replace(tmp_path, file_path)
     return True

@@ -106,7 +106,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
           topic, apiKey: selectedOpenaiKey || undefined, elevenlabsKey: selectedElevenlabsKey || undefined,
           videoEngine, imageEngine, llmProvider,
           llmModel: llmModel || undefined, imageModel: imageModel || undefined, videoModel: videoModel || undefined,
-          language, llmKey: llmKeyOverride || undefined, geminiKeys: geminiKeysStr,
+          language: language === "auto" ? "ko" : language, llmKey: llmKeyOverride || undefined, geminiKeys: geminiKeysStr,
           outputPath: outputPath.trim() || undefined, cameraStyle, bgmTheme,
           formatType: formatType !== "auto" ? formatType : undefined,
           channel: channel || undefined, platforms, ttsSpeed, voiceId, captionSize, captionY,
@@ -397,8 +397,8 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
     });
   };
 
-  const handlePrepare = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePrepare = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
     if (!topic.trim()) return;
 
     if (Object.keys(channelPreviews).length > 0 || previewData) {

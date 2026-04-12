@@ -100,8 +100,8 @@ def align_words_with_script(whisper_words: list[dict], script: str, lang: str = 
     if not script_words:
         return whisper_words
 
-    # ── Case 1: 단어 수 정확히 같거나 1개 차이 → 단순 1:1 교체 ──────────
-    # 차이 2 이상은 LCS 정렬로 (잘못된 타임스탬프 보간 방지)
+    # ── Case 1: 단어 수 차이 1개 이하 → 단순 1:1 교체 ──────────
+    # 차이 2개 이상은 LCS 정렬로 (잘못된 타임스탬프 보간 방지)
     if abs(len(script_words) - len(whisper_words)) <= 1:
         aligned = []
         # Whisper > Script: script 단어 수만큼만 사용 (Whisper 잉여 단어 드롭)

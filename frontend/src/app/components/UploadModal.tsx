@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, Youtube, Send, Instagram, Upload, ExternalLink, CheckCircle2 } from "lucide-react";
 import { API_BASE, CHANNEL_PRESETS } from "../constants";
@@ -27,6 +27,11 @@ export function UploadModal({
   const [uploadTitle, setUploadTitle] = useState(initialTitle);
   const [uploadDescription, setUploadDescription] = useState(initialDescription);
   const [uploadTags, setUploadTags] = useState(initialTags);
+
+  // props 변경 시 state 동기화 (modal 재오픈 시 새 값 반영)
+  useEffect(() => { setUploadTitle(initialTitle); }, [initialTitle]);
+  useEffect(() => { setUploadDescription(initialDescription); }, [initialDescription]);
+  useEffect(() => { setUploadTags(initialTags); }, [initialTags]);
   const [uploadPrivacy, setUploadPrivacy] = useState("private");
   const [ttPrivacy, setTtPrivacy] = useState("SELF_ONLY");
   const [uploading, setUploading] = useState(false);
