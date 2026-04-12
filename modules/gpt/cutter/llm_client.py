@@ -130,10 +130,12 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
     prompt_hash = hashlib.sha256(system_prompt.encode()).hexdigest()
     key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
     cache_key = f"{key_hash}:{model_name}:{prompt_hash}"
+    cached = None
     with _gemini_cache_lock:
-        cached = _gemini_cache.get(cache_key)
-        if cached:
+        _cached_ref = _gemini_cache.get(cache_key)
+        if _cached_ref:
             _gemini_cache.move_to_end(cache_key)  # LRU: 최근 접근으로 이동
+            cached = _cached_ref  # 락 안에서 로컬 변수로 복사
     try:
         if cached:
             # 캐시된 컨텍스트 사용
@@ -179,6 +181,9 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
             ),
         )
     except Exception:
+        # 캐시 생성 후 generate 실패 → 캐시 정리
+        with _gemini_cache_lock:
+            _gemini_cache.pop(cache_key, None)
         # 캐시 미지원 모델이거나 에러 → 일반 요청
         response = client.models.generate_content(
             model=model_name,

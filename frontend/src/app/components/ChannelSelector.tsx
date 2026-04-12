@@ -47,24 +47,27 @@ export function ChannelSelector({ settings, isGenerating }: ChannelSelectorProps
         })}
       </div>
       {/* Format selection */}
-      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+      <div className="flex items-center justify-center gap-1 sm:gap-1.5 flex-wrap">
         {[
-          { value: "auto", label: "\uc790\ub3d9" },
-          { value: "WHO_WINS", label: "WHO WINS" },
-          { value: "COUNTDOWN", label: "COUNTDOWN" },
-          { value: "SCALE", label: "SCALE" },
-          { value: "IF", label: "IF" },
-          { value: "FACT", label: "FACT" },
-          { value: "MYSTERY", label: "MYSTERY" },
-          { value: "PARADOX", label: "PARADOX" },
-          { value: "EMOTIONAL_SCI", label: "EMOTIONAL" },
+          { value: "auto", label: "\uc790\ub3d9", desc: "\uc8fc\uc81c \uae30\ubc18 \uc790\ub3d9 \ud3ec\ub9f7 \uc120\ud0dd" },
+          { value: "WHO_WINS", label: "WHO WINS", desc: "\ub300\uacb0 \ud3ec\ub9f7 (A vs B)" },
+          { value: "COUNTDOWN", label: "COUNTDOWN", desc: "TOP N \ub7ad\ud0b9" },
+          { value: "SCALE", label: "SCALE", desc: "\ud06c\uae30 \ube44\uad50" },
+          { value: "IF", label: "IF", desc: "\ub9cc\uc57d ~\ud558\uba74 \uac00\uc815" },
+          { value: "FACT", label: "FACT", desc: "\ucda9\uaca9 \uc0ac\uc2e4" },
+          { value: "MYSTERY", label: "MYSTERY", desc: "\ubbf8\uc2a4\ud130\ub9ac \ubbf8\ud574\uacb0" },
+          { value: "PARADOX", label: "PARADOX", desc: "\uc5ed\uc124 \ubc18\uc804" },
+          { value: "EMOTIONAL_SCI", label: "EMOTIONAL", desc: "\uac10\uc131 \uacfc\ud559" },
         ].map((fmt) => (
           <button
             type="button"
             key={fmt.value}
+            type="button"
+            title={fmt.desc}
+            aria-label={fmt.desc}
             onClick={() => setFormatType(fmt.value)}
             disabled={isGenerating}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+            className={`px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-medium border transition-colors ${
               formatType === fmt.value
                 ? "bg-orange-500/20 border-orange-500/50 text-orange-300"
                 : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"

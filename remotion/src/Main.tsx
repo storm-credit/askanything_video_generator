@@ -74,6 +74,12 @@ const CAMERA_PRESETS: Record<Exclude<CameraStyle, 'auto'>, KenBurnsPreset[]> = {
   static: [
     { startScale: 1.0, endScale: 1.0, startX: 0, endX: 0, startY: 0, endY: 0, easing: 'linear' },
   ],
+  cinematic: [
+    { startScale: 1.0, endScale: 1.12, startX: 0, endX: -2, startY: 0, endY: -1.5, easing: 'easeInOutStrong' },
+    { startScale: 1.1, endScale: 1.0, startX: -1.5, endX: 1.5, startY: -0.5, endY: 0.5, easing: 'easeInOutStrong' },
+    { startScale: 1.0, endScale: 1.08, startX: 1, endX: -1, startY: 0, endY: -1, easing: 'easeInOutStrong' },
+    { startScale: 1.06, endScale: 1.0, startX: 0, endX: 0, startY: 1, endY: -1, easing: 'easeInOutStrong' },
+  ],
 };
 
 // Emotion → camera preset mapping (overrides round-robin when emotion tag present)

@@ -28,8 +28,8 @@ CHANNEL_WINDOWS = {
         "min_interval_min": 45,
     },
     "prismtale": {
-        "start": dt_time(9, 0),    # KST 09:00 = EST 20:00 — US 히스패닉 저녁 (wonderdrop +1h 오프셋)
-        "end": dt_time(12, 0),     # KST 12:00 = EST 23:00
+        "start": dt_time(13, 30),  # KST 13:30 = CET 05:30 / EST 00:30 — 유럽 아침 + US 야간 (exploratodo와 겹침 해소)
+        "end": dt_time(16, 0),     # KST 16:00 = CET 08:00 / EST 03:00
         "min_interval_min": 45,
     },
 }
@@ -129,6 +129,7 @@ def calculate_schedule(topics: list[dict],
                 "channel": ch,
                 "topic_group": topic_item.get("topic_group", topic_name) if isinstance(topic_item, dict) else topic_name,
                 "format_type": topic_item.get("format_type", "FACT") if isinstance(topic_item, dict) else "FACT",
+                "series_title": topic_item.get("series_title") if isinstance(topic_item, dict) else None,
                 "publish_at_kst": publish_time.strftime("%Y-%m-%d %H:%M KST"),
                 "publish_at_iso": publish_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "publish_at": publish_time,

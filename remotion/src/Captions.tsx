@@ -35,13 +35,21 @@ const EMOTION_HIGHLIGHT_COLOR: Record<EmotionTag, string> = {
   DISBELIEF: '#FF3B30',  // 빨강 — 불신
   IDENTITY:  '#34C759',  // 초록 — 공감/정체성
   CALM:      '#FFFFFF',  // 흰색 — 차분
-  LOOP:      '#A78BFA',  // 보라 — 루프 (다시 처음으로)
+  LOOP:      '#C084FC',  // 밝은 보라 — 루프 (다시 처음으로)
 };
 const DEFAULT_HIGHLIGHT = '#FFE600';
 
-const getEmotionColor = (emotion?: string): string => {
-  if (!emotion) return DEFAULT_HIGHLIGHT;
-  return EMOTION_HIGHLIGHT_COLOR[emotion as EmotionTag] ?? DEFAULT_HIGHLIGHT;
+// 채널 브랜드 색상 — 피드에서 채널 인식 일관성 확보
+const CHANNEL_BRAND_COLOR: Record<string, string> = {
+  askanything: '#FFE600',  // 노랑
+  wonderdrop:  '#00D4FF',  // 하늘
+  exploratodo: '#FF6B35',  // 오렌지
+  prismtale:   '#C084FC',  // 보라
+};
+
+const getHighlightColor = (channel?: string): string => {
+  if (channel && CHANNEL_BRAND_COLOR[channel]) return CHANNEL_BRAND_COLOR[channel];
+  return DEFAULT_HIGHLIGHT;
 };
 
 const isEmphasisWord = (word: string): boolean => {
@@ -66,12 +74,14 @@ const calcCJKFontSize = (words: { word: string }[], base: number): number => {
   const gapPx = Math.max(words.length - 1, 0) * 12; // word gap 12px
   const availWidth = EFFECTIVE_WIDTH - gapPx;
   const maxByWidth = Math.floor(availWidth / Math.max(totalChars * 1.02, 1));
-  return Math.max(64, Math.min(base, maxByWidth));
+  return Math.max(72, Math.min(base, maxByWidth));
 };
 
 const calcLatinFontSize = (words: { word: string }[], base: number): number => {
   const totalChars = words.reduce((s, w) => s + w.word.length + 1, 0); // +1 for space
-  const maxByWidth = Math.floor(EFFECTIVE_WIDTH / Math.max(totalChars * 0.6, 1));
+  const gapPx = Math.max(words.length - 1, 0) * 12; // word gap 12px (CJK와 동일)
+  const availWidth = EFFECTIVE_WIDTH - gapPx;
+  const maxByWidth = Math.floor(availWidth / Math.max(totalChars * 0.6, 1));
   return Math.max(52, Math.min(base, maxByWidth));
 };
 
@@ -132,7 +142,7 @@ export const Captions: React.FC<{
   // captionY → paddingBottom (captionY=50→35%, captionY=38→42%, captionY=28→46%)
   const bottomPadding = `${Math.round(60 - captionY * 0.5)}%`;
 
-  const highlightColor = getEmotionColor(emotion);
+  const highlightColor = getHighlightColor(channel);
 
   if (visibleWords.length === 0) return null;
 

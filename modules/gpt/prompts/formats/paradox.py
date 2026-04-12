@@ -26,14 +26,16 @@ FRAGMENT: dict[str, str] = {
 [포맷: PARADOX 역설 반전 — 반드시 준수]
 이 영상은 "당연하다고 생각한 것을 뒤집는" 구조다. 패턴 인터럽트가 핵심.
 
-컷 구조 (7~9컷):
+컷 구조 (8~9컷):
 - 컷1  [SHOCK]:   통념 충격 — "우리가 완전히 잘못 알고 있는 X" 질문형 금지.
 - 컷2  [WONDER]:  일반 상식 제시 — "모두가 이렇게 알고 있다"
 - 컷3  [TENSION]: 반전 1 — "하지만 실제로는 반대다." 구체적 근거 포함.
 - 컷4  [DISBELIEF]: 과학적/역사적 근거 — 왜 우리가 틀렸는지 설명
-- 컷5  [REVEAL]:  반전 2 (더 깊은) — "그런데 사실 이것도 틀렸다." 이중 반전.
-- 컷6  [IDENTITY]: 개인 적용 — "당신 인생에서도 이게 일어나고 있다"
-- 컷7  [LOOP]:    "또 다른 반전이 있는데..." → 다음 역설 암시
+- 컷5  [TENSION]: 추가 증거 — 반전을 뒷받침하는 두 번째 근거
+- 컷6  [REVEAL]:  반전 2 (더 깊은) — "그런데 사실 이것도 틀렸다." 이중 반전.
+- 컷7  [DISBELIEF]: 최종 근거 — 이중 반전의 결정적 증거
+- 컷8  [IDENTITY]: 개인 적용 — "당신 인생에서도 이게 일어나고 있다"
+- 컷9  [LOOP]:    "또 다른 반전이 있는데..." → 다음 역설 암시
 
 문장 규칙:
 - 각 컷 1문장, 15~28자
@@ -80,14 +82,16 @@ If any check fails, rewrite everything.
 [FORMAT: PARADOX Reversal — STRICTLY FOLLOW]
 This video "flips what you thought was obvious." Pattern interrupt is the core.
 
-Cut structure (7~9 cuts):
+Cut structure (8~9 cuts):
 - Cut 1  [SHOCK]:   Challenge common belief — "Everything you know about X is wrong." NO questions.
 - Cut 2  [WONDER]:  Present conventional wisdom — "Everyone believes this"
 - Cut 3  [TENSION]: Reversal 1 — "But the reality is the opposite." Include specific evidence.
 - Cut 4  [DISBELIEF]: Scientific/historical proof — why we were wrong
-- Cut 5  [REVEAL]:  Reversal 2 (deeper) — "But even THAT is wrong." Double twist.
-- Cut 6  [IDENTITY]: Personal application — "This is happening in YOUR life right now"
-- Cut 7  [LOOP]:    "There's another twist..." → hint at next paradox
+- Cut 5  [TENSION]: Additional evidence — second proof backing the reversal
+- Cut 6  [REVEAL]:  Reversal 2 (deeper) — "But even THAT is wrong." Double twist.
+- Cut 7  [DISBELIEF]: Final proof — decisive evidence for the double twist
+- Cut 8  [IDENTITY]: Personal application — "This is happening in YOUR life right now"
+- Cut 9  [LOOP]:    "There's another twist..." → hint at next paradox
 
 Script rules:
 - 1 sentence per cut, 11~14 words — evidence-packed, no filler
@@ -134,14 +138,16 @@ Si falla cualquier verificación, reescribir todo.
 [FORMATO: PARADOX Reversión — SEGUIR ESTRICTAMENTE]
 Este video "voltea lo que creías obvio." La interrupción de patrón es el núcleo.
 
-Estructura de cortes (7~9 cortes):
+Estructura de cortes (8~9 cortes):
 - Corte 1  [SHOCK]:   Desafiar creencia común — "Todo lo que sabes sobre X está mal." SIN preguntas.
 - Corte 2  [WONDER]:  Presentar sabiduría convencional — "Todos creen esto"
 - Corte 3  [TENSION]: Reversión 1 — "Pero la realidad es lo opuesto." Evidencia específica.
 - Corte 4  [DISBELIEF]: Prueba científica/histórica — por qué estábamos equivocados
-- Corte 5  [REVEAL]:  Reversión 2 (más profunda) — "Pero incluso ESO está mal." Doble giro.
-- Corte 6  [IDENTITY]: Aplicación personal — "Esto está pasando en TU vida ahora mismo"
-- Corte 7  [LOOP]:    "Hay otro giro más..." → insinuar próxima paradoja
+- Corte 5  [TENSION]: Evidencia adicional — segunda prueba respaldando la reversión
+- Corte 6  [REVEAL]:  Reversión 2 (más profunda) — "Pero incluso ESO está mal." Doble giro.
+- Corte 7  [DISBELIEF]: Prueba final — evidencia decisiva del doble giro
+- Corte 8  [IDENTITY]: Aplicación personal — "Esto está pasando en TU vida ahora mismo"
+- Corte 9  [LOOP]:    "Hay otro giro más..." → insinuar próxima paradoja
 
 Reglas de script:
 - 1 oración por corte, 12~16 palabras — con evidencia, sin relleno

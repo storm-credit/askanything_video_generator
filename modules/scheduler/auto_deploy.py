@@ -12,7 +12,7 @@
     - askanything: KST 21~23:30 (한국 저녁)
     - wonderdrop:  KST 08~11 = EST 19~22 (미국 저녁)
     - exploratodo: KST 10~13 = CST 20~23 (멕시코 저녁)
-    - prismtale:   KST 08~11 = EST 19~22 (US 히스패닉 저녁)
+    - prismtale:   KST 13:30~16 = CET 05:30~08 / EST 00:30~03 (유럽 아침 + US 야간)
 
 사용법:
   # API 엔드포인트

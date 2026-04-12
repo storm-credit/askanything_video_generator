@@ -336,20 +336,6 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
         const downloadUrl = `${API_BASE}${normalizedPath}`;
         setGeneratedVideoPath(videoPath);
         setGeneratedVideoUrl(downloadUrl);
-        fetch(downloadUrl).then(res => {
-          if (!res.ok) return;
-          return res.blob();
-        }).then(blob => {
-          if (!blob) return;
-          const blobUrl = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = blobUrl;
-          a.download = `${channel || "shorts"}_${(topic || "video").slice(0, 50)}.mp4`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          URL.revokeObjectURL(blobUrl);
-        }).catch(() => {});
         setSuccessMessage("\ube44\ub514\uc624 \uc0dd\uc131 \uc131\uacf5!");
         setIsGenerating(false);
         setPreviewData(null);

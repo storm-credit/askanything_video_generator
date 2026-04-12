@@ -69,7 +69,7 @@ FORMAT_CUT_GUIDE: dict[str, dict[str, int]] = {
     "FACT":              {"min": 8,  "max": 11, "ideal": 10},
     "COUNTDOWN":         {"min": 8,  "max": 10, "ideal": 9},
     "SCALE":             {"min": 7,  "max": 9,  "ideal": 8},
-    "PARADOX":           {"min": 7,  "max": 9,  "ideal": 8},  # 채널별 9컷 오버라이드 반영
+    "PARADOX":           {"min": 8,  "max": 9,  "ideal": 9},
     "MYSTERY":           {"min": 8,  "max": 9,  "ideal": 8},
 }
 
