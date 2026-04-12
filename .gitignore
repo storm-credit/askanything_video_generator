@@ -30,8 +30,12 @@ remotion/public/
 # Next.js
 .next/
 
-# Claude Code local settings
+# Remotion rendered output
+remotion/out/
+
+# Claude Code
 .claude/settings.local.json
+.claude/worktrees/
 vertex-sa-key.json
 youtube_tokens/
 vertex-sa-key-wonderdrop.json
