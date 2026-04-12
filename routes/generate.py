@@ -69,6 +69,7 @@ class GenerateRequest(BaseModel):
     scheduledTime: str | None = None  # ISO datetime (예약 모드 전용)
     workflowMode: str = "fast"  # fast(즉시 렌더) / review(초안만 생성, 검수 후 렌더)
     maxCuts: int | None = None  # 테스트 모드: 컷 수 제한 (예: 3)
+    seriesTitle: str | None = None  # 시리즈 재생목록 제목 (배치 전용)
 
     @field_validator("workflowMode")
     @classmethod
@@ -819,6 +820,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                                     channel_id=account_id,
                                     publish_at=yt_publish_at,
                                     format_type=req.formatType,
+                                    series_title=req.seriesTitle,
                                     channel=req.channel or "",
                                 )
                             )

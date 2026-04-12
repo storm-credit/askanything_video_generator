@@ -196,8 +196,6 @@ async def run_auto_deploy(target_date: datetime | None = None,
         return {"success": False, "message": "이미 배포가 진행 중입니다"}
 
     from modules.utils.obsidian_parser import get_today_topics
-    from modules.orchestrator.orchestrator import MainOrchestrator
-    from modules.orchestrator.base import AgentContext
 
     if target_date is None:
         target_date = datetime.now(KST)
@@ -312,7 +310,9 @@ async def run_auto_deploy(target_date: datetime | None = None,
             task_result["_retries"] = item.get("_retries", 0)
 
             try:
-                # v2 오케스트라: 전체 파이프라인을 에이전트 시스템으로 실행
+                # 웹 경로(/api/generate)와 동일한 파이프라인 사용 — 내부 HTTP SSE 호출
+                import httpx
+
                 lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
                 lang = lang_map.get(channel, "ko")
 
@@ -337,50 +337,69 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 if _fmt:
                     print(f"  [포맷 선택] {channel}: {_fmt} (출처: {_fmt_src})")
 
-                ctx = AgentContext(
-                    topic=_topic_for_llm,
-                    language=lang,
-                    channel=channel,
-                    image_engine="imagen",
-                    image_model="imagen-4.0-generate-001",  # Standard 고정
-                    video_engine="veo3",
-                    video_model="hero-only",  # SHOCK/REVEAL만 영상 (비용 절감)
-                    format_type=_fmt,  # 3단계 폴백 적용
-                    series_title=job.get("series_title"),  # 시리즈 태그 전달
-                    publish_mode="scheduled",
-                    scheduled_time=publish_at,
-                    gemini_keys_override=os.getenv("GEMINI_API_KEYS", ""),
-                )
+                # /api/generate와 동일한 요청 구성
+                api_port = os.getenv("API_PORT", "8003")
+                generate_payload = {
+                    "topic": _topic_for_llm,
+                    "language": lang,
+                    "channel": channel,
+                    "formatType": _fmt,
+                    "imageEngine": "imagen",
+                    "videoEngine": "veo3",
+                    "videoModel": "hero-only",
+                    "publishMode": "scheduled",
+                    "scheduledTime": publish_at,
+                    "seriesTitle": job.get("series_title"),
+                    "geminiKeys": os.getenv("GEMINI_API_KEYS", ""),
+                    "workflowMode": "fast",
+                }
 
-                orchestrator = MainOrchestrator()
                 yt_url = ""
+                video_path = ""
+                _video_title = ""
 
-                async for msg in orchestrator.run(ctx):
-                    # SSE 메시지에서 핵심 이벤트 추출
-                    if msg.startswith("UPLOAD_DONE|youtube|"):
-                        yt_url = msg.split("|", 2)[2].strip()
-                    elif msg.startswith("ERROR|"):
-                        raise RuntimeError(msg[6:].strip())
-                    # 진행 로그 출력
-                    if not msg.startswith("PROG|"):
-                        print(f"  {msg.rstrip()}")
+                async with httpx.AsyncClient(timeout=httpx.Timeout(600.0)) as client:
+                    async with client.stream(
+                        "POST",
+                        f"http://127.0.0.1:{api_port}/api/generate",
+                        json=generate_payload,
+                        headers={"Accept": "text/event-stream"},
+                    ) as response:
+                        async for line in response.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            raw = line[5:].strip()
+                            if not raw:
+                                continue
+
+                            if raw.startswith("DONE|"):
+                                parts = raw[5:].split("|")
+                                video_path = parts[0].strip()
+                                print(f"  [웹 경로] 완료: {video_path}")
+                            elif raw.startswith("UPLOAD_DONE|youtube|"):
+                                yt_url = raw.split("|", 2)[2].strip()
+                            elif raw.startswith("ERROR|"):
+                                raise RuntimeError(raw[6:].strip())
+                            elif raw.startswith("GEN_ID|"):
+                                _video_title = raw.split("|", 1)[1].strip() if "|" in raw else ""
+                            elif not raw.startswith("PROG|"):
+                                print(f"  {raw.rstrip()}")
 
                 task_result["status"] = "success"
-                consecutive_tts_fails = 0  # 성공 시 카운터 리셋
-                task_result["video_path"] = str(ctx.video_paths) if ctx.video_paths else None
+                consecutive_tts_fails = 0
+                task_result["video_path"] = video_path
                 task_result["youtube"] = {"url": yt_url} if yt_url else None
                 task_result["format_type"] = _fmt or job.get("format_type", "FACT")
                 _deploy_status["completed"] += 1
                 _deploy_status["results"].append(task_result)
                 _save_state()
-                print(f"  ✅ 완료: {channel} — '{ctx.title}'")
-                # Day 파일 체크박스: 같은 topic_group의 모든 채널이 완료되면 ✅ 표시
+                _display_title = _video_title or topic
+                print(f"  ✅ 완료: {channel} — '{_display_title}'")
+                # Day 파��� 체크박스
                 if day_file_path:
                     topic_group = job.get("topic_group", "")
                     if topic_group:
-                        # 이 topic_group에서 예상 채널 수
                         group_total = sum(1 for s in schedule if s.get("topic_group") == topic_group)
-                        # 기존 결과에서 성공 수 (현재 결과 이미 추가됨)
                         group_success = sum(1 for r in _deploy_status["results"] if r.get("topic_group") == topic_group and r.get("status") == "success")
                         if group_success >= group_total:
                             try:
@@ -389,20 +408,10 @@ async def run_auto_deploy(target_date: datetime | None = None,
                                     print(f"  📋 Day 파일 체크: ✅ {topic_group[:30]}")
                             except Exception:
                                 pass
-                # 비용 기록 + 텔레그램 알림
+                # 비용은 /api/generate 내부에서 자동 기록됨 — 알림만 전송
                 try:
-                    from modules.utils.cost_tracker import record_generation_cost
-                    from modules.utils.notify import notify_success, notify_cost
-                    cost_entry = record_generation_cost(
-                        channel=channel, success=True,
-                        llm_usd=ctx.total_cost(),
-                        image_count=ctx.image_count,
-                        video_count=ctx.video_count,
-                        tts_chars=ctx.tts_chars,
-                    )
-                    notify_success(channel, f"[{channel}] {ctx.title}", video_url=yt_url)
-                    notify_cost(channel, ctx.title, cost_entry, video_url=yt_url,
-                                format_type=_fmt or job.get("format_type", ""))
+                    from modules.utils.notify import notify_success
+                    notify_success(channel, f"[{channel}] {_display_title}", video_url=yt_url)
                 except Exception:
                     pass
 
@@ -412,13 +421,12 @@ async def run_auto_deploy(target_date: datetime | None = None,
 
                 if is_retryable and task_result.get("_retries", 0) < 2:
                     retry_num = task_result.get("_retries", 0) + 1
-                    wait_sec = 30 * (2 ** (retry_num - 1))  # 30s, 60s
-                    print(f"  ⏳ 리트라이 가능 에러 — {wait_sec}초 후 재시도 ({retry_num}/2): {err_str}")
+                    wait_sec = 30 * (2 ** (retry_num - 1))
+                    print(f"  ⏳ 리트라이 — {wait_sec}초 후 재시도 ({retry_num}/2): {err_str}")
                     await asyncio.sleep(wait_sec)
                     task_result["_retries"] = retry_num
-                    # 스케줄 맨 뒤에 다시 추가
                     schedule.append({**item, "_retries": retry_num})
-                    continue  # results에 추가하지 않고 다음으로
+                    continue
 
                 task_result["status"] = "failed"
                 task_result["error"] = err_str
@@ -426,45 +434,27 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 _deploy_status["failed"] += 1
                 print(f"  ❌ 실패: {channel} — '{topic}': {e}")
 
-                # TTS 전체 실패 감지 → 연속 실패 시 배치 조기 중단
+                # TTS 연속 실패 감지
                 _tts_patterns = ["오디오 실패", "tts", "elevenlabs", "qwen3", "audio"]
                 if any(p in err_str.lower() for p in _tts_patterns):
                     consecutive_tts_fails += 1
                     if consecutive_tts_fails >= MAX_CONSECUTIVE_TTS_FAILS:
-                        _notify_batch_abort(f"TTS {consecutive_tts_fails}회 연속 실패 — 서버 문제 추정, 배치 중단")
+                        _notify_batch_abort(f"TTS {consecutive_tts_fails}회 연속 실패 — 배치 중단")
                         _deploy_status["results"].append(task_result)
                         raise RuntimeError(f"TTS {consecutive_tts_fails}회 연속 실패 — 조기 중단")
                 else:
-                    consecutive_tts_fails = 0  # TTS 이외 에러면 리셋
-                # 실패 시에도 부분 비용 기록
+                    consecutive_tts_fails = 0
+
+                traceback.print_exc()
                 try:
-                    from modules.utils.cost_tracker import record_generation_cost
-                    record_generation_cost(
-                        channel=channel, success=False,
-                        llm_usd=getattr(ctx, 'total_cost', lambda: 0.0)() if 'ctx' in locals() else 0.0,
-                        image_count=getattr(ctx, 'image_count', 0) if 'ctx' in locals() else 0,
-                        video_count=getattr(ctx, 'video_count', 0) if 'ctx' in locals() else 0,
-                        tts_chars=getattr(ctx, 'tts_chars', 0) if 'ctx' in locals() else 0,
-                    )
+                    from modules.utils.notify import notify_failure
+                    notify_failure(channel, topic, error=err_str)
                 except Exception:
                     pass
-                traceback.print_exc()
-                # FailureAnalyzer: 실패 분류 + 로그 + 텔레그램 상세 알림
-                try:
-                    from modules.orchestrator.agents.failure_analyzer import analyze_and_notify
-                    analyze_and_notify(channel, topic, err_str)
-                except Exception:
-                    # 폴백: 기존 알림
-                    try:
-                        from modules.utils.notify import notify_failure
-                        notify_failure(channel, topic, error=err_str)
-                    except Exception:
-                        pass
 
-            # 실패 시만 여기서 추가 (성공은 체크박스 로직 전에 이미 추가됨)
             if task_result.get("status") != "success":
                 _deploy_status["results"].append(task_result)
-            _save_state()  # 매 토픽 완료 후 상태 저장
+            _save_state()
 
     finally:
         _deploy_status["running"] = False
