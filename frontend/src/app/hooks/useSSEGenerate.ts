@@ -356,13 +356,17 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
       }
     };
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) { if (buffer.trim()) processLine(buffer); break; }
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-      for (const line of lines) processLine(line);
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) { if (buffer.trim()) processLine(buffer); break; }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) processLine(line);
+      }
+    } finally {
+      reader.releaseLock();
     }
   };
 

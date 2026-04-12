@@ -69,7 +69,7 @@ VOICE_ID_TO_NAME = {v["id"]: k for k, v in VOICE_MAP.items()}
 
 
 def cleanup_sessions():
-    """만료된 세션 정리."""
+    """만료된 세션 + cancel events 정리."""
     import time
     now = time.time()
     with session_lock:
@@ -80,3 +80,10 @@ def cleanup_sessions():
         while len(prepared_sessions) > SESSION_MAX_COUNT:
             oldest = min(prepared_sessions, key=lambda k: prepared_sessions[k].get("_created", prepared_sessions[k].get("created_at", 0)))
             del prepared_sessions[oldest]
+    # cancel events GC: TTL 만료된 이벤트 제거
+    with generation_lock:
+        stale = [gid for gid, (_, ts) in cancel_events.items()
+                 if now - ts > CANCEL_EVENT_TTL]
+        for gid in stale:
+            del cancel_events[gid]
+            active_generation_ids.discard(gid)
