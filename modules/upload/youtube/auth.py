@@ -12,7 +12,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
     "https://www.googleapis.com/auth/youtube",
-    "https://www.googleapis.com/auth/yt-analytics.readonly",
+    # yt-analytics.readonly는 modules/analytics/youtube_analytics.py에서 별도 관리
 ]
 _BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # project root
 TOKENS_DIR = _BASE_DIR / "youtube_tokens"
