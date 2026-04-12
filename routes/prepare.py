@@ -69,6 +69,7 @@ class PrepareRequest(BaseModel):
     language: str = "ko"
     videoEngine: str = "none"
     channel: str | None = None
+    formatType: str | None = None
     referenceUrl: str | None = None
     maxCuts: int | None = None
 
@@ -133,6 +134,7 @@ class RenderRequest(BaseModel):
     videoEngine: str = "none"
     cameraStyle: str = "auto"
     bgmTheme: str = "random"
+    formatType: str | None = None
     channel: str | None = None
     platforms: list[str] = ["youtube"]
     captionSize: int = Field(48, ge=32, le=72)
@@ -195,6 +197,7 @@ async def prepare_endpoint(req: PrepareRequest):
                     llm_provider=req.llmProvider, llm_key_override=llm_key_for_request,
                     channel=req.channel, llm_model=req.llmModel,
                     reference_url=prep_ref_url,
+                    format_type=req.formatType,
                 ),
             )
 
@@ -674,6 +677,13 @@ async def render_endpoint(req: RenderRequest):
             language = session["language"]
             api_key_override = req.apiKey or os.getenv("OPENAI_API_KEY", "")
             elevenlabs_key_override = req.elevenlabsKey or os.getenv("ELEVENLABS_API_KEY", "")
+
+            # 채널 프리셋 fallback: cameraStyle "auto" → 채널 설정값
+            if req.channel:
+                _ch_preset = get_channel_preset(req.channel)
+                if _ch_preset:
+                    if req.cameraStyle == "auto" and _ch_preset.get("camera_style"):
+                        req.cameraStyle = _ch_preset["camera_style"]
 
             # 수정된 스크립트 반영
             script_updates = {c["index"]: c["script"] for c in req.cuts if "script" in c}
