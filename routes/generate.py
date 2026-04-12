@@ -519,10 +519,12 @@ async def generate_video_endpoint(req: GenerateRequest):
                 def _run_video():
                     try:
                         cut_video_key = get_google_key(llm_key_override, service=active_video_engine, extra_keys=gemini_keys_override)
+                        # hero-only는 로직 플래그 — 실제 모델명으로 전달하지 않음
+                        _actual_veo_model = None if video_model_override == "hero-only" else video_model_override
                         video_result[0] = generate_video_from_image(
                             img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key,
                             description=cut.get("description", ""),
-                            veo_model=video_model_override, gemini_api_keys=gemini_keys_override,
+                            veo_model=_actual_veo_model, gemini_api_keys=gemini_keys_override,
                         )
                     except Exception as exc:
                         with errors_lock:
