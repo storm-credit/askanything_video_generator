@@ -158,17 +158,30 @@ class MainOrchestrator:
                 yield f"ERROR|[Asset] {self._safe_error(exc)}\n"
                 return
 
-        # 에셋 검증
-        failed_visual = [i+1 for i, p in enumerate(ctx.visual_paths) if p is None]
-        failed_audio = [i+1 for i, p in enumerate(ctx.audio_paths) if p is None]
-        if failed_visual or failed_audio:
+        # 에셋 검증 — 실패한 컷 제거 후 나머지로 계속 진행 (웹 경로와 동일)
+        failed_visual = [i for i, p in enumerate(ctx.visual_paths) if p is None]
+        failed_audio = [i for i, p in enumerate(ctx.audio_paths) if p is None]
+        failed_indices = set(failed_visual) | set(failed_audio)
+
+        if failed_indices:
             details = []
             if failed_visual:
-                details.append(f"이미지 실패: 컷 {failed_visual}")
+                details.append(f"이미지 실패: 컷 {[i+1 for i in failed_visual]}")
             if failed_audio:
-                details.append(f"오디오 실패: 컷 {failed_audio}")
-            yield f"ERROR|[소스 생성 오류] {', '.join(details)}\n"
-            return
+                details.append(f"오디오 실패: 컷 {[i+1 for i in failed_audio]}")
+            yield f"WARN|[소스 일부 실패] {', '.join(details)} — 나머지 컷으로 계속 진행\n"
+
+            # 실패 컷 역순 제거 (인덱스 안정성)
+            for i in sorted(failed_indices, reverse=True):
+                ctx.cuts.pop(i)
+                ctx.visual_paths.pop(i)
+                ctx.audio_paths.pop(i)
+                if hasattr(ctx, 'word_timestamps') and ctx.word_timestamps and i < len(ctx.word_timestamps):
+                    ctx.word_timestamps.pop(i)
+
+            if not ctx.cuts:
+                yield f"ERROR|[소스 생성 오류] 전체 컷 실패 — 렌더링 불가\n"
+                return
 
         yield "PROG|75\n"
 
