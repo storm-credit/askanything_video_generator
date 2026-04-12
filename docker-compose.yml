@@ -15,6 +15,7 @@ services:
     volumes:
       - ./api_server.py:/app/api_server.py
       - ./routes:/app/routes
+      - ./services:/app/services
       - ./modules:/app/modules
       - ./remotion/src:/app/remotion/src
       - ./assets:/app/assets
@@ -28,7 +29,9 @@ services:
       - ./.env:/app/.env
       - ./vertex-sa-key.json:/app/vertex-sa-key.json:ro
       - ./vertex-sa-key-exploratodo.json:/app/vertex-sa-key-exploratodo.json:ro
+      - ./vertex-sa-key-wonderdrop.json:/app/vertex-sa-key-wonderdrop.json:ro
       - ./vertex-sa-key-prismtale.json:/app/vertex-sa-key-prismtale.json:ro
+      - ./data:/app/data
     restart: unless-stopped
 
   frontend:

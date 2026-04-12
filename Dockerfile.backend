@@ -28,6 +28,8 @@ RUN cd remotion && npm install --production=false
 
 # Copy application code
 COPY api_server.py .
+COPY routes/ routes/
+COPY services/ services/
 COPY modules/ modules/
 COPY remotion/ remotion/
 COPY preflight_check.py syntax_check.py ./

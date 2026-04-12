@@ -30,6 +30,7 @@ RUN cd remotion && npm install --production=false
 # Copy application code (v2: routes/ + orchestrator 포함)
 COPY api_server.py .
 COPY routes/ routes/
+COPY services/ services/
 COPY modules/ modules/
 COPY remotion/ remotion/
 COPY blender/ blender/
