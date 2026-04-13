@@ -111,7 +111,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
           formatType: formatType !== "auto" ? formatType : undefined,
           channel: channel || undefined, platforms, ttsSpeed, voiceId, captionSize, captionY,
           referenceUrl: detectedRefUrl, publishMode,
-          scheduledTime: publishMode === "scheduled" ? scheduledTime : undefined,
+
           maxCuts: testMode ? 3 : undefined,
         }),
       });
@@ -266,7 +266,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
           ttsSpeed: preset.ttsSpeed, voiceId: "auto",
           captionSize: preset.captionSize, captionY: preset.captionY,
           referenceUrl: detectedRefUrl, publishMode,
-          scheduledTime: publishMode === "scheduled" ? scheduledTime : undefined,
+
           maxCuts: testMode ? 3 : undefined,
         }),
       });
