@@ -51,10 +51,18 @@ FRAGMENT: dict[str, str] = {
 - 컷1: 좌우 대칭, 두 피사체 대결 구도, dramatic split lighting
 - 컷10(REVEAL): 승자 단독, 압도적 포즈, 강렬한 조명
 
+일관성 규칙 (필수):
+- 컷1에서 정한 A와 B의 이름을 전 컷에서 동일하게 유지. 중간에 다른 종/별칭으로 바꾸면 실패.
+  예: 컷1 "티라노사우루스 vs 악어" → 전 컷 "티라노사우루스", "악어" 고정. "유타랩터", "크로커다일" 등 변경 금지.
+- 같은 문장이 두 컷 이상에서 반복되면 실패. 모든 컷은 고유한 정보를 전달해야 한다.
+- 컷2-3(A 소개)의 팩트와 컷4-5(B 소개)의 팩트가 겹치면 실패.
+
 HARD FAIL:
 - 컷1 단일 피사체 → 실패
 - 11컷 미만 → 실패
 - 컷9 이전 승자 공개 → 실패
+- A/B 이름이 컷 중간에 바뀜 → 실패
+- 같은 대사 2번 이상 등장 → 실패
 
 시리즈 모드 (series_context가 제공된 경우에만 적용):
 - 컷1 훅에 시리즈명 + 에피소드 번호 언급 ("바다의 왕 토너먼트 EP2")
@@ -106,10 +114,18 @@ Image prompts:
 - Cut 1: Symmetric split, both subjects facing off, dramatic split lighting
 - Cut 10 (REVEAL): Winner alone, dominant pose, hero lighting
 
+Consistency rules (mandatory):
+- The names of A and B established in Cut 1 MUST remain identical in ALL cuts. Do NOT switch to synonyms, subspecies, or alternate names mid-script.
+  Example: Cut 1 "T. rex vs Crocodile" → ALL cuts use "T. rex" and "Crocodile". Never switch to "Utahraptor", "Raptor", "Croc", etc.
+- No sentence may appear in more than one cut. Every cut must deliver unique information.
+- Facts in cuts 2-3 (A's intro) must not overlap with facts in cuts 4-5 (B's intro).
+
 HARD FAIL:
 - Cut 1 single subject → fail
 - Fewer than 11 cuts → fail
 - Winner revealed before Cut 9 → fail
+- A/B name changes mid-script → fail
+- Same line appears twice → fail
 
 Series mode (apply ONLY when series_context is provided):
 - Cut 1 hook MUST mention series name + episode number ("Ocean King Tournament EP2")
@@ -161,10 +177,18 @@ Reglas de image_prompt:
 - Corte 1: Composición simétrica, ambos enfrentados, iluminación dramática
 - Corte 10 (REVEAL): Ganador solo, pose dominante
 
+Reglas de consistencia (obligatorio):
+- Los nombres de A y B establecidos en Corte 1 DEBEN mantenerse idénticos en TODOS los cortes. NO cambiar a sinónimos, subespecies u otros nombres a mitad del guion.
+  Ejemplo: Corte 1 "T. rex vs Cocodrilo" → TODOS los cortes usan "T. rex" y "Cocodrilo". Nunca cambiar a "Raptor", "Caimán", etc.
+- Ninguna oración puede aparecer en más de un corte. Cada corte debe aportar información única.
+- Los datos de cortes 2-3 (intro A) no deben repetirse en cortes 4-5 (intro B).
+
 HARD FAIL:
 - Corte 1 sujeto único → fallo
 - Menos de 11 cortes → fallo
 - Ganador antes Corte 9 → fallo
+- Nombres A/B cambian a mitad del guion → fallo
+- Misma línea aparece dos veces → fallo
 
 Modo serie (aplicar SOLO cuando series_context está presente):
 - Corte 1 DEBE mencionar nombre de serie + número de episodio ("Torneo del Rey del Mar EP2")
