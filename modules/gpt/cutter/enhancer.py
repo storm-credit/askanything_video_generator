@@ -365,8 +365,12 @@ def polish_scripts(cuts: list[dict[str, Any]], lang: str = "ko",
             return cuts, [f"[polisher] 컷 수 불일치 ({len(rewritten)} vs {len(cuts)}) — 원본 유지"]
 
         # script만 교체 (안전 검사 통과한 것만), 나머지(description, image_prompt) 유지
+        # 컷1(훅)은 polish 스킵 — 자극적인 훅이 부드러워지는 것 방지
         applied = 0
         for i, new_script in enumerate(rewritten):
+            if i == 0:
+                print(f"[polisher] 컷1(훅) 스킵 — 원본 유지")
+                continue
             if isinstance(new_script, str) and _is_script_rewrite_safe(cuts[i].get("script", ""), new_script):
                 cuts[i]["script"] = new_script.strip()
                 applied += 1

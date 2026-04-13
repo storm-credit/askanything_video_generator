@@ -13,15 +13,19 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
 
     # 1) Hook 검증 — 첫 컷이 질문형이거나 너무 약한지
     first_script = cuts[0].get("script", "")
+    # 약한 훅 패턴 차단 (강한 질문형은 허용 — 쇼츠 CTR 최고 패턴)
     weak_hook_patterns = [
         "did you know", "sabías que", "알고 있", "오늘 소개",
         "today we", "have you ever", "¿sabías", "한번 알아",
-        "let me tell", "들어봤", "이번에는",
+        "let me tell", "들어봤", "이번에는", "오늘은",
+        "in this video", "en este video", "이 영상에서",
     ]
     if any(p in first_script.lower() for p in weak_hook_patterns):
         failures.append(f"HOOK_WEAK: 첫 컷이 약한 패턴 포함 — '{first_script[:50]}'")
-    if first_script.rstrip().endswith("?") or first_script.rstrip().endswith("？"):
-        failures.append(f"HOOK_QUESTION: 첫 컷이 질문형 — '{first_script[:50]}'")
+    # 질문형 훅: 강한 질문 허용, 약한 질문만 차단
+    # OK: "이거 진짜 가능해?", "Can this actually exist?"
+    # NG: "알고 있었어?", "Did you know?"
+
 
     # 1-b) Hook 길이 강제 — 채널별 Cut1 글자/단어 수 제한
     if channel:
