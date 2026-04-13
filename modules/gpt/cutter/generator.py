@@ -16,6 +16,59 @@ from .quality import _validate_hard_fail, _validate_narrative_arc, _validate_reg
 from .enhancer import _enhance_image_prompts, _rewrite_academic_tone, polish_scripts
 
 
+def _get_channel_hook_rules(channel: str | None, lang: str) -> str:
+    """채널별 첫 컷 훅 스타일 규칙을 반환 — 생성 단계 주입용."""
+    if channel == "askanything":
+        if lang == "ko":
+            return (
+                "[Channel Hook Style] askanything: Cut 1 should feel like a bold Korean short-form hook. "
+                "Strong questions are allowed and encouraged if they create immediate curiosity. "
+                "Prefer direct, punchy, conversational phrasing. Avoid weak openers like '알고 있었어?' or '오늘은'."
+            )
+    if channel == "wonderdrop":
+        return (
+            "[Channel Hook Style] wonderdrop: Cut 1 should sound like a confident documentary line. "
+            "Prefer a declarative opener over a casual question. "
+            "Calm authority, cinematic clarity, no slang, no overhype."
+        )
+    if channel == "exploratodo":
+        return (
+            "[Channel Hook Style] exploratodo: Cut 1 should be energetic, immediate, and highly clickable in neutral LATAM Spanish. "
+            "A strong exclamatory or urgent hook is welcome. "
+            "Avoid formal or academic openings."
+        )
+    if channel == "prismtale":
+        return (
+            "[Channel Hook Style] prismtale: Cut 1 should feel like a dark mystery declaration. "
+            "Prefer enigmatic, ominous, cinematic first lines over casual questions. "
+            "Sound intriguing, not loud or playful."
+        )
+    if lang == "ko":
+        return "[Channel Hook Style] Cut 1 should be short, punchy, and immediately curiosity-inducing."
+    if lang == "es":
+        return "[Channel Hook Style] El corte 1 debe ser corto, claro e inmediatamente intrigante."
+    return "[Channel Hook Style] Cut 1 should be short, clear, and immediately intriguing."
+
+
+def _should_run_fact_verify(topic_title: str, format_type: str | None, fact_context: str | None) -> bool:
+    """팩트 검증 선택 실행 — 최신성/숫자/논쟁 리스크 큰 주제+포맷만 검증."""
+    if not fact_context:
+        return False
+    fmt = (format_type or "").upper()
+    # 고위험 포맷: 수치/논쟁/미스터리/과학 계열
+    if fmt in {"FACT", "PARADOX", "MYSTERY", "COUNTDOWN", "EMOTIONAL_SCI"}:
+        return True
+    # 에버그린/비교형(WHO_WINS, SCALE, IF, EMOTIONAL_SCI): 주제에 위험 키워드 있을 때만
+    title = (topic_title or "").lower()
+    risk_keywords = [
+        "study", "studies", "research", "scientists", "evidence",
+        "연구", "논문", "과학자", "발견", "증거", "통계",
+        "estudio", "cient", "evidencia", "descub",
+    ]
+    has_digits = re.search(r'\d{4}|\d+%', title) is not None
+    return has_digits or any(k in title for k in risk_keywords)
+
+
 # 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
@@ -96,6 +149,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             user_content += f"\n\n{fact_context}\n[Verificación de datos] Prioriza los datos de la referencia anterior. NO inventes estadísticas — usa solo datos verificados."
         else:
             user_content += f"\n\n{fact_context}\n[팩트체크 지시] 위 검색 결과의 팩트를 우선 활용하세요. 통계나 수치를 지어내지 마세요 — 검증된 정보만 사용하세요."
+
+    # 채널별 훅 스타일 — fact_context 뒤에 주입 (LLM이 후반부를 더 강하게 반영)
+    channel_hook_rules = _get_channel_hook_rules(channel, lang)
+    if channel_hook_rules:
+        user_content += f"\n\n{channel_hook_rules}\n[Critical] This rule applies MOST strongly to Cut 1. Different channels must have visibly different first-line energy."
 
     # 레퍼런스 영상 분석 주입 (XML 구조화)
     if reference_url:
@@ -228,19 +286,19 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
         if lang == "en":
             retry_expansion = (
                 f"\n\nOnly {len(cuts)} cuts were generated. Expand to {_cfg_min}-{_cfg_max} total cuts. "
-                f"You MUST keep ALL existing cuts verbatim and add NEW cuts between them to reinforce buildup/climax. "
+                f"You MUST keep ALL existing cuts verbatim and add NEW cuts between them to reinforce buildup/climax. Preserve the channel-specific hook style of Cut 1. "
                 f"Return the complete expanded array.\nExisting cuts: {existing_cuts_json}"
             )
         elif lang == "es":
             retry_expansion = (
                 f"\n\nSolo se generaron {len(cuts)} cortes. Expande a {_cfg_min}-{_cfg_max} cortes en total. "
-                f"DEBES mantener TODOS los cortes existentes tal cual y agregar cortes NUEVOS entre ellos para reforzar el clímax. "
+                f"DEBES mantener TODOS los cortes existentes tal cual y agregar cortes NUEVOS entre ellos para reforzar el clímax. Conserva el estilo de gancho del corte 1 según el canal. "
                 f"Devuelve el array completo expandido.\nCortes existentes: {existing_cuts_json}"
             )
         else:
             retry_expansion = (
                 f"\n\n기존에 {len(cuts)}컷만 생성되었습니다. 총 {_cfg_min}~{_cfg_max}컷으로 확장하세요. "
-                f"기존 컷은 반드시 그대로 유지하고, 사이에 새 컷을 추가하여 빌드업/클라이맥스를 보강하세요. "
+                f"기존 컷은 반드시 그대로 유지하고, 사이에 새 컷을 추가하여 빌드업/클라이맥스를 보강하세요. 컷1의 채널별 훅 스타일은 그대로 유지하세요. "
                 f"확장된 전체 배열을 반환하세요.\n기존 컷: {existing_cuts_json}"
             )
         if lang == "en":
@@ -307,9 +365,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             print("-> [재검증] 구조/주제 수정으로 스크립트 변경됨 → 주제 일치 재검증 (1회)")
             cuts = _verify_subject_match(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model)
 
-        # ③ 팩트 검증 (선택적 — 팩트 컨텍스트 있을 때만)
-        if fact_context:
+        # ③ 팩트 검증 (조건부 — 고위험 주제+포맷만)
+        if _should_run_fact_verify(_topic_title, format_type, fact_context):
             cuts = _verify_facts(cuts, fact_context, _topic_title, llm_provider, _verify_key(), lang, llm_model)
+        elif fact_context:
+            print(f"  [팩트 검증] 스킵 — 저위험 주제/포맷")
 
         # ④ HARD FAIL 검증 (코드 레벨 품질 게이트) — 실패 시 1회 구조 수정 재시도
         # format_type을 각 컷에 첨부 (포맷별 HARD FAIL 검증용)
@@ -327,17 +387,19 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             # 아크 문제 → 구조 검증으로 1회 자동 수정
             has_hook_fail = any("ARC_HOOK" in i for i in arc_issues)
             has_loop_fail = any("ARC_LOOP" in i for i in arc_issues)
-            has_climax_pivot = any("ARC_CLIMAX" in i or "ARC_PIVOT" in i for i in arc_issues)
-            if has_hook_fail or has_loop_fail or has_climax_pivot:
-                print("-> [아크 수정] 하이네스 구조 검증으로 자동 수정 시도...")
+            # 컷1/마지막 컷 문제만 구조 검증으로 자동 수정 (중간 컷은 건드리지 않음)
+            if has_hook_fail or has_loop_fail:
+                print("-> [아크 수정] 훅/루프 구조 검증으로 자동 수정 시도...")
                 cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model, channel)
                 arc_issues_retry = _validate_narrative_arc(cuts, lang)
                 if arc_issues_retry:
                     print(f"  [아크] 수정 후 {len(arc_issues_retry)}개 남음 — 결과 유지")
                 else:
                     print("OK [아크] 자동 수정 성공")
-            if any("ARC_RELEASE" in i for i in arc_issues):
-                print("  [아크 경고] 이완 컷 없음 — 수동 확인 권장 (자동 수정 생략)")
+            # 중간 컷 문제(CLIMAX/PIVOT/RELEASE)는 경고만
+            _mid_issues = [i for i in arc_issues if any(k in i for k in ("ARC_CLIMAX", "ARC_PIVOT", "ARC_RELEASE"))]
+            if _mid_issues:
+                print(f"  [아크 경고] 중간 컷 구조 {len(_mid_issues)}건 — 수동 확인 권장 (자동 수정 생략)")
         else:
             print("OK [아크 검증] HOOK/LOOP/CLIMAX/PIVOT/RELEASE 통과")
 
@@ -348,7 +410,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                 print(f"  - {fail}")
             # HARD FAIL 유형별 수정 라우팅
             has_visual_fail = any("VISUAL" in f for f in hard_fails)
-            has_structure_fail = any(k in "".join(hard_fails) for k in ["HOOK", "TENSION", "LOOP", "TONE"])
+            has_structure_fail = any(k in "".join(hard_fails) for k in ["HOOK_WEAK", "LOOP", "TONE"])
             has_academic_fail = any("ACADEMIC" in f for f in hard_fails)
             if has_academic_fail:
                 print("-> [HARD FAIL 수정] 학술체 리라이트 시도...")
@@ -405,30 +467,26 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                     print(f"[금지 표현] Cut {_ci+1} 필터링됨")
 
         # ── 문장 자연화 리라이트 ──
-        _pre_polish_hook = cuts[0].get("script", "") if cuts else ""
         _pre_polish_mid = cuts[3].get("script", "") if len(cuts) > 3 else ""
         _pre_polish_last = cuts[-1].get("script", "") if cuts else ""
         try:
-            _polish_key = llm_key_override or api_key_override
+            _polish_key = _verify_key()
             cuts, _polish_notes = polish_scripts(
                 cuts=cuts, lang=lang, channel=channel,
                 llm_provider=llm_provider, api_key=_polish_key,
                 llm_model=llm_model,
+                skip_indices=[0],  # 컷1(훅) 보존
             )
             if _polish_notes:
                 print(f"[문장 자연화] 적용됨")
         except Exception as _pe:
             print(f"[문장 자연화] 스킵 (원본 유지): {_pe}")
 
-        # ── polish 후 핵심 컷 재검사 (훅/리텐션/루프 약화 방지) ──
+        # ── polish 후 핵심 컷 재검사 (리텐션/루프 약화 방지) ──
+        # 컷1은 skip_indices=[0]으로 polish에서 제외되므로 복원 불필요
         if cuts:
-            _post_hook = cuts[0].get("script", "")
             _post_mid = cuts[3].get("script", "") if len(cuts) > 3 else ""
             _post_last = cuts[-1].get("script", "")
-            # Cut 1 (훅): 약해졌으면 원본 복원
-            if _pre_polish_hook and _post_hook and len(_post_hook) > len(_pre_polish_hook) * 1.3:
-                cuts[0]["script"] = _pre_polish_hook
-                print(f"[재검사] Cut 1 훅 복원 — polish 후 너무 길어짐")
             # Cut 4 (리텐션 락): 약해졌으면 원본 복원
             if len(cuts) > 3 and _pre_polish_mid and _post_mid and len(_post_mid) > len(_pre_polish_mid) * 1.3:
                 cuts[3]["script"] = _pre_polish_mid

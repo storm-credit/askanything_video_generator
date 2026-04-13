@@ -11,43 +11,37 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
 
     failures: list[str] = []
 
-    # 1) Hook 검증 — 첫 컷이 질문형이거나 너무 약한지
+    # 1) Hook 검증 — 약한/뻔한 훅만 차단 (강한 질문형은 허용)
     first_script = cuts[0].get("script", "")
-    # 약한 훅 패턴 차단 (강한 질문형은 허용 — 쇼츠 CTR 최고 패턴)
     weak_hook_patterns = [
         "did you know", "sabías que", "알고 있", "오늘 소개",
         "today we", "have you ever", "¿sabías", "한번 알아",
-        "let me tell", "들어봤", "이번에는", "오늘은",
+        "let me tell", "들어봤", "이번에는",
         "in this video", "en este video", "이 영상에서",
     ]
     if any(p in first_script.lower() for p in weak_hook_patterns):
         failures.append(f"HOOK_WEAK: 첫 컷이 약한 패턴 포함 — '{first_script[:50]}'")
-    # 질문형 훅: 강한 질문 허용, 약한 질문만 차단
-    # OK: "이거 진짜 가능해?", "Can this actually exist?"
-    # NG: "알고 있었어?", "Did you know?"
 
+    warnings: list[str] = []
 
-    # 1-b) Hook 길이 강제 — 채널별 Cut1 글자/단어 수 제한
+    # 1-b) Hook 길이 — 채널별 Cut1 글자/단어 수 (경고 전용, 하드 fail 아님)
     if channel:
         from modules.utils.channel_config import get_channel_preset as _get_hook_preset
         _hook_preset = _get_hook_preset(channel)
         _hook_lang = (_hook_preset or {}).get("language", "en")
         if _hook_lang == "ko":
-            # 한국어: 20자 초과 시 reject (WHO_WINS/IF 등 포맷 프롬프트 20자 기준)
             if len(first_script.replace(" ", "")) > 20:
-                failures.append(f"HOOK_TOO_LONG: KO 훅 {len(first_script.replace(' ', ''))}자 (최대 20자) — '{first_script[:30]}'")
+                warnings.append(f"HOOK_TOO_LONG: KO 훅 {len(first_script.replace(' ', ''))}자 (최대 20자) — '{first_script[:30]}'")
         elif _hook_lang == "en":
-            # 영어: 10단어 초과 시 reject
             word_count = len(first_script.split())
             if word_count > 10:
-                failures.append(f"HOOK_TOO_LONG: EN 훅 {word_count}단어 (최대 10) — '{first_script[:40]}'")
+                warnings.append(f"HOOK_TOO_LONG: EN 훅 {word_count}단어 (최대 10) — '{first_script[:40]}'")
         elif _hook_lang == "es":
-            # 스페인어: 12단어 초과 시 reject
             word_count = len(first_script.split())
             if word_count > 12:
-                failures.append(f"HOOK_TOO_LONG: ES 훅 {word_count}단어 (최대 12) — '{first_script[:40]}'")
+                warnings.append(f"HOOK_TOO_LONG: ES 훅 {word_count}단어 (최대 12) — '{first_script[:40]}'")
 
-    # 2) 긴장 상승 검증 — 감정 태그 다양성
+    # 2) 긴장 상승 — 감정 태그 다양성 (경고 전용, 하드 fail 아님)
     emotions: list[tuple[int, str]] = []  # (컷 인덱스, 태그)
     for ci, c in enumerate(cuts):
         desc = c.get("text", "") or c.get("description", "")
@@ -57,11 +51,11 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                 break
     unique_tags = {t for _, t in emotions}
     if len(unique_tags) < 3:
-        failures.append(f"TENSION_FLAT: 감정 태그 {len(unique_tags)}종류 (최소 3 필요)")
-    # 2연속 동일 감정 태그 체크 (실제 컷 번호 사용)
+        warnings.append(f"TENSION_FLAT: 감정 태그 {len(unique_tags)}종류 (최소 3 필요)")
+    # 2연속 동일 감정 태그 체크 (경고만, 자동 수정 없음)
     for i in range(1, len(emotions)):
         if emotions[i][1] == emotions[i-1][1]:
-            failures.append(f"EMOTION_REPEAT: 컷 {emotions[i-1][0]+1}~{emotions[i][0]+1} 동일 태그 [{emotions[i][1]}] 연속")
+            warnings.append(f"EMOTION_REPEAT: 컷 {emotions[i-1][0]+1}~{emotions[i][0]+1} 동일 태그 [{emotions[i][1]}] 연속")
 
     # 3) 루프 연결 검증 — 마지막 컷이 미완성 문장인지
     last_script = cuts[-1].get("script", "")
@@ -129,14 +123,14 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
     # 7) 포맷별 구조 검증 (format_type은 line 71에서 이미 추출됨)
 
     if fmt_type == "WHO_WINS":
-        # 컷1 반드시 [SHOCK]
+        # 컷1 [SHOCK] — 권장 (warning)
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
-            failures.append("FORMAT_WHO_WINS: 컷1 [SHOCK] 태그 없음 — 대결 선언 컷 필수")
-        # 11컷 필수
+            warnings.append("FORMAT_WHO_WINS_SOFT: 컷1 [SHOCK] 태그 없음 — 대결 선언 강도 약할 수 있음")
+        # 11컷 필수 (뼈대 — hard fail)
         if len(cuts) != 11:
             failures.append(f"FORMAT_WHO_WINS: {len(cuts)}컷 → 반드시 11컷 필요 (A소개2+B소개2+대결3+과학1+승자1+루프1+훅1)")
-        # REVEAL이 컷9 이후에 있어야 함 (너무 일찍 승자 공개 방지)
+        # REVEAL이 컷9 이후에 있어야 함 (뼈대 — hard fail)
         for ci, c in enumerate(cuts[:min(8, len(cuts))]):
             desc = c.get("description", c.get("text", ""))
             if "REVEAL" in desc.upper():
@@ -144,132 +138,137 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                 break
 
     elif fmt_type == "EMOTIONAL_SCI":
-        # 컷1 [WONDER] 필수
+        # 컷1 [WONDER] — 권장 (warning)
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "WONDER" not in first_desc.upper():
-            failures.append("FORMAT_EMOTIONAL_SCI: 컷1 [WONDER] 태그 필수 — 감성과학은 경이감으로 시작")
-        # 전체 컷에서 [SHOCK] 금지
+            warnings.append("FORMAT_EMOTIONAL_SCI_SOFT: 컷1 [WONDER] 태그 권장 — 감성과학의 몰입감이 약해질 수 있음")
+        # 전체 컷에서 [SHOCK] 금지 (뼈대 — hard fail)
         for ci, c in enumerate(cuts):
             desc = c.get("description", "") or c.get("text", "")
             if "SHOCK" in desc.upper():
                 failures.append(f"FORMAT_EMOTIONAL_SCI: 컷{ci+1} [SHOCK] 금지 — 감성과학 포맷은 SHOCK 사용 불가")
-        # [WONDER] 또는 [IDENTITY] 최소 2컷 이상
+        # [WONDER] 또는 [IDENTITY] 최소 2컷 — 권장 (warning)
         warm_count = sum(
             1 for c in cuts
             if any(t in (c.get("description", "") or c.get("text", "")).upper()
                    for t in ("WONDER", "IDENTITY"))
         )
         if warm_count < 2:
-            failures.append(f"FORMAT_EMOTIONAL_SCI: WONDER/IDENTITY 태그 {warm_count}컷 (최소 2 필요)")
+            warnings.append(f"FORMAT_EMOTIONAL_SCI_SOFT: WONDER/IDENTITY 태그 {warm_count}컷 (권장 2+)")
 
     elif fmt_type == "IF":
-        # 컷1 반드시 [SHOCK]
+        # 컷1 [SHOCK] — 권장 (warning)
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
-            failures.append("FORMAT_IF: 컷1 [SHOCK] 태그 없음 — 가정 선언 컷 필수")
-        # 연쇄 결과 컷 최소 2개 (CHAIN/ESCALATE/BUILD 태그)
+            warnings.append("FORMAT_IF_SOFT: 컷1 [SHOCK] 태그 권장 — 가정 선언 임팩트가 약할 수 있음")
+        # 연쇄 결과 컷: 0개는 포맷 붕괴 (hard fail), 1개는 권장 (warning)
         chain_tags = {"CHAIN", "ESCALATE", "BUILD"}
         chain_count = sum(
             1 for c in cuts
             if any(t in (c.get("description", "") or c.get("text", "")).upper() for t in chain_tags)
         )
-        if chain_count < 2:
-            failures.append(f"FORMAT_IF: 연쇄 결과 컷 {chain_count}개 (최소 2개 CHAIN/ESCALATE 필요)")
+        if chain_count == 0:
+            failures.append("FORMAT_IF: 연쇄 결과 컷 0개 — IF 포맷은 최소 1개 CHAIN/ESCALATE 필수")
+        elif chain_count < 2:
+            warnings.append(f"FORMAT_IF_SOFT: 연쇄 결과 컷 {chain_count}개 (권장 2+)")
 
     elif fmt_type == "COUNTDOWN":
-        # 컷1 [SHOCK] 필수
+        # 컷1 [SHOCK] — 권장 (warning)
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
-            failures.append("FORMAT_COUNTDOWN: 컷1 [SHOCK] 태그 없음 — TOP N 선언 컷 필수")
-        # [REVEAL] 태그 존재 확인 (1위 공개)
+            warnings.append("FORMAT_COUNTDOWN_SOFT: 컷1 [SHOCK] 태그 권장 — TOP N 선언 임팩트 약화 가능")
+        # [REVEAL] 태그 존재 확인 (뼈대 — hard fail)
         has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
         if not has_reveal:
             failures.append("FORMAT_COUNTDOWN: [REVEAL] 태그 없음 — 1위 공개 컷 필수")
-        # 순위 숫자 존재 검증 — 스크립트에 숫자가 최소 3개 컷에 있어야 (5위~1위)
+        # 순위 숫자 — 권장 (warning)
         cuts_with_numbers = sum(
             1 for c in cuts
             if re.search(r'\d+\s*(?:위|등|번째|th|st|nd|rd|°|lugar|er[oa]?|t[oa]s?)', c.get("script", ""), re.IGNORECASE)
         )
         if cuts_with_numbers < 3:
-            failures.append(f"FORMAT_COUNTDOWN: 순위 표기 {cuts_with_numbers}컷 (최소 3컷 이상 순위 숫자 필요)")
+            warnings.append(f"FORMAT_COUNTDOWN_SOFT: 순위 표기 {cuts_with_numbers}컷 (권장 3컷 이상)")
 
     elif fmt_type == "SCALE":
-        # 컷1 [SHOCK] 필수
+        # 컷1 [SHOCK] — 권장 (warning)
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
-            failures.append("FORMAT_SCALE: 컷1 [SHOCK] 태그 없음 — 스케일 충격 선언 필수")
-        # 수치/배율 밀도 검증 — 수치 없는 컷 2개 이상 → FAIL
-        import re as _re
+            warnings.append("FORMAT_SCALE_SOFT: 컷1 [SHOCK] 태그 권장 — 스케일 충격이 약할 수 있음")
+        # 수치 밀도 — 권장 (warning)
         cuts_without_scale = sum(
             1 for c in cuts
-            if not _re.search(r'\d', c.get("script", ""))
+            if not re.search(r'\d', c.get("script", ""))
         )
         if cuts_without_scale >= 2:
-            failures.append(f"FORMAT_SCALE: 수치 없는 컷 {cuts_without_scale}개 (최대 1개 허용)")
+            warnings.append(f"FORMAT_SCALE_SOFT: 수치 없는 컷 {cuts_without_scale}개 (권장 최대 1개)")
 
     elif fmt_type == "PARADOX":
-        # 컷1 [SHOCK] 필수
+        # 컷1 [SHOCK] — 권장 (warning)
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
-            failures.append("FORMAT_PARADOX: 컷1 [SHOCK] 태그 없음 — 통념 충격 선언 필수")
-        # 최소 2개 반전: TENSION + REVEAL 또는 DISBELIEF 필수
+            warnings.append("FORMAT_PARADOX_SOFT: 컷1 [SHOCK] 태그 권장 — 통념 전복 임팩트 약화 가능")
+        # 반전 횟수: 0개는 포맷 붕괴 (hard fail), 1개는 권장 (warning)
         reversal_count = sum(
             1 for c in cuts
             if any(t in (c.get("description", "") or c.get("text", "")).upper()
                    for t in ("REVEAL", "DISBELIEF"))
         )
-        if reversal_count < 2:
-            failures.append(f"FORMAT_PARADOX: 반전 {reversal_count}개 (최소 2단계 반전 필수)")
+        if reversal_count == 0:
+            failures.append("FORMAT_PARADOX: 반전 0개 — PARADOX 포맷은 최소 1개 REVEAL/DISBELIEF 필수")
+        elif reversal_count < 2:
+            warnings.append(f"FORMAT_PARADOX_SOFT: 반전 {reversal_count}개 (권장 2단계 이상)")
 
     elif fmt_type == "FACT":
+        # REVEAL 존재 (뼈대 — hard fail)
         has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
         if not has_reveal:
             failures.append("FORMAT_FACT: [REVEAL] 태그 없음 — 핵심 사실 공개 컷 필수")
-        # 수치/통계 밀도 검증 — 수치 없는 컷 3개 이상 → FAIL
+        # 수치 밀도 — 권장 (warning)
         cuts_without_numbers = sum(
             1 for c in cuts
             if not re.search(r'\d', c.get("script", ""))
         )
         if cuts_without_numbers >= 3:
-            failures.append(f"FORMAT_FACT: 수치 없는 컷 {cuts_without_numbers}개 (최대 2개 허용)")
+            warnings.append(f"FORMAT_FACT_SOFT: 수치 없는 컷 {cuts_without_numbers}개 (권장 최대 2개)")
 
     elif fmt_type == "MYSTERY":
-        # 컷1 [SHOCK] 필수
+        # 컷1 [SHOCK] — 권장 (warning)
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
-            failures.append("FORMAT_MYSTERY: 컷1 [SHOCK] 태그 없음 — 미스터리 선언 필수")
-        # 열린 결말: 마지막 컷이 단정적이면 안 됨 — [LOOP] 필수
+            warnings.append("FORMAT_MYSTERY_SOFT: 컷1 [SHOCK] 태그 권장 — 미스터리 선언 강도 약할 수 있음")
+        # 열린 결말 [LOOP] (뼈대 — hard fail)
         last_desc = cuts[-1].get("description", cuts[-1].get("text", ""))
         if "LOOP" not in last_desc.upper():
             failures.append("FORMAT_MYSTERY: 마지막 컷 [LOOP] 태그 없음 — 열린 결말 필수")
-        # 마지막 컷 SHOCK/URGENCY 금지 — 열린 결말에 부적합
+        # 마지막 컷 SHOCK/URGENCY 금지 (뼈대 — hard fail)
         if any(t in last_desc.upper() for t in ("SHOCK", "URGENCY")):
             failures.append("FORMAT_MYSTERY: 마지막 컷 [SHOCK/URGENCY] 금지 — 열린 결말에 부적합")
-        # 가설/이론 최소 2개 — [TENSION] 태그 2개 이상 필요
+        # 가설 수 — 권장 (warning)
         tension_count = sum(
             1 for c in cuts
             if "TENSION" in (c.get("description", "") or c.get("text", "")).upper()
         )
         if tension_count < 2:
-            failures.append(f"FORMAT_MYSTERY: 가설 {tension_count}개 (이론/가설 최소 2개 필요 — [TENSION] 컷)")
+            warnings.append(f"FORMAT_MYSTERY_SOFT: 가설 {tension_count}개 (권장 2개 이상)")
 
-    # 7) 톤-채널 일치 검증
+    # 7) 톤-채널 일치 검증 (warning)
     if channel:
         from modules.utils.channel_config import get_channel_preset
         preset = get_channel_preset(channel)
         if preset:
             tone = preset.get("tone", "").lower()
             all_scripts = " ".join(c.get("script", "") for c in cuts).lower()
-            # LATAM 채널인데 너무 형식적인 톤
             if "energetic" in tone or "rápido" in tone or "enérgico" in tone:
                 formal_patterns = ["sin embargo", "no obstante", "cabe mencionar"]
                 if any(p in all_scripts for p in formal_patterns):
-                    failures.append(f"TONE_MISMATCH: LATAM 에너지 채널에 형식적 표현 사용")
-            # 영어 채널인데 과도한 감탄
+                    warnings.append(f"TONE_MISMATCH: LATAM 에너지 채널에 형식적 표현 사용")
             if "calm" in tone or "cinematic" in tone:
                 exclaim_count = sum(1 for c in cuts if "!" in c.get("script", ""))
                 if exclaim_count > len(cuts) * 0.5:
-                    failures.append(f"TONE_MISMATCH: calm 채널에 감탄부호 과다 ({exclaim_count}/{len(cuts)}컷)")
+                    warnings.append(f"TONE_MISMATCH: calm 채널에 감탄부호 과다 ({exclaim_count}/{len(cuts)}컷)")
+
+    for warning in warnings:
+        print(f"⚠️ [SOFT GUARD] {warning}")
 
     return failures
 

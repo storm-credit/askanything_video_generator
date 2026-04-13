@@ -333,13 +333,22 @@ def polish_scripts(cuts: list[dict[str, Any]], lang: str = "ko",
                    channel: str | None = None,
                    llm_provider: str = "gemini",
                    api_key: str | None = None,
-                   llm_model: str | None = None) -> tuple[list[dict[str, Any]], list[str]]:
-    """생성된 컷의 script만 자연스럽게 다듬습니다. 구조/정보는 변경하지 않음."""
+                   llm_model: str | None = None,
+                   skip_indices: list[int] | None = None) -> tuple[list[dict[str, Any]], list[str]]:
+    """생성된 컷의 script만 자연스럽게 다듬습니다. 구조/정보는 변경하지 않음.
+
+    skip_indices: polish 대상에서 제외할 컷 인덱스 목록 (예: [0] = 컷1 훅 보존).
+    """
     if not cuts:
         return cuts, []
 
+    skip_set = set(skip_indices or [])
+    target_indices = [i for i in range(len(cuts)) if i not in skip_set]
+    if not target_indices:
+        return cuts, ["[polisher] 전체 컷이 skip 처리됨 — 원본 유지"]
+
     system_prompt = _get_sentence_polish_prompt(lang, channel)
-    payload = {"scripts": [c.get("script", "").strip() for c in cuts]}
+    payload = {"scripts": [cuts[i].get("script", "").strip() for i in target_indices]}
     user_content = json.dumps(payload, ensure_ascii=False)
 
     try:
@@ -361,22 +370,19 @@ def polish_scripts(cuts: list[dict[str, Any]], lang: str = "ko",
         rewritten = data.get("rewritten_scripts", [])
         notes = data.get("notes", [])
 
-        if not isinstance(rewritten, list) or len(rewritten) != len(cuts):
-            return cuts, [f"[polisher] 컷 수 불일치 ({len(rewritten)} vs {len(cuts)}) — 원본 유지"]
+        if not isinstance(rewritten, list) or len(rewritten) != len(target_indices):
+            return cuts, [f"[polisher] 컷 수 불일치 ({len(rewritten)} vs {len(target_indices)}) — 원본 유지"]
 
         # script만 교체 (안전 검사 통과한 것만), 나머지(description, image_prompt) 유지
-        # 컷1(훅)은 polish 스킵 — 자극적인 훅이 부드러워지는 것 방지
         applied = 0
-        for i, new_script in enumerate(rewritten):
-            if i == 0:
-                print(f"[polisher] 컷1(훅) 스킵 — 원본 유지")
-                continue
-            if isinstance(new_script, str) and _is_script_rewrite_safe(cuts[i].get("script", ""), new_script):
-                cuts[i]["script"] = new_script.strip()
+        for local_i, new_script in enumerate(rewritten):
+            cut_idx = target_indices[local_i]
+            if isinstance(new_script, str) and _is_script_rewrite_safe(cuts[cut_idx].get("script", ""), new_script):
+                cuts[cut_idx]["script"] = new_script.strip()
                 applied += 1
 
         log_notes = notes if isinstance(notes, list) else []
-        print(f"[polisher] 다듬기 완료: {applied}/{len(cuts)}컷 적용")
+        print(f"[polisher] 다듬기 완료: {applied}/{len(target_indices)}컷 적용 (skip {len(skip_set)}컷)")
         if log_notes:
             for n in log_notes[:3]:
                 print(f"  - {n}")
