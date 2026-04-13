@@ -462,9 +462,15 @@ Hashtags: #Tag1 #Tag2 #Tag3 #Tag4 #Tag5
 
 
 def generate_weekly_topics(start_date: datetime, days: int = 7,
-                           llm_provider: str = "gemini") -> dict[str, Any]:
-    """주간 토픽 생성 — 성과 분석 + LLM 전문가."""
-    from modules.utils.keys import get_google_key
+                           llm_provider: str | None = None) -> dict[str, Any]:
+    """주간 토픽 생성 — 성과 분석 + LLM 전문가.
+
+    llm_provider: "openai" | "gemini" | None (자동 — OPENAI_API_KEY 있으면 openai, 없으면 gemini)
+    env TOPIC_LLM_MODEL: 모델 오버라이드 (예: gpt-5.4, gemini-2.5-pro)
+    """
+    # 프로바이더 자동 결정
+    if llm_provider is None:
+        llm_provider = "openai" if os.getenv("OPENAI_API_KEY") else "gemini"
 
     # 1. 컨텍스트 수집
     performance = _get_performance_context()
@@ -512,26 +518,46 @@ def generate_weekly_topics(start_date: datetime, days: int = 7,
     full_prompt = TOPIC_EXPERT_PROMPT + "\n\n" + user_prompt
 
     # 3. LLM 호출
-    print(f"[토픽 생성] {days}일분 토픽 생성 중...")
-    api_key = get_google_key(None, service="gemini")
+    _topic_model = os.getenv("TOPIC_LLM_MODEL", "gpt-4o" if llm_provider == "openai" else "gemini-2.5-flash")
+    print(f"[토픽 생성] {days}일분 토픽 생성 중... ({llm_provider}/{_topic_model})")
 
     try:
-        from google.genai import types
-        from modules.utils.gemini_client import create_gemini_client
+        if llm_provider == "openai":
+            import openai
+            _oai_key = os.getenv("OPENAI_API_KEY")
+            if not _oai_key:
+                return {"success": False, "error": "OPENAI_API_KEY 미설정"}
+            client = openai.OpenAI(api_key=_oai_key)
+            resp = client.chat.completions.create(
+                model=_topic_model,
+                messages=[
+                    {"role": "system", "content": TOPIC_EXPERT_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.5,
+                max_tokens=30000,
+                timeout=120,
+            )
+            raw_content = (resp.choices[0].message.content or "").strip()
+        else:
+            from google.genai import types
+            from modules.utils.gemini_client import create_gemini_client
+            from modules.utils.keys import get_google_key
 
-        client = create_gemini_client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=full_prompt,
-            config={
-                "temperature": 0.5,  # 팩트 정확도 우선 (0.8→0.5)
-                "max_output_tokens": 30000,
-                "http_options": types.HttpOptions(timeout=120_000),
-            },
-        )
-        raw_content = (response.text or "").strip()
+            api_key = get_google_key(None, service="gemini")
+            client = create_gemini_client(api_key=api_key)
+            response = client.models.generate_content(
+                model=_topic_model,
+                contents=full_prompt,
+                config={
+                    "temperature": 0.5,
+                    "max_output_tokens": 30000,
+                    "http_options": types.HttpOptions(timeout=120_000),
+                },
+            )
+            raw_content = (response.text or "").strip()
     except Exception as e:
-        return {"success": False, "error": f"LLM 호출 실패: {e}"}
+        return {"success": False, "error": f"LLM 호출 실패 ({llm_provider}): {e}"}
 
     if not raw_content:
         return {"success": False, "error": "LLM 응답 비어있음"}
