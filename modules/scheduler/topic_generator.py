@@ -535,8 +535,8 @@ def generate_weekly_topics(start_date: datetime, days: int = 7,
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.5,
-                max_tokens=30000,
-                timeout=120,
+                max_completion_tokens=30000,
+                timeout=300,
             )
             raw_content = (resp.choices[0].message.content or "").strip()
         else:
