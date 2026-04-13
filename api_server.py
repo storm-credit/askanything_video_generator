@@ -47,7 +47,7 @@ async def _lifespan(app):
         now = datetime.now(_kst)
         monday = now + timedelta(days=(7 - now.weekday()))
         return generate_weekly_topics(monday, days=7)
-    add_weekly("주간 토픽 생성", 6, 21, 0, _cron_topics)
+    add_weekly("주간 토픽 생성", 0, 9, 0, _cron_topics)  # 매주 월요일 오전 9시
 
     def _cron_record():
         from modules.analytics.performance_tracker import record_daily
