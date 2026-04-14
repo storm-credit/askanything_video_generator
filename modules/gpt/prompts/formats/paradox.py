@@ -51,10 +51,17 @@ FRAGMENT: dict[str, str] = {
 - 컷6: 따뜻한 톤 복귀 — 개인적, 친밀한 조명
 - 마지막: 반반 구도 — 밝은면/어두운면 대비 (양면성)
 
+일관성 규칙 (필수):
+- 토픽 제목에 명시된 핵심 주제를 전 컷에서 동일하게 유지. LLM이 임의로 다른 대상으로 바꾸면 실패.
+- 토픽에 명시된 통념/역설 대상을 유지. 다른 통념으로 슬쩍 교체하면 실패.
+- 같은 문장이 두 컷 이상에서 반복되면 실패. 모든 컷은 고유한 정보를 전달해야 한다.
+
 HARD FAIL:
 ✗ 반전이 1개 이하 → 실패 (최소 2단계 반전 필수)
 ✗ 근거/출처 없이 주장만 → 실패
 ✗ 색감 변화 지시 없는 image_prompt → 실패
+✗ 주제 이탈 (통념/역설 대상 교체) → 실패
+✗ 같은 대사 2번 이상 등장 → 실패
 """,
 
     "en": """
@@ -107,10 +114,17 @@ Image prompt rules:
 - Cut 6: Warm tone returns — personal, intimate lighting
 - Final: Half-and-half composition — bright/dark contrast (duality)
 
+Consistency rules (mandatory):
+- The core subject from the topic title MUST remain identical in ALL cuts. Do NOT switch to related but different subjects mid-script.
+- The common belief / paradox subject stated in the topic MUST be maintained. Quietly substituting a different belief → FAIL.
+- No sentence may appear in more than one cut. Every cut must deliver unique information.
+
 HARD FAIL:
 ✗ Fewer than 2 reversals → FAIL
 ✗ Claims without evidence/source → FAIL
 ✗ Image prompts without color shift instructions → FAIL
+✗ Subject deviation (common belief / paradox subject replaced) → FAIL
+✗ Same line appears in 2+ cuts → FAIL
 """,
 
     "es": """
@@ -163,9 +177,16 @@ Reglas de image_prompt:
 - Corte 6: Regreso a tono cálido — personal, iluminación íntima
 - Final: Composición mitad y mitad — contraste brillante/oscuro (dualidad)
 
+Reglas de consistencia (obligatorio):
+- El sujeto principal del título del tema DEBE mantenerse idéntico en TODOS los cortes. NO cambiar a sujetos diferentes a mitad del guion.
+- El sujeto de la creencia común/paradoja indicado en el tema DEBE mantenerse. Sustituir silenciosamente por otra creencia → FALLO.
+- Ninguna oración puede aparecer en más de un corte. Cada corte debe aportar información única.
+
 HARD FAIL:
 ✗ Menos de 2 reversiones → FALLO
 ✗ Afirmaciones sin evidencia/fuente → FALLO
 ✗ Image prompts sin instrucciones de cambio de color → FALLO
+✗ Desviación del sujeto (sujeto de creencia común/paradoja reemplazado) → FALLO
+✗ La misma línea aparece en 2+ cortes → FALLO
 """,
 }

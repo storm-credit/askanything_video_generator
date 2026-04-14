@@ -54,10 +54,17 @@ FRAGMENT: dict[str, str] = {
 - 컷1: 가정 대상 극적 변화 장면, before/after 암시
 - 컷8(CLIMAX): 극단적 결과, 파괴적 또는 경이로운 스케일
 
+일관성 규칙 (필수):
+- 토픽 제목에 명시된 핵심 주제를 전 컷에서 동일하게 유지. LLM이 임의로 다른 대상으로 바꾸면 실패.
+- 토픽에 명시된 가정 조건을 전 컷에서 유지. 다른 가정으로 슬쩍 교체하면 실패.
+- 같은 문장이 두 컷 이상에서 반복되면 실패. 모든 컷은 고유한 정보를 전달해야 한다.
+
 HARD FAIL:
 - 컷1 가정 조건 없음 → 실패
 - 연쇄 결과 2개 미만 → 실패
 - 10컷 미만 → 실패
+- 주제 이탈 (가정 조건 교체 또는 이탈) → 실패
+- 같은 대사 2번 이상 등장 → 실패
 """,
 
     "en": """
@@ -106,10 +113,17 @@ Image prompts:
 - Cut 1: Dramatic transformation of the premise subject, before/after implied
 - Cut 8 (CLIMAX): Extreme outcome, catastrophic or awe-inspiring scale
 
+Consistency rules (mandatory):
+- The core subject from the topic title MUST remain identical in ALL cuts. Do NOT switch to related but different subjects mid-script.
+- The premise condition stated in the topic MUST be maintained throughout ALL cuts. Quietly substituting a different premise → FAIL.
+- No sentence may appear in more than one cut. Every cut must deliver unique information.
+
 HARD FAIL:
 - Cut 1 no premise stated → fail
 - Fewer than 2 chain reactions → fail
 - Fewer than 10 cuts → fail
+- Subject deviation (premise condition replaced or abandoned) → fail
+- Same line appears in 2+ cuts → fail
 """,
 
     "es": """
@@ -158,9 +172,16 @@ Reglas de image_prompt:
 - Corte 1: Transformación dramática, antes/después
 - Corte 8 (CLIMAX): Escala catastrófica o asombrosa
 
+Reglas de consistencia (obligatorio):
+- El sujeto principal del título del tema DEBE mantenerse idéntico en TODOS los cortes. NO cambiar a sujetos diferentes a mitad del guion.
+- La condición de premisa indicada en el tema DEBE mantenerse en TODOS los cortes. Sustituir silenciosamente la premisa → FALLO.
+- Ninguna oración puede aparecer en más de un corte. Cada corte debe aportar información única.
+
 HARD FAIL:
 - Corte 1 sin premisa → fallo
 - Menos de 2 reacciones en cadena → fallo
 - Menos de 10 cortes → fallo
+- Desviación del sujeto (condición de premisa reemplazada o abandonada) → fallo
+- La misma línea aparece en 2+ cortes → fallo
 """,
 }

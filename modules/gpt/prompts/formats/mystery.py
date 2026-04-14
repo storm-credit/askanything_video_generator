@@ -51,10 +51,17 @@ FRAGMENT: dict[str, str] = {
 - 컷6: 약간의 빛 — 가설의 실마리 느낌
 - 마지막: 문이 열리는 느낌 — 다음 미스터리 입구
 
+일관성 규칙 (필수):
+- 토픽 제목에 명시된 핵심 주제를 전 컷에서 동일하게 유지. LLM이 임의로 다른 대상으로 바꾸면 실패.
+- 토픽에 명시된 미스터리 대상을 다른 사건으로 바꾸지 말 것. 중간에 다른 미스터리로 이탈 시 실패.
+- 같은 문장이 두 컷 이상에서 반복되면 실패. 모든 컷은 고유한 정보를 전달해야 한다.
+
 HARD FAIL:
 ✗ 확정적 결론을 내리면 → 실패 (미스터리는 열린 결말 필수)
 ✗ 가설이 1개 미만 → 실패 (최소 2가지 이론 제시)
 ✗ 구체적 장소/시간 없이 추상적 미스터리 → 실패
+✗ 주제 이탈 (다른 미스터리 사건으로 교체) → 실패
+✗ 같은 대사 2번 이상 등장 → 실패
 """,
 
     "en": """
@@ -107,10 +114,17 @@ Image prompt rules:
 - Cut 6: Slight light — thread of the hypothesis
 - Final: Door opening feeling — entrance to next mystery
 
+Consistency rules (mandatory):
+- The core subject from the topic title MUST remain identical in ALL cuts. Do NOT switch to related but different subjects mid-script.
+- Do NOT replace the mystery subject stated in the topic with a different event. Drifting to another mystery mid-script → FAIL.
+- No sentence may appear in more than one cut. Every cut must deliver unique information.
+
 HARD FAIL:
 ✗ Gives a definitive conclusion → FAIL (mystery must have open ending)
 ✗ Fewer than 2 theories presented → FAIL
 ✗ Abstract mystery without specific location/time → FAIL
+✗ Subject deviation (mystery subject replaced with a different event) → FAIL
+✗ Same line appears in 2+ cuts → FAIL
 """,
 
     "es": """
@@ -163,9 +177,16 @@ Reglas de image_prompt:
 - Corte 6: Luz leve — hilo de la hipótesis
 - Final: Sensación de puerta abriéndose — entrada al próximo misterio
 
+Reglas de consistencia (obligatorio):
+- El sujeto principal del título del tema DEBE mantenerse idéntico en TODOS los cortes. NO cambiar a sujetos diferentes a mitad del guion.
+- NO reemplazar el sujeto del misterio indicado en el tema con un evento diferente. Derivar a otro misterio a mitad del guion → FALLO.
+- Ninguna oración puede aparecer en más de un corte. Cada corte debe aportar información única.
+
 HARD FAIL:
 ✗ Da una conclusión definitiva → FALLO (misterio debe tener final abierto)
 ✗ Menos de 2 teorías presentadas → FALLO
 ✗ Misterio abstracto sin lugar/tiempo específico → FALLO
+✗ Desviación del sujeto (sujeto del misterio reemplazado por otro evento) → FALLO
+✗ La misma línea aparece en 2+ cortes → FALLO
 """,
 }

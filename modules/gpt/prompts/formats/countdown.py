@@ -50,10 +50,17 @@ FRAGMENT: dict[str, str] = {
 - 1위: 최대 임팩트 — 극적 조명, 풀프레임 클로즈업, 압도적 스케일
 - 마지막 컷: 미스터리 실루엣 또는 그림자 — 다음 편 암시
 
+일관성 규칙 (필수):
+- 토픽 제목에 명시된 핵심 주제를 전 컷에서 동일하게 유지. LLM이 임의로 다른 대상으로 바꾸면 실패.
+- TOP N 주제의 항목들은 토픽 범위 내에서만 선택. 토픽과 무관한 항목 포함 시 실패.
+- 같은 문장이 두 컷 이상에서 반복되면 실패. 모든 컷은 고유한 정보를 전달해야 한다.
+
 HARD FAIL:
 ✗ 순위가 5→1 순서로 내려가지 않으면 → 실패
 ✗ 1위 컷이 [REVEAL] 태그가 아니면 → 실패
 ✗ 숫자/통계 없는 컷 3개 이상 → 실패
+✗ 주제 이탈 (토픽 범위 외 항목 포함) → 실패
+✗ 같은 대사 2번 이상 등장 → 실패
 """,
 
     "en": """
@@ -105,10 +112,17 @@ Image prompt rules:
 - 1st: Maximum impact — dramatic lighting, full-frame close-up, overwhelming scale
 - Final cut: Mystery silhouette or shadow — hinting at next episode
 
+Consistency rules (mandatory):
+- The core subject from the topic title MUST remain identical in ALL cuts. Do NOT switch to related but different subjects mid-script.
+- Items in the TOP N list MUST be selected only within the topic scope. Including off-topic items → FAIL.
+- No sentence may appear in more than one cut. Every cut must deliver unique information.
+
 HARD FAIL:
 ✗ Ranks don't descend 5→1 → FAIL
 ✗ 1st place cut doesn't have [REVEAL] tag → FAIL
 ✗ 3+ cuts without statistics → FAIL
+✗ Subject deviation (off-topic items included) → FAIL
+✗ Same line appears in 2+ cuts → FAIL
 """,
 
     "es": """
@@ -160,9 +174,16 @@ Reglas de image_prompt:
 - 1°: Máximo impacto — iluminación dramática, primer plano que llena el cuadro
 - Corte final: Silueta misteriosa — insinuando próximo episodio
 
+Reglas de consistencia (obligatorio):
+- El sujeto principal del título del tema DEBE mantenerse idéntico en TODOS los cortes. NO cambiar a sujetos diferentes a mitad del guion.
+- Los elementos del TOP N DEBEN seleccionarse solo dentro del alcance del tema. Incluir elementos fuera del tema → FALLO.
+- Ninguna oración puede aparecer en más de un corte. Cada corte debe aportar información única.
+
 HARD FAIL:
 ✗ Rankings no descienden 5→1 → FALLO
 ✗ Corte del 1° lugar sin etiqueta [REVEAL] → FALLO
 ✗ 3+ cortes sin estadísticas → FALLO
+✗ Desviación del sujeto (elementos fuera del tema) → FALLO
+✗ La misma línea aparece en 2+ cortes → FALLO
 """,
 }

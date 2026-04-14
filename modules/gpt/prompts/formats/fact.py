@@ -47,10 +47,17 @@ FRAGMENT: dict[str, str] = {
 - 중간 컷: 교육적 명확성, 자연스러운 스케일, 다큐멘터리 미학 유지
 - 마지막 컷: 결론적 우아함, 여운 있는 단색 또는 고급 팔레트
 
+일관성 규칙 (필수):
+- 토픽 제목에 명시된 핵심 주제를 전 컷에서 동일하게 유지. LLM이 임의로 다른 대상으로 바꾸면 실패.
+- 토픽의 핵심 팩트 주제를 벗어나지 말 것. 연관 주제라도 토픽 범위 외 팩트로 이탈 시 실패.
+- 같은 문장이 두 컷 이상에서 반복되면 실패. 모든 컷은 고유한 정보를 전달해야 한다.
+
 HARD FAIL:
 ✗ 컷1이 질문으로 시작 → 실패
 ✗ 수치 없는 컷 3개 이상 → 실패
 ✗ escalation 없음 (컷4가 컷3보다 약하면) → 실패
+✗ 주제 이탈 (토픽 팩트 범위 외) → 실패
+✗ 같은 대사 2번 이상 등장 → 실패
 """,
 
     "en": """
@@ -99,10 +106,17 @@ Image prompt rules:
 - Middle cuts: Educational clarity, natural scale, documentary aesthetic
 - Final cut: Conclusive elegance, muted or refined color palette with lingering mood
 
+Consistency rules (mandatory):
+- The core subject from the topic title MUST remain identical in ALL cuts. Do NOT switch to related but different subjects mid-script.
+- Do NOT stray from the topic's core fact subject. Drifting to related-but-off-topic facts → FAIL.
+- No sentence may appear in more than one cut. Every cut must deliver unique information.
+
 HARD FAIL:
 ✗ Cut 1 starts with a question → FAIL
 ✗ 3+ cuts without statistics → FAIL
 ✗ No escalation (cut 4 weaker than cut 3) → FAIL
+✗ Subject deviation (outside topic fact scope) → FAIL
+✗ Same line appears in 2+ cuts → FAIL
 """,
 
     "es": """
@@ -151,9 +165,16 @@ Reglas de image_prompt:
 - Cortes medios: Claridad educativa, escala natural, estética documental
 - Corte final: Elegancia conclusiva, paleta de colores sobria
 
+Reglas de consistencia (obligatorio):
+- El sujeto principal del título del tema DEBE mantenerse idéntico en TODOS los cortes. NO cambiar a sujetos diferentes a mitad del guion.
+- No alejarse del sujeto del hecho central del tema. Derivar a hechos relacionados pero fuera del tema → FALLO.
+- Ninguna oración puede aparecer en más de un corte. Cada corte debe aportar información única.
+
 HARD FAIL:
 ✗ Corte 1 empieza con pregunta → FALLO
 ✗ 3+ cortes sin estadísticas → FALLO
 ✗ Sin escalada → FALLO
+✗ Desviación del sujeto (fuera del alcance del hecho del tema) → FALLO
+✗ La misma línea aparece en 2+ cortes → FALLO
 """,
 }

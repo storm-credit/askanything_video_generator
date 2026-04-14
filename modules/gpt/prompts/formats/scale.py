@@ -49,10 +49,17 @@ FRAGMENT: dict[str, str] = {
 - 히어로 컷: 압도적 우주/자연 스케일 — 경외감 극대화
 - 마지막 컷: 인간 실루엣 대비 거대 스케일 — 겸손의 비주얼
 
+일관성 규칙 (필수):
+- 토픽 제목에 명시된 핵심 주제를 전 컷에서 동일하게 유지. LLM이 임의로 다른 대상으로 바꾸면 실패.
+- 토픽에 명시된 비교 대상을 유지. 다른 대상으로 슬쩍 교체하거나 이탈하면 실패.
+- 같은 문장이 두 컷 이상에서 반복되면 실패. 모든 컷은 고유한 정보를 전달해야 한다.
+
 HARD FAIL:
 ✗ 수치/배율 없는 컷 2개 이상 → 실패
 ✗ 비교 대상 없이 단독 설명만 → 실패
 ✗ 스케일이 점점 커지지 않으면 → 실패
+✗ 주제 이탈 (비교 대상 교체 또는 이탈) → 실패
+✗ 같은 대사 2번 이상 등장 → 실패
 """,
 
     "en": """
@@ -103,10 +110,17 @@ Image prompt rules:
 - Hero cut: Overwhelming cosmic/nature scale — maximize awe
 - Final cut: Human silhouette against massive scale — humility visual
 
+Consistency rules (mandatory):
+- The core subject from the topic title MUST remain identical in ALL cuts. Do NOT switch to related but different subjects mid-script.
+- The comparison subject stated in the topic MUST be maintained. Quietly swapping to a different comparison target → FAIL.
+- No sentence may appear in more than one cut. Every cut must deliver unique information.
+
 HARD FAIL:
 ✗ 2+ cuts without numbers/multipliers → FAIL
 ✗ No comparison target, just standalone description → FAIL
 ✗ Scale doesn't progressively increase → FAIL
+✗ Subject deviation (comparison target replaced or abandoned) → FAIL
+✗ Same line appears in 2+ cuts → FAIL
 """,
 
     "es": """
@@ -157,9 +171,16 @@ Reglas de image_prompt:
 - Corte héroe: Escala cósmica/natural abrumadora — maximizar asombro
 - Corte final: Silueta humana contra escala masiva
 
+Reglas de consistencia (obligatorio):
+- El sujeto principal del título del tema DEBE mantenerse idéntico en TODOS los cortes. NO cambiar a sujetos diferentes a mitad del guion.
+- El sujeto de comparación indicado en el tema DEBE mantenerse. Cambiar silenciosamente a otro objetivo de comparación → FALLO.
+- Ninguna oración puede aparecer en más de un corte. Cada corte debe aportar información única.
+
 HARD FAIL:
 ✗ 2+ cortes sin números/multiplicadores → FALLO
 ✗ Sin objetivo de comparación → FALLO
 ✗ La escala no aumenta progresivamente → FALLO
+✗ Desviación del sujeto (objetivo de comparación reemplazado o abandonado) → FALLO
+✗ La misma línea aparece en 2+ cortes → FALLO
 """,
 }
