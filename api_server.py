@@ -35,10 +35,11 @@ async def _lifespan(app):
     # 크론 스케줄러
     from modules.scheduler.cron import add_daily, add_weekly, start as cron_start
 
-    async def _cron_deploy():
-        from modules.scheduler.auto_deploy import run_auto_deploy
-        return await run_auto_deploy()
-    add_daily("자동 배포", 2, 0, _cron_deploy)
+    # 자동 배포 크론 비활성화 — 현재 수동 운영 중
+    # async def _cron_deploy():
+    #     from modules.scheduler.auto_deploy import run_auto_deploy
+    #     return await run_auto_deploy()
+    # add_daily("자동 배포", 2, 0, _cron_deploy)
 
     def _cron_topics():
         from modules.scheduler.topic_generator import generate_weekly_topics

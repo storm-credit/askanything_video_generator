@@ -45,7 +45,10 @@ def _next_run(hour: int, minute: int, weekday: int | None = None) -> datetime:
 
 
 def add_daily(name: str, hour: int, minute: int, func: Callable):
-    """매일 실행 작업 등록."""
+    """매일 실행 작업 등록. 같은 이름 중복 등록 방지."""
+    if any(j["name"] == name for j in _jobs):
+        print(f"[크론] 스킵: {name} — 이미 등록됨")
+        return
     _jobs.append({
         "name": name,
         "hour": hour,
@@ -59,7 +62,10 @@ def add_daily(name: str, hour: int, minute: int, func: Callable):
 
 
 def add_weekly(name: str, weekday: int, hour: int, minute: int, func: Callable):
-    """매주 특정 요일 실행 작업 등록. weekday: 0=월~6=일."""
+    """매주 특정 요일 실행 작업 등록. weekday: 0=월~6=일. 같은 이름 중복 방지."""
+    if any(j["name"] == name for j in _jobs):
+        print(f"[크론] 스킵: {name} — 이미 등록됨")
+        return
     day_names = ["월", "화", "수", "목", "금", "토", "일"]
     _jobs.append({
         "name": name,
@@ -100,7 +106,7 @@ async def _scheduler_loop():
     print(f"[크론] 스케줄러 시작 ({len(_jobs)}개 작업)")
 
     # 헬스체크 — 등록된 잡 수 확인 + 텔레그램 알림
-    expected_jobs = 6  # deploy, topics, stats, playlists, daily_cost, morning_briefing
+    expected_jobs = 5  # topics, stats, playlists, daily_cost, morning_briefing (deploy 비활성)
     if len(_jobs) < expected_jobs:
         try:
             from modules.utils.notify import notify_warning
@@ -114,16 +120,17 @@ async def _scheduler_loop():
     while _running:
         now = _now_kst()
         for job in _jobs:
-            next_t = _next_run(job["hour"], job["minute"], job.get("weekday"))
-            # 현재 시각이 실행 시각과 1분 이내 차이면 실행
-            diff = (next_t - now).total_seconds()
-            if -30 <= diff <= 30:
-                # 이미 이번 분에 실행했는지 체크
-                last_run = job.get("_last_run")
-                if last_run and (now - last_run).total_seconds() < 120:
-                    continue
-                job["_last_run"] = now
-                asyncio.create_task(_run_job(job))
+            # 현재 시각의 시:분이 스케줄과 일치하는지만 체크 (±초 윈도우 제거)
+            if job.get("weekday") is not None and now.weekday() != job["weekday"]:
+                continue
+            if now.hour != job["hour"] or now.minute != job["minute"]:
+                continue
+            # 이번 분에 이미 실행했으면 스킵 (중복 방지)
+            last_run = job.get("_last_run")
+            if last_run and (now - last_run).total_seconds() < 120:
+                continue
+            job["_last_run"] = now
+            asyncio.create_task(_run_job(job))
 
         await asyncio.sleep(30)  # 30초마다 체크
 
