@@ -52,8 +52,9 @@ FRAGMENT: dict[str, str] = {
 - 컷10(REVEAL): 승자 단독, 압도적 포즈, 강렬한 조명
 
 일관성 규칙 (필수):
-- 컷1에서 정한 A와 B의 이름을 전 컷에서 동일하게 유지. 중간에 다른 종/별칭으로 바꾸면 실패.
-  예: 컷1 "티라노사우루스 vs 악어" → 전 컷 "티라노사우루스", "악어" 고정. "유타랩터", "크로커다일" 등 변경 금지.
+- 토픽 제목에 명시된 A와 B를 그대로 사용. LLM이 임의로 다른 종/대상으로 바꾸면 실패.
+  예: 토픽 "티라노사우루스 vs 악어" → 전 컷 "티라노사우루스", "악어" 고정. "유타랩터", "데이노수쿠스", "퓨루사우루스" 등 변경 절대 금지.
+- 토픽이 추상적이면("공룡 vs 악어") 컷1에서 구체화한 이름을 전 컷에서 유지.
 - 같은 문장이 두 컷 이상에서 반복되면 실패. 모든 컷은 고유한 정보를 전달해야 한다.
 - 컷2-3(A 소개)의 팩트와 컷4-5(B 소개)의 팩트가 겹치면 실패.
 
@@ -115,8 +116,9 @@ Image prompts:
 - Cut 10 (REVEAL): Winner alone, dominant pose, hero lighting
 
 Consistency rules (mandatory):
-- The names of A and B established in Cut 1 MUST remain identical in ALL cuts. Do NOT switch to synonyms, subspecies, or alternate names mid-script.
-  Example: Cut 1 "T. rex vs Crocodile" → ALL cuts use "T. rex" and "Crocodile". Never switch to "Utahraptor", "Raptor", "Croc", etc.
+- Use the EXACT subjects from the topic title. Do NOT replace them with related species, subspecies, or alternate names.
+  Example: Topic "T. rex vs Crocodile" → ALL cuts use "T. rex" and "Crocodile". Never switch to "Utahraptor", "Purussaurus", "Sarcosuchus", etc.
+- If the topic is abstract (e.g. "Dinosaur vs Crocodile"), pick ONE specific name in Cut 1 and keep it identical in ALL cuts.
 - No sentence may appear in more than one cut. Every cut must deliver unique information.
 - Facts in cuts 2-3 (A's intro) must not overlap with facts in cuts 4-5 (B's intro).
 
@@ -178,8 +180,9 @@ Reglas de image_prompt:
 - Corte 10 (REVEAL): Ganador solo, pose dominante
 
 Reglas de consistencia (obligatorio):
-- Los nombres de A y B establecidos en Corte 1 DEBEN mantenerse idénticos en TODOS los cortes. NO cambiar a sinónimos, subespecies u otros nombres a mitad del guion.
-  Ejemplo: Corte 1 "T. rex vs Cocodrilo" → TODOS los cortes usan "T. rex" y "Cocodrilo". Nunca cambiar a "Raptor", "Caimán", etc.
+- Usar los MISMOS sujetos del título del tema. NO reemplazar con especies relacionadas, subespecies u otros nombres.
+  Ejemplo: Tema "T. rex vs Cocodrilo" → TODOS los cortes usan "T. rex" y "Cocodrilo". Nunca cambiar a "Sarcosuchus", "Caimán", "Purussaurus", etc.
+- Si el tema es abstracto (ej. "Dinosaurio vs Cocodrilo"), elegir UN nombre específico en Corte 1 y mantenerlo idéntico en TODOS los cortes.
 - Ninguna oración puede aparecer en más de un corte. Cada corte debe aportar información única.
 - Los datos de cortes 2-3 (intro A) no deben repetirse en cortes 4-5 (intro B).
 
