@@ -1,0 +1,51 @@
+{
+  "series_id": "dino-battle",
+  "series_title": "최강공룡대전",
+  "series_titles": {
+    "ko": "최강공룡대전",
+    "en": "Ultimate Dinosaur Battle",
+    "es": "Batalla Definitiva de Dinosaurios"
+  },
+  "status": "active",
+  "format": "WHO_WINS",
+  "description": "16강 토너먼트 — 역대 최강 공룡 16마리가 1:1로 붙는다",
+  "rules": {
+    "matchup_criteria": "체급/무기/시대 균형 고려, 50:50 긴장감 우선",
+    "winner_selection": "과학적 근거 기반 (턱 힘, 체중, 속도, 무기)",
+    "loser_mention": "다음 에피소드 컷2에서 이전 승자 언급"
+  },
+  "contestants": [
+    {"id": 1, "name_ko": "티라노사우루스", "name_en": "Tyrannosaurus Rex", "name_es": "Tiranosaurio Rex", "weight": "9t", "weapon": "턱 힘 6t", "era": "백악기 후기"},
+    {"id": 2, "name_ko": "스피노사우루스", "name_en": "Spinosaurus", "name_es": "Espinosaurio", "weight": "7t", "weapon": "반수생 사냥꾼, 1.8m 발톱", "era": "백악기 전기"},
+    {"id": 3, "name_ko": "기가노토사우루스", "name_en": "Giganotosaurus", "name_es": "Giganotosaurio", "weight": "8t", "weapon": "13m 체장, 칼날 이빨", "era": "백악기 전기"},
+    {"id": 4, "name_ko": "카르카로돈토사우루스", "name_en": "Carcharodontosaurus", "name_es": "Carcarodontosaurio", "weight": "7t", "weapon": "상어이빨 구조", "era": "백악기 전기"},
+    {"id": 5, "name_ko": "안킬로사우루스", "name_en": "Ankylosaurus", "name_es": "Anquilosaurio", "weight": "6t", "weapon": "꼬리 곤봉 + 갑옷", "era": "백악기 후기"},
+    {"id": 6, "name_ko": "트리케라톱스", "name_en": "Triceratops", "name_es": "Triceratops", "weight": "9t", "weapon": "3개 뿔 + 방패 프릴", "era": "백악기 후기"},
+    {"id": 7, "name_ko": "알로사우루스", "name_en": "Allosaurus", "name_es": "Alosaurio", "weight": "2.5t", "weapon": "도끼형 두개골 + 속도", "era": "쥐라기 후기"},
+    {"id": 8, "name_ko": "유타랩터", "name_en": "Utahraptor", "name_es": "Utahraptor", "weight": "0.5t", "weapon": "24cm 갈고리 발톱 + 지능", "era": "백악기 전기"},
+    {"id": 9, "name_ko": "데이노수쿠스", "name_en": "Deinosuchus", "name_es": "Deinosuchus", "weight": "8.5t", "weapon": "턱 힘 10t + 매복", "era": "백악기 후기"},
+    {"id": 10, "name_ko": "테리지노사우루스", "name_en": "Therizinosaurus", "name_es": "Terizinosaurio", "weight": "5t", "weapon": "70cm 갈퀴 발톱 3개", "era": "백악기 후기"},
+    {"id": 11, "name_ko": "파키케팔로사우루스", "name_en": "Pachycephalosaurus", "name_es": "Paquicefalosaurio", "weight": "0.45t", "weapon": "25cm 두개골 돔 박치기", "era": "백악기 후기"},
+    {"id": 12, "name_ko": "스테고사우루스", "name_en": "Stegosaurus", "name_es": "Estegosaurio", "weight": "5t", "weapon": "꼬리 가시 4개 (타고미저)", "era": "쥐라기 후기"},
+    {"id": 13, "name_ko": "모사사우루스", "name_en": "Mosasaurus", "name_es": "Mosasaurio", "weight": "15t", "weapon": "이중턱 + 수중 최상위", "era": "백악기 후기"},
+    {"id": 14, "name_ko": "케찰코아틀루스", "name_en": "Quetzalcoatlus", "name_es": "Quetzalcoatlus", "weight": "0.25t", "weapon": "11m 날개폭 + 급강하", "era": "백악기 후기"},
+    {"id": 15, "name_ko": "사우로포세이돈", "name_en": "Sauroposeidon", "name_es": "Sauroposeidón", "weight": "50t", "weapon": "순수 체급 압도 (18m 높이)", "era": "백악기 전기"},
+    {"id": 16, "name_ko": "마이아사우라", "name_en": "Maiasaura", "name_es": "Maiasaura", "weight": "4t", "weapon": "떼 공격 (수천 마리 무리)", "era": "백악기 후기"}
+  ],
+  "bracket": {
+    "round_16": [
+      {"ep": 1, "a": 1, "b": 9, "title_ko": "티라노사우루스 vs 데이노수쿠스", "winner": null},
+      {"ep": 2, "a": 3, "b": 6, "title_ko": "기가노토사우루스 vs 트리케라톱스", "winner": null},
+      {"ep": 3, "a": 2, "b": 5, "title_ko": "스피노사우루스 vs 안킬로사우루스", "winner": null},
+      {"ep": 4, "a": 4, "b": 10, "title_ko": "카르카로돈토사우루스 vs 테리지노사우루스", "winner": null},
+      {"ep": 5, "a": 7, "b": 12, "title_ko": "알로사우루스 vs 스테고사우루스", "winner": null},
+      {"ep": 6, "a": 8, "b": 11, "title_ko": "유타랩터 vs 파키케팔로사우루스", "winner": null},
+      {"ep": 7, "a": 13, "b": 15, "title_ko": "모사사우루스 vs 사우로포세이돈", "winner": null},
+      {"ep": 8, "a": 14, "b": 16, "title_ko": "케찰코아틀루스 vs 마이아사우라", "winner": null}
+    ],
+    "quarter_final": [],
+    "semi_final": [],
+    "final": null
+  },
+  "next_episode": 1
+}

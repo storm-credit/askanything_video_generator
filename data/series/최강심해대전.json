@@ -1,0 +1,33 @@
+{
+  "series_id": "deepsea-battle",
+  "series_title": "최강심해대전",
+  "series_titles": {
+    "ko": "최강심해대전",
+    "en": "Ultimate Deep Sea Battle",
+    "es": "Batalla del Abismo"
+  },
+  "status": "active",
+  "format": "WHO_WINS",
+  "description": "8강 토너먼트 — 심해 최강 생물 8마리가 1:1로 붙는다",
+  "contestants": [
+    {"id": 1, "name_ko": "대왕오징어", "name_en": "Giant Squid", "name_es": "Calamar Gigante", "weapon": "10m 촉수 + 흡반 + 톱니 빨판"},
+    {"id": 2, "name_ko": "향유고래", "name_en": "Sperm Whale", "name_es": "Cachalote", "weapon": "20t 체급 + 음파 충격"},
+    {"id": 3, "name_ko": "범고래", "name_en": "Orca", "name_es": "Orca", "weapon": "팀 전략 + 속도 + 8t 턱"},
+    {"id": 4, "name_ko": "백상아리", "name_en": "Great White Shark", "name_es": "Gran Tiburón Blanco", "weapon": "3000개 이빨 + 전자감지"},
+    {"id": 5, "name_ko": "대왕문어", "name_en": "Giant Pacific Octopus", "name_es": "Pulpo Gigante del Pacífico", "weapon": "위장 + 지능 + 8팔 조임"},
+    {"id": 6, "name_ko": "바다악어", "name_en": "Saltwater Crocodile", "name_es": "Cocodrilo Marino", "weapon": "3.7t 턱 + 데스롤"},
+    {"id": 7, "name_ko": "상자해파리", "name_en": "Box Jellyfish", "name_es": "Medusa de Caja", "weapon": "세계 최강 독 + 투명"},
+    {"id": 8, "name_ko": "귀상어", "name_en": "Hammerhead Shark", "name_es": "Tiburón Martillo", "weapon": "360도 시야 + 전자감지 극대화"}
+  ],
+  "bracket": {
+    "quarter_final": [
+      {"ep": 1, "a": 1, "b": 2, "title_ko": "대왕오징어 vs 향유고래", "winner": null},
+      {"ep": 2, "a": 3, "b": 4, "title_ko": "범고래 vs 백상아리", "winner": null},
+      {"ep": 3, "a": 5, "b": 6, "title_ko": "대왕문어 vs 바다악어", "winner": null},
+      {"ep": 4, "a": 7, "b": 8, "title_ko": "상자해파리 vs 귀상어", "winner": null}
+    ],
+    "semi_final": [],
+    "final": null
+  },
+  "next_episode": 1
+}

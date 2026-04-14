@@ -1,0 +1,33 @@
+{
+  "series_id": "space-battle",
+  "series_title": "최강우주대전",
+  "series_titles": {
+    "ko": "최강우주대전",
+    "en": "Ultimate Space Battle",
+    "es": "Batalla Cósmica Definitiva"
+  },
+  "status": "active",
+  "format": "WHO_WINS",
+  "description": "8강 토너먼트 — 우주 최강 천체/현상이 1:1로 붙는다",
+  "contestants": [
+    {"id": 1, "name_ko": "블랙홀", "name_en": "Black Hole", "name_es": "Agujero Negro", "weapon": "무한 중력 + 빛도 탈출 불가"},
+    {"id": 2, "name_ko": "중성자별", "name_en": "Neutron Star", "name_es": "Estrella de Neutrones", "weapon": "1cm³ = 10억 t + 자기장"},
+    {"id": 3, "name_ko": "감마선 폭발", "name_en": "Gamma Ray Burst", "name_es": "Explosión de Rayos Gamma", "weapon": "우주 최강 에너지 방출"},
+    {"id": 4, "name_ko": "초신성", "name_en": "Supernova", "name_es": "Supernova", "weapon": "별 전체 폭발 에너지"},
+    {"id": 5, "name_ko": "퀘이사", "name_en": "Quasar", "name_es": "Cuásar", "weapon": "은하 전체보다 밝은 빛"},
+    {"id": 6, "name_ko": "마그네타", "name_en": "Magnetar", "name_es": "Magnetar", "weapon": "우주 최강 자기장"},
+    {"id": 7, "name_ko": "태양", "name_en": "The Sun", "name_es": "El Sol", "weapon": "코로나 질량 방출 + 태양풍"},
+    {"id": 8, "name_ko": "소행성 충돌", "name_en": "Asteroid Impact", "name_es": "Impacto de Asteroide", "weapon": "공룡 멸종급 운동에너지"}
+  ],
+  "bracket": {
+    "quarter_final": [
+      {"ep": 1, "a": 1, "b": 3, "title_ko": "블랙홀 vs 감마선 폭발", "winner": null},
+      {"ep": 2, "a": 2, "b": 6, "title_ko": "중성자별 vs 마그네타", "winner": null},
+      {"ep": 3, "a": 4, "b": 5, "title_ko": "초신성 vs 퀘이사", "winner": null},
+      {"ep": 4, "a": 7, "b": 8, "title_ko": "태양 vs 소행성 충돌", "winner": null}
+    ],
+    "semi_final": [],
+    "final": null
+  },
+  "next_episode": 1
+}

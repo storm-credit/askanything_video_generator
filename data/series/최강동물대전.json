@@ -1,0 +1,46 @@
+{
+  "series_id": "animal-battle",
+  "series_title": "최강동물대전",
+  "series_titles": {
+    "ko": "최강동물대전",
+    "en": "Ultimate Animal Battle",
+    "es": "Batalla Animal Definitiva"
+  },
+  "status": "active",
+  "format": "WHO_WINS",
+  "description": "16강 토너먼트 — 지구 최강 동물 16마리가 1:1로 붙는다",
+  "contestants": [
+    {"id": 1, "name_ko": "백상아리", "name_en": "Great White Shark", "name_es": "Gran Tiburón Blanco", "weight": "2t", "weapon": "3000개 이빨 + 전자감지"},
+    {"id": 2, "name_ko": "범고래", "name_en": "Orca", "name_es": "Orca", "weight": "6t", "weapon": "팀 사냥 + 8t 턱 힘"},
+    {"id": 3, "name_ko": "아프리카코끼리", "name_en": "African Elephant", "name_es": "Elefante Africano", "weight": "6t", "weapon": "순수 체급 + 상아"},
+    {"id": 4, "name_ko": "하마", "name_en": "Hippopotamus", "name_es": "Hipopótamo", "weight": "3t", "weapon": "50cm 송곳니 + 1.8t 턱 힘"},
+    {"id": 5, "name_ko": "시베리아호랑이", "name_en": "Siberian Tiger", "name_es": "Tigre Siberiano", "weight": "0.3t", "weapon": "속도 + 발톱 + 기습"},
+    {"id": 6, "name_ko": "북극곰", "name_en": "Polar Bear", "name_es": "Oso Polar", "weight": "0.7t", "weapon": "힘 + 지구력 + 두꺼운 지방"},
+    {"id": 7, "name_ko": "바다악어", "name_en": "Saltwater Crocodile", "name_es": "Cocodrilo de Agua Salada", "weight": "1t", "weapon": "3.7t 턱 힘 + 데스롤"},
+    {"id": 8, "name_ko": "아나콘다", "name_en": "Green Anaconda", "name_es": "Anaconda Verde", "weight": "0.25t", "weapon": "압사 + 수중 매복"},
+    {"id": 9, "name_ko": "흰코뿔소", "name_en": "White Rhinoceros", "name_es": "Rinoceronte Blanco", "weight": "2.3t", "weapon": "돌진 + 뿔"},
+    {"id": 10, "name_ko": "고릴라", "name_en": "Silverback Gorilla", "name_es": "Gorila Espalda Plateada", "weight": "0.2t", "weapon": "인간 10배 힘 + 지능"},
+    {"id": 11, "name_ko": "독수리", "name_en": "Harpy Eagle", "name_es": "Águila Harpía", "weight": "9kg", "weapon": "급강하 + 발톱 압력"},
+    {"id": 12, "name_ko": "대왕오징어", "name_en": "Giant Squid", "name_es": "Calamar Gigante", "weight": "0.275t", "weapon": "10m 촉수 + 흡반"},
+    {"id": 13, "name_ko": "꿀오소리", "name_en": "Honey Badger", "name_es": "Tejón de Miel", "weight": "14kg", "weapon": "독 면역 + 두꺼운 피부 + 불굴"},
+    {"id": 14, "name_ko": "왕도마뱀", "name_en": "Komodo Dragon", "name_es": "Dragón de Komodo", "weight": "70kg", "weapon": "독성 타액 + 인내 사냥"},
+    {"id": 15, "name_ko": "코끼리물범", "name_en": "Elephant Seal", "name_es": "Elefante Marino", "weight": "3.7t", "weapon": "순수 체급 + 두꺼운 지방"},
+    {"id": 16, "name_ko": "검은맘바", "name_en": "Black Mamba", "name_es": "Mamba Negra", "weight": "1.6kg", "weapon": "시속 20km + 신경독"}
+  ],
+  "bracket": {
+    "round_16": [
+      {"ep": 1, "a": 1, "b": 2, "title_ko": "백상아리 vs 범고래", "winner": null},
+      {"ep": 2, "a": 3, "b": 4, "title_ko": "아프리카코끼리 vs 하마", "winner": null},
+      {"ep": 3, "a": 5, "b": 6, "title_ko": "시베리아호랑이 vs 북극곰", "winner": null},
+      {"ep": 4, "a": 7, "b": 9, "title_ko": "바다악어 vs 흰코뿔소", "winner": null},
+      {"ep": 5, "a": 8, "b": 12, "title_ko": "아나콘다 vs 대왕오징어", "winner": null},
+      {"ep": 6, "a": 10, "b": 13, "title_ko": "고릴라 vs 꿀오소리", "winner": null},
+      {"ep": 7, "a": 11, "b": 14, "title_ko": "독수리 vs 왕도마뱀", "winner": null},
+      {"ep": 8, "a": 15, "b": 16, "title_ko": "코끼리물범 vs 검은맘바", "winner": null}
+    ],
+    "quarter_final": [],
+    "semi_final": [],
+    "final": null
+  },
+  "next_episode": 1
+}

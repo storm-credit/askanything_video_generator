@@ -1,0 +1,46 @@
+{
+  "series_id": "monster-battle",
+  "series_title": "최강몬스터대전",
+  "series_titles": {
+    "ko": "최강몬스터대전",
+    "en": "Ultimate Monster Battle",
+    "es": "Batalla de Monstruos Definitiva"
+  },
+  "status": "active",
+  "format": "WHO_WINS",
+  "description": "16강 토너먼트 — 신화/전설 속 최강 몬스터 16마리가 붙는다",
+  "contestants": [
+    {"id": 1, "name_ko": "크라켄", "name_en": "Kraken", "name_es": "Kraken", "weapon": "수백 m 촉수 + 배 침몰"},
+    {"id": 2, "name_ko": "히드라", "name_en": "Hydra", "name_es": "Hidra", "weapon": "머리 재생 + 독 피"},
+    {"id": 3, "name_ko": "드래곤", "name_en": "Dragon", "name_es": "Dragón", "weapon": "화염 + 비행 + 비늘 갑옷"},
+    {"id": 4, "name_ko": "바실리스크", "name_en": "Basilisk", "name_es": "Basilisco", "weapon": "시선 석화 + 독 숨결"},
+    {"id": 5, "name_ko": "케르베로스", "name_en": "Cerberus", "name_es": "Cerbero", "weapon": "머리 3개 + 지옥문 수호"},
+    {"id": 6, "name_ko": "피닉스", "name_en": "Phoenix", "name_es": "Fénix", "weapon": "불멸 부활 + 화염체"},
+    {"id": 7, "name_ko": "미노타우로스", "name_en": "Minotaur", "name_es": "Minotauro", "weapon": "인간 지능 + 황소 체력"},
+    {"id": 8, "name_ko": "메두사", "name_en": "Medusa", "name_es": "Medusa", "weapon": "시선 석화 + 독뱀 머리카락"},
+    {"id": 9, "name_ko": "레비아탄", "name_en": "Leviathan", "name_es": "Leviatán", "weapon": "바다 자체를 지배 + 무한 체급"},
+    {"id": 10, "name_ko": "키메라", "name_en": "Chimera", "name_es": "Quimera", "weapon": "사자+염소+뱀 3중 공격"},
+    {"id": 11, "name_ko": "그리폰", "name_en": "Griffin", "name_es": "Grifo", "weapon": "독수리 비행 + 사자 힘"},
+    {"id": 12, "name_ko": "만티코어", "name_en": "Manticore", "name_es": "Mantícora", "weapon": "전갈 꼬리 독 + 비행"},
+    {"id": 13, "name_ko": "요르문간드", "name_en": "Jörmungandr", "name_es": "Jörmungandr", "weapon": "세계를 감는 뱀 + 독 안개"},
+    {"id": 14, "name_ko": "스핑크스", "name_en": "Sphinx", "name_es": "Esfinge", "weapon": "수수께끼 + 날개 + 발톱"},
+    {"id": 15, "name_ko": "골렘", "name_en": "Golem", "name_es": "Gólem", "weapon": "불멸 석체 + 무한 힘"},
+    {"id": 16, "name_ko": "웬디고", "name_en": "Wendigo", "name_es": "Wendigo", "weapon": "초자연 속도 + 공포 + 극한 추위"}
+  ],
+  "bracket": {
+    "round_16": [
+      {"ep": 1, "a": 3, "b": 6, "title_ko": "드래곤 vs 피닉스", "winner": null},
+      {"ep": 2, "a": 1, "b": 9, "title_ko": "크라켄 vs 레비아탄", "winner": null},
+      {"ep": 3, "a": 2, "b": 4, "title_ko": "히드라 vs 바실리스크", "winner": null},
+      {"ep": 4, "a": 5, "b": 7, "title_ko": "케르베로스 vs 미노타우로스", "winner": null},
+      {"ep": 5, "a": 8, "b": 14, "title_ko": "메두사 vs 스핑크스", "winner": null},
+      {"ep": 6, "a": 10, "b": 12, "title_ko": "키메라 vs 만티코어", "winner": null},
+      {"ep": 7, "a": 11, "b": 16, "title_ko": "그리폰 vs 웬디고", "winner": null},
+      {"ep": 8, "a": 13, "b": 15, "title_ko": "요르문간드 vs 골렘", "winner": null}
+    ],
+    "quarter_final": [],
+    "semi_final": [],
+    "final": null
+  },
+  "next_episode": 1
+}
