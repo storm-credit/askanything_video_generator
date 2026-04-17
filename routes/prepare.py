@@ -129,9 +129,11 @@ class RenderRequest(BaseModel):
     cuts: list[dict]
     apiKey: str | None = None
     llmKey: str | None = None
+    geminiKeys: str | None = None
     elevenlabsKey: str | None = None
-    ttsSpeed: float = 0.9
+    ttsSpeed: float = 1.05
     videoEngine: str = "none"
+    videoModel: str | None = None
     cameraStyle: str = "auto"
     bgmTheme: str = "random"
     formatType: str | None = None
@@ -176,7 +178,10 @@ async def prepare_endpoint(req: PrepareRequest):
       async with generate_semaphore:
         _gemini_keys = req.geminiKeys or None
         try:
-            llm_key_for_request = get_google_key(req.llmKey, extra_keys=_gemini_keys) if req.llmProvider == "gemini" else req.llmKey
+            if os.getenv("GEMINI_BACKEND") == "vertex_ai" and req.llmProvider == "gemini":
+                llm_key_for_request = None
+            else:
+                llm_key_for_request = get_google_key(req.llmKey, extra_keys=_gemini_keys) if req.llmProvider == "gemini" else req.llmKey
             loop = asyncio.get_running_loop()
 
             yield {"data": "PROG|10\n"}
@@ -277,6 +282,18 @@ async def prepare_endpoint(req: PrepareRequest):
                 yield {"data": f"PROG|{prog}\n"}
                 yield {"data": f"  -> 컷 {i+1}/{len(cuts)} 이미지 생성 완료\n"}
 
+            try:
+                from modules.utils.cost_tracker import record_asset_cost
+
+                image_success_count = sum(1 for p in image_paths if p and os.path.exists(p))
+                if image_success_count:
+                    record_asset_cost(
+                        channel=req.channel or "unknown",
+                        image_count=image_success_count + len(cut1_ab_variants),
+                    )
+            except Exception as cost_exc:
+                print(f"[비용 추적] 이미지 비용 기록 실패(무시): {cost_exc}")
+
             # 세션 저장 (오래된 세션 자동 정리)
             import uuid as _uuid
             import time as _time
@@ -291,6 +308,7 @@ async def prepare_endpoint(req: PrepareRequest):
                     "tags": video_tags,
                     "image_paths": image_paths,
                     "topic": req.topic,
+                    "channel": req.channel or "",
                     "language": req.language,
                     "cut1_ab_variants": cut1_ab_variants,
                     "_created": _time.time(),
@@ -345,9 +363,7 @@ async def prepare_endpoint(req: PrepareRequest):
                 preview_cuts.append(cut_data)
 
             yield {"data": "PROG|100\n"}
-            _tags_str = " ".join(video_tags)
-            _upload_desc = f"{video_desc}\n\n{_tags_str}".strip() if video_desc else _tags_str
-            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'description': _upload_desc, 'tags': video_tags, 'cuts': preview_cuts}, ensure_ascii=False)}\n"}
+            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'description': video_desc, 'tags': video_tags, 'cuts': preview_cuts}, ensure_ascii=False)}\n"}
 
         except Exception as e:
             traceback.print_exc()
@@ -482,9 +498,16 @@ async def regenerate_image_endpoint(req: RegenerateImageRequest):
 
         if new_path and os.path.exists(new_path):
             # 세션 업데이트
+            cost_channel = "unknown"
             with session_lock:
                 if req.sessionId in prepared_sessions:
                     prepared_sessions[req.sessionId]["image_paths"][req.cutIndex] = new_path
+                    cost_channel = prepared_sessions[req.sessionId].get("channel") or cost_channel
+            try:
+                from modules.utils.cost_tracker import record_asset_cost
+                record_asset_cost(channel=cost_channel, image_count=1)
+            except Exception as cost_exc:
+                print(f"[비용 추적] 이미지 재생성 비용 기록 실패(무시): {cost_exc}")
 
             rel = new_path.replace("\\", "/")
             idx = rel.find("assets/")
@@ -622,11 +645,18 @@ async def batch_generate_images(req: BatchImageRequest):
                 new_path = generate_image_dalle(prompt, i, topic_folder, topic=topic)
 
             if new_path and os.path.exists(new_path):
+                cost_channel = "unknown"
                 with session_lock:
                     if req.sessionId in prepared_sessions:
                         if "image_paths" not in prepared_sessions[req.sessionId]:
                             prepared_sessions[req.sessionId]["image_paths"] = [""] * len(cuts)
                         prepared_sessions[req.sessionId]["image_paths"][i] = new_path
+                        cost_channel = prepared_sessions[req.sessionId].get("channel") or cost_channel
+                try:
+                    from modules.utils.cost_tracker import record_asset_cost
+                    record_asset_cost(channel=cost_channel, image_count=1)
+                except Exception as cost_exc:
+                    print(f"[비용 추적] 일괄 이미지 비용 기록 실패(무시): {cost_exc}")
                 rel = new_path.replace("\\", "/")
                 idx = rel.find("assets/")
                 img_url = f"/{rel[idx:]}" if idx >= 0 else None
@@ -661,13 +691,39 @@ async def render_endpoint(req: RenderRequest):
 
     async def sse_generator():
         # lazy imports
-        from modules.tts.elevenlabs import generate_tts
+        from modules.tts.elevenlabs import generate_tts, prepare_spoken_script
         from modules.utils.audio import normalize_audio_lufs
         from modules.transcription.whisper import generate_word_timestamps
         from modules.video.remotion import create_remotion_video
         from modules.video.engines import generate_video_from_image
         from modules.utils.keys import get_google_key
         from modules.utils.channel_config import get_channel_preset
+
+        def _extract_emotion_tag(description: str) -> str | None:
+            match = re.search(r"\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM|LOOP)\]", description or "", re.IGNORECASE)
+            return match.group(1).upper() if match else None
+
+        def _pick_hero_indices(cuts_data: list[dict]) -> list[int]:
+            priority_groups = [
+                {"SHOCK", "REVEAL"},
+                {"URGENCY", "DISBELIEF", "TENSION"},
+                {"WONDER", "IDENTITY", "LOOP", "CALM"},
+            ]
+            hero_indices: list[int] = []
+            seen: set[int] = set()
+            emotions = [_extract_emotion_tag(cut.get("description", "")) for cut in cuts_data]
+
+            for group in priority_groups:
+                for idx, emotion in enumerate(emotions):
+                    if emotion in group and idx not in seen:
+                        hero_indices.append(idx)
+                        seen.add(idx)
+                if hero_indices:
+                    break
+
+            if not hero_indices and cuts_data:
+                hero_indices = [0]
+            return hero_indices
 
         try:
             cuts = copy.deepcopy(session["cuts"])
@@ -678,18 +734,18 @@ async def render_endpoint(req: RenderRequest):
             api_key_override = req.apiKey or os.getenv("OPENAI_API_KEY", "")
             elevenlabs_key_override = req.elevenlabsKey or os.getenv("ELEVENLABS_API_KEY", "")
 
-            # 채널 프리셋 fallback: cameraStyle "auto" → 채널 설정값
+            # 채널 프리셋 fallback: cameraStyle은 사용자가 명시 선택한 값을 유지.
             if req.channel:
                 _ch_preset = get_channel_preset(req.channel)
-                if _ch_preset:
-                    if req.cameraStyle == "auto" and _ch_preset.get("camera_style"):
-                        req.cameraStyle = _ch_preset["camera_style"]
 
             # 수정된 스크립트 반영
             script_updates = {c["index"]: c["script"] for c in req.cuts if "script" in c}
             for idx, new_script in script_updates.items():
                 if 0 <= idx < len(cuts):
-                    cuts[idx]["script"] = new_script
+                    cuts[idx]["script"] = prepare_spoken_script(new_script, language)
+
+            for cut in cuts:
+                cut["script"] = prepare_spoken_script(cut.get("script", ""), language)
 
             scripts = [cut["script"] for cut in cuts]
             loop = asyncio.get_running_loop()
@@ -720,7 +776,7 @@ async def render_endpoint(req: RenderRequest):
             for i, script in enumerate(scripts):
                 try:
                     aud = await loop.run_in_executor(
-                        None, lambda idx=i, s=script: generate_tts(s, idx, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=render_voice_id, voice_settings=render_voice_settings)
+                        None, lambda idx=i, s=script: generate_tts(s, idx, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=render_voice_id, voice_settings=render_voice_settings, already_prepared=True)
                     )
                     if aud:
                         aud = normalize_audio_lufs(aud)
@@ -746,26 +802,48 @@ async def render_endpoint(req: RenderRequest):
 
             # 비디오 변환 (선택) — 히어로 컷(SHOCK/REVEAL)만 비디오 생성
             visual_paths = list(image_paths)
+            generated_video_count = 0
             active_video_engine = req.videoEngine
-            _hero_emotions = {"SHOCK", "REVEAL"}
             if active_video_engine != "none":
-                hero_indices = [i for i, c in enumerate(cuts) if any(f"[{e}]" in c.get("description", "") for e in _hero_emotions)]
-                skip_count = len(cuts) - len(hero_indices)
-                if skip_count > 0:
-                    yield {"data": f"[비디오] 히어로 컷 {len(hero_indices)}개만 비디오 생성 (나머지 {skip_count}개는 Ken Burns)\n"}
-                yield {"data": f"[비디오] {active_video_engine} 변환 중...\n"}
+                hero_only = req.videoModel == "hero-only"
+                actual_veo_model = req.videoModel if req.videoModel and req.videoModel != "hero-only" else None
+                target_indices = _pick_hero_indices(cuts) if hero_only else list(range(len(cuts)))
+                skip_count = len(cuts) - len(target_indices)
+                if hero_only and skip_count > 0:
+                    hero_labels = [f"{idx + 1}컷" for idx in target_indices]
+                    yield {"data": f"[비디오] hero-only 모드 — Veo3 대상: {', '.join(hero_labels)} (나머지 {skip_count}개는 Ken Burns)\n"}
+                elif not hero_only:
+                    yield {"data": f"[비디오] {active_video_engine} 전체 컷 변환 중... ({len(target_indices)}개 컷)\n"}
+
                 for i, img_path in enumerate(image_paths):
-                    if img_path and os.path.exists(img_path) and i in hero_indices:
+                    if img_path and os.path.exists(img_path) and i in target_indices:
                         try:
                             llm_key = req.llmKey
-                            vid_key = get_google_key(llm_key, service=active_video_engine)
+                            vid_key = get_google_key(llm_key, service=active_video_engine, extra_keys=req.geminiKeys)
                             vid = await loop.run_in_executor(
-                                None, lambda idx=i, ip=img_path, p=cuts[idx]["prompt"], vk=vid_key, desc=cuts[idx].get("description", ""): generate_video_from_image(ip, p, idx, topic_folder, active_video_engine, vk, description=desc)
+                                None,
+                                lambda idx=i, ip=img_path, p=cuts[idx]["prompt"], vk=vid_key, desc=cuts[idx].get("description", ""):
+                                    generate_video_from_image(
+                                        ip,
+                                        p,
+                                        idx,
+                                        topic_folder,
+                                        active_video_engine,
+                                        vk,
+                                        description=desc,
+                                        veo_model=actual_veo_model,
+                                        gemini_api_keys=req.geminiKeys,
+                                    ),
                             )
                             if vid:
                                 visual_paths[i] = vid
+                                generated_video_count += 1
+                                yield {"data": f"  -> 컷 {i+1}/{len(cuts)} Veo 영상 생성 완료\n"}
+                            else:
+                                yield {"data": f"WARN|  -> 컷 {i+1}/{len(cuts)} Veo 생성 실패, 정지 이미지 유지\n"}
                         except Exception as exc:
                             print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
+                            yield {"data": f"WARN|  -> 컷 {i+1}/{len(cuts)} 비디오 변환 예외, 정지 이미지 유지\n"}
 
             # 실패 체크
             failed = [i+1 for i, p in enumerate(audio_paths) if p is None]
@@ -773,22 +851,42 @@ async def render_endpoint(req: RenderRequest):
                 yield {"data": f"ERROR|[TTS 오류] 컷 {failed} 음성 생성 실패\n"}
                 return
 
+            try:
+                from modules.utils.cost_tracker import record_asset_cost
+
+                record_asset_cost(
+                    channel=req.channel or session.get("channel") or "unknown",
+                    video_count=generated_video_count,
+                    tts_chars=sum(len(s or "") for s in scripts),
+                )
+            except Exception as cost_exc:
+                print(f"[비용 추적] 렌더 비용 기록 실패(무시): {cost_exc}")
+
             yield {"data": "PROG|70\n"}
             yield {"data": "[렌더링] Remotion 렌더링 시작...\n"}
 
-            # Remotion 렌더
-            render_result = await loop.run_in_executor(
-                None,
-                lambda: create_remotion_video(
-                    visual_paths, audio_paths, scripts,
-                    word_timestamps_list, topic_folder, title=video_title,
-                    camera_style=req.cameraStyle, bgm_theme=req.bgmTheme,
-                    channel=req.channel, platforms=req.platforms,
-                    caption_size=req.captionSize,
-                    caption_y=req.captionY,
-                    descriptions=[cut.get("description", "") for cut in cuts],
-                ),
-            )
+            # Remotion 렌더. 로컬 브라우저/파일 로딩 타임아웃은 비용 재발생 없이 재시도 가능.
+            render_result = None
+            for render_attempt in range(1, 3):
+                if render_attempt > 1:
+                    yield {"data": f"WARN|[Remotion 재시도] 로컬 렌더를 다시 시도합니다 ({render_attempt}/2)\n"}
+                    await asyncio.sleep(5)
+                render_result = await loop.run_in_executor(
+                    None,
+                    lambda: create_remotion_video(
+                        visual_paths, audio_paths, scripts,
+                        word_timestamps_list, topic_folder, title=video_title,
+                        camera_style=req.cameraStyle, bgm_theme=req.bgmTheme,
+                        channel=req.channel, platforms=req.platforms,
+                        caption_size=req.captionSize,
+                        caption_y=req.captionY,
+                        descriptions=[cut.get("description", "") for cut in cuts],
+                    ),
+                )
+                if render_result:
+                    if render_attempt > 1:
+                        yield {"data": "[Remotion 재시도] 성공\n"}
+                    break
 
             if not render_result:
                 import traceback as _tb
@@ -954,6 +1052,7 @@ async def load_session(req: LoadSessionRequest):
             "tags": tags,
             "image_paths": image_paths,
             "topic": meta.get("topic", title),
+            "channel": meta.get("channel", ""),
             "language": meta.get("language", "ko"),
             "_created": _time.time(),
         }

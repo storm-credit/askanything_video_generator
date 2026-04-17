@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { API_BASE, CHANNEL_PRESETS, type PreviewData, type ChannelStatus, type RenderResult } from "../constants";
+import type { UploadTopicMeta } from "../../components/types";
 import type { LocalSettings } from "./useLocalSettings";
 
 interface UseSSEGenerateParams {
@@ -9,7 +10,7 @@ interface UseSSEGenerateParams {
   savedKeys: Record<string, string[]>;
   topic: string;
   todayCuts: Record<string, any[]> | null;
-  todayMeta: Record<string, { title: string; description: string; hashtags: string }> | null;
+  todayMeta: Record<string, UploadTopicMeta> | null;
   checkPlatformStatus: () => void;
 }
 
@@ -66,6 +67,22 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
     return keys[Math.floor(Math.random() * keys.length)];
   };
 
+  const getHttpErrorMessage = async (response: Response): Promise<string> => {
+    const fallback = `HTTP ${response.status} ${response.statusText || "요청 실패"}`;
+    try {
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const data = await response.json();
+        const detail = data?.detail || data?.error || data?.message;
+        return typeof detail === "string" ? detail : fallback;
+      }
+      const text = await response.text();
+      return text.trim() || fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
   // ── Single channel SSE generate ──
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +133,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
         }),
       });
 
+      if (!response.ok) throw new Error(await getHttpErrorMessage(response));
       if (!response.body) throw new Error("No response body");
       reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
@@ -204,7 +222,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
     setLogs([]);
   };
 
-  // ── Multi-channel parallel generation ──
+  // ── Multi-channel queued generation ──
   const processMultiLine = (ch: string, line: string) => {
     if (!line.startsWith("data:")) return;
     const rawData = line.slice(5).trim();
@@ -222,7 +240,9 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
       const info = uploadParts.slice(1).join("|");
       setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], logs: [...(prev[ch]?.logs || []).slice(-49), `\u2705 ${platform.toUpperCase()} \uc5c5\ub85c\ub4dc \uc644\ub8cc ${info}`] } }));
     } else if (rawData.startsWith("ERROR|")) {
-      setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: rawData.slice(6), logs: [...(prev[ch]?.logs || []).slice(-49), rawData.slice(6)] } }));
+      const errMsg = rawData.slice(6);
+      setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: errMsg, logs: [...(prev[ch]?.logs || []).slice(-49), errMsg] } }));
+      setErrorMessage(prev => prev ? `${prev}\n[${ch}] ${errMsg}` : `[${ch}] ${errMsg}`);
     } else if (rawData.startsWith("PROG|")) {
       const p = parseInt(rawData.slice(5), 10);
       if (!isNaN(p)) setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], progress: p } }));
@@ -271,6 +291,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
         }),
       });
 
+      if (!response.ok) throw new Error(await getHttpErrorMessage(response));
       if (!response.body) throw new Error("No response body");
       reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
@@ -287,6 +308,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
       if (ac.signal.aborted) return;
       const msg = error instanceof Error ? error.message : "Unknown error";
       setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: msg } }));
+      setErrorMessage(prev => prev ? `${prev}\n[${ch}] ${msg}` : `[${ch}] ${msg}`);
     } finally {
       reader?.cancel().catch(() => {});
     }
@@ -304,9 +326,12 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
     setChannelPreviews({});
     setPreviewData(null);
     setProgress(0);
+    cancelledRef.current = false;
 
-    const promises = selectedChannels.map(ch => generateForChannel(ch));
-    await Promise.allSettled(promises);
+    for (const ch of selectedChannels) {
+      if (cancelledRef.current) break;
+      await generateForChannel(ch);
+    }
 
     setIsGenerating(false);
     setChannelResults(prev => {
@@ -338,7 +363,9 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
         setGeneratedVideoUrl(downloadUrl);
         setSuccessMessage("\ube44\ub514\uc624 \uc0dd\uc131 \uc131\uacf5!");
         setIsGenerating(false);
+        setPreviewMode(false);
         setPreviewData(null);
+        setChannelPreviews({});
         checkPlatformStatus();
       } else if (rawData.startsWith("PREVIEW|")) {
         onPreview?.(rawData.slice(8));
@@ -388,6 +415,9 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
           referenceUrl: detectedRefUrl, maxCuts: testMode ? 3 : undefined,
         }),
       }).then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await getHttpErrorMessage(response));
+        }
         await readSSE(response, (previewJson) => {
           try {
             const data: PreviewData = { ...JSON.parse(previewJson), channel: ch };
@@ -398,7 +428,11 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
           }
         });
         resolve(null);
-      }).catch(() => resolve(null));
+      }).catch((error) => {
+        const msg = error instanceof Error ? error.message : "미리보기 준비 실패";
+        setErrorMessage(prev => prev ? `${prev}\n[${ch}] ${msg}` : `[${ch}] ${msg}`);
+        resolve(null);
+      });
     });
   };
 
@@ -533,6 +567,9 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
             referenceUrl: detectedRefUrl, maxCuts: testMode ? 3 : undefined,
           }),
         });
+        if (!response.ok) {
+          throw new Error(await getHttpErrorMessage(response));
+        }
         await readSSE(response, (previewJson) => {
           try {
             const data = JSON.parse(previewJson);
@@ -549,7 +586,8 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
         setLogs(prev => [...prev.slice(-99), "WARN:\uc0ac\uc6a9\uc790\uc5d0 \uc758\ud574 \uc0dd\uc131\uc774 \ucde8\uc18c\ub418\uc5c8\uc2b5\ub2c8\ub2e4."]);
       } else {
         console.error(error);
-        setErrorMessage("[\uc5f0\uacb0 \uc2e4\ud328] \ubc31\uc5d4\ub4dc \uc11c\ubc84\uc5d0 \uc5f0\uacb0\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.");
+        const msg = error instanceof Error ? error.message : "\ubbf8\ub9ac\ubcf4\uae30 \uc900\ube44 \uc2e4\ud328";
+        setErrorMessage(msg);
       }
     } finally {
       setIsGenerating(false);
@@ -580,6 +618,11 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
   const renderForChannel = async (ch: string, preview: PreviewData, scripts: Record<number, string>, abortSignal: AbortSignal) => {
     const preset = CHANNEL_PRESETS[ch];
     const updatedCuts = preview.cuts.map((cut) => ({ index: cut.index, script: scripts[cut.index] ?? cut.script }));
+    let llmKeyOverride: string | undefined;
+    if (llmProvider === "gemini") llmKeyOverride = pickKey("gemini");
+    else if (llmProvider === "claude") llmKeyOverride = pickKey("claude_key");
+    const geminiKeys = savedKeys["gemini"] || [];
+    const geminiKeysStr = geminiKeys.length > 0 ? geminiKeys.join(",") : undefined;
     setRenderResults(prev => ({ ...prev, [ch]: { progress: 0, logs: [], status: 'rendering' } }));
     try {
       const response = await fetch(`${API_BASE}/api/render`, {
@@ -588,8 +631,10 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
         signal: abortSignal,
         body: JSON.stringify({
           sessionId: preview.sessionId, cuts: updatedCuts,
+          llmKey: llmKeyOverride || undefined,
+          geminiKeys: geminiKeysStr,
           elevenlabsKey: pickKey("elevenlabs") || undefined,
-          ttsSpeed: preset?.ttsSpeed ?? ttsSpeed, videoEngine, cameraStyle, bgmTheme,
+          ttsSpeed: preset?.ttsSpeed ?? ttsSpeed, videoEngine, videoModel: videoModel || undefined, cameraStyle, bgmTheme,
           formatType: formatType !== "auto" ? formatType : undefined,
           channel: ch, platforms: preset?.platforms ?? platforms,
           captionSize: preset?.captionSize ?? captionSize,
@@ -597,6 +642,9 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
           outputPath: outputPath.trim() || undefined,
         }),
       });
+      if (!response.ok) {
+        throw new Error(await getHttpErrorMessage(response));
+      }
       if (!response.body) return;
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
@@ -611,7 +659,8 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
       }
     } catch (error) {
       if (!abortSignal.aborted) {
-        setRenderResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: '\ub80c\ub354 \uc5f0\uacb0 \uc2e4\ud328' } }));
+        const msg = error instanceof Error ? error.message : '\ub80c\ub354 \uc5f0\uacb0 \uc2e4\ud328';
+        setRenderResults(prev => ({ ...prev, [ch]: { ...prev[ch], status: 'error', errorMsg: msg } }));
       }
     }
   };
@@ -685,19 +734,29 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
         setChannelPreviews({});
       } else {
         const updatedCuts = previewData!.cuts.map((cut) => ({ index: cut.index, script: editedScripts[cut.index] ?? cut.script }));
+        let llmKeyOverride: string | undefined;
+        if (llmProvider === "gemini") llmKeyOverride = pickKey("gemini");
+        else if (llmProvider === "claude") llmKeyOverride = pickKey("claude_key");
+        const geminiKeys = savedKeys["gemini"] || [];
+        const geminiKeysStr = geminiKeys.length > 0 ? geminiKeys.join(",") : undefined;
         const response = await fetch(`${API_BASE}/api/render`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: abortController.signal,
           body: JSON.stringify({
             sessionId: previewData!.sessionId, cuts: updatedCuts,
+            llmKey: llmKeyOverride || undefined,
+            geminiKeys: geminiKeysStr,
             elevenlabsKey: pickKey("elevenlabs") || undefined,
-            ttsSpeed, videoEngine, cameraStyle, bgmTheme,
+            ttsSpeed, videoEngine, videoModel: videoModel || undefined, cameraStyle, bgmTheme,
             formatType: formatType !== "auto" ? formatType : undefined,
             channel: channel || undefined, platforms, captionSize, captionY,
             outputPath: outputPath.trim() || undefined,
           }),
         });
+        if (!response.ok) {
+          throw new Error(await getHttpErrorMessage(response));
+        }
         await readSSE(response);
       }
     } catch (error) {
@@ -705,7 +764,8 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
         setLogs(prev => [...prev.slice(-99), "WARN:\uc0ac\uc6a9\uc790\uc5d0 \uc758\ud574 \ub80c\ub354\ub9c1\uc774 \ucde8\uc18c\ub418\uc5c8\uc2b5\ub2c8\ub2e4."]);
       } else {
         console.error(error);
-        setErrorMessage("[\uc5f0\uacb0 \uc2e4\ud328] \ub80c\ub354 \uc11c\ubc84\uc5d0 \uc5f0\uacb0\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.");
+        const msg = error instanceof Error ? error.message : "\ub80c\ub354 \uc2e4\ud328";
+        setErrorMessage(msg);
       }
     } finally {
       setIsGenerating(false);

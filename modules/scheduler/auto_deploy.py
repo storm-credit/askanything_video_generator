@@ -53,6 +53,102 @@ STATE_FILE = os.path.join("data", "_deploy_state.json")
 
 # TTS 연속 실패 시 조기 중단 임계값
 MAX_CONSECUTIVE_TTS_FAILS = 2
+CATCHUP_MIN_LEAD_MINUTES = 60
+CATCHUP_CHANNEL_STARTS = {
+    "prismtale": (19, 0),
+    "wonderdrop": (19, 10),
+    "exploratodo": (19, 20),
+    "askanything": (19, 30),
+}
+CATCHUP_INTERVAL_MINUTES = 50
+UPLOAD_MIN_LEAD_MINUTES = 60
+
+
+def _round_up_time(dt: datetime, step_minutes: int = 10) -> datetime:
+    """지정 간격(step) 단위로 시간을 올림 정렬."""
+    dt = dt.replace(second=0, microsecond=0)
+    remainder = dt.minute % step_minutes
+    if remainder == 0:
+        return dt
+    return dt + timedelta(minutes=step_minutes - remainder)
+
+
+def _shift_past_slots_for_today(schedule: list[dict], target_date: datetime) -> list[dict]:
+    """오늘 실행인데 이미 지난 예약 슬롯이 있으면 남은 오늘 저녁 슬롯으로 재배치.
+
+    원래 피크 윈도우를 놓친 수동 재실행 케이스용.
+    - 미래 슬롯은 그대로 유지
+    - 과거 슬롯만 채널별로 저녁 시간대로 재배치
+    - 채널 내부 간격은 50분 유지
+    """
+    target_kst = target_date.astimezone(KST) if target_date.tzinfo else target_date.replace(tzinfo=KST)
+    now_kst = datetime.now(KST)
+    if target_kst.date() != now_kst.date():
+        return schedule
+
+    min_publish_time = _round_up_time(now_kst + timedelta(minutes=CATCHUP_MIN_LEAD_MINUTES))
+    past_items: list[dict] = []
+    future_items: list[dict] = []
+
+    for item in schedule:
+        publish_dt = item.get("publish_at")
+        if not isinstance(publish_dt, datetime):
+            publish_dt = datetime.fromisoformat(item["publish_at_iso"].replace("Z", "+00:00")).astimezone(KST)
+            item["publish_at"] = publish_dt
+        if publish_dt >= min_publish_time:
+            future_items.append(item)
+        else:
+            past_items.append(item)
+
+    if not past_items:
+        return schedule
+
+    print(f"[자동 배포] 지난 예약 슬롯 {len(past_items)}개 감지 → 오늘 저녁 슬롯으로 재배치")
+    channel_counts: dict[str, int] = {}
+
+    for item in sorted(past_items, key=lambda x: (x["channel"], x.get("order", 0))):
+        channel = item["channel"]
+        start_hour, start_minute = CATCHUP_CHANNEL_STARTS.get(channel, (19, 30))
+        channel_base = now_kst.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+        slot_index = channel_counts.get(channel, 0)
+        publish_dt = max(channel_base, min_publish_time) + timedelta(minutes=CATCHUP_INTERVAL_MINUTES * slot_index)
+        publish_utc = publish_dt.astimezone(timezone.utc)
+        item["publish_at"] = publish_dt
+        item["publish_at_kst"] = publish_dt.strftime("%Y-%m-%d %H:%M KST")
+        item["publish_at_iso"] = publish_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        channel_counts[channel] = slot_index + 1
+
+    merged = future_items + past_items
+    merged.sort(key=lambda x: x["publish_at"])
+    return merged
+
+
+def _ensure_future_publish_at(publish_at_iso: str, channel: str) -> str:
+    """업로드 직전에 예약 시간이 지났으면 오늘 남은 시간대로 재조정."""
+    try:
+        scheduled_dt = datetime.fromisoformat(publish_at_iso.replace("Z", "+00:00")).astimezone(KST)
+    except Exception:
+        return publish_at_iso
+
+    now_kst = datetime.now(KST)
+    min_publish_time = _round_up_time(now_kst + timedelta(minutes=UPLOAD_MIN_LEAD_MINUTES))
+    if scheduled_dt >= min_publish_time:
+        return publish_at_iso
+
+    adjusted_kst = min_publish_time
+    if adjusted_kst.date() != now_kst.date():
+        # 오늘 안에 넣을 수 있으면 최대한 오늘 마지막 슬롯으로 보정.
+        today_last = now_kst.replace(hour=23, minute=50, second=0, microsecond=0)
+        if today_last >= min_publish_time:
+            adjusted_kst = today_last
+
+    adjusted_utc = adjusted_kst.astimezone(timezone.utc)
+    adjusted_iso = adjusted_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    print(
+        f"[자동 배포] 예약 시간 보정: {channel} "
+        f"{scheduled_dt.strftime('%Y-%m-%d %H:%M KST')} → {adjusted_kst.strftime('%Y-%m-%d %H:%M KST')}"
+    )
+    return adjusted_iso
 
 
 def _preflight_tts() -> bool:
@@ -150,6 +246,167 @@ def _load_state(target_date_str: str) -> set[str]:
     return set()
 
 
+async def _read_sse_response(response, on_line) -> None:
+    """HTTP SSE 응답을 한 줄씩 읽어 콜백에 전달."""
+    async for line in response.aiter_lines():
+        if not line.startswith("data:"):
+            continue
+        raw = line[5:].strip()
+        if raw:
+            await on_line(raw)
+
+
+async def _prepare_render_upload_via_preview_flow(
+    *,
+    client,
+    api_port: str,
+    topic: str,
+    language: str,
+    channel: str,
+    format_type: str | None,
+    publish_at: str,
+    series_title: str | None,
+) -> dict[str, Any]:
+    """웹 미리보기 플로우와 동일하게 prepare → render → upload를 순차 실행."""
+    preview_payload = {
+        "topic": topic,
+        "language": language,
+        "channel": channel,
+        "formatType": format_type,
+        "imageEngine": "imagen",
+        "videoEngine": "none",
+        "llmProvider": "gemini",
+        "geminiKeys": os.getenv("GEMINI_API_KEYS", ""),
+    }
+    preview_data: dict[str, Any] | None = None
+
+    async def on_prepare_line(raw: str) -> None:
+        nonlocal preview_data
+        if raw.startswith("PREVIEW|"):
+            preview_data = json.loads(raw[8:])
+        elif raw.startswith("ERROR|"):
+            raise RuntimeError(raw[6:].strip())
+        elif not raw.startswith("PROG|"):
+            print(f"  [미리보기] {raw.rstrip()}")
+
+    async with client.stream(
+        "POST",
+        f"http://127.0.0.1:{api_port}/api/prepare",
+        json=preview_payload,
+        headers={"Accept": "text/event-stream"},
+    ) as response:
+        if response.status_code >= 400:
+            body = (await response.aread()).decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"[미리보기 오류] HTTP {response.status_code}: {body or response.reason_phrase}")
+        await _read_sse_response(response, on_prepare_line)
+
+    if not preview_data or not preview_data.get("sessionId"):
+        raise RuntimeError("[미리보기 오류] PREVIEW 세션을 받지 못했습니다.")
+
+    session_id = preview_data["sessionId"]
+    cuts = preview_data.get("cuts") or []
+    if not cuts:
+        raise RuntimeError("[미리보기 오류] 컷 데이터가 비어 있습니다.")
+
+    render_payload = {
+        "sessionId": session_id,
+        "cuts": [{"index": c.get("index", i), "script": c.get("script", "")} for i, c in enumerate(cuts)],
+        "videoEngine": "veo3",
+        "videoModel": "hero-only",
+        "cameraStyle": "auto",
+        "bgmTheme": "random",
+        "formatType": format_type,
+        "channel": channel,
+        "platforms": ["youtube"],
+        "ttsSpeed": 1.05,
+        "voiceId": "auto",
+    }
+    try:
+        from modules.utils.channel_config import get_channel_preset as _get_preset
+        _preset = _get_preset(channel)
+        if _preset and _preset.get("tts_speed"):
+            render_payload["ttsSpeed"] = _preset["tts_speed"]
+    except Exception:
+        pass
+    video_path = ""
+
+    async def on_render_line(raw: str) -> None:
+        nonlocal video_path
+        if raw.startswith("DONE|"):
+            video_path = raw[5:].split("|")[0].strip()
+            print(f"  [렌더] 완료: {video_path}")
+        elif raw.startswith("ERROR|"):
+            raise RuntimeError(raw[6:].strip())
+        elif not raw.startswith("PROG|"):
+            print(f"  [렌더] {raw.rstrip()}")
+
+    async with client.stream(
+        "POST",
+        f"http://127.0.0.1:{api_port}/api/render",
+        json=render_payload,
+        headers={"Accept": "text/event-stream"},
+    ) as response:
+        if response.status_code >= 400:
+            body = (await response.aread()).decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"[렌더 오류] HTTP {response.status_code}: {body or response.reason_phrase}")
+        await _read_sse_response(response, on_render_line)
+
+    if not video_path:
+        raise RuntimeError("[렌더 오류] 최종 영상 경로를 받지 못했습니다.")
+
+    abs_video_path = os.path.abspath(video_path.lstrip("/"))
+    title = preview_data.get("title") or topic
+    description = preview_data.get("description") or ""
+    raw_tags = [str(t).lstrip("#") for t in (preview_data.get("tags") or []) if str(t).strip()]
+    tags: list[str] = []
+    seen_tags: set[str] = set()
+    for candidate in [channel, language, *raw_tags]:
+        value = str(candidate or "").lstrip("#").strip()
+        lowered = value.lower()
+        if not value or lowered in seen_tags:
+            continue
+        seen_tags.add(lowered)
+        tags.append(value)
+    tags = tags[:5]
+
+    from modules.upload.youtube import upload_video as yt_upload
+    from modules.utils.channel_config import get_upload_account
+
+    publish_at = _ensure_future_publish_at(publish_at, channel)
+    sched_dt = datetime.fromisoformat(publish_at.replace("Z", "+00:00"))
+    if sched_dt.tzinfo is None:
+        sched_dt = sched_dt.replace(tzinfo=timezone.utc)
+    yt_publish_at = sched_dt.isoformat()
+    account_id = get_upload_account(channel, "youtube")
+    print(f"  [업로드] YouTube 예약 업로드 시작... ({yt_publish_at})")
+    yt_result = await asyncio.get_running_loop().run_in_executor(
+        None,
+        lambda: yt_upload(
+            video_path=abs_video_path,
+            title=title,
+            description=description,
+            tags=tags,
+            privacy="private",
+            channel_id=account_id,
+            publish_at=yt_publish_at,
+            format_type=format_type,
+            series_title=series_title,
+            channel=channel,
+        ),
+    )
+    if not yt_result.get("success"):
+        raise RuntimeError(f"YouTube 업로드 실패: {yt_result.get('error', 'unknown')}")
+
+    return {
+        "video_path": video_path,
+        "youtube_url": f"{yt_result.get('url', '')} (예약: {yt_publish_at})",
+        "publish_at": publish_at,
+        "title": title,
+        "cut_count": len(cuts),
+        "tts_chars": sum(len(str(c.get("script", ""))) for c in cuts),
+    }
+
+
 def get_status() -> dict[str, Any]:
     """현재 배포 상태 반환."""
     return {**_deploy_status}
@@ -170,6 +427,25 @@ def preview_schedule(target_date: datetime | None = None) -> dict[str, Any]:
         }
 
     summary = get_schedule_summary(result["topics"], target_date)
+    base_schedule = calculate_schedule(result["topics"], target_date)
+    adjusted_schedule = _shift_past_slots_for_today(base_schedule, target_date)
+    if adjusted_schedule != base_schedule:
+        summary["schedule"] = [
+            {
+                "topic": s["topic"],
+                "channel": s["channel"],
+                "time_kst": s["publish_at_kst"],
+                "publish_at": s["publish_at_iso"],
+            }
+            for s in adjusted_schedule
+        ]
+        summary["table"] = "\n".join(
+            ["시간 (KST)     | 채널           | 주제", "-" * 60]
+            + [
+                f"{s['publish_at_kst'].split(' ')[1]}        | {s['channel'][:15].ljust(15)} | {s['topic'][:30]}"
+                for s in adjusted_schedule
+            ]
+        )
     return {
         "success": True,
         "file": result["file"],
@@ -223,6 +499,8 @@ async def run_auto_deploy(target_date: datetime | None = None,
             if channel_count[ch] <= max_per_channel:
                 filtered.append(item)
         schedule = filtered
+
+    schedule = _shift_past_slots_for_today(schedule, target_date)
 
     if dry_run:
         return {
@@ -288,7 +566,6 @@ async def run_auto_deploy(target_date: datetime | None = None,
             item_key = f"{item['channel']}:{item['topic']}"
             if item_key in completed_keys:
                 print(f"[자동 배포] 스킵 (이미 완료): {item['channel']} — '{item['topic']}'")
-                _deploy_status["completed"] += 1
                 continue
             topic = item["topic"]
             channel = item["channel"]
@@ -310,7 +587,8 @@ async def run_auto_deploy(target_date: datetime | None = None,
             task_result["_retries"] = item.get("_retries", 0)
 
             try:
-                # 웹 경로(/api/generate)와 동일한 파이프라인 사용 — 내부 HTTP SSE 호출
+                # 웹 미리보기 경로와 동일한 파이프라인 사용:
+                # prepare(기획+이미지 세션) → render(TTS+Veo+Remotion) → upload(예약)
                 import httpx
 
                 lang_map = {"askanything": "ko", "wonderdrop": "en", "exploratodo": "es", "prismtale": "es"}
@@ -337,63 +615,40 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 if _fmt:
                     print(f"  [포맷 선택] {channel}: {_fmt} (출처: {_fmt_src})")
 
-                # /api/generate와 동일한 요청 구성
                 api_port = os.getenv("API_PORT", "8003")
-                generate_payload = {
-                    "topic": _topic_for_llm,
-                    "language": lang,
-                    "channel": channel,
-                    "formatType": _fmt,
-                    "imageEngine": "imagen",
-                    "videoEngine": "veo3",
-                    "videoModel": "hero-only",
-                    "publishMode": "scheduled",
-                    "scheduledTime": publish_at,
-                    "seriesTitle": job.get("series_title"),
-                    "geminiKeys": os.getenv("GEMINI_API_KEYS", ""),
-                    "workflowMode": "fast",
-                }
-
-                yt_url = ""
-                video_path = ""
-                _video_title = ""
 
                 async with httpx.AsyncClient(timeout=httpx.Timeout(600.0)) as client:
-                    async with client.stream(
-                        "POST",
-                        f"http://127.0.0.1:{api_port}/api/generate",
-                        json=generate_payload,
-                        headers={"Accept": "text/event-stream"},
-                    ) as response:
-                        async for line in response.aiter_lines():
-                            if not line.startswith("data:"):
-                                continue
-                            raw = line[5:].strip()
-                            if not raw:
-                                continue
-
-                            if raw.startswith("DONE|"):
-                                parts = raw[5:].split("|")
-                                video_path = parts[0].strip()
-                                print(f"  [웹 경로] 완료: {video_path}")
-                            elif raw.startswith("UPLOAD_DONE|youtube|"):
-                                yt_url = raw.split("|", 2)[2].strip()
-                            elif raw.startswith("ERROR|"):
-                                raise RuntimeError(raw[6:].strip())
-                            elif raw.startswith("GEN_ID|"):
-                                _video_title = raw.split("|", 1)[1].strip() if "|" in raw else ""
-                            elif not raw.startswith("PROG|"):
-                                print(f"  {raw.rstrip()}")
+                    flow_result = await _prepare_render_upload_via_preview_flow(
+                        client=client,
+                        api_port=api_port,
+                        topic=_topic_for_llm,
+                        language=lang,
+                        channel=channel,
+                        format_type=_fmt,
+                        publish_at=publish_at,
+                        series_title=job.get("series_title"),
+                    )
 
                 task_result["status"] = "success"
                 consecutive_tts_fails = 0
-                task_result["video_path"] = video_path
-                task_result["youtube"] = {"url": yt_url} if yt_url else None
+                task_result["publish_at"] = flow_result.get("publish_at", publish_at)
+                task_result["video_path"] = flow_result.get("video_path", "")
+                task_result["youtube"] = {"url": flow_result.get("youtube_url", "")}
                 task_result["format_type"] = _fmt or job.get("format_type", "FACT")
+                task_result["cut_count"] = flow_result.get("cut_count")
+                try:
+                    from modules.utils.cost_tracker import record_generation_cost
+
+                    record_generation_cost(
+                        channel=channel,
+                        success=True,
+                    )
+                except Exception as cost_exc:
+                    print(f"  [비용 추적] 기록 실패(무시): {cost_exc}")
                 _deploy_status["completed"] += 1
                 _deploy_status["results"].append(task_result)
                 _save_state()
-                _display_title = _video_title or topic
+                _display_title = flow_result.get("title") or topic
                 print(f"  ✅ 완료: {channel} — '{_display_title}'")
                 # Day 파��� 체크박스
                 if day_file_path:
@@ -411,7 +666,11 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 # 비용은 /api/generate 내부에서 자동 기록됨 — 알림만 전송
                 try:
                     from modules.utils.notify import notify_success
-                    notify_success(channel, f"[{channel}] {_display_title}", video_url=yt_url)
+                    notify_success(
+                        channel,
+                        f"[{channel}] {_display_title}",
+                        video_url=flow_result.get("youtube_url", ""),
+                    )
                 except Exception:
                     pass
 

@@ -3,7 +3,9 @@ import time
 import struct
 import random
 import tempfile
+import re
 import requests
+from difflib import SequenceMatcher
 
 
 MAX_RETRIES = 3
@@ -27,6 +29,116 @@ def _write_silent_wav(path: str, duration_sec: float = 1.0, sample_rate: int = 2
         f.write(b"data")
         f.write(struct.pack("<I", data_size))
         f.write(b"\x00" * data_size)
+
+
+def _sanitize_tts_text(text: str, language: str = "ko") -> str:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return cleaned
+    replacements = {
+        "—": ", ",
+        "–": ", ",
+        "…": "... ",
+        "·": " ",
+        "_": " ",
+    }
+    for src, dst in replacements.items():
+        cleaned = cleaned.replace(src, dst)
+    cleaned = " ".join(cleaned.split())
+    return cleaned
+
+
+_KO_ALPHA = {
+    "a": "에이", "b": "비", "c": "씨", "d": "디", "e": "이", "f": "에프", "g": "지", "h": "에이치",
+    "i": "아이", "j": "제이", "k": "케이", "l": "엘", "m": "엠", "n": "엔", "o": "오", "p": "피",
+    "q": "큐", "r": "알", "s": "에스", "t": "티", "u": "유", "v": "브이", "w": "더블유", "x": "엑스",
+    "y": "와이", "z": "지",
+}
+_KO_DIGIT = {
+    "0": "제로", "1": "원", "2": "투", "3": "쓰리", "4": "포",
+    "5": "파이브", "6": "식스", "7": "세븐", "8": "에이트", "9": "나인",
+}
+_EN_DIGIT = {
+    "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+    "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine",
+}
+
+
+def _normalize_alnum_for_tts(text: str, language: str = "ko") -> str:
+    def repl(match: re.Match[str]) -> str:
+        token = match.group(0)
+        if language == "ko":
+            parts = []
+            for ch in token:
+                if ch.isalpha():
+                    parts.append(_KO_ALPHA.get(ch.lower(), ch))
+                elif ch.isdigit():
+                    parts.append(_KO_DIGIT.get(ch, ch))
+                else:
+                    parts.append(ch)
+            return " ".join(parts)
+        return " ".join(token)
+
+    return re.sub(r"\b[A-Za-z]{1,3}\d{1,3}\b", repl, text)
+
+
+def _normalize_clause(text: str) -> str:
+    text = re.sub(r"[^\w\s가-힣]", " ", (text or "").lower())
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _dedupe_adjacent_clauses(text: str) -> str:
+    if "," not in text:
+        return text
+
+    clauses = [chunk.strip() for chunk in re.split(r"\s*,\s*", text) if chunk.strip()]
+    if len(clauses) <= 1:
+        return text
+
+    kept: list[str] = []
+    prev_norm = ""
+    for clause in clauses:
+        norm = _normalize_clause(clause)
+        if not norm:
+            continue
+        if prev_norm:
+            prev_tokens = prev_norm.split()
+            curr_tokens = norm.split()
+            shared_opening = 0
+            for left, right in zip(prev_tokens, curr_tokens):
+                if left != right:
+                    break
+                shared_opening += 1
+            shared_tokens = set(prev_tokens) & set(curr_tokens)
+            ratio = SequenceMatcher(None, prev_norm, norm).ratio()
+            if (
+                ratio >= 0.78
+                or prev_norm in norm
+                or norm in prev_norm
+                or (shared_opening >= 2 and len(shared_tokens) >= 2)
+            ):
+                continue
+        kept.append(clause)
+        prev_norm = norm
+    return ", ".join(kept) if kept else text
+
+
+def _collapse_repeated_words(text: str) -> str:
+    text = re.sub(r"\b([A-Za-z]{2,})\s+\1\b", r"\1", text, flags=re.IGNORECASE)
+    text = re.sub(r"([가-힣]{2,})\s+\1", r"\1", text)
+    return text
+
+
+def prepare_spoken_script(text: str, language: str = "ko") -> str:
+    cleaned = _sanitize_tts_text(text, language)
+    if not cleaned:
+        return cleaned
+    cleaned = _normalize_alnum_for_tts(cleaned, language)
+    cleaned = _dedupe_adjacent_clauses(cleaned)
+    cleaned = _collapse_repeated_words(cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,")
+    return cleaned
 
 
 def check_quota(api_key: str = None) -> dict | None:
@@ -62,7 +174,7 @@ EMOTION_VOICE_DESC = {
 
 # ── 채널 → Qwen3 기본 voice_desc ──
 CHANNEL_VOICE_DESC = {
-    "askanything": "Korean male, fast steady narration, same energy throughout",
+    "askanything": "Korean male, brisk short-form narration, tight rhythm, clipped endings, continuous energy throughout",
     "wonderdrop": "English male, confident steady narration, same energy throughout",
     "exploratodo": "Spanish male, energetic steady narration, same energy throughout",
     "prismtale": "Spanish male, calm steady narration, same energy throughout",
@@ -70,7 +182,7 @@ CHANNEL_VOICE_DESC = {
 
 # ── 감정 태그 → TTS speed 배율 (채널 기본 speed에 곱함) ──
 # 채널 기본 speed (예: 1.3) × 감정 배율 → 최종 speed
-# 최소 0.80, 최대 1.50 클램프
+# 최소 1.00, 최대 1.50 클램프
 # 2단계 speed: FAST(긴박 감정) vs NORMAL(나머지) — 미세 차이 제거로 톤 일관성 확보
 _FAST_EMOTIONS = frozenset({"SHOCK", "URGENCY", "DISBELIEF"})
 EMOTION_SPEED_FACTOR: dict[str, float] = {e: 1.10 for e in _FAST_EMOTIONS}
@@ -146,13 +258,23 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
     return None
 
 
-def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko", speed: float | None = None, voice_id: str | None = None, voice_settings: dict | None = None, emotion: str | None = None, channel: str | None = None) -> str | None:
+def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str = None, language: str = "ko", speed: float | None = None, voice_id: str | None = None, voice_settings: dict | None = None, emotion: str | None = None, channel: str | None = None, already_prepared: bool = False) -> str | None:
     """
     TTS 음성 생성. Qwen3-TTS 우선, 실패 시 ElevenLabs 폴백.
     """
     # 빈 스크립트: 1초 무음 WAV 생성
     if not text or not text.strip() or text.strip() == "...":
         print(f"[TTS 경고] 컷 {index+1} 스크립트가 비어 있어 무음 오디오를 생성합니다.")
+        output_dir = os.path.join("assets", topic_folder, "audio")
+        os.makedirs(output_dir, exist_ok=True)
+        silent_path = os.path.join(output_dir, f"cut_{index:02d}.wav")
+        _write_silent_wav(silent_path, duration_sec=1.0)
+        return silent_path
+
+    if not already_prepared:
+        text = prepare_spoken_script(text, language)
+    if not text or not text.strip() or text.strip() == "...":
+        print(f"[TTS 경고] 컷 {index+1} 전처리 후 스크립트가 비어 있어 무음 오디오를 생성합니다.")
         output_dir = os.path.join("assets", topic_folder, "audio")
         os.makedirs(output_dir, exist_ok=True)
         silent_path = os.path.join(output_dir, f"cut_{index:02d}.wav")
@@ -169,12 +291,18 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
     # speed 폴백: channel도 없으면 기본 1.0 (감정 배율 적용을 위해)
     if speed is None:
         speed = 1.0
+    try:
+        if float(speed) < 1.0:
+            print(f"  [TTS speed] 요청 속도 {float(speed):.2f}x → 1.00x (느려짐 방지)")
+            speed = 1.0
+    except Exception:
+        speed = 1.0
 
     # 감정 태그 → speed 배율 적용 (채널 기본값에 곱함)
     if emotion and emotion in EMOTION_SPEED_FACTOR:
         factor = EMOTION_SPEED_FACTOR[emotion]
         adjusted = round(speed * factor, 3)
-        adjusted = max(0.80, min(1.50, adjusted))  # 클램프
+        adjusted = max(1.00, min(1.50, adjusted))  # 클램프: 쇼츠 기본 속도 아래로 내리지 않음
         if adjusted != speed:
             print(f"  [TTS speed] {emotion} 배율 {factor} → {speed:.2f}x → {adjusted:.2f}x")
         speed = adjusted
@@ -211,8 +339,8 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         "xi-api-key": api_key
     }
 
-    # speed: 0.7(느리게) ~ 1.0(기본) ~ 1.2(빠르게), 숏폼은 0.85~0.9 권장
-    tts_speed = speed if speed is not None else float(os.getenv("ELEVENLABS_SPEED", "0.9"))
+    # speed: 1.0(기본) ~ 1.2(빠르게). 기본은 숏폼용으로 느려지지 않게 1.05.
+    tts_speed = speed if speed is not None else float(os.getenv("ELEVENLABS_SPEED", "1.05"))
 
     default_voice_settings = {
         "stability": 0.5,

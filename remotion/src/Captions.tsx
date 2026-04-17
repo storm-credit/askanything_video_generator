@@ -193,7 +193,7 @@ export const Captions: React.FC<{
                   WebkitTextStroke: '2px #000000',
                   paintOrder: 'stroke fill',
                   lineHeight: '1.3',
-                  letterSpacing: '-0.5px',
+                  letterSpacing: 0,
                   display: 'inline-block',
                   opacity,
                 }}

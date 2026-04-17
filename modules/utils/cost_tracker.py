@@ -36,7 +36,12 @@ PRICE = {
 }
 
 _DAILY_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", ".daily_cost.json")
+_BILLING_ALERT_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", ".billing_alert_state.json")
+_BILLING_SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", ".billing_settings.json")
 _lock = threading.Lock()
+
+DEFAULT_BILLING_THRESHOLD_KRW = int(os.getenv("BILLING_ALERT_THRESHOLD_KRW", "400000"))
+DEFAULT_BILLING_CRON_MINUTE = int(os.getenv("BILLING_ALERT_CRON_MINUTE", "5"))
 
 
 def _today_kst() -> str:
@@ -62,6 +67,261 @@ def _save_daily(data: dict):
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[CostTracker] 저장 실패: {e}")
+
+
+def _load_billing_alert_state() -> dict:
+    try:
+        path = os.path.abspath(_BILLING_ALERT_FILE)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_billing_alert_state(data: dict) -> None:
+    try:
+        path = os.path.abspath(_BILLING_ALERT_FILE)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[BillingAlert] 저장 실패: {e}")
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _coerce_bool(value: object, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _load_billing_settings_file() -> dict:
+    try:
+        path = os.path.abspath(_BILLING_SETTINGS_FILE)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_billing_settings_file(data: dict) -> None:
+    try:
+        path = os.path.abspath(_BILLING_SETTINGS_FILE)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[BillingSettings] 저장 실패: {e}")
+
+
+def parse_krw(value: str | int | float | None) -> int:
+    """'₩453,008' 같은 표시 금액을 정수 원화로 변환."""
+    if value is None:
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    return int(digits or 0)
+
+
+def load_billing_settings() -> dict:
+    """청구 금액 알림 설정을 파일 + 환경변수 기본값으로 로드."""
+    saved = _load_billing_settings_file()
+    current = saved.get("current_krw", os.getenv("BILLING_CURRENT_KRW", "0"))
+    total = saved.get("total_krw", os.getenv("BILLING_TOTAL_KRW", "0"))
+    threshold = saved.get("threshold_krw", os.getenv("BILLING_ALERT_THRESHOLD_KRW", str(DEFAULT_BILLING_THRESHOLD_KRW)))
+    cron_minute = saved.get("cron_minute", os.getenv("BILLING_ALERT_CRON_MINUTE", str(DEFAULT_BILLING_CRON_MINUTE)))
+    return {
+        "current_krw": parse_krw(current),
+        "total_krw": parse_krw(total),
+        "threshold_krw": parse_krw(threshold),
+        "cron_enabled": _coerce_bool(saved.get("cron_enabled"), _env_flag("BILLING_ALERT_CRON_ENABLED", True)),
+        "cron_minute": max(0, min(59, parse_krw(cron_minute))),
+        "alert_key": str(saved.get("alert_key") or os.getenv("BILLING_ALERT_KEY", "billing-settings")),
+        "updated_at": saved.get("updated_at"),
+    }
+
+
+def save_billing_settings(settings: dict) -> dict:
+    """프론트 설정 화면에서 받은 청구 금액 알림 설정 저장."""
+    previous = load_billing_settings()
+    updated = {
+        **previous,
+        "current_krw": parse_krw(settings.get("current_krw", previous["current_krw"])),
+        "total_krw": parse_krw(settings.get("total_krw", previous["total_krw"])),
+        "threshold_krw": parse_krw(settings.get("threshold_krw", previous["threshold_krw"])),
+        "cron_enabled": _coerce_bool(settings.get("cron_enabled"), previous["cron_enabled"]),
+        "cron_minute": max(0, min(59, parse_krw(settings.get("cron_minute", previous["cron_minute"])))),
+        "alert_key": str(settings.get("alert_key") or previous["alert_key"] or "billing-settings"),
+        "updated_at": datetime.now(KST).isoformat(),
+    }
+    if updated["threshold_krw"] > 0 and updated["total_krw"] >= updated["threshold_krw"]:
+        updated["cron_enabled"] = False
+        updated["disabled_reason"] = "threshold_crossed"
+        updated["disabled_at"] = datetime.now(KST).isoformat()
+    _save_billing_settings_file(updated)
+    os.environ["BILLING_CURRENT_KRW"] = str(updated["current_krw"])
+    os.environ["BILLING_TOTAL_KRW"] = str(updated["total_krw"])
+    os.environ["BILLING_ALERT_THRESHOLD_KRW"] = str(updated["threshold_krw"])
+    os.environ["BILLING_ALERT_CRON_ENABLED"] = "true" if updated["cron_enabled"] else "false"
+    os.environ["BILLING_ALERT_CRON_MINUTE"] = str(updated["cron_minute"])
+    return updated
+
+
+def disable_billing_cron(reason: str = "") -> dict:
+    """비용 임계치 초과 후 청구 알림 크론을 끕니다."""
+    settings = load_billing_settings()
+    if not settings.get("cron_enabled"):
+        return settings
+    settings["cron_enabled"] = False
+    settings["disabled_reason"] = reason or "threshold_crossed"
+    settings["disabled_at"] = datetime.now(KST).isoformat()
+    _save_billing_settings_file(settings)
+    os.environ["BILLING_ALERT_CRON_ENABLED"] = "false"
+    return settings
+
+
+def check_configured_billing_threshold(send_telegram: bool = True) -> dict:
+    """저장된 청구 설정 기준으로 임계치 알림 확인."""
+    settings = load_billing_settings()
+    if not settings["cron_enabled"]:
+        return {"skipped": True, "reason": "disabled", **settings}
+    if settings["total_krw"] <= 0:
+        return {"skipped": True, "reason": "missing_total_krw", **settings}
+    result = check_billing_threshold(
+        current_krw=settings["current_krw"],
+        total_krw=settings["total_krw"],
+        threshold_krw=settings["threshold_krw"],
+        alert_key=settings["alert_key"],
+        send_telegram=send_telegram,
+    )
+    if result.get("crossed"):
+        disabled = disable_billing_cron("threshold_crossed")
+        result["cron_disabled"] = True
+        result["cron_enabled"] = disabled.get("cron_enabled", False)
+        try:
+            from modules.scheduler.cron import set_hourly
+
+            def _cron_billing_threshold():
+                from modules.utils.cost_tracker import check_configured_billing_threshold
+                return check_configured_billing_threshold(send_telegram=True)
+
+            set_hourly(
+                "청구 금액 임계치 확인",
+                int(settings.get("cron_minute", 5)),
+                _cron_billing_threshold,
+                enabled=False,
+            )
+        except Exception as e:
+            result["cron_disable_error"] = str(e)
+    return {**settings, **result}
+
+
+def build_billing_threshold_message(
+    *,
+    current_krw: int,
+    total_krw: int,
+    threshold_krw: int = DEFAULT_BILLING_THRESHOLD_KRW,
+) -> str:
+    over_krw = max(0, total_krw - threshold_krw)
+    remaining_to_total = max(0, total_krw - current_krw)
+    ratio = (total_krw / threshold_krw * 100) if threshold_krw else 0
+    return "\n".join([
+        f"🚨 <b>비용 경고 — {threshold_krw:,}원 초과</b>",
+        "─────────────────────",
+        f"현재 표시: {current_krw:,}원 / {total_krw:,}원",
+        f"기준선: {threshold_krw:,}원",
+        f"초과액: {over_krw:,}원",
+        f"기준 대비: {ratio:.1f}%",
+        f"현재값에서 총액까지 차이: {remaining_to_total:,}원",
+    ])
+
+
+def check_billing_threshold(
+    *,
+    current_krw: int | str,
+    total_krw: int | str,
+    threshold_krw: int | str = DEFAULT_BILLING_THRESHOLD_KRW,
+    alert_key: str = "default",
+    send_telegram: bool = True,
+) -> dict:
+    """외부 결제 화면 금액을 받아 임계치 초과 시 1회 텔레그램 알림.
+
+    current_krw: 화면 왼쪽 금액(예: 오늘/현재 사용액)
+    total_krw: 화면 오른쪽 금액(예: 총 청구/예산 사용액)
+    threshold_krw: 기본 400,000원
+    """
+    current = parse_krw(current_krw)
+    total = parse_krw(total_krw)
+    threshold = parse_krw(threshold_krw)
+    crossed = total >= threshold if threshold else False
+    over = max(0, total - threshold)
+
+    result = {
+        "current_krw": current,
+        "total_krw": total,
+        "threshold_krw": threshold,
+        "crossed": crossed,
+        "over_krw": over,
+        "sent": False,
+    }
+
+    state = _load_billing_alert_state()
+    key = f"{alert_key}:{threshold}"
+    if not crossed:
+        if key in state:
+            state[key] = {
+                "crossed": False,
+                "sent": False,
+                "last_total_krw": total,
+                "last_current_krw": current,
+                "threshold_krw": threshold,
+                "reset_at": datetime.now(KST).isoformat(),
+            }
+            _save_billing_alert_state(state)
+        return result
+
+    previous = state.get(key, {})
+    if previous.get("crossed") and previous.get("sent") and int(previous.get("last_total_krw", 0)) >= threshold:
+        result["deduped"] = True
+        return result
+
+    message = build_billing_threshold_message(
+        current_krw=current,
+        total_krw=total,
+        threshold_krw=threshold,
+    )
+    if send_telegram:
+        try:
+            from modules.utils.notify import _send
+            result["sent"] = bool(_send(message))
+        except Exception as e:
+            result["error"] = str(e)
+
+    state[key] = {
+        "crossed": True,
+        "sent": result.get("sent", False),
+        "last_total_krw": total,
+        "last_current_krw": current,
+        "threshold_krw": threshold,
+        "sent_at": datetime.now(KST).isoformat(),
+    }
+    _save_billing_alert_state(state)
+    return result
 
 
 # ── 단가 조회 ──
@@ -196,6 +456,58 @@ def record_generation_cost(
     return entry
 
 
+def record_asset_cost(
+    channel: str,
+    llm_usd: float = 0.0,
+    image_count: int = 0,
+    video_count: int = 0,
+    tts_chars: int = 0,
+    whisper_secs: float = 0.0,
+) -> dict:
+    """실제 생성된 자산 비용만 일별 집계에 저장. 영상 성공/실패 카운트는 바꾸지 않는다."""
+    image_usd = calc_image_cost(image_count)
+    video_usd = calc_video_cost(video_count)
+    tts_usd = calc_tts_cost(tts_chars)
+    whisper_usd = whisper_secs * PRICE["whisper"]
+    total_usd = llm_usd + image_usd + video_usd + tts_usd + whisper_usd
+
+    entry = {
+        "success": 0,
+        "failed": 0,
+        "llm_usd": llm_usd,
+        "image_usd": image_usd,
+        "video_usd": video_usd,
+        "tts_usd": tts_usd,
+        "whisper_usd": whisper_usd,
+        "image_count": image_count,
+        "video_count": video_count,
+        "tts_chars": tts_chars,
+        "whisper_secs": whisper_secs,
+        "total_usd": total_usd,
+    }
+
+    today = _today_kst()
+    with _lock:
+        data = _load_daily()
+        if today not in data:
+            data[today] = {}
+        if channel not in data[today]:
+            data[today][channel] = {
+                "success": 0, "failed": 0,
+                "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0, "whisper_usd": 0.0,
+                "image_count": 0, "video_count": 0, "tts_chars": 0, "whisper_secs": 0.0,
+            }
+        ch = data[today][channel]
+        for k in ("image_count", "video_count", "tts_chars"):
+            ch[k] += entry[k]
+        ch["whisper_secs"] = ch.get("whisper_secs", 0.0) + entry["whisper_secs"]
+        for k in ("llm_usd", "image_usd", "video_usd", "tts_usd", "whisper_usd"):
+            ch[k] += entry.get(k, 0.0)
+        _save_daily(data)
+
+    return entry
+
+
 def get_daily_summary(date: Optional[str] = None) -> Optional[dict]:
     """특정 날짜(YYYY-MM-DD) 또는 오늘의 집계 반환."""
     target = date or _today_kst()
@@ -231,6 +543,7 @@ def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
         f"{'Whisper':<10}{wh_secs:.0f}초{'':<3}{whisper_krw:>6,}원",
         "─────────────────────",
         f"{'합계':<10}{'':<8}{total_krw:>6,}원",
+        f"환율 기준: $1 = {EXCHANGE_RATE:,}원",
     ]
     return "\n".join(lines)
 
