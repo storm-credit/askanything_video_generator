@@ -121,14 +121,36 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
     _last_gemini_request_time = _time.time()
 
     from google.genai import types
-    from modules.utils.gemini_client import create_gemini_client, get_backend_label, get_current_sa_key, mark_sa_key_blocked
+    from modules.utils.gemini_client import create_gemini_client
     model_name = model_override or os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
     client = create_gemini_client(api_key=api_key)
+    use_context_cache = (
+        os.getenv("GEMINI_CONTEXT_CACHE", "1").lower() not in {"0", "false", "no", "off"}
+        and os.getenv("GEMINI_BACKEND", "").lower().strip() != "vertex_ai"
+    )
+
+    def _generate_with_system_instruction() -> str:
+        response = client.models.generate_content(
+            model=model_name,
+            contents=user_content,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                response_schema=_GEMINI_RESPONSE_SCHEMA,
+                temperature=0.75,
+                http_options=types.HttpOptions(timeout=120_000),
+            ),
+        )
+        return (response.text or "").strip()
+
+    if not use_context_cache:
+        return _generate_with_system_instruction()
 
     # Context Caching: 시스템 프롬프트를 캐시하여 토큰 비용 절감
     # 캐시 키에 프롬프트 해시 포함 (lang/channel 변경 시 잘못된 캐시 사용 방지)
     prompt_hash = hashlib.sha256(system_prompt.encode()).hexdigest()
-    key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+    cache_identity = api_key or f"{os.getenv('GEMINI_BACKEND', 'ai_studio')}:{model_name}"
+    key_hash = hashlib.sha256(cache_identity.encode()).hexdigest()[:16]
     cache_key = f"{key_hash}:{model_name}:{prompt_hash}"
     cached = None
     with _gemini_cache_lock:
@@ -185,17 +207,7 @@ def _request_gemini(api_key: str, system_prompt: str, user_content: str, model_o
         with _gemini_cache_lock:
             _gemini_cache.pop(cache_key, None)
         # 캐시 미지원 모델이거나 에러 → 일반 요청
-        response = client.models.generate_content(
-            model=model_name,
-            contents=user_content,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-                response_schema=_GEMINI_RESPONSE_SCHEMA,
-                temperature=0.75,
-                http_options=types.HttpOptions(timeout=120_000),
-            ),
-        )
+        return _generate_with_system_instruction()
     return (response.text or "").strip()
 
 

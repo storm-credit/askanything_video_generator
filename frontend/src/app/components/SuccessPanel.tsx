@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { CheckCircle2, Download, Youtube, Send, Instagram, Loader2 } from "lucide-react";
 import { CHANNEL_PRESETS } from "../constants";
+import type { UploadTopicMeta } from "../../components/types";
 
 interface SuccessPanelProps {
   successMessage: string | null;
@@ -15,7 +16,7 @@ interface SuccessPanelProps {
   topic: string;
   channel: string;
   selectedChannels: string[];
-  todayMeta: Record<string, { title: string; description: string; hashtags: string }> | null;
+  todayMeta: Record<string, UploadTopicMeta> | null;
   onOpenUpload: (platform: "youtube" | "tiktok" | "instagram", ch: string, videoUrl: string) => void;
 }
 

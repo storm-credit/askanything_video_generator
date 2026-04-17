@@ -25,7 +25,10 @@ def _split_yt_topic(topic: str) -> tuple[str, str]:
     return topic, ""
 
 
-_VALID_EMOTIONS = {"[SHOCK]", "[WONDER]", "[TENSION]", "[REVEAL]", "[URGENCY]", "[DISBELIEF]", "[IDENTITY]", "[CALM]", "[LOOP]"}
+_VALID_EMOTIONS = {
+    "[SHOCK]", "[WONDER]", "[TENSION]", "[REVEAL]", "[URGENCY]", "[DISBELIEF]", "[IDENTITY]", "[CALM]", "[LOOP]",
+    "[SETUP]", "[CHAIN_1]", "[CHAIN_2]", "[CHAIN_3]", "[ESCALATE]", "[BUILD]", "[CLIMAX]", "[PIVOT]",
+}
 
 def _sanitize_cuts(cuts_data: list[dict[str, Any]]) -> list[dict[str, str]]:
     cuts = []

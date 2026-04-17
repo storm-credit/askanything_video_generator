@@ -15,23 +15,50 @@ interface UploadModalProps {
   initialTitle: string;
   initialDescription: string;
   initialTags: string;
+  initialFormatType?: string;
+  initialSeriesTitle?: string | null;
+  initialObsidianUri?: string;
   platformAuth: PlatformAuth;
 }
 
 export function UploadModal({
   show, onClose, generatedVideoPath, uploadChannel, topic,
-  initialTitle, initialDescription, initialTags,
+  initialTitle, initialDescription, initialTags, initialFormatType, initialSeriesTitle, initialObsidianUri,
   platformAuth,
 }: UploadModalProps) {
+  const normalizeYoutubeTags = (value: string): string[] => {
+    const forbiddenTags = new Set(["shorts", "short", "쇼츠"]);
+    return [...new Set(
+      (value || "")
+        .split(/[,\s]+/)
+        .map((tag) => tag.replace(/^#/, "").trim())
+        .filter((tag) => tag && !forbiddenTags.has(tag.toLowerCase())),
+    )].slice(0, 5);
+  };
+
+  const normalizeYoutubeDescription = (description: string): string => {
+    return (description || "")
+      .split("\n")
+      .map((line) => line.replace(/#[^\s#]+/g, "").replace(/#/g, "").replace(/\s{2,}/g, " ").trim())
+      .filter((line, index, lines) => line.length > 0 || (index > 0 && index < lines.length - 1))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  };
+
   const [uploadPlatform, setUploadPlatform] = useState<"youtube" | "tiktok" | "instagram">("youtube");
   const [uploadTitle, setUploadTitle] = useState(initialTitle);
-  const [uploadDescription, setUploadDescription] = useState(initialDescription);
+  const [uploadDescription, setUploadDescription] = useState(
+    normalizeYoutubeDescription(initialDescription),
+  );
   const [uploadTags, setUploadTags] = useState(initialTags);
 
   // props 변경 시 state 동기화 (modal 재오픈 시 새 값 반영)
   useEffect(() => { setUploadTitle(initialTitle); }, [initialTitle]);
-  useEffect(() => { setUploadDescription(initialDescription); }, [initialDescription]);
   useEffect(() => { setUploadTags(initialTags); }, [initialTags]);
+  useEffect(() => {
+    setUploadDescription(normalizeYoutubeDescription(initialDescription));
+  }, [initialDescription]);
   const [uploadPrivacy, setUploadPrivacy] = useState("private");
   const [ttPrivacy, setTtPrivacy] = useState("SELF_ONLY");
   const [uploading, setUploading] = useState(false);
@@ -58,18 +85,13 @@ export function UploadModal({
       if (uploadPlatform === "youtube") {
         endpoint = "/api/youtube/upload";
         const hashtagsInDesc = (uploadDescription.match(/#[^\s#]+/g) || []).map(t => t.slice(1));
-        const manualTags = uploadTags.split(/[,\s]+/).map(t => t.replace(/^#/, "").trim()).filter(Boolean);
-        const allTags = [...new Set([...hashtagsInDesc, ...manualTags])];
-        const hasHashtagsInDesc = /#[^\s#]+/.test(uploadDescription);
-        const extraHashtags = manualTags.filter(t => !hashtagsInDesc.includes(t));
-        const hashtagLine = extraHashtags.map(t => `#${t.replace(/\s+/g, "")}`).join(" ");
-        const finalDesc = hasHashtagsInDesc
-          ? (hashtagLine ? `${uploadDescription}\n${hashtagLine}` : uploadDescription)
-          : (hashtagLine ? `${uploadDescription}\n\n${hashtagLine}` : uploadDescription);
+        const manualTags = normalizeYoutubeTags(uploadTags);
+        const allTags = normalizeYoutubeTags([...hashtagsInDesc, ...manualTags].join(","));
+        const cleanDesc = normalizeYoutubeDescription(uploadDescription);
         body = {
           video_path: generatedVideoPath,
           title: uploadTitle || topic,
-          description: finalDesc,
+          description: cleanDesc,
           tags: allTags,
           privacy: scheduleEnabled ? "private" : uploadPrivacy,
           channel_id: (() => {
@@ -77,6 +99,9 @@ export function UploadModal({
             return matched?.id || ytSelectedChannel || undefined;
           })(),
           channel: uploadChannel || undefined,
+          format_type: initialFormatType || undefined,
+          series_title: initialSeriesTitle || undefined,
+          obsidian_uri: initialObsidianUri || undefined,
           ...(scheduleEnabled && scheduleDate ? { publish_at: new Date(scheduleDate).toISOString() } : {}),
         };
       } else if (uploadPlatform === "tiktok") {
@@ -124,6 +149,15 @@ export function UploadModal({
   const isNotConnected = (uploadPlatform === "youtube" && !ytConnected) ||
     (uploadPlatform === "tiktok" && !ttConnected) ||
     (uploadPlatform === "instagram" && !igConnected);
+  const hashtagsInDesc = (uploadDescription.match(/#[^\s#]+/g) || []).map((tag) => tag.slice(1));
+  const youtubeTags = normalizeYoutubeTags([...hashtagsInDesc, uploadTags].join(","));
+  const finalYoutubeDescription = normalizeYoutubeDescription(uploadDescription);
+  const finalYoutubePrivacy = scheduleEnabled ? "비공개 업로드 후 예약 공개" : (
+    uploadPrivacy === "public" ? "공개" : uploadPrivacy === "unlisted" ? "미등록" : "비공개"
+  );
+  const finalScheduleLabel = scheduleEnabled && scheduleDate
+    ? new Date(scheduleDate).toLocaleString("ko-KR")
+    : "즉시 업로드";
 
   return (
     <motion.div
@@ -229,7 +263,7 @@ export function UploadModal({
             {uploadPlatform !== "tiktok" && (
               <div>
                 <label className="text-gray-400 text-xs mb-1 block">
-                  {uploadPlatform === "instagram" ? "\uce21\uc158" : "\uc124\uba85"}
+                  {uploadPlatform === "instagram" ? "\uce21\uc158" : "\uc124\uba85 (\ubcf8\ubb38)"}
                 </label>
                 <textarea value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)}
                   rows={3} maxLength={uploadPlatform === "instagram" ? 2200 : 5000}
@@ -239,10 +273,11 @@ export function UploadModal({
 
             {uploadPlatform === "youtube" && (
               <div>
-                <label className="text-gray-400 text-xs mb-1 block">{"\ud0dc\uadf8 (\uc27c\ud45c\ub85c \uad6c\ubd84)"}</label>
+                <label className="text-gray-400 text-xs mb-1 block">{"\ud574\uc2dc\ud0dc\uadf8 / \ud0dc\uadf8 (\uc27c\ud45c\ub85c \uad6c\ubd84)"}</label>
                 <input type="text" value={uploadTags} onChange={(e) => setUploadTags(e.target.value)}
-                  placeholder="AI, \uc21f\ud3fc, \uacfc\ud559"
+                  placeholder="#과학, #문어, #헤모시아닌"
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50" />
+                <p className="mt-1 text-[11px] text-gray-500">최대 5개, `shorts`류 태그는 자동 제외됩니다.</p>
               </div>
             )}
 
@@ -306,24 +341,23 @@ export function UploadModal({
                       max={uploadPlatform === "tiktok" ? new Date(Date.now() + 75 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16) : undefined}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50" />
                     {uploadPlatform === "youtube" && (() => {
-                      const windows: Record<string, {start: number, end: number, label: string}> = {
-                        askanything: {start: 18, end: 22, label: "KST"},
-                        wonderdrop: {start: 6, end: 10, label: "KST (=EST 17~21\uc2dc)"},
-                        exploratodo: {start: 9, end: 13, label: "KST (=CST 19~23\uc2dc)"},
-                        prismtale: {start: 7, end: 11, label: "KST (=EST 18~22\uc2dc)"},
+                      const windows: Record<string, {startHour: number, startMinute: number, endHour: number, endMinute: number, label: string}> = {
+                        askanything: {startHour: 19, startMinute: 30, endHour: 22, endMinute: 0, label: "KST"},
+                        wonderdrop: {startHour: 8, startMinute: 0, endHour: 11, endMinute: 0, label: "KST (=EST 19~22\uc2dc)"},
+                        exploratodo: {startHour: 10, startMinute: 0, endHour: 13, endMinute: 0, label: "KST (=CST 20~23\uc2dc)"},
+                        prismtale: {startHour: 7, startMinute: 30, endHour: 10, endMinute: 30, label: "KST (=EST 18:30~21:30\uc2dc)"},
                       };
                       const w = windows[uploadChannel] || windows.askanything;
                       const tomorrow = new Date();
                       tomorrow.setDate(tomorrow.getDate() + 1);
-                      const slots = [];
-                      for (let h = w.start; h < w.end; h++) {
+                      const slots: Date[] = [];
+                      const startMinutes = w.startHour * 60 + w.startMinute;
+                      const endMinutes = w.endHour * 60 + w.endMinute;
+                      for (let minutes = startMinutes; minutes <= endMinutes; minutes += 45) {
                         const d = new Date(tomorrow);
-                        d.setHours(h, 0, 0, 0);
+                        d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
                         slots.push(d);
                       }
-                      const halfSlot = new Date(tomorrow);
-                      halfSlot.setHours(w.start, 30, 0, 0);
-                      slots.splice(1, 0, halfSlot);
                       return (
                         <div className="flex flex-wrap gap-1.5 mt-2">
                           <span className="text-[10px] text-gray-500 w-full">{"\ucd94\ucc9c \uc2dc\uac04"} ({w.label}):</span>
@@ -357,6 +391,43 @@ export function UploadModal({
                 <p className="text-gray-500 text-xs mt-1">Instagram{"\uc740 API\ub97c \ud1b5\ud55c \uc608\uc57d \uc5c5\ub85c\ub4dc\ub97c \uc9c0\uc6d0\ud558\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."}</p>
               </div>
             )}
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-sm font-semibold text-white">최종 업로드 미리보기</h4>
+                <span className="text-[10px] text-gray-500">
+                  {uploadPlatform === "youtube" ? "설명 # 제거 후 업로드" : "현재 입력값 기준"}
+                </span>
+              </div>
+              <div className="space-y-1.5 text-xs">
+                <p className="text-gray-400">제목</p>
+                <p className="text-white break-words">{(uploadTitle || topic).trim() || "-"}</p>
+              </div>
+              <div className="space-y-1.5 text-xs">
+                <p className="text-gray-400">{uploadPlatform === "instagram" ? "캡션" : "설명"}</p>
+                <p className="text-gray-200 whitespace-pre-wrap break-words">
+                  {uploadPlatform === "youtube" ? (finalYoutubeDescription || "-") : (uploadDescription.trim() || "-")}
+                </p>
+              </div>
+              {uploadPlatform === "youtube" && (
+                <>
+                  <div className="space-y-1.5 text-xs">
+                    <p className="text-gray-400">태그</p>
+                    <p className="text-gray-200 break-words">{youtubeTags.length > 0 ? youtubeTags.map((tag) => `#${tag}`).join(" ") : "-"}</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-black/20 px-3 py-2">
+                      <p className="text-gray-500 mb-1">재생목록</p>
+                      <p className="text-gray-200 break-words">{initialSeriesTitle || "자동 연결 없음"}</p>
+                    </div>
+                    <div className="rounded-lg bg-black/20 px-3 py-2">
+                      <p className="text-gray-500 mb-1">공개/예약</p>
+                      <p className="text-gray-200 break-words">{finalYoutubePrivacy} · {finalScheduleLabel}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
 
             {uploadResult && !uploadResult.success && (
               <p className="text-red-400 text-sm">{uploadResult.error}</p>

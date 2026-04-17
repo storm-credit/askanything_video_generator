@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Settings, Globe, Crown, FolderOpen, FlaskConical, Square, Youtube, Download, AlertCircle } from "lucide-react";
 import { API_BASE } from "../components/types";
-import { KeyStatus, KeyUsageStats } from "../components/types";
+import { KeyStatus, KeyUsageStats, UploadTopicMeta } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
 import { CHANNEL_PRESETS } from "./constants";
@@ -27,10 +27,18 @@ import { RenderPanel } from "./components/RenderPanel";
 import { PreviewPanel } from "./components/PreviewPanel";
 import { SuccessPanel } from "./components/SuccessPanel";
 
+type PreflightSummary = {
+  loading: boolean;
+  vertexSaCount: number;
+  nextSaLabel: string;
+  veoReady: boolean;
+  ttsReady: boolean;
+};
+
 export default function Home() {
   const [topic, setTopic] = useState("");
   const [todayCuts, setTodayCuts] = useState<Record<string, any[]> | null>(null);
-  const [todayMeta, setTodayMeta] = useState<Record<string, { title: string; description: string; hashtags: string }> | null>(null);
+  const [todayMeta, setTodayMeta] = useState<Record<string, UploadTopicMeta> | null>(null);
 
   // Today modal state
   const [showTodayModal, setShowTodayModal] = useState(false);
@@ -55,6 +63,9 @@ export default function Home() {
   const [uploadInitialTitle, setUploadInitialTitle] = useState("");
   const [uploadInitialDesc, setUploadInitialDesc] = useState("");
   const [uploadInitialTags, setUploadInitialTags] = useState("");
+  const [uploadInitialFormatType, setUploadInitialFormatType] = useState("");
+  const [uploadInitialSeriesTitle, setUploadInitialSeriesTitle] = useState<string | null>(null);
+  const [uploadInitialObsidianUri, setUploadInitialObsidianUri] = useState("");
 
   // Settings modal
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -69,6 +80,13 @@ export default function Home() {
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
   const [keyUsageStats, setKeyUsageStats] = useState<KeyUsageStats | null>(null);
   const [modelLimits, setModelLimits] = useState<Record<string, { rpm: number; rpd: number; used: number; total_rpd: number; remaining: number }> | null>(null);
+  const [preflightSummary, setPreflightSummary] = useState<PreflightSummary>({
+    loading: true,
+    vertexSaCount: 0,
+    nextSaLabel: "",
+    veoReady: false,
+    ttsReady: false,
+  });
 
   // Hooks
   const settings = useLocalSettings();
@@ -107,11 +125,42 @@ export default function Home() {
     try { const res = await fetch(`${API_BASE}/api/model-limits`); if (res.ok) setModelLimits(await res.json()); } catch {}
   }, []);
 
+  const fetchPreflightSummary = useCallback(async () => {
+    setPreflightSummary((prev) => ({ ...prev, loading: true }));
+    try {
+      const [healthRes, vertexRes] = await Promise.all([
+        fetch(`${API_BASE}/api/health`),
+        fetch(`${API_BASE}/api/settings/vertex-sa`),
+      ]);
+      const health = healthRes.ok ? await healthRes.json() : null;
+      const vertex = vertexRes.ok ? await vertexRes.json() : null;
+      const vertexSaCount = Number(vertex?.enabled_count ?? health?.vertex_sa_count ?? 0);
+      const nextSa = vertex?.next_account;
+      const nextSaLabel = nextSa ? `${nextSa.project_id} (${nextSa.filename})` : "";
+      setPreflightSummary({
+        loading: false,
+        vertexSaCount,
+        nextSaLabel,
+        veoReady: Boolean(health?.keys?.gemini) && (vertexSaCount > 0 || vertex?.backend === "vertex_ai"),
+        ttsReady: Boolean(health?.keys?.elevenlabs),
+      });
+    } catch {
+      setPreflightSummary({
+        loading: false,
+        vertexSaCount: 0,
+        nextSaLabel: "",
+        veoReady: false,
+        ttsReady: false,
+      });
+    }
+  }, []);
+
   useEffect(() => { fetchKeyStatus(); }, [fetchKeyStatus]);
   useEffect(() => { fetchModelLimits(); }, [fetchModelLimits]);
+  useEffect(() => { fetchPreflightSummary(); }, [fetchPreflightSummary]);
   useEffect(() => {
-    if (isSettingsOpen) { fetchKeyStatus(); fetchKeyUsage(); fetchModelLimits(); }
-  }, [isSettingsOpen, fetchKeyStatus, fetchKeyUsage, fetchModelLimits]);
+    if (isSettingsOpen) { fetchKeyStatus(); fetchKeyUsage(); fetchModelLimits(); fetchPreflightSummary(); }
+  }, [isSettingsOpen, fetchKeyStatus, fetchKeyUsage, fetchModelLimits, fetchPreflightSummary]);
 
   useEffect(() => {
     try { localStorage.setItem("askanything_keys", JSON.stringify(savedKeys)); } catch {}
@@ -148,6 +197,28 @@ export default function Home() {
     return ` [${m.remaining}/${m.total_rpd}\ud68c]`;
   };
 
+  const normalizeUploadTags = (value: string | string[] | undefined | null): string => {
+    const forbiddenTags = new Set(["shorts", "short", "쇼츠"]);
+    const tokens = Array.isArray(value)
+      ? value
+      : (value || "").split(/[,\s]+/);
+    return [...new Set(tokens
+      .map((tag) => tag.replace(/^#/, "").trim())
+      .filter((tag) => tag && !forbiddenTags.has(tag.toLowerCase())))]
+      .slice(0, 5)
+      .join(", ");
+  };
+
+  const normalizeUploadDescription = (value: string | undefined | null): string => {
+    return (value || "")
+      .split("\n")
+      .map((line) => line.replace(/#[^\s#]+/g, "").replace(/\s{2,}/g, " ").trim())
+      .filter((line, index, lines) => line.length > 0 || (index > 0 && index < lines.length - 1))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  };
+
   // Key status badge
   const totalSavedKeys = Object.values(savedKeys).reduce((sum, arr) => sum + arr.length, 0);
   const totalServerKeys = serverKeyStatus ? Object.values(serverKeyStatus).filter(Boolean).length : 0;
@@ -168,13 +239,19 @@ export default function Home() {
     sse.setGeneratedVideoUrl(videoUrl);
     setUploadChannel(ch);
     const meta = todayMeta?.[ch];
-    const chPreview = sse.channelPreviews[ch];
+    const chPreview = sse.channelPreviews[ch] || (sse.previewData?.channel === ch || !sse.previewData?.channel ? sse.previewData : undefined);
     const genTitle = meta?.title || chPreview?.title || topic;
-    const genDesc = meta?.description || (chPreview?.cuts || []).map((c: any) => c.script || "").filter(Boolean).join("\n") || `AI\uac00 \uc0dd\uc131\ud55c \uc21f\ud3fc \uc601\uc0c1: ${genTitle}`;
-    const genTags = meta?.hashtags || (chPreview?.cuts?.[0] as any)?.tags?.join(", ") || topic;
+    const baseDesc = normalizeUploadDescription(
+      meta?.description || chPreview?.description || (chPreview?.cuts || []).map((c: any) => c.script || "").filter(Boolean).join("\n") || `AI\uac00 \uc0dd\uc131\ud55c \uc21f\ud3fc \uc601\uc0c1: ${genTitle}`
+    );
+    const genTags = normalizeUploadTags(meta?.hashtags) || normalizeUploadTags(chPreview?.tags);
+    const genDesc = baseDesc;
     setUploadInitialTitle(genTitle);
     setUploadInitialDesc(genDesc);
     setUploadInitialTags(platform === "youtube" ? genTags : "");
+    setUploadInitialFormatType(meta?.formatType || settings.formatType || "");
+    setUploadInitialSeriesTitle(meta?.seriesTitle || null);
+    setUploadInitialObsidianUri(meta?.obsidianUri || "");
     setShowUploadModal(true);
     platformAuth.checkPlatformStatus();
   };
@@ -184,10 +261,19 @@ export default function Home() {
     const topicName = t.topic_group?.replace(/^[^\s]+\s*/, "") || t.topic_group;
     setTopic(topicName);
     setTodayCuts(null);
-    const channelMeta: Record<string, { title: string; description: string; hashtags: string }> = {};
+    const channelMeta: Record<string, UploadTopicMeta> = {};
     if (t.channels) {
       for (const [ch, chData] of Object.entries(t.channels as Record<string, any>)) {
-        channelMeta[ch] = { title: chData.title || topicName, description: chData.description || "", hashtags: chData.hashtags || "" };
+        channelMeta[ch] = {
+          title: chData.title || topicName,
+          description: chData.description || "",
+          hashtags: chData.hashtags || "",
+          formatType: t.format_type || "",
+          seriesTitle: t.series_title || null,
+          sourceFile: t.source_file || todayFile || "",
+          sourceSection: t.source_section || "",
+          obsidianUri: t.obsidian_uri || "",
+        };
       }
     }
     setTodayMeta(Object.keys(channelMeta).length > 0 ? channelMeta : null);
@@ -252,6 +338,7 @@ export default function Home() {
             onRemoveKey={removeKey}
             onToggleVisible={(id) => setVisibleKeys((prev) => ({ ...prev, [id]: !prev[id] }))}
             onOutputPathChange={settings.setOutputPath}
+            onRefreshServerKeys={fetchKeyStatus}
           />
         )}
       </AnimatePresence>
@@ -416,6 +503,47 @@ export default function Home() {
             <ChannelSelector settings={settings} isGenerating={sse.isGenerating} />
             <EnginePanel settings={settings} isGenerating={sse.isGenerating} remainLabel={remainLabel} />
             <DirectionPanel settings={settings} isGenerating={sse.isGenerating} />
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 text-left">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">생성 전 체크</h3>
+                  <p className="text-[11px] text-gray-500 mt-1">실행 전에 바로 확인하는 운영 상태야.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchPreflightSummary}
+                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs rounded-lg transition-colors"
+                >
+                  새로고침
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+                <PreflightItem
+                  label="Vertex SA"
+                  value={preflightSummary.loading ? "확인 중..." : `${preflightSummary.vertexSaCount}개 활성`}
+                  ok={preflightSummary.vertexSaCount > 0}
+                  detail={preflightSummary.nextSaLabel ? `다음: ${preflightSummary.nextSaLabel}` : "다음 SA 미정"}
+                />
+                <PreflightItem
+                  label="Veo3 가능"
+                  value={preflightSummary.loading ? "확인 중..." : (preflightSummary.veoReady ? "가능" : "불가")}
+                  ok={preflightSummary.veoReady}
+                  detail={settings.videoEngine === "veo3" ? "현재 비디오 엔진으로 사용" : `현재 선택: ${settings.videoEngine}`}
+                />
+                <PreflightItem
+                  label="TTS 가능"
+                  value={preflightSummary.loading ? "확인 중..." : (preflightSummary.ttsReady ? "가능" : "불가")}
+                  ok={preflightSummary.ttsReady}
+                  detail="ElevenLabs 키 기준"
+                />
+                <PreflightItem
+                  label="해시태그 정책"
+                  value="설명 # 금지"
+                  ok={true}
+                  detail="태그 최대 5개 · short/shorts/쇼츠 금지"
+                />
+              </div>
+            </div>
           </div>
         </form>
       </motion.div>
@@ -538,11 +666,14 @@ export default function Home() {
           generatedVideoPath={sse.generatedVideoPath}
           uploadChannel={uploadChannel}
           topic={topic}
-          initialTitle={uploadInitialTitle}
-          initialDescription={uploadInitialDesc}
-          initialTags={uploadInitialTags}
-          platformAuth={platformAuth}
-        />}
+            initialTitle={uploadInitialTitle}
+            initialDescription={uploadInitialDesc}
+            initialTags={uploadInitialTags}
+            initialFormatType={uploadInitialFormatType}
+            initialSeriesTitle={uploadInitialSeriesTitle}
+            initialObsidianUri={uploadInitialObsidianUri}
+            platformAuth={platformAuth}
+          />}
       </AnimatePresence>
 
       {/* Dashboard modal */}
@@ -580,5 +711,28 @@ export default function Home() {
       </AnimatePresence>
 
     </main>
+  );
+}
+
+function PreflightItem({
+  label,
+  value,
+  detail,
+  ok,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  ok: boolean;
+}) {
+  return (
+    <div className={`rounded-xl border px-3 py-3 ${ok ? "border-emerald-500/20 bg-emerald-500/8" : "border-amber-500/20 bg-amber-500/8"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] text-gray-400">{label}</p>
+        <span className={`w-2 h-2 rounded-full ${ok ? "bg-emerald-400" : "bg-amber-400"}`} />
+      </div>
+      <p className="text-sm text-white mt-1">{value}</p>
+      <p className="text-[10px] text-gray-500 mt-1 break-words">{detail}</p>
+    </div>
   );
 }

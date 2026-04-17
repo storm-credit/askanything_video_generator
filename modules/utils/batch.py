@@ -70,6 +70,9 @@ def _init_db():
     _ensure_column(conn, "batch_jobs", "draft_title", "draft_title TEXT")
     _ensure_column(conn, "batch_jobs", "draft_tags", "draft_tags TEXT")
     _ensure_column(conn, "batch_jobs", "draft_cuts_json", "draft_cuts_json TEXT")
+    _ensure_column(conn, "batch_jobs", "series_title", "series_title TEXT")
+    _ensure_column(conn, "batch_jobs", "obsidian_uri", "obsidian_uri TEXT")
+    _ensure_column(conn, "batch_jobs", "format_type", "format_type TEXT")
 
     conn.commit()
     conn.close()
@@ -168,6 +171,7 @@ def update_job(job_id: int, **kwargs) -> None:
         "prompt_status", "stale_reason", "review_notes",
         "reviewed_at", "approved_at", "channel_fit_score", "script_hash",
         "draft_title", "draft_tags", "draft_cuts_json",
+        "series_title", "obsidian_uri", "format_type",
     }
     invalid = set(kwargs.keys()) - ALLOWED_COLS
     if invalid:

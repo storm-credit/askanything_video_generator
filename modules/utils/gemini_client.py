@@ -18,6 +18,8 @@ import os
 import glob
 import time
 import threading
+from pathlib import Path
+from google.oauth2 import service_account
 
 _backend: str | None = None
 _sa_key_files: list[str] = []
@@ -34,10 +36,30 @@ def _get_backend() -> str:
     return _backend
 
 
+def _sa_only_enabled() -> bool:
+    return os.getenv("VERTEX_SA_ONLY", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _discover_sa_keys() -> list[str]:
-    """프로젝트 루트에서 vertex-sa-key*.json 파일 자동 탐색."""
+    """Vertex SA 목록 탐색. 설정창 관리 목록을 우선 사용."""
     global _sa_key_files
     if _sa_key_files:
+        return _sa_key_files
+
+    try:
+        from modules.utils.vertex_sa_manager import get_enabled_sa_paths
+        managed_keys = get_enabled_sa_paths()
+        if managed_keys:
+            _sa_key_files = managed_keys
+            print(f"[Gemini Client] {len(managed_keys)}개 관리 SA 키 사용: {[os.path.basename(f) for f in managed_keys]}")
+            return _sa_key_files
+    except Exception as e:
+        print(f"[Gemini Client] 관리 SA 목록 로드 실패: {e}")
+
+    explicit = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    if explicit and os.path.exists(explicit):
+        _sa_key_files = [explicit]
+        print(f"[Gemini Client] 명시적 SA 키 사용: {os.path.basename(explicit)}")
         return _sa_key_files
 
     # Docker: /app/, 로컬: 프로젝트 루트
@@ -59,6 +81,40 @@ def _discover_sa_keys() -> list[str]:
     if unique:
         print(f"[Gemini Client] {len(unique)}개 SA 키 발견: {[os.path.basename(f) for f in unique]}")
     return unique
+
+
+def refresh_sa_keys() -> None:
+    """설정창에서 SA 목록이 바뀌었을 때 런타임 캐시 초기화."""
+    global _sa_key_files, _current_sa_idx, _sa_blocked, _last_used_sa_key, _backend
+    with _sa_lock:
+        _sa_key_files = []
+        _current_sa_idx = 0
+        _sa_blocked = {}
+        _last_used_sa_key = None
+        _backend = None
+
+
+def count_available_sa_keys() -> int:
+    """현재 Vertex에서 사용할 수 있는 SA 키 파일 수."""
+    return len(_discover_sa_keys())
+
+
+def peek_next_sa_key() -> str | None:
+    """다음 요청에서 사용될 SA 키 파일 경로를 미리 확인한다."""
+    keys = _discover_sa_keys()
+    if not keys:
+        return None
+
+    with _sa_lock:
+        now = time.time()
+        for offset in range(len(keys)):
+            idx = (_current_sa_idx + offset) % len(keys)
+            if now >= _sa_blocked.get(idx, 0):
+                return keys[idx]
+        if _sa_blocked:
+            earliest_idx = min(_sa_blocked, key=_sa_blocked.get)
+            return keys[earliest_idx]
+    return keys[0]
 
 
 def _get_next_sa_key() -> str | None:
@@ -107,6 +163,28 @@ def mark_sa_key_blocked(key_file: str, block_seconds: int = 60):
                 break
 
 
+def get_sa_runtime_state() -> list[dict[str, object]]:
+    """현재 SA 런타임 상태(다음 사용/마지막 사용/429 대기)를 반환한다."""
+    keys = _discover_sa_keys()
+    next_key = peek_next_sa_key()
+    now = time.time()
+    states: list[dict[str, object]] = []
+
+    with _sa_lock:
+        for idx, key_path in enumerate(keys):
+            blocked_until = _sa_blocked.get(idx, 0)
+            remaining = max(0, int(blocked_until - now))
+            states.append({
+                "path": key_path,
+                "filename": Path(key_path).name,
+                "is_next": bool(next_key and os.path.realpath(next_key) == os.path.realpath(key_path)),
+                "last_used": bool(_last_used_sa_key and os.path.realpath(_last_used_sa_key) == os.path.realpath(key_path)),
+                "blocked": remaining > 0,
+                "blocked_remaining_sec": remaining,
+            })
+    return states
+
+
 def create_gemini_client(api_key: str | None = None):
     """GEMINI_BACKEND 설정에 따라 적절한 genai.Client를 반환합니다.
 
@@ -125,17 +203,19 @@ def create_gemini_client(api_key: str | None = None):
                 sa_data = json.load(f)
             project = sa_data.get("project_id", os.getenv("VERTEX_PROJECT", ""))
             location = os.getenv("VERTEX_LOCATION", "us-central1")
-
-            # GOOGLE_APPLICATION_CREDENTIALS + Client 생성을 lock 안에서 원자적 실행
-            with _sa_lock:
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = sa_key_file
-                client = genai.Client(
-                    vertexai=True,
-                    project=project,
-                    location=location,
-                )
-            return client
+            creds = service_account.Credentials.from_service_account_file(
+                sa_key_file,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            return genai.Client(
+                vertexai=True,
+                project=project,
+                location=location,
+                credentials=creds,
+            )
         else:
+            if _sa_only_enabled():
+                raise RuntimeError("VERTEX_SA_ONLY=true 상태인데 활성 Vertex SA 키가 없습니다. 설정 > Vertex SA에서 SA JSON을 등록하세요.")
             # SA 키 없으면 기본 ADC
             project = os.getenv("VERTEX_PROJECT", "")
             location = os.getenv("VERTEX_LOCATION", "us-central1")

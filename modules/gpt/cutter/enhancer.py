@@ -218,6 +218,8 @@ def _get_sentence_polish_prompt(lang: str, channel: str | None = None) -> str:
 - 소리 내서 읽었을 때 자연스러워야 한다. 어색하면 실패.
 - 번역투/설명체/교과서체를 전부 없앤다.
 - 한국어 어순: 핵심 단어를 앞에 놓아라.
+- 한 줄은 한 호흡으로 읽히게 짧고 단단하게 만든다.
+- 딱딱한 해설자 말투, 추상 명사 마무리, 문어체 요약문 금지.
 
 ★ 자주 나오는 나쁜 패턴 → 고치는 법:
 ❌ "이것은 매우 독특한 특성을 가지고 있어" → ✅ "이거 진짜 특이해"
@@ -229,14 +231,14 @@ def _get_sentence_polish_prompt(lang: str, channel: str | None = None) -> str:
 ❌ "이 현상은 ~에 의해 발생해" → ✅ "~가 이걸 만들어"
 ❌ "약 50%에 달하는 비율이야" → ✅ "절반이야"
 ❌ "~할 수 있는 능력을 가지고 있어" → ✅ "~할 수 있어"
+❌ "정말 경이로움 그 자체였습니다" → ✅ "진짜 소름 돋아"
+❌ "~한 존재였지" → ✅ "~였어" 또는 "~였지"
 
-★ 어미 다양성 (같은 어미 2번 연속 금지):
-"~야" "~거든" "~잖아" "~거야" "~인데" "~라는 거지" "~알아?"
-이 중에서 골고루 섞어 써라.
-
-★ 리듬감:
-짧은 문장(15자) → 긴 문장(30자) → 짧은 문장 교대.
-3문장 연속 같은 길이 금지.
+★ 말투:
+- 과한 어미 변주로 억지 리듬 만들지 마라.
+- 같은 정보라도 더 짧고 바로 꽂히는 쪽을 우선한다.
+- "~입니다/~였습니다/~합니다" 같은 형식체 금지.
+- 앞뒤 컷에서 같은 표현을 비슷하게 반복하지 마라. 특히 같은 형용사, 같은 핵심 술어, 같은 결론어를 연달아 재사용하면 실패.
 
 반드시 지킬 것:
 - 컷 수 유지, 각 컷 한 문장
@@ -329,6 +331,17 @@ def _is_script_rewrite_safe(old: str, new: str) -> bool:
     return True
 
 
+def _looks_stiff_korean_line(text: str) -> bool:
+    text = (text or "").strip()
+    if not text:
+        return False
+    if text.endswith(("입니다.", "합니다.", "였습니다.", "했습니다.")):
+        return True
+    if "그 자체" in text:
+        return True
+    return False
+
+
 def polish_scripts(cuts: list[dict[str, Any]], lang: str = "ko",
                    channel: str | None = None,
                    llm_provider: str = "gemini",
@@ -375,11 +388,23 @@ def polish_scripts(cuts: list[dict[str, Any]], lang: str = "ko",
 
         # script만 교체 (안전 검사 통과한 것만), 나머지(description, image_prompt) 유지
         applied = 0
+        original_scripts = [cuts[i].get("script", "").strip() for i in target_indices]
         for local_i, new_script in enumerate(rewritten):
             cut_idx = target_indices[local_i]
             if isinstance(new_script, str) and _is_script_rewrite_safe(cuts[cut_idx].get("script", ""), new_script):
                 cuts[cut_idx]["script"] = new_script.strip()
                 applied += 1
+
+        if channel == "askanything" and lang == "ko":
+            reverted = 0
+            for local_i, original in enumerate(original_scripts):
+                cut_idx = target_indices[local_i]
+                current = cuts[cut_idx].get("script", "").strip()
+                if _looks_stiff_korean_line(current):
+                    cuts[cut_idx]["script"] = original
+                    reverted += 1
+            if reverted:
+                print(f"[polisher] 한국어 딱딱한 문장 {reverted}개 원문으로 롤백")
 
         log_notes = notes if isinstance(notes, list) else []
         print(f"[polisher] 다듬기 완료: {applied}/{len(target_indices)}컷 적용 (skip {len(skip_set)}컷)")

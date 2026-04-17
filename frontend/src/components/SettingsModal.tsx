@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle, Tv, Globe, ChevronDown, ChevronUp, Youtube, Music, Instagram } from "lucide-react";
+import { X, Plus, Trash2, Eye, EyeOff, BarChart3, Key, Puzzle, Tv, Globe, ChevronDown, ChevronUp, Youtube, Music, Instagram, Wallet, UploadCloud, GripVertical, CalendarClock, Play, RefreshCw } from "lucide-react";
 import { API_BASE, KeyConfig, KeyStatus, KeyUsageStats, KEY_CONFIGS } from "./types";
 
 // ── 언어 목록 ──
@@ -39,6 +39,45 @@ interface ChannelConfig {
   upload_accounts: Record<string, string | null>;
 }
 
+interface BillingSettings {
+  current_krw: number;
+  total_krw: number;
+  threshold_krw: number;
+  cron_enabled: boolean;
+  cron_minute: number;
+  updated_at?: string | null;
+}
+
+interface VertexSaAccount {
+  id: string;
+  filename: string;
+  source: "managed" | "root";
+  managed: boolean;
+  enabled: boolean;
+  project_id: string;
+  client_email: string;
+  fingerprint: string;
+  is_next?: boolean;
+  last_used?: boolean;
+  blocked?: boolean;
+  blocked_remaining_sec?: number;
+}
+
+interface VertexSaSummary {
+  backend: string;
+  sa_only: boolean;
+  enabled_count: number;
+  next_account: VertexSaAccount | null;
+}
+
+interface SchedulerJob {
+  name: string;
+  type: string;
+  schedule: string;
+  next_run: string;
+  last_run?: string | null;
+}
+
 interface SettingsModalProps {
   serverKeyStatus: KeyStatus | null;
   savedKeys: Record<string, string[]>;
@@ -56,6 +95,7 @@ interface SettingsModalProps {
   onRemoveKey: (configId: string, index: number) => void;
   onToggleVisible: (configId: string) => void;
   onOutputPathChange: (value: string) => void;
+  onRefreshServerKeys?: () => Promise<void> | void;
 }
 
 export function SettingsModal({
@@ -75,8 +115,9 @@ export function SettingsModal({
   onRemoveKey,
   onToggleVisible,
   onOutputPathChange,
+  onRefreshServerKeys,
 }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<"core" | "extra" | "channels">("core");
+  const [activeTab, setActiveTab] = useState<"core" | "extra" | "vertex" | "billing" | "cron" | "channels">("core");
 
   // ── 채널 관리 상태 ──
   const [channels, setChannels] = useState<Record<string, ChannelConfig>>({});
@@ -84,6 +125,28 @@ export function SettingsModal({
   const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
   const [channelSaveStatus, setChannelSaveStatus] = useState<Record<string, "saved" | "saving" | "error" | null>>({});
   const [ytConnectedChannels, setYtConnectedChannels] = useState<string[]>([]);
+  const [billingSettings, setBillingSettings] = useState<BillingSettings>({
+    current_krw: 0,
+    total_krw: 0,
+    threshold_krw: 400000,
+    cron_enabled: true,
+    cron_minute: 5,
+  });
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingStatus, setBillingStatus] = useState<string>("");
+  const [vertexAccounts, setVertexAccounts] = useState<VertexSaAccount[]>([]);
+  const [vertexLoading, setVertexLoading] = useState(false);
+  const [vertexStatus, setVertexStatus] = useState("");
+  const [vertexSummary, setVertexSummary] = useState<VertexSaSummary>({
+    backend: "vertex_ai",
+    sa_only: true,
+    enabled_count: 0,
+    next_account: null,
+  });
+  const [vertexTestingId, setVertexTestingId] = useState<string | null>(null);
+  const [schedulerJobs, setSchedulerJobs] = useState<SchedulerJob[]>([]);
+  const [schedulerStatus, setSchedulerStatus] = useState("");
+  const [schedulerLoading, setSchedulerLoading] = useState(false);
 
   // YouTube 연동 상태 로드
   useEffect(() => {
@@ -105,6 +168,74 @@ export function SettingsModal({
     setChannelsLoading(false);
   }, []);
 
+  const fetchBillingSettings = useCallback(async () => {
+    setBillingLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/settings/billing`);
+      if (res.ok) {
+        const data = await res.json();
+        setBillingSettings((prev) => ({ ...prev, ...(data.settings || {}) }));
+      }
+    } catch { /* server offline */ }
+    setBillingLoading(false);
+  }, []);
+
+  const fetchVertexAccounts = useCallback(async () => {
+    setVertexLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/settings/vertex-sa`);
+      if (res.ok) {
+        const data = await res.json();
+        setVertexAccounts(data.accounts || []);
+        setVertexSummary({
+          backend: data.backend || "vertex_ai",
+          sa_only: !!data.sa_only,
+          enabled_count: Number(data.enabled_count || 0),
+          next_account: data.next_account || null,
+        });
+      }
+    } catch { /* server offline */ }
+    setVertexLoading(false);
+  }, []);
+
+  const saveVertexAccounts = useCallback(async (accounts: VertexSaAccount[], message = "저장됨") => {
+    setVertexStatus("저장 중...");
+    try {
+      const res = await fetch(`${API_BASE}/api/settings/vertex-sa`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accounts }),
+      });
+      const data = await res.json();
+      if (res.ok && data.accounts) {
+        setVertexAccounts(data.accounts);
+        await fetchVertexAccounts();
+        setVertexStatus(message);
+      } else {
+        setVertexStatus(data.detail || "저장 실패");
+      }
+    } catch {
+      setVertexStatus("저장 실패: 서버 연결을 확인하세요");
+    }
+  }, [fetchVertexAccounts]);
+
+  const fetchSchedulerStatus = useCallback(async () => {
+    setSchedulerLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/scheduler/cron`);
+      const data = await res.json();
+      if (res.ok && data.jobs) {
+        setSchedulerJobs(data.jobs);
+        setSchedulerStatus(data.running ? "크론 실행 중" : "크론 중지됨");
+      } else {
+        setSchedulerStatus(data.message || "크론 상태 확인 실패");
+      }
+    } catch {
+      setSchedulerStatus("크론 상태 확인 실패: 서버 연결을 확인하세요");
+    }
+    setSchedulerLoading(false);
+  }, []);
+
   // Escape 키로 모달 닫기
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -117,7 +248,10 @@ export function SettingsModal({
   // 채널 탭 진입 시 로드
   useEffect(() => {
     if (activeTab === "channels") fetchChannels();
-  }, [activeTab, fetchChannels]);
+    if (activeTab === "billing") fetchBillingSettings();
+    if (activeTab === "vertex") fetchVertexAccounts();
+    if (activeTab === "cron") fetchSchedulerStatus();
+  }, [activeTab, fetchChannels, fetchBillingSettings, fetchVertexAccounts, fetchSchedulerStatus]);
 
   const coreConfigs = KEY_CONFIGS.filter((c) => c.group === "core");
   const extraConfigs = KEY_CONFIGS.filter((c) => c.group === "extra");
@@ -196,7 +330,7 @@ export function SettingsModal({
             </button>
           </div>
           {/* 탭 버튼 */}
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             <button
               onClick={() => setActiveTab("core")}
               className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-xl transition-colors ${
@@ -230,6 +364,39 @@ export function SettingsModal({
               <Tv className="w-3.5 h-3.5" />
               채널 관리
             </button>
+            <button
+              onClick={() => setActiveTab("vertex")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-xl transition-colors ${
+                activeTab === "vertex"
+                  ? "bg-white/[0.06] text-cyan-400 border-b-2 border-cyan-400"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              Vertex SA
+            </button>
+            <button
+              onClick={() => setActiveTab("billing")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-xl transition-colors ${
+                activeTab === "billing"
+                  ? "bg-white/[0.06] text-emerald-400 border-b-2 border-emerald-400"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              비용 알림
+            </button>
+            <button
+              onClick={() => setActiveTab("cron")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-xl transition-colors ${
+                activeTab === "cron"
+                  ? "bg-white/[0.06] text-sky-400 border-b-2 border-sky-400"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <CalendarClock className="w-3.5 h-3.5" />
+              크론
+            </button>
           </div>
         </div>
 
@@ -252,6 +419,7 @@ export function SettingsModal({
                   onAdd={() => onAddKey(config.id)}
                   onRemove={(idx) => onRemoveKey(config.id, idx)}
                   onToggleVisible={() => onToggleVisible(config.id)}
+                  onRefreshServerKeys={onRefreshServerKeys}
                 />
               ))}
 
@@ -341,9 +509,179 @@ export function SettingsModal({
                   onAdd={() => onAddKey(config.id)}
                   onRemove={(idx) => onRemoveKey(config.id, idx)}
                   onToggleVisible={() => onToggleVisible(config.id)}
+                  onRefreshServerKeys={onRefreshServerKeys}
                 />
               ))}
             </>
+          )}
+
+          {activeTab === "billing" && (
+            <BillingSettingsPanel
+              settings={billingSettings}
+              loading={billingLoading}
+              status={billingStatus}
+              onChange={(next) => setBillingSettings((prev) => ({ ...prev, ...next }))}
+              onSave={async () => {
+                setBillingStatus("저장 중...");
+                try {
+                  const res = await fetch(`${API_BASE}/api/settings/billing`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(billingSettings),
+                  });
+                  const data = await res.json();
+                  if (res.ok && data.settings) {
+                    setBillingSettings((prev) => ({ ...prev, ...data.settings }));
+                    setBillingStatus(data.settings.cron_enabled
+                      ? "저장됨. 크론은 다음 매시간 체크부터 적용됩니다."
+                      : "저장됨. 기준 초과 상태라 비용 알림 크론은 꺼졌습니다.");
+                  } else {
+                    setBillingStatus("저장 실패");
+                  }
+                } catch {
+                  setBillingStatus("저장 실패: 서버 연결을 확인하세요");
+                }
+              }}
+              onCheck={async () => {
+                setBillingStatus("텔레그램 알림 조건 확인 중...");
+                try {
+                  await fetch(`${API_BASE}/api/settings/billing`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(billingSettings),
+                  });
+                  const res = await fetch(`${API_BASE}/api/settings/billing/check`, { method: "POST" });
+                  const data = await res.json();
+                  const result = data.result || {};
+                  if (result.skipped) {
+                    setBillingStatus(`확인 스킵: ${result.reason || "조건 없음"}`);
+                  } else if (result.crossed) {
+                    setBillingStatus(result.sent ? "기준 초과 알림 전송됨" : "기준 초과. 텔레그램 전송은 실패 또는 중복 처리됨");
+                  } else {
+                    setBillingStatus("아직 기준선 아래입니다.");
+                  }
+                } catch {
+                  setBillingStatus("확인 실패: 서버 연결을 확인하세요");
+                }
+              }}
+            />
+          )}
+
+          {activeTab === "vertex" && (
+            <VertexSaPanel
+              accounts={vertexAccounts}
+              loading={vertexLoading}
+              status={vertexStatus}
+              summary={vertexSummary}
+              testingId={vertexTestingId}
+              onRefresh={fetchVertexAccounts}
+              onUpload={async (files) => {
+                if (!files.length) return;
+                setVertexStatus("업로드 중...");
+                for (const file of files) {
+                  const form = new FormData();
+                  form.append("file", file);
+                  const res = await fetch(`${API_BASE}/api/settings/vertex-sa/upload`, {
+                    method: "POST",
+                    body: form,
+                  });
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    setVertexStatus(data.detail || `${file.name} 업로드 실패`);
+                    return;
+                  }
+                }
+                await fetchVertexAccounts();
+                setVertexStatus("업로드됨. 다음 요청부터 순서대로 SA를 씁니다.");
+              }}
+              onTest={async (id) => {
+                setVertexTestingId(id || "__next__");
+                setVertexStatus("Vertex 연결 테스트 중...");
+                try {
+                  const res = await fetch(`${API_BASE}/api/settings/vertex-sa/test`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(id ? { item_id: id } : {}),
+                  });
+                  const data = await res.json();
+                  if (res.ok && data.account) {
+                    setVertexStatus(`${data.account.project_id} 연결 성공`);
+                    await fetchVertexAccounts();
+                  } else {
+                    setVertexStatus(data.detail || "Vertex 연결 테스트 실패");
+                  }
+                } catch {
+                  setVertexStatus("Vertex 연결 테스트 실패: 서버 연결을 확인하세요");
+                } finally {
+                  setVertexTestingId(null);
+                }
+              }}
+              onReorder={(next) => {
+                setVertexAccounts(next);
+                saveVertexAccounts(next, "순서 저장됨. 위에서부터 한 번씩 씁니다.");
+              }}
+              onToggle={(id, enabled) => {
+                const next = vertexAccounts.map((item) => item.id === id ? { ...item, enabled } : item);
+                setVertexAccounts(next);
+                saveVertexAccounts(next, enabled ? "SA 활성화됨" : "SA 비활성화됨");
+              }}
+              onDelete={async (id) => {
+                if (!confirm("이 SA 파일을 삭제할까요? 업로드한 관리 SA만 삭제됩니다.")) return;
+                setVertexStatus("삭제 중...");
+                try {
+                  const res = await fetch(`${API_BASE}/api/settings/vertex-sa/${encodeURIComponent(id)}`, { method: "DELETE" });
+                  const data = await res.json();
+                  if (res.ok && data.accounts) {
+                    setVertexAccounts(data.accounts);
+                    await fetchVertexAccounts();
+                    setVertexStatus("삭제됨");
+                  } else {
+                    setVertexStatus(data.detail || "삭제 실패");
+                  }
+                } catch {
+                  setVertexStatus("삭제 실패: 서버 연결을 확인하세요");
+                }
+              }}
+            />
+          )}
+
+          {activeTab === "cron" && (
+            <SchedulerPanel
+              jobs={schedulerJobs}
+              loading={schedulerLoading}
+              status={schedulerStatus}
+              onRefresh={fetchSchedulerStatus}
+              onPreview={async () => {
+                setSchedulerStatus("오늘 할 일 스케줄 계산 중...");
+                try {
+                  const res = await fetch(`${API_BASE}/api/scheduler/preview`);
+                  const data = await res.json();
+                  if (res.ok) {
+                    const total = data.total || data.summary?.total_videos || data.schedule?.length || 0;
+                    setSchedulerStatus(`오늘 할 일 미리보기 완료: ${total}개`);
+                  } else {
+                    setSchedulerStatus(data.message || "미리보기 실패");
+                  }
+                } catch {
+                  setSchedulerStatus("미리보기 실패: 서버 연결을 확인하세요");
+                }
+              }}
+              onRunToday={async () => {
+                if (!confirm("오늘 할 일을 지금 자동 생성/예약 업로드로 실행할까요? 유료 API가 사용됩니다.")) return;
+                setSchedulerStatus("오늘 할 일 자동 배포 시작 중...");
+                try {
+                  const res = await fetch(`${API_BASE}/api/scheduler/run?max_per_channel=3`, { method: "POST" });
+                  const data = await res.json();
+                  if (res.ok && data.success) {
+                    setSchedulerStatus(data.message || "오늘 할 일 자동 배포 시작됨");
+                  } else {
+                    setSchedulerStatus(data.message || "자동 배포 시작 실패");
+                  }
+                } catch {
+                  setSchedulerStatus("자동 배포 시작 실패: 서버 연결을 확인하세요");
+                }
+              }}
+            />
           )}
 
           {/* ════════ 채널 관리 탭 ════════ */}
@@ -580,6 +918,12 @@ export function SettingsModal({
           <p className="text-xs text-gray-600">
             {activeTab === "channels"
               ? `${Object.keys(channels).length}개 채널 등록됨`
+              : activeTab === "vertex"
+                ? `Vertex SA ${vertexAccounts.filter((a) => a.enabled).length}/${vertexAccounts.length}개 사용`
+              : activeTab === "cron"
+                ? `${schedulerJobs.length}개 크론 잡`
+              : activeTab === "billing"
+                ? `청구 기준 ${billingSettings.threshold_krw.toLocaleString()}원`
               : `서버 키 ${totalServerKeys}개 | 브라우저 키 ${totalSavedKeys}개`}
           </p>
           <button
@@ -591,6 +935,464 @@ export function SettingsModal({
         </div>
       </motion.div>
     </>
+  );
+}
+
+
+/* ─── 크론 / 오늘 할 일 패널 ─── */
+function SchedulerPanel({
+  jobs,
+  loading,
+  status,
+  onRefresh,
+  onPreview,
+  onRunToday,
+}: {
+  jobs: SchedulerJob[];
+  loading: boolean;
+  status: string;
+  onRefresh: () => void;
+  onPreview: () => void;
+  onRunToday: () => void;
+}) {
+  return (
+    <>
+      <p className="text-[10px] text-gray-500">
+        자동 배포 크론 상태를 확인하고, 오늘 할 일을 필요할 때 바로 시작합니다.
+      </p>
+
+      <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">오늘 할 일 트리거</h3>
+            <p className="text-xs text-gray-500 mt-0.5">미리보기는 비용 없이 시간표만 계산합니다.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            새로고침
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onPreview}
+            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 text-xs font-medium rounded-lg transition-colors"
+          >
+            오늘 할 일 미리보기
+          </button>
+          <button
+            type="button"
+            onClick={onRunToday}
+            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5"
+          >
+            <Play className="w-3.5 h-3.5" />
+            오늘 할 일 실행
+          </button>
+        </div>
+
+        <div>
+          <h4 className="text-xs font-semibold text-gray-400 mb-2">등록된 크론</h4>
+          {loading ? (
+            <div className="flex items-center gap-2 text-xs text-gray-500 py-4">
+              <div className="w-4 h-4 border-2 border-sky-400/30 border-t-sky-400 rounded-full animate-spin" />
+              크론 상태 불러오는 중...
+            </div>
+          ) : jobs.length === 0 ? (
+            <p className="text-xs text-gray-600 py-3">등록된 크론 잡이 없습니다.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {jobs.map((job) => (
+                <div key={`${job.name}-${job.schedule}`} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
+                  <CalendarClock className="w-4 h-4 text-sky-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-white truncate">{job.name}</p>
+                    <p className="text-[10px] text-gray-500 truncate">{job.schedule} · 다음 {job.next_run}</p>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300">
+                    {job.type}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {status && <p className="text-[10px] text-gray-500">{status}</p>}
+      </div>
+    </>
+  );
+}
+
+
+/* ─── Vertex SA 관리 패널 ─── */
+function VertexSaPanel({
+  accounts,
+  loading,
+  status,
+  summary,
+  testingId,
+  onRefresh,
+  onUpload,
+  onTest,
+  onReorder,
+  onToggle,
+  onDelete,
+}: {
+  accounts: VertexSaAccount[];
+  loading: boolean;
+  status: string;
+  summary: VertexSaSummary;
+  testingId: string | null;
+  onRefresh: () => void;
+  onUpload: (files: File[]) => Promise<void>;
+  onTest: (id?: string) => Promise<void>;
+  onReorder: (next: VertexSaAccount[]) => void;
+  onToggle: (id: string, enabled: boolean) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  const moveAccount = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    const fromIndex = accounts.findIndex((item) => item.id === fromId);
+    const toIndex = accounts.findIndex((item) => item.id === toId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const next = [...accounts];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    onReorder(next);
+  };
+
+  return (
+    <>
+      <p className="text-[10px] text-gray-500">
+        Gemini/Imagen/Veo3는 Vertex AI service account만 사용합니다. 위에서 아래 순서로 한 요청마다 다음 SA를 씁니다.
+      </p>
+
+      <div className="p-4 rounded-2xl bg-cyan-500/8 border border-cyan-500/15 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">다음 사용 예정 SA</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              활성 SA {summary.enabled_count}개 · {summary.backend === "vertex_ai" ? "Vertex AI" : summary.backend}
+              {summary.sa_only ? " · SA 전용" : ""}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onTest()}
+            disabled={testingId === "__next__" || !summary.next_account}
+            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 disabled:text-gray-400 text-white text-xs rounded-lg transition-colors"
+          >
+            {testingId === "__next__" ? "테스트 중..." : "다음 SA 테스트"}
+          </button>
+        </div>
+        {summary.next_account ? (
+          <div className="rounded-lg bg-white/[0.03] border border-white/10 px-3 py-2">
+            <p className="text-xs text-white">{summary.next_account.project_id}</p>
+            <p className="text-[10px] text-gray-400 truncate">{summary.next_account.client_email}</p>
+            <p className="text-[10px] text-gray-500 truncate">{summary.next_account.filename}</p>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500">현재 사용할 수 있는 활성 SA가 없습니다.</p>
+        )}
+      </div>
+
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={async (e) => {
+          e.preventDefault();
+          setDragOver(false);
+          await onUpload(Array.from(e.dataTransfer.files).filter((file) => file.name.toLowerCase().endsWith(".json")));
+        }}
+        className={`p-5 rounded-2xl border border-dashed transition-colors ${
+          dragOver ? "bg-cyan-500/10 border-cyan-400/60" : "bg-white/[0.03] border-white/10"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <UploadCloud className="w-6 h-6 text-cyan-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-white">SA JSON 드래그앤드롭</p>
+            <p className="text-xs text-gray-500 mt-0.5">Google service_account JSON만 받습니다. 키 본문은 화면에 표시하지 않습니다.</p>
+          </div>
+          <label className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium rounded-lg cursor-pointer transition-colors">
+            파일 선택
+            <input
+              type="file"
+              accept="application/json,.json"
+              multiple
+              className="hidden"
+              onChange={async (e) => {
+                await onUpload(Array.from(e.target.files || []));
+                e.currentTarget.value = "";
+              }}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-white">SA 로테이션 순서</h3>
+            <p className="text-xs text-gray-500 mt-0.5">켜진 SA만 사용합니다. 드래그해서 순서를 바꾸세요.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs rounded-lg transition-colors"
+          >
+            새로고침
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-2 text-xs text-gray-500 py-4">
+            <div className="w-4 h-4 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+            SA 목록 불러오는 중...
+          </div>
+        ) : accounts.length === 0 ? (
+          <div className="text-center py-6">
+            <Key className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">등록된 Vertex SA가 없습니다</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {accounts.map((account, index) => (
+              <div
+                key={account.id}
+                draggable
+                onDragStart={() => setDraggingId(account.id)}
+                onDragEnd={() => setDraggingId(null)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggingId) moveAccount(draggingId, account.id);
+                }}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${
+                  account.enabled ? "bg-white/[0.03] border-white/10" : "bg-white/[0.015] border-white/5 opacity-55"
+                }`}
+              >
+                <GripVertical className="w-4 h-4 text-gray-600 cursor-grab shrink-0" />
+                <span className="w-6 h-6 rounded bg-cyan-500/15 text-cyan-300 text-xs flex items-center justify-center shrink-0">
+                  {index + 1}
+                </span>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-white truncate">{account.project_id}</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${account.source === "managed" ? "bg-cyan-500/15 text-cyan-300" : "bg-amber-500/15 text-amber-300"}`}>
+                      {account.source === "managed" ? "업로드" : "루트"}
+                    </span>
+                    {account.is_next && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300">
+                        다음
+                      </span>
+                    )}
+                    {account.last_used && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                        방금 사용
+                      </span>
+                    )}
+                    {account.blocked && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-300">
+                        429 대기 {Math.max(1, Number(account.blocked_remaining_sec || 0))}초
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-gray-500 truncate">{account.client_email}</p>
+                  <p className="text-[9px] text-gray-600 truncate">{account.filename}</p>
+                </div>
+                <label className="flex items-center gap-1.5 text-[10px] text-gray-400 shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={account.enabled}
+                    onChange={(e) => onToggle(account.id, e.target.checked)}
+                    className="accent-cyan-500"
+                  />
+                  사용
+                </label>
+                <button
+                  type="button"
+                  onClick={() => onTest(account.id)}
+                  disabled={testingId === account.id}
+                  className="px-2 py-1 bg-white/5 hover:bg-white/10 disabled:bg-gray-800 disabled:text-gray-500 border border-white/10 text-[10px] text-gray-300 rounded-md transition-colors"
+                >
+                  {testingId === account.id ? "테스트 중" : "테스트"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!account.managed}
+                  onClick={() => onDelete(account.id)}
+                  title={account.managed ? "삭제" : "루트 파일은 여기서 삭제하지 않습니다"}
+                  className="text-gray-600 hover:text-red-400 disabled:opacity-30 disabled:hover:text-gray-600 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {status && <p className="text-[10px] text-gray-500">{status}</p>}
+      </div>
+    </>
+  );
+}
+
+
+/* ─── 청구 금액 알림 설정 패널 ─── */
+function BillingSettingsPanel({
+  settings,
+  loading,
+  status,
+  onChange,
+  onSave,
+  onCheck,
+}: {
+  settings: BillingSettings;
+  loading: boolean;
+  status: string;
+  onChange: (next: Partial<BillingSettings>) => void;
+  onSave: () => void;
+  onCheck: () => void;
+}) {
+  const parseKrwInput = (value: string) => Number(value.replace(/[^\d]/g, "") || 0);
+  const thresholdReached = settings.total_krw >= settings.threshold_krw && settings.threshold_krw > 0;
+  const overKrw = Math.max(0, settings.total_krw - settings.threshold_krw);
+
+  return (
+    <>
+      <p className="text-[10px] text-gray-500">
+        결제 화면의 금액을 넣어두면 내부 크론이 매시간 확인합니다. 기준선을 넘으면 Telegram으로 한 번 알리고 크론을 자동으로 끕니다.
+      </p>
+
+      <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">청구 금액 경보</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              현재 입력값: {settings.current_krw.toLocaleString()}원 / {settings.total_krw.toLocaleString()}원
+            </p>
+          </div>
+          <span className={`text-[10px] px-2 py-1 rounded-full border ${
+            thresholdReached
+              ? "bg-red-500/15 text-red-300 border-red-500/30"
+              : "bg-green-500/10 text-green-300 border-green-500/20"
+          }`}>
+            {thresholdReached ? `초과 ${overKrw.toLocaleString()}원` : "기준선 아래"}
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="w-4 h-4 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+            불러오는 중...
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <BillingMoneyInput
+                label="현재 사용금액"
+                value={settings.current_krw}
+                placeholder="16,434"
+                onChange={(value) => onChange({ current_krw: parseKrwInput(value) })}
+              />
+              <BillingMoneyInput
+                label="총 청구금액"
+                value={settings.total_krw}
+                placeholder="453,008"
+                onChange={(value) => onChange({ total_krw: parseKrwInput(value) })}
+              />
+              <BillingMoneyInput
+                label="알림 기준"
+                value={settings.threshold_krw}
+                placeholder="400,000"
+                onChange={(value) => onChange({ threshold_krw: parseKrwInput(value) })}
+              />
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">크론 체크 시각</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">매시간</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={settings.cron_minute}
+                    onChange={(e) => onChange({ cron_minute: Math.max(0, Math.min(59, Number(e.target.value || 0))) })}
+                    className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  />
+                  <span className="text-xs text-gray-400">분</span>
+                </div>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-xs text-gray-300">
+              <input
+                type="checkbox"
+                checked={settings.cron_enabled}
+                onChange={(e) => onChange({ cron_enabled: e.target.checked })}
+                className="accent-emerald-500"
+              />
+              매시간 자동 체크 사용
+            </label>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onSave}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                저장
+              </button>
+              <button
+                type="button"
+                onClick={onCheck}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 text-xs font-medium rounded-lg transition-colors"
+              >
+                지금 확인
+              </button>
+              {status && <span className="text-[10px] text-gray-500">{status}</span>}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+
+function BillingMoneyInput({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="text-[10px] text-gray-500 block mb-1">{label}</label>
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">₩</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={value ? value.toLocaleString() : ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full bg-white/5 border border-white/10 rounded-lg pl-7 pr-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 font-mono"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -654,6 +1456,7 @@ function KeySection({
   onAdd,
   onRemove,
   onToggleVisible,
+  onRefreshServerKeys,
 }: {
   config: KeyConfig;
   serverStatus: boolean | null;
@@ -666,6 +1469,7 @@ function KeySection({
   onAdd: () => void;
   onRemove: (idx: number) => void;
   onToggleVisible: () => void;
+  onRefreshServerKeys?: () => Promise<void> | void;
 }) {
   const maskKey = (key: string) => {
     if (key.length <= 8) return "****";
@@ -695,7 +1499,7 @@ function KeySection({
           <span className="text-[10px] text-gray-500">
             {totalKeys > 0
               ? `${totalKeys}키 등록됨`
-              : serverStatus === false ? "미설정" : "확인 중"}
+              : serverStatus === false ? "미설정" : "서버 설정됨"}
           </span>
         </div>
       </div>
@@ -719,9 +1523,7 @@ function KeySection({
                     });
                     const data = await res.json();
                     if (data.ok && data.removed > 0) {
-                      // 목록에서 제거 (페이지 새로고침 없이)
-                      const el = document.getElementById(`env-key-${idx}`);
-                      if (el) el.remove();
+                      await onRefreshServerKeys?.();
                     } else {
                       alert("키 제거 실패: 매칭되는 키를 찾을 수 없습니다");
                     }

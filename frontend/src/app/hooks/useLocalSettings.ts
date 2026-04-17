@@ -13,7 +13,7 @@ export function useLocalSettings() {
   const [videoModel, setVideoModel] = useState(() => loadSetting("videoModel", "hero-only"));
   const [testMode, setTestMode] = useState(() => loadSetting("testMode", false));
   const [language, setLanguage] = useState(() => loadSetting("language", "ko"));
-  const [cameraStyle, setCameraStyle] = useState(() => loadSetting("cameraStyle", "cinematic"));
+  const [cameraStyle, setCameraStyle] = useState(() => loadSetting("cameraStyle", "auto"));
   const [bgmTheme, setBgmTheme] = useState(() => loadSetting("bgmTheme", "random"));
   const [formatType, setFormatType] = useState(() => loadSetting("formatType", "auto"));
   const [channel, setChannel] = useState(() => loadSetting("channel", ""));
@@ -40,7 +40,7 @@ export function useLocalSettings() {
     setVideoModel(_load("videoModel", "hero-only"));
     setTestMode(_load("testMode", false));
     setLanguage(_load("language", "ko"));
-    setCameraStyle(_load("cameraStyle", "cinematic"));
+    setCameraStyle(_load("cameraStyle", "auto"));
     setBgmTheme(_load("bgmTheme", "random"));
     setFormatType(_load("formatType", "auto"));
     setChannel(_load("channel", ""));

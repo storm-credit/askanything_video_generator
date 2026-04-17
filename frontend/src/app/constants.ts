@@ -28,6 +28,8 @@ export type PreviewData = {
   sessionId: string;
   title: string;
   channel?: string;
+  description?: string;
+  tags?: string[];
   cuts: { index: number; script: string; prompt: string; description?: string; image_url: string | null; ab_variants?: string[] }[];
 };
 

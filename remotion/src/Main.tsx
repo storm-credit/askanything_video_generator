@@ -108,10 +108,10 @@ const EMOTION_CAMERA: Record<EmotionTag, KenBurnsPreset> = {
 const KenBurnsImage: React.FC<{ src: string; durationInFrames: number; index: number; cameraStyle?: CameraStyle; emotion?: EmotionTag }> = ({ src, durationInFrames, index, cameraStyle = 'dynamic', emotion }) => {
   const frame = useCurrentFrame();
 
-  // Emotion-based camera takes priority over round-robin
+  // Emotion-based camera takes priority over round-robin.
+  // auto = 감정 태그가 있으면 감정 기반, 없으면 cinematic 프리셋으로 자연스럽게 폴백
   let preset: KenBurnsPreset;
-  // "auto" mode: always use emotion-based camera if available
-  const effectiveStyle = cameraStyle === 'auto' ? 'dynamic' : cameraStyle;
+  const effectiveStyle = cameraStyle === 'auto' ? 'cinematic' : cameraStyle;
   if (emotion && effectiveStyle !== 'static' && EMOTION_CAMERA[emotion]) {
     preset = EMOTION_CAMERA[emotion];
   } else {

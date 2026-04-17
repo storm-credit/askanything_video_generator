@@ -60,6 +60,7 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
     """
     if not prompt or not prompt.strip():
         raise ValueError(f"[Imagen 이미지 오류] 프롬프트가 비어 있습니다 (index={index})")
+    is_vertex_backend = os.getenv("GEMINI_BACKEND") == "vertex_ai"
 
     # ── 캐시 확인 ──
     cache_key_prompt = MASTER_STYLE + prompt
@@ -96,23 +97,26 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
 
         while key_attempt < MAX_KEY_RETRIES:
             # 키 선택 (이전에 429 난 키 제외)
-            if key_attempt == 0:
+            if is_vertex_backend:
+                final_api_key = current_key
+            elif key_attempt == 0:
                 final_api_key = current_key or get_google_key(service=service_tag, extra_keys=gemini_api_keys)
             else:
                 final_api_key = get_google_key(service=service_tag, exclude=tried_keys, extra_keys=gemini_api_keys)
 
-            if not final_api_key:
+            if not is_vertex_backend and not final_api_key:
                 break  # 이 모델에 사용 가능한 키 없음 → 다음 모델로
 
-            tried_keys.add(final_api_key)
+            if final_api_key:
+                tried_keys.add(final_api_key)
 
             # RPM 체크 — 한도 초과 시 잠시 대기
-            if not check_rpm_available(final_api_key, service_tag):
+            if final_api_key and not is_vertex_backend and not check_rpm_available(final_api_key, service_tag):
                 wait = exponential_backoff_wait(key_attempt, base=1.5, max_wait=10)
                 print(f"  [{model_label}] 컷 {index+1} RPM 한도 근접, {wait:.1f}초 대기...")
                 time.sleep(wait)
 
-            if key_attempt > 0:
+            if key_attempt > 0 and final_api_key:
                 print(f"  [{model_label}] 컷 {index+1} 다른 키로 재시도 (시도 {key_attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_api_key)})")
 
             if key_attempt == 0 and model_idx == 0:
@@ -145,8 +149,9 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                         pass
                     raise
 
-                record_key_usage(final_api_key, service_tag)
-                record_rpm_usage(final_api_key, service_tag)
+                if final_api_key and not is_vertex_backend:
+                    record_key_usage(final_api_key, service_tag)
+                    record_rpm_usage(final_api_key, service_tag)
                 save_to_cache(cache_key_prompt, filename)
                 print(f"OK [아트 디렉터] 컷 {index+1} {model_label} 렌더링 완료!")
                 return filename
@@ -155,17 +160,22 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 error_msg = str(e)
                 # 429/503/유료전용 → 키 차단 후 다른 키로 전환
                 if is_key_rotation_error(error_msg):
-                    mark_key_exhausted(final_api_key, service_tag)
+                    if final_api_key and not is_vertex_backend:
+                        mark_key_exhausted(final_api_key, service_tag)
                     # 지수 백오프: 다음 키 시도 전 잠시 대기
                     backoff = exponential_backoff_wait(key_attempt, base=2.0, max_wait=30)
-                    print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → {backoff:.1f}초 대기 후 다른 키로...")
+                    if final_api_key and not is_vertex_backend:
+                        print(f"  [{model_label} 키 전환] 컷 {index+1}: {mask_key(final_api_key)} 차단 → {backoff:.1f}초 대기 후 다른 키로...")
+                    else:
+                        print(f"  [{model_label} Vertex 재시도] 컷 {index+1}: {backoff:.1f}초 대기 후 다른 SA로...")
                     time.sleep(backoff)
                     key_attempt += 1
                     continue
                 if is_safety_error(error_msg) and safety_retry_count < 3:
                     enhanced_prompt = MASTER_STYLE + get_safety_fallback_prompt(prompt, safety_retry_count, topic=topic)
                     safety_retry_count += 1
-                    tried_keys.discard(final_api_key)  # safety 재시도는 같은 키로
+                    if final_api_key:
+                        tried_keys.discard(final_api_key)  # safety 재시도는 같은 키로
                     print(f"  [{model_label} 경고] 컷 {index+1} 안전 정책 위반. 대체 프롬프트로 재시도... ({safety_retry_count}/3)")
                     continue  # key_attempt 증가 안 함 — 키 로테이션 예산 소모 방지
                 print(f"  [{model_label} 실패] 컷 {index+1}: {e}")
@@ -196,6 +206,7 @@ def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_k
     from modules.utils.gemini_client import create_gemini_client
 
     enhanced_prompt = MASTER_STYLE + prompt
+    is_vertex_backend = os.getenv("GEMINI_BACKEND") == "vertex_ai"
 
     image_dir = os.path.join("assets", topic_folder, "images")
     os.makedirs(image_dir, exist_ok=True)
@@ -208,22 +219,27 @@ def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_k
 
         for key_attempt in range(MAX_KEY_RETRIES):
             # 키 로테이션: 이전 실패 키 제외하고 다음 키 선택
-            if key_attempt == 0:
+            if is_vertex_backend:
+                final_key = api_key
+            elif key_attempt == 0:
                 final_key = api_key or get_google_key(service=service_tag, extra_keys=gemini_api_keys)
             else:
                 final_key = get_google_key(service=service_tag, exclude=tried_keys, extra_keys=gemini_api_keys)
 
-            if not final_key:
+            if not is_vertex_backend and not final_key:
                 print(f"  [Nano Banana] {model_name} 사용 가능한 키 없음 → 다음 모델로")
                 break
 
-            tried_keys.add(final_key)
+            if final_key:
+                tried_keys.add(final_key)
 
             try:
                 if key_attempt == 0:
                     print(f"  [Nano Banana] 컷 {index+1} {model_name}로 생성 중...")
-                else:
+                elif final_key:
                     print(f"  [Nano Banana] 컷 {index+1} 다른 키로 재시도 ({key_attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_key)})")
+                else:
+                    print(f"  [Nano Banana] 컷 {index+1} 다른 SA로 재시도 ({key_attempt+1}/{MAX_KEY_RETRIES})")
 
                 client = create_gemini_client(api_key=final_key)
                 response = client.models.generate_content(
@@ -265,15 +281,21 @@ def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_k
                     raise
 
                 save_to_cache(enhanced_prompt, filename)
-                print(f"  [Nano Banana] 컷 {index+1} 생성 완료 ({model_name}, 키: {mask_key(final_key)})")
+                if final_key and not is_vertex_backend:
+                    print(f"  [Nano Banana] 컷 {index+1} 생성 완료 ({model_name}, 키: {mask_key(final_key)})")
+                else:
+                    print(f"  [Nano Banana] 컷 {index+1} 생성 완료 ({model_name}, Vertex SA)")
                 return filename
 
             except Exception as e:
                 error_msg = str(e)
                 last_error = e
                 if is_key_rotation_error(error_msg):
-                    mark_key_exhausted(final_key, service_tag)
-                    print(f"  [Nano Banana 키 전환] 컷 {index+1}: {mask_key(final_key)} 차단 → 다른 키로")
+                    if final_key and not is_vertex_backend:
+                        mark_key_exhausted(final_key, service_tag)
+                        print(f"  [Nano Banana 키 전환] 컷 {index+1}: {mask_key(final_key)} 차단 → 다른 키로")
+                    else:
+                        print(f"  [Nano Banana Vertex 재시도] 컷 {index+1}: 다른 SA로 전환")
                     continue
                 print(f"  [Nano Banana] {model_name} 실패: {e}")
                 break  # 이 모델 포기 → 다음 모델로

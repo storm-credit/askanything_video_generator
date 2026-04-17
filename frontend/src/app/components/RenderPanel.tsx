@@ -3,13 +3,14 @@
 import { motion } from "framer-motion";
 import { Download, Youtube, Send, Instagram } from "lucide-react";
 import { API_BASE, CHANNEL_PRESETS, type RenderResult } from "../constants";
+import type { UploadTopicMeta } from "../../components/types";
 
 interface RenderPanelProps {
   renderResults: Record<string, RenderResult>;
   activeRenderTab: string;
   setActiveRenderTab: (tab: string) => void;
   topic: string;
-  todayMeta: Record<string, { title: string; description: string; hashtags: string }> | null;
+  todayMeta: Record<string, UploadTopicMeta> | null;
   onOpenUpload: (platform: "youtube" | "tiktok" | "instagram", ch: string, videoUrl: string) => void;
 }
 

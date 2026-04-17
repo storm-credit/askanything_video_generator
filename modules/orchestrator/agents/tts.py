@@ -19,7 +19,7 @@ class TTSAgent(BaseAgent):
     name = "TTSAgent"
 
     async def execute(self, ctx: AgentContext) -> AsyncGenerator[str, None]:
-        from modules.tts.elevenlabs import generate_tts
+        from modules.tts.elevenlabs import generate_tts, prepare_spoken_script
         from modules.transcription.whisper import generate_word_timestamps, align_words_with_script
         from modules.utils.audio import normalize_audio_lufs
         from modules.utils.channel_config import get_channel_preset
@@ -48,6 +48,8 @@ class TTSAgent(BaseAgent):
 
             audio_path = None
             timestamps = None
+            spoken_script = prepare_spoken_script(cut.get("script", ""), ctx.language)
+            cut["script"] = spoken_script
 
             # 감정 태그 추출
             emotion = None
@@ -60,11 +62,11 @@ class TTSAgent(BaseAgent):
             # TTS 생성
             try:
                 audio_path = generate_tts(
-                    cut["script"], i, ctx.topic_folder,
+                    spoken_script, i, ctx.topic_folder,
                     ctx.elevenlabs_key,
                     language=ctx.language, speed=ctx.tts_speed,
                     voice_id=voice_id, voice_settings=voice_settings,
-                    emotion=emotion, channel=ctx.channel)
+                    emotion=emotion, channel=ctx.channel, already_prepared=True)
             except Exception as exc:
                 print(f"[TTSAgent] 컷 {i+1} TTS 실패: {exc}")
                 return i, None, None
@@ -82,7 +84,7 @@ class TTSAgent(BaseAgent):
                     raw_ts = generate_word_timestamps(
                         audio_path, ctx.api_key_override,
                         language=ctx.language)
-                    timestamps = align_words_with_script(raw_ts, cut.get("script", ""), lang=ctx.language)
+                    timestamps = align_words_with_script(raw_ts, spoken_script, lang=ctx.language)
                 except Exception as exc:
                     print(f"[TTSAgent] 컷 {i+1} 타임스탬프 실패: {exc}")
 

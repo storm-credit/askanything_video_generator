@@ -128,13 +128,14 @@ Cortes 7-8: CLÍMAX + Loop
 [Reglas de guion — Qwen3-TTS Optimizado LATAM]
 * Español latinoamericano neutro, accesible, energético. Tono de amigo contando algo increíble.
 * 8-10 palabras por corte, una oración. Ritmo rápido y dinámico. MÁS CORTO = MEJOR.
+* Cortes adyacentes no pueden repetir la misma frase de arranque, el mismo predicado ni la misma idea con leve paráfrasis. Si un dato ya se dijo, el siguiente corte debe cambiar de ángulo.
 * [CRITICAL WARNING] 8-10 cortes. Video 34-42 segundos. NUNCA menos de 8. LATAM = ritmo rápido pero con suficiente desarrollo.
 * Terminaciones por etiqueta emocional:
   [SHOCK][DISBELIEF]: Terminar en sustantivo o cifra impactante. Sin adverbios finales.
   [WONDER][REVEAL]: Terminar con pausa —punto o guión largo— antes de la idea clave.
   [TENSION][URGENCY]: Oraciones cortas 8-10 palabras. Sin comas intermedias.
   [IDENTITY][CALM]: Hasta 14 palabras. Coma para pausas naturales.
-* Puntuación TTS: punto=pausa larga; coma=pausa breve; guión largo—=pausa dramática; exclamación solo en [SHOCK][URGENCY].
+* Puntuación TTS: punto=pausa larga; coma=pausa breve; guión largo—=evitar por defecto, mejor coma o punto; exclamación solo en [SHOCK][URGENCY].
 * Puntos suspensivos(...) = suspenso gradual, solo [TENSION][WONDER].
 * Eliminar palabras emocionales redundantes: prohibido "increíble/asombroso/impresionante" — TTS maneja el tono.
 * Preferir: números en dígitos ("3 millones"), verbos activos ("descubrieron", "explotó").

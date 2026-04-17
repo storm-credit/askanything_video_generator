@@ -187,6 +187,14 @@ class ModelRouter:
     @staticmethod
     def _is_provider_available(provider: str, ctx: AgentContext) -> bool:
         if provider == "gemini":
+            if os.getenv("GEMINI_BACKEND", "").lower().strip() == "vertex_ai":
+                try:
+                    from modules.utils.gemini_client import count_available_sa_keys
+                    if os.getenv("VERTEX_SA_ONLY", "").lower().strip() in {"1", "true", "yes", "on"}:
+                        return count_available_sa_keys() > 0
+                    return True
+                except Exception:
+                    return False
             from modules.utils.keys import count_available_keys
             return count_available_keys(extra_keys=ctx.gemini_keys_override) > 0
         elif provider == "openai":

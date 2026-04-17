@@ -1,10 +1,39 @@
 import os
+import re
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 from .auth import _get_credentials
 from .playlists import add_to_playlist, add_to_format_playlist, add_to_series_playlist
 from .engagement import _build_related_comment, _post_pinned_comment
+
+
+def _sanitize_youtube_tags(tags: list[str] | None) -> list[str]:
+    forbidden = {"shorts", "short", "쇼츠"}
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for tag in tags or []:
+        value = str(tag).replace("#", "").strip()
+        if not value:
+            continue
+        lowered = value.lower()
+        if lowered in forbidden or lowered in seen:
+            continue
+        seen.add(lowered)
+        cleaned.append(value)
+        if len(cleaned) >= 5:
+            break
+    return cleaned
+
+
+def _sanitize_youtube_description(description: str | None) -> str:
+    """YouTube 본문 설명에서 공개 해시태그 토큰을 최종 제거."""
+    text = str(description or "")
+    text = re.sub(r"(?<!\w)#[\w가-힣ぁ-んァ-ヶ一-龥ÁÉÍÓÚÜÑáéíóúüñ-]+", "", text)
+    text = text.replace("#", "")
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return "\n".join(line.rstrip() for line in text.splitlines()).strip()
 
 
 def upload_video(
@@ -34,6 +63,9 @@ def upload_video(
 
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"동영상 파일을 찾을 수 없습니다: {video_path}")
+
+    tags = _sanitize_youtube_tags(tags)
+    description = _sanitize_youtube_description(description)
 
     # 예약 공개 검증
     if publish_at:

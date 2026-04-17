@@ -3,12 +3,13 @@
 import { motion } from "framer-motion";
 import { Download, Youtube, Send, Instagram } from "lucide-react";
 import { API_BASE, CHANNEL_PRESETS, type ChannelStatus, type PreviewData } from "../constants";
+import type { UploadTopicMeta } from "../../components/types";
 
 interface MultiChannelPanelProps {
   channelResults: Record<string, ChannelStatus>;
   channelPreviews: Record<string, PreviewData>;
   topic: string;
-  todayMeta: Record<string, { title: string; description: string; hashtags: string }> | null;
+  todayMeta: Record<string, UploadTopicMeta> | null;
   onOpenUpload: (platform: "youtube" | "tiktok" | "instagram", ch: string, videoUrl: string) => void;
 }
 

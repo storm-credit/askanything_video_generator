@@ -13,8 +13,8 @@ KST = timezone(timedelta(hours=9))
 # ※ 배치(영상 생성)는 새벽 2~6시에 별도 실행, 여기서는 공개 시간만 제어
 CHANNEL_WINDOWS = {
     "askanything": {
-        "start": dt_time(21, 0),   # KST 21:00 — 한국 저녁 프라임 (21~24시 피크)
-        "end": dt_time(23, 30),    # KST 23:30
+        "start": dt_time(19, 30),  # KST 19:30 — 한국 저녁 프라임 초입부터 선점
+        "end": dt_time(22, 0),     # KST 22:00
         "min_interval_min": 45,
     },
     "wonderdrop": {
@@ -28,8 +28,8 @@ CHANNEL_WINDOWS = {
         "min_interval_min": 45,
     },
     "prismtale": {
-        "start": dt_time(13, 30),  # KST 13:30 = CET 05:30 / EST 00:30 — 유럽 아침 + US 야간 (exploratodo와 겹침 해소)
-        "end": dt_time(16, 0),     # KST 16:00 = CET 08:00 / EST 03:00
+        "start": dt_time(7, 30),   # KST 07:30 = EST 18:30 / CET 00:30 — US 저녁 우선
+        "end": dt_time(10, 30),    # KST 10:30 = EST 21:30 / CET 03:30
         "min_interval_min": 45,
     },
 }

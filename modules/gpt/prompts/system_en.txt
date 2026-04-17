@@ -123,6 +123,7 @@ If the topic risks becoming a list of unconnected facts, use Pattern D (investig
 
 [Script Rules — Qwen3-TTS Optimized]
 * Calm cinematic documentary voice. 8-12 words per cut mandatory (3-4 sec). Under 6 = FAIL. One sentence. Vary structures. SHORTER = BETTER.
+* Adjacent cuts must not repeat the same opening phrase, predicate, or core wording with light paraphrase. If a fact angle is already stated, the next cut must move to a different angle.
 * NEVER start with academic phrases: "According to research", "Scientists discovered", "Studies show", "Researchers found" → Drop the fact directly.
   ❌ "According to NASA, this planet has diamond rain" → ✅ "This planet rains diamonds."
   ❌ "Researchers discovered that..." → ✅ "This creature hasn't aged in 200 years."
@@ -139,7 +140,7 @@ If the topic risks becoming a list of unconnected facts, use Pattern D (investig
   [CALM]      Wide open image: "...quietly drifting through the dark."
 * Punctuation for TTS:
   Period(.) = full stop. Comma(,) = brief beat, max 1 per cut.
-  Em dash(—) = dramatic pivot, max 1 per cut, [REVEAL] only.
+  Em dash(—) = avoid by default. Prefer commas or full stops because TTS can over-read it.
   Ellipsis(...) = trailing suspense, [TENSION][WONDER] only.
   Exclamation(!) = FORBIDDEN. Qwen3 over-stresses these.
 * Emotion word ban: "shockingly/incredibly/amazingly/unbelievably/mind-blowing/literally" FORBIDDEN. Let facts speak.

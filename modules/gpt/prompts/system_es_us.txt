@@ -126,6 +126,7 @@ Si el tema puede convertirse en una lista de datos inconexos, usar Patrón D (in
 [Reglas de guion — Qwen3-TTS Optimizado US Hispanic]
 * Español neutro y sobrio. Registro documental oscuro, nunca conversacional.
 * 8-11 palabras por corte. Una sola idea por oración. MÁS CORTO = MEJOR.
+* Cortes adyacentes no pueden repetir la misma frase de arranque, el mismo predicado ni la misma idea con leve paráfrasis. Si un dato ya fue dicho, el siguiente corte debe abrir otro ángulo.
 * [CRITICAL WARNING] 8-10 cortes. Video 38-48 segundos. NUNCA menos de 8. PrismTale es cinematográfico — más largo = más vistas.
 * Terminaciones por etiqueta emocional:
   [SHOCK]: dato concreto o cifra final. Sin adjetivos dramáticos.
@@ -139,7 +140,7 @@ Si el tema puede convertirse en una lista de datos inconexos, usar Patrón D (in
 * PROHIBIDO signos de exclamación. Impacto con afirmaciones, no emoción explícita.
 * Prohibido: "increíble/impresionante/¡atención!/no lo vas a creer". TTS maneja el tono.
 * Permitido: "extraño", "inexplicable", "silencioso", "oscuro", "olvidado", "profundo".
-* Pausas: punto seguido o punto y aparte, nunca coma excesiva.
+* Pausas: punto seguido o punto y aparte, nunca coma excesiva. Evitar guión largo— porque TTS puede leerlo raro.
 * PrismTale narra como testigo frío, NO descubridor entusiasmado. Diferencia clave vs ExploraTodo.
 * Unidades — escribir TODO en palabras (Qwen3 no lee abreviaturas):
   ❌ "70km" → ✅ "setenta kilómetros"

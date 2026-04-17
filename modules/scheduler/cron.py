@@ -4,10 +4,11 @@ api_server.py 시작 시 자동 등록. Docker 재시작해도 다시 등록.
 
 스케줄:
   매주 일요일 21:00 KST → 주간 토픽 생성 (다음 주 7일분)
-  매일 05:00 KST → 당일 Day 파일 자동 배포
+  매일 02:00 KST → 당일 Day 파일 자동 배포 (AUTO_DEPLOY_CRON_ENABLED=true일 때)
   매일 23:50 KST → 일일 성과 기록
 """
 import asyncio
+import os
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Any
@@ -61,6 +62,51 @@ def add_daily(name: str, hour: int, minute: int, func: Callable):
     print(f"[크론] 등록: {name} — 매일 {hour:02d}:{minute:02d} KST (다음: {next_t.strftime('%m/%d %H:%M')})")
 
 
+def add_hourly(name: str, minute: int, func: Callable):
+    """매시간 실행 작업 등록. 같은 이름 중복 등록 방지."""
+    if any(j["name"] == name for j in _jobs):
+        print(f"[크론] 스킵: {name} — 이미 등록됨")
+        return
+    minute = max(0, min(59, int(minute)))
+    _jobs.append({
+        "name": name,
+        "hour": None,
+        "minute": minute,
+        "weekday": None,
+        "func": func,
+        "type": "hourly",
+    })
+    now = _now_kst()
+    next_t = now.replace(minute=minute, second=0, microsecond=0)
+    if now >= next_t:
+        next_t += timedelta(hours=1)
+    print(f"[크론] 등록: {name} — 매시간 {minute:02d}분 KST (다음: {next_t.strftime('%m/%d %H:%M')})")
+
+
+def set_hourly(name: str, minute: int, func: Callable, enabled: bool = True):
+    """매시간 작업을 런타임에 추가/수정/비활성화."""
+    global _jobs
+    minute = max(0, min(59, int(minute)))
+    existing = next((j for j in _jobs if j["name"] == name), None)
+    if not enabled:
+        before = len(_jobs)
+        _jobs = [j for j in _jobs if j["name"] != name]
+        if before != len(_jobs):
+            print(f"[크론] 비활성화: {name}")
+        return
+    if existing:
+        existing.update({
+            "hour": None,
+            "minute": minute,
+            "weekday": None,
+            "func": func,
+            "type": "hourly",
+        })
+        print(f"[크론] 수정: {name} — 매시간 {minute:02d}분 KST")
+        return
+    add_hourly(name, minute, func)
+
+
 def add_weekly(name: str, weekday: int, hour: int, minute: int, func: Callable):
     """매주 특정 요일 실행 작업 등록. weekday: 0=월~6=일. 같은 이름 중복 방지."""
     if any(j["name"] == name for j in _jobs):
@@ -106,7 +152,15 @@ async def _scheduler_loop():
     print(f"[크론] 스케줄러 시작 ({len(_jobs)}개 작업)")
 
     # 헬스체크 — 등록된 잡 수 확인 + 텔레그램 알림
-    expected_jobs = 5  # topics, stats, playlists, daily_cost, morning_briefing (deploy 비활성)
+    expected_jobs = 5
+    if os.getenv("AUTO_DEPLOY_CRON_ENABLED", "false").lower() in {"1", "true", "yes", "on"}:
+        expected_jobs += 1
+    try:
+        from modules.utils.cost_tracker import load_billing_settings
+        if load_billing_settings().get("cron_enabled", True):
+            expected_jobs += 1
+    except Exception:
+        expected_jobs += 1
     if len(_jobs) < expected_jobs:
         try:
             from modules.utils.notify import notify_warning
@@ -123,7 +177,10 @@ async def _scheduler_loop():
             # 현재 시각의 시:분이 스케줄과 일치하는지만 체크 (±초 윈도우 제거)
             if job.get("weekday") is not None and now.weekday() != job["weekday"]:
                 continue
-            if now.hour != job["hour"] or now.minute != job["minute"]:
+            if job.get("type") == "hourly":
+                if now.minute != job["minute"]:
+                    continue
+            elif now.hour != job["hour"] or now.minute != job["minute"]:
                 continue
             # 이번 분에 이미 실행했으면 스킵 (중복 방지)
             last_run = job.get("_last_run")
@@ -172,11 +229,18 @@ def get_status() -> dict[str, Any]:
     now = _now_kst()
     jobs_info = []
     for job in _jobs:
-        next_t = _next_run(job["hour"], job["minute"], job.get("weekday"))
+        if job.get("type") == "hourly":
+            next_t = now.replace(minute=job["minute"], second=0, microsecond=0)
+            if now >= next_t:
+                next_t += timedelta(hours=1)
+            schedule = f"매시간 {job['minute']:02d}분 KST"
+        else:
+            next_t = _next_run(job["hour"], job["minute"], job.get("weekday"))
+            schedule = f"{job['hour']:02d}:{job['minute']:02d} KST"
         jobs_info.append({
             "name": job["name"],
             "type": job["type"],
-            "schedule": f"{job['hour']:02d}:{job['minute']:02d} KST",
+            "schedule": schedule,
             "next_run": next_t.strftime("%Y-%m-%d %H:%M KST"),
             "last_run": job.get("_last_run", "").isoformat() if job.get("_last_run") else None,
         })

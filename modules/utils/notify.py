@@ -9,8 +9,13 @@
 """
 import os
 import json
-import requests
+import urllib.request
 from datetime import datetime, timezone, timedelta
+
+try:
+    import requests
+except Exception:
+    requests = None
 
 _KST = timezone(timedelta(hours=9))
 
@@ -30,11 +35,11 @@ CHANNEL_EMOJI = {
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8003")
 
 
-def _send(text: str, silent: bool = False, buttons: list = None):
+def _send(text: str, silent: bool = False, buttons: list = None) -> bool:
     """텔레그램 메시지 전송 (인라인 버튼 지원)."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print(f"[알림] Telegram 미설정 — {text[:50]}")
-        return
+        return False
     try:
         payload = {
             "chat_id": TELEGRAM_CHAT_ID,
@@ -46,9 +51,21 @@ def _send(text: str, silent: bool = False, buttons: list = None):
             payload["reply_markup"] = json.dumps({
                 "inline_keyboard": [buttons]
             })
-        requests.post(f"{TELEGRAM_API}/sendMessage", json=payload, timeout=10)
+        if requests is not None:
+            response = requests.post(f"{TELEGRAM_API}/sendMessage", json=payload, timeout=10)
+            return response.ok
+        else:
+            req = urllib.request.Request(
+                f"{TELEGRAM_API}/sendMessage",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10):
+                return True
     except Exception as e:
         print(f"[알림] Telegram 전송 실패: {e}")
+        return False
 
 
 def notify_success(channel: str, topic: str, video_url: str = None):
@@ -121,8 +138,18 @@ def notify_daily_cost(date: str = ""):
         from modules.utils.cost_tracker import build_daily_summary_text
         text = build_daily_summary_text(date or None)
         _send(text)
+        _notify_env_billing_threshold()
     except Exception as e:
         print(f"[알림] 일일 결산 알림 실패: {e}")
+
+
+def _notify_env_billing_threshold():
+    """저장된 청구 설정 또는 환경변수 기준으로 40만원 초과 여부 확인."""
+    try:
+        from modules.utils.cost_tracker import check_configured_billing_threshold
+        check_configured_billing_threshold(send_telegram=True)
+    except Exception as e:
+        print(f"[알림] 청구 임계치 알림 실패: {e}")
 
 
 def notify_deploy_summary(total: int, completed: int, failed: int, date: str):

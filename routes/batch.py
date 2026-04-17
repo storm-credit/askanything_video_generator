@@ -65,6 +65,14 @@ async def batch_stats():
 async def batch_start():
     """배치 큐의 대기 작업을 순차 실행합니다."""
     global _batch_running
+    if os.getenv("ENABLE_LEGACY_BATCH_EXECUTION", "false").lower() not in {"1", "true", "yes", "on"}:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "running": False,
+                "message": "레거시 배치 실행은 안전장치 우회를 막기 위해 비활성화되었습니다. 오늘 할 일/auto_deploy 경로를 사용하세요.",
+            },
+        )
     if _batch_running:
         return {"message": "배치가 이미 실행 중입니다", "running": True}
     _batch_stop.clear()
@@ -318,6 +326,9 @@ async def batch_import_day(file_path: str = None, date: str = None):
         update_job(job_id,
             draft_title=job["title"],
             draft_tags=job.get("hashtags", ""),
+            series_title=job.get("series_title"),
+            obsidian_uri=job.get("obsidian_uri"),
+            format_type=job.get("format_type"),
             review_notes=f"Imported from {job.get('source_file', 'Obsidian')}",
         )
         created_ids.append(job_id)

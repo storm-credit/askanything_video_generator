@@ -36,6 +36,17 @@ export interface KeyUsageStats {
   keys: KeyUsageEntry[];
 }
 
+export interface UploadTopicMeta {
+  title: string;
+  description: string;
+  hashtags: string;
+  formatType?: string;
+  seriesTitle?: string | null;
+  sourceFile?: string;
+  sourceSection?: string;
+  obsidianUri?: string;
+}
+
 export const KEY_CONFIGS: KeyConfig[] = [
   // ── 핵심 키 (Google 또는 OpenAI 중 하나 + ElevenLabs = 최소 구성) ──
   {

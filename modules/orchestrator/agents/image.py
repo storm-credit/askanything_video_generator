@@ -67,8 +67,8 @@ class ImageAgent(BaseAgent):
                             cut["prompt"], i, ctx.topic_folder, key,
                             topic=ctx.topic)
 
-                    # Gemini Flash Vision 검수 + 실패 시 1회 재생성
-                    if img_path:
+                    # 컷1은 아래 A/B scoring에서 Vision을 한 번 더 쓰므로 중복 검수를 피한다.
+                    if img_path and i != 0:
                         from modules.orchestrator.agents.image_validator import validate_and_retry
                         img_path = validate_and_retry(
                             img_path, cut["prompt"], i, ctx.topic_folder,
@@ -173,6 +173,7 @@ class ImageAgent(BaseAgent):
             if path:
                 ctx.image_count += 1
             if i == 0 and ab_vars:
+                ctx.image_count += len(ab_vars)
                 ctx.cut1_ab_variants = ab_vars
                 # Vision API로 스크롤멈추기 점수 측정 → 최선 선택
                 best = _pick_best_cut1(path, ab_vars, ctx.cuts[0].get("script", ""),

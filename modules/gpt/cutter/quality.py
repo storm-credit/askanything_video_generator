@@ -1,8 +1,92 @@
 import re
+from difflib import SequenceMatcher
 from .parser import _VALID_EMOTIONS
 
 
 # ── HARD FAIL 검증 (코드 레벨 품질 게이트) ──────────────────────────
+
+_WEAPON_TOPIC_PATTERN = re.compile(r"(무기|weapon|weapons|arma|armas)", re.IGNORECASE)
+_WEAPON_SCRIPT_PATTERN = re.compile(
+    r"(무기|발톱|턱|이빨|치아|송곳니|꼬리\s*곤봉|꼬리곤봉|뿔|가시|bite|bite force|jaw|jaws|teeth|tooth|fang|claw|claws|talon|talons|horn|horns|spike|spikes|tail club|clubbed tail|weapon|weapons|arma|armas|garra|garras|diente|dientes|colmillo|colmillos|mordida|mandibula|mandíbula|mandibulas|mandíbulas|cola|cuerno|cuernos|espina|espinas)",
+    re.IGNORECASE,
+)
+_KOREAN_STIFF_ENDING_PATTERN = re.compile(r"(입니다|합니다|였습니다|했습니다|그 자체)([.!?…]?)$")
+_KOREAN_REPEAT_PHRASE_PATTERN = re.compile(r"[가-힣A-Za-z]{3,}")
+_COUNTDOWN_RANK_PATTERN = re.compile(
+    r"(?:#?\s*(\d{1,2})\s*(?:위|등|번째|st|nd|rd|th|°|lugar)\b)|(?:\b(top)\s*(\d{1,2})\b)|(?:\b(number|no\.)\s*(\d{1,2})\b)",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_weapon_topic(cuts: list[dict]) -> bool:
+    if not cuts:
+        return False
+    topic = (
+        cuts[0].get("topic")
+        or cuts[0].get("topic_title")
+        or cuts[0].get("title")
+        or ""
+    )
+    return bool(_WEAPON_TOPIC_PATTERN.search(topic))
+
+
+def _countdown_target_n(cuts: list[dict]) -> int | None:
+    topic = " ".join(
+        str(cuts[0].get(k, "") or "")
+        for k in ("topic", "topic_title", "title", "script")
+    ) if cuts else ""
+    m = re.search(r"\btop\s*(\d{1,2})\b|TOP\s*(\d{1,2})|(\d{1,2})\s*(?:개|가지|위)", topic, re.IGNORECASE)
+    if not m:
+        return 3 if _looks_like_weapon_topic(cuts) else None
+    for group in m.groups():
+        if group:
+            return int(group)
+    return None
+
+
+def _extract_countdown_rank(text: str) -> int | None:
+    match = _COUNTDOWN_RANK_PATTERN.search(text or "")
+    if not match:
+        return None
+    for group in match.groups():
+        if group and group.isdigit():
+            return int(group)
+    return None
+
+
+def _is_spoken_korean_channel(channel: str | None) -> bool:
+    return (channel or "").lower() == "askanything"
+
+
+def _normalize_script_for_similarity(text: str) -> str:
+    text = re.sub(r"[^\w\s가-힣]", " ", (text or "").lower())
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _shared_long_tokens(a: str, b: str) -> set[str]:
+    tokens_a = {t for t in _normalize_script_for_similarity(a).split() if len(t) >= 3}
+    tokens_b = {t for t in _normalize_script_for_similarity(b).split() if len(t) >= 3}
+    return tokens_a & tokens_b
+
+
+def _shared_opening_tokens(a: str, b: str, limit: int = 4) -> list[str]:
+    tokens_a = [t for t in _normalize_script_for_similarity(a).split() if len(t) >= 2][:limit]
+    tokens_b = [t for t in _normalize_script_for_similarity(b).split() if len(t) >= 2][:limit]
+    shared: list[str] = []
+    for ta, tb in zip(tokens_a, tokens_b):
+        if ta != tb:
+            break
+        shared.append(ta)
+    return shared
+
+
+def _shared_token_phrases(a: str, b: str, n: int = 2) -> set[str]:
+    tokens_a = [t for t in _normalize_script_for_similarity(a).split() if len(t) >= 2]
+    tokens_b = [t for t in _normalize_script_for_similarity(b).split() if len(t) >= 2]
+    phrases_a = {" ".join(tokens_a[i:i+n]) for i in range(len(tokens_a) - n + 1)}
+    phrases_b = {" ".join(tokens_b[i:i+n]) for i in range(len(tokens_b) - n + 1)}
+    return {p for p in (phrases_a & phrases_b) if len(p.replace(" ", "")) >= 4}
 
 def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[str]:
     """프롬프트의 HARD FAIL 조건을 코드로 검증. 실패 항목 리스트 반환 (빈 리스트 = 통과)."""
@@ -119,6 +203,56 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
                         f"CONTENT_REPEAT: 컷{i+1}↔컷{j+1} 내용 65%+ 중복 "
                         f"({len(overlap)}/{min(len(words_i), len(words_j))}단어 일치)"
                     )
+                    continue
+
+                normalized_i = _normalize_script_for_similarity(scripts[i])
+                normalized_j = _normalize_script_for_similarity(scripts[j])
+                if not normalized_i or not normalized_j:
+                    continue
+
+                seq_ratio = SequenceMatcher(None, normalized_i, normalized_j).ratio()
+                shared_tokens = _shared_long_tokens(scripts[i], scripts[j])
+                if seq_ratio >= 0.72 and len(shared_tokens) >= 2:
+                    failures.append(
+                        f"CONTENT_NEAR_REPEAT: 컷{i+1}↔컷{j+1} 표현만 바꾼 유사 반복 "
+                        f"(유사도 {seq_ratio:.2f}, 공통어 {', '.join(sorted(shared_tokens)[:4])})"
+                    )
+
+    # 6-b) askanything 한국어 말투 검증 — 딱딱한 형식체 마무리 차단
+    if _is_spoken_korean_channel(channel):
+        for ci, c in enumerate(cuts):
+            script = (c.get("script", "") or "").strip()
+            if script and _KOREAN_STIFF_ENDING_PATTERN.search(script):
+                failures.append(f"KOREAN_TONE_STIFF: 컷{ci+1} 한국어 말투가 딱딱함 — '{script[:50]}'")
+        for ci in range(1, len(cuts)):
+            prev_script = (cuts[ci - 1].get("script", "") or "").strip()
+            curr_script = (cuts[ci].get("script", "") or "").strip()
+            shared_tokens = _shared_long_tokens(prev_script, curr_script)
+            shared_opening = _shared_opening_tokens(prev_script, curr_script)
+            shared_phrases = _shared_token_phrases(prev_script, curr_script, n=2)
+            if len(shared_tokens) >= 2:
+                seq_ratio = SequenceMatcher(
+                    None,
+                    _normalize_script_for_similarity(prev_script),
+                    _normalize_script_for_similarity(curr_script),
+                ).ratio()
+                if seq_ratio >= 0.6:
+                    failures.append(
+                        f"KOREAN_NEAR_REPEAT: 컷{ci}↔컷{ci+1} 비슷한 말 반복 "
+                        f"(유사도 {seq_ratio:.2f}, 공통어 {', '.join(sorted(shared_tokens)[:4])})"
+                    )
+                    continue
+            if len(shared_opening) >= 2:
+                failures.append(
+                    f"KOREAN_OPENING_REPEAT: 컷{ci}↔컷{ci+1} 문장 앞머리 반복 "
+                    f"({ ' '.join(shared_opening) })"
+                )
+                continue
+            if shared_phrases:
+                failures.append(
+                    f"KOREAN_PHRASE_REPEAT: 컷{ci}↔컷{ci+1} 핵심 구절 반복 "
+                    f"({', '.join(sorted(shared_phrases)[:3])})"
+                )
 
     # 7) 포맷별 구조 검증 (format_type은 line 71에서 이미 추출됨)
 
@@ -181,13 +315,34 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
         if not has_reveal:
             failures.append("FORMAT_COUNTDOWN: [REVEAL] 태그 없음 — 1위 공개 컷 필수")
-        # 순위 숫자 — 권장 (warning)
-        cuts_with_numbers = sum(
-            1 for c in cuts
-            if re.search(r'\d+\s*(?:위|등|번째|th|st|nd|rd|°|lugar|er[oa]?|t[oa]s?)', c.get("script", ""), re.IGNORECASE)
-        )
-        if cuts_with_numbers < 3:
-            warnings.append(f"FORMAT_COUNTDOWN_SOFT: 순위 표기 {cuts_with_numbers}컷 (권장 3컷 이상)")
+        target_n = _countdown_target_n(cuts)
+        ranked_items: list[tuple[int, int, str]] = []
+        for ci, c in enumerate(cuts):
+            script = c.get("script", "") or ""
+            rank = _extract_countdown_rank(script)
+            if rank:
+                ranked_items.append((ci + 1, rank, script))
+        if target_n:
+            expected_ranks = set(range(1, target_n + 1))
+            actual_ranks = {rank for _, rank, _ in ranked_items if rank in expected_ranks}
+            if actual_ranks != expected_ranks:
+                failures.append(
+                    f"FORMAT_COUNTDOWN: TOP {target_n}인데 순위 컷이 정확하지 않음 "
+                    f"(필요 {sorted(expected_ranks)}, 실제 {sorted(actual_ranks)})"
+                )
+            extra_ranks = [rank for _, rank, _ in ranked_items if rank > target_n]
+            if extra_ranks:
+                failures.append(f"FORMAT_COUNTDOWN: TOP {target_n} 범위 밖 순위 표기 감지 ({sorted(set(extra_ranks))})")
+        elif len(ranked_items) < 3:
+            warnings.append(f"FORMAT_COUNTDOWN_SOFT: 순위 표기 {len(ranked_items)}컷 (권장 3컷 이상)")
+        if _looks_like_weapon_topic(cuts):
+            weapon_lines = [
+                (ci, rank, script) for ci, rank, script in ranked_items
+                if _WEAPON_SCRIPT_PATTERN.search(script)
+            ]
+            required = target_n or 3
+            if len(weapon_lines) < required:
+                failures.append(f"FORMAT_COUNTDOWN_WEAPON: 무기 TOP {required}인데 무기 명칭이 직접 나온 순위 컷이 {len(weapon_lines)}개")
 
     elif fmt_type == "SCALE":
         # 컷1 [SHOCK] — 권장 (warning)
@@ -296,11 +451,14 @@ def _validate_narrative_arc(cuts: list[dict], lang: str = "ko") -> list[str]:
 
     issues: list[str] = []
 
-    # 1. HOOK: 첫 컷은 강한 감정 필수
+    # 1. HOOK: 첫 컷은 포맷별 선행 감정 필수
+    fmt_type = ((cuts[0].get("format_type") or "") if cuts else "").upper()
     high_emotions = {"SHOCK", "URGENCY", "DISBELIEF"}
+    if fmt_type == "EMOTIONAL_SCI":
+        high_emotions = {"WONDER", "IDENTITY", "TENSION"}
     if emotions[0] not in high_emotions:
         issues.append(
-            f"ARC_HOOK: 첫 컷 감정 [{emotions[0]}] 약함 — SHOCK/URGENCY/DISBELIEF 필요"
+            f"ARC_HOOK: 첫 컷 감정 [{emotions[0]}] 약함 — {'/'.join(sorted(high_emotions))} 필요"
         )
 
     # 2. LOOP: 마지막 컷은 열린 마무리 (SHOCK/URGENCY로 끝나면 루프 안 됨)
@@ -311,18 +469,22 @@ def _validate_narrative_arc(cuts: list[dict], lang: str = "ko") -> list[str]:
 
     # 3. CLIMAX: 후반부(컷5~끝-1)에 임팩트 감정 존재
     climax_emotions = {"SHOCK", "REVEAL", "URGENCY", "DISBELIEF"}
+    if fmt_type == "EMOTIONAL_SCI":
+        climax_emotions = {"REVEAL", "WONDER", "IDENTITY", "TENSION"}
     climax_range = emotions[4:-1] if len(emotions) > 5 else emotions[3:-1]
     if climax_range and not any(e in climax_emotions for e in climax_range if e):
         issues.append(
-            "ARC_CLIMAX: 후반부 클라이맥스 없음 — 컷5~끝-1에 SHOCK/REVEAL/URGENCY 필요"
+            f"ARC_CLIMAX: 후반부 클라이맥스 없음 — 컷5~끝-1에 {'/'.join(sorted(climax_emotions))} 필요"
         )
 
     # 4. PIVOT: 중반부(컷3~5)에 두 번째 훅 (REVEAL or SHOCK)
     pivot_range = emotions[2:5] if len(emotions) > 4 else emotions[2:]
     pivot_emotions = {"REVEAL", "SHOCK", "DISBELIEF", "URGENCY"}
+    if fmt_type == "EMOTIONAL_SCI":
+        pivot_emotions = {"REVEAL", "TENSION", "IDENTITY", "WONDER"}
     if pivot_range and not any(e in pivot_emotions for e in pivot_range if e):
         issues.append(
-            "ARC_PIVOT: 중반부(컷3~5) 두 번째 훅 없음 — REVEAL/SHOCK/URGENCY 필요"
+            f"ARC_PIVOT: 중반부(컷3~5) 두 번째 훅 없음 — {'/'.join(sorted(pivot_emotions))} 필요"
         )
 
     # 5. RELEASE: 이완 컷 (WONDER/CALM/IDENTITY) 최소 1개

@@ -23,6 +23,7 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "format_cuts": {
             "WHO_WINS":      {"min": 11, "max": 11},  # ~2.7s/컷 → 11컷=30s
             "IF":            {"min": 10, "max": 11},  # ~3.1s/컷 → 10컷=31s
+            "EMOTIONAL_SCI": {"min": 8,  "max": 9},
             "FACT":          {"min": 10, "max": 11},  # ~3.1s/컷 → 10컷=31s
             "COUNTDOWN":     {"min": 8,  "max": 10},
             "SCALE":         {"min": 7,  "max": 9},
@@ -100,10 +101,12 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "format_cuts": {
             "WHO_WINS":      {"min": 11, "max": 11},  # ~2.8s/컷 → 11컷=31s
             "IF":            {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
+            "EMOTIONAL_SCI": {"min": 9,  "max": 9},
             "FACT":          {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
             "PARADOX":       {"min": 9,  "max": 9},   # 단어수 상향 → 9컷=38s
             "SCALE":         {"min": 8,  "max": 9},
             "COUNTDOWN":     {"min": 8,  "max": 10},
+            "MYSTERY":       {"min": 8,  "max": 9},
         },
         "preferred_formats": ["IF", "WHO_WINS", "SCALE", "FACT", "COUNTDOWN", "PARADOX"],
         "voice_settings": {

@@ -198,7 +198,7 @@ async def generate_video_endpoint(req: GenerateRequest):
     from modules.image.dalle import generate_image as generate_image_dalle
     from modules.image.imagen import generate_image_imagen, generate_image_nano_banana
     from modules.video.engines import generate_video_from_image, check_engine_available
-    from modules.tts.elevenlabs import generate_tts, check_quota as check_elevenlabs_quota
+    from modules.tts.elevenlabs import generate_tts, prepare_spoken_script, check_quota as check_elevenlabs_quota
     from modules.transcription.whisper import generate_word_timestamps
     from modules.video.remotion import create_remotion_video
     from modules.utils.constants import PROVIDER_LABELS
@@ -276,25 +276,25 @@ async def generate_video_endpoint(req: GenerateRequest):
                     yield {"data": f"WARN|[ElevenLabs 크레딧 경고] {remaining:,}/{limit:,}자 남음 ({pct:.0f}%).\n"}
 
             # Google 키 가용성 경고
-            total_keys = count_google_keys(extra_keys=gemini_keys_override)
-            avail_keys = count_available_keys(extra_keys=gemini_keys_override)
-            if total_keys > 0 and avail_keys < total_keys:
-                blocked_count = total_keys - avail_keys
-                if avail_keys == 0:
-                    yield {"data": f"WARN|[Google 키 경고] 모든 {total_keys}개 키가 429 차단됨. 쿼터 초과 가능성 높음.\n"}
-                else:
-                    yield {"data": f"WARN|[Google 키 상태] {avail_keys}/{total_keys}개 사용 가능 ({blocked_count}개 24시간 차단 중)\n"}
+            if os.getenv("GEMINI_BACKEND") != "vertex_ai":
+                total_keys = count_google_keys(extra_keys=gemini_keys_override)
+                avail_keys = count_available_keys(extra_keys=gemini_keys_override)
+                if total_keys > 0 and avail_keys < total_keys:
+                    blocked_count = total_keys - avail_keys
+                    if avail_keys == 0:
+                        yield {"data": f"WARN|[Google 키 경고] 모든 {total_keys}개 키가 429 차단됨. 쿼터 초과 가능성 높음.\n"}
+                    else:
+                        yield {"data": f"WARN|[Google 키 상태] {avail_keys}/{total_keys}개 사용 가능 ({blocked_count}개 24시간 차단 중)\n"}
 
             provider_label = PROVIDER_LABELS.get(llm_provider, "ChatGPT")
 
-            # 채널 프리셋 fallback: 프론트엔드 기본값이면 채널 프리셋 값 적용
+            # 채널 프리셋 fallback: 속도/자막 기본값만 보정.
+            # cameraStyle은 사용자가 cinematic/auto 등을 명시 선택할 수 있으므로 덮어쓰지 않는다.
             if req.channel:
                 _ch_preset = get_channel_preset(req.channel)
                 if _ch_preset:
                     if _ch_preset.get("tts_speed") is not None:
                         req.ttsSpeed = _ch_preset["tts_speed"]
-                    if req.cameraStyle == "auto" and _ch_preset.get("camera_style"):
-                        req.cameraStyle = _ch_preset["camera_style"]
                     if _ch_preset.get("caption_size"):
                         req.captionSize = _ch_preset["caption_size"]
                     if _ch_preset.get("caption_y"):
@@ -434,6 +434,8 @@ async def generate_video_endpoint(req: GenerateRequest):
             visual_paths = [None] * len(cuts)
             audio_paths = [None] * len(cuts)
             word_timestamps_list = [None] * len(cuts)
+            for cut in cuts:
+                cut["script"] = prepare_spoken_script(cut.get("script", ""), language)
             scripts = [cut["script"] for cut in cuts]
 
             # 이미지 엔진에 따라 생성 함수 선택
@@ -541,7 +543,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                             if f"[{_etag}]" in _cut_desc:
                                 _cut_emotion = _etag
                                 break
-                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=channel_voice_id, voice_settings=channel_voice_settings, emotion=_cut_emotion, channel=req.channel)
+                        tts_result[0] = generate_tts(cut["script"], i, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=channel_voice_id, voice_settings=channel_voice_settings, emotion=_cut_emotion, channel=req.channel, already_prepared=True)
                     except Exception as exc:
                         with errors_lock:
                             errors.append(f"TTS: {exc}")
@@ -568,8 +570,18 @@ async def generate_video_endpoint(req: GenerateRequest):
                 _should_video = False
                 if img_path and active_video_engine != "none":
                     if video_model_override == "hero-only":
-                        # Hero cut만: SHOCK/REVEAL 태그만 비디오 생성 (비용 50-70% 절감)
-                        _hero_emotions = {"SHOCK", "REVEAL"}
+                        # Hero cut만: 포맷별 핵심 감정 태그 컷만 비디오 생성 (비용 절감)
+                        _hero_by_format = {
+                            "WHO_WINS": {"SHOCK", "REVEAL", "DISBELIEF"},
+                            "IF": {"SHOCK", "REVEAL", "URGENCY"},
+                            "EMOTIONAL_SCI": {"WONDER", "REVEAL"},
+                            "FACT": {"SHOCK", "REVEAL"},
+                            "COUNTDOWN": {"SHOCK", "REVEAL"},
+                            "SCALE": {"SHOCK", "REVEAL"},
+                            "PARADOX": {"SHOCK", "REVEAL", "DISBELIEF"},
+                            "MYSTERY": {"SHOCK", "TENSION", "REVEAL"},
+                        }
+                        _hero_emotions = _hero_by_format.get((req.formatType or "FACT").upper(), {"SHOCK", "REVEAL"})
                         _cut_desc = cut.get("description", "")
                         _is_hero = any(f"[{e}]" in _cut_desc for e in _hero_emotions)
                         if _is_hero:
@@ -662,20 +674,29 @@ async def generate_video_endpoint(req: GenerateRequest):
             yield {"data": f"[렌더링 마스터] Remotion 렌더링 시작 — 플랫폼: {platform_label}\n"}
 
             # 단계 4: Remotion 비디오 렌더링 (멀티 플랫폼 지원)
-            render_result = await loop.run_in_executor(
-                None,
-                lambda: create_remotion_video(
-                    visual_paths, audio_paths, scripts,
-                    word_timestamps_list, topic_folder, title=video_title,
-                    camera_style=req.cameraStyle,
-                    bgm_theme=req.bgmTheme,
-                    channel=req.channel,
-                    platforms=req.platforms,
-                    caption_size=req.captionSize,
-                    caption_y=req.captionY,
-                    descriptions=[cut.get("description", "") for cut in cuts],
-                ),
-            )
+            render_result = None
+            for render_attempt in range(1, 3):
+                if render_attempt > 1:
+                    yield {"data": f"WARN|[Remotion 재시도] 로컬 렌더를 다시 시도합니다 ({render_attempt}/2)\n"}
+                    await asyncio.sleep(5)
+                render_result = await loop.run_in_executor(
+                    None,
+                    lambda: create_remotion_video(
+                        visual_paths, audio_paths, scripts,
+                        word_timestamps_list, topic_folder, title=video_title,
+                        camera_style=req.cameraStyle,
+                        bgm_theme=req.bgmTheme,
+                        channel=req.channel,
+                        platforms=req.platforms,
+                        caption_size=req.captionSize,
+                        caption_y=req.captionY,
+                        descriptions=[cut.get("description", "") for cut in cuts],
+                    ),
+                )
+                if render_result:
+                    if render_attempt > 1:
+                        yield {"data": "[Remotion 재시도] 성공\n"}
+                    break
 
             if not render_result:
                 yield {"data": "ERROR|[Remotion 오류] 영상 렌더링에 실패했습니다. remotion 폴더에서 'npm install'이 완료되었는지 확인해주세요.\n"}
@@ -871,8 +892,13 @@ async def generate_video_endpoint(req: GenerateRequest):
                     channel=req.channel or "unknown",
                     success=True,
                     llm_usd=_llm_usd,
-                    image_count=_n_cuts,
-                    video_count=1 if active_video_engine != "none" else 0,
+                    image_count=_n_cuts + len(cut1_ab_variants if "cut1_ab_variants" in locals() else []),
+                    video_count=(
+                        sum(
+                            1 for p in visual_paths
+                            if str(p or "").lower().split("?")[0].endswith((".mp4", ".webm", ".mov"))
+                        ) if active_video_engine != "none" else 0
+                    ),
                     tts_chars=sum(len(s) for s in scripts if s),
                 )
             except Exception:
@@ -929,8 +955,6 @@ async def generate_video_v2(req: GenerateRequest):
         if _ch_preset:
             if _ch_preset.get("tts_speed") is not None:
                 tts_speed = _ch_preset["tts_speed"]
-            if camera_style == "auto" and _ch_preset.get("camera_style"):
-                camera_style = _ch_preset["camera_style"]
             if _ch_preset.get("caption_size"):
                 caption_size = _ch_preset["caption_size"]
             if _ch_preset.get("caption_y"):

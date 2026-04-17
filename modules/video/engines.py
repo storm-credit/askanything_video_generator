@@ -33,6 +33,20 @@ MAX_IMAGE_SIZE_MB = 20       # Base64 인코딩 전 최대 이미지 크기
 from modules.utils.constants import get_motion_style
 
 
+def _has_vertex_gemini_backend() -> bool:
+    """Vertex AI 서비스 계정 기반 Gemini/Veo 사용 가능 여부."""
+    if os.getenv("GEMINI_BACKEND") != "vertex_ai":
+        return False
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if creds_path and os.path.exists(creds_path):
+        return True
+    try:
+        from modules.utils.gemini_client import _discover_sa_keys  # type: ignore
+        return len(_discover_sa_keys()) > 0
+    except Exception:
+        return False
+
+
 def get_available_engines() -> list[dict]:
     """프론트엔드에 표시할 사용 가능한 엔진 목록을 반환합니다."""
     available = []
@@ -48,9 +62,11 @@ def check_engine_available(engine: str, google_key: str = None) -> tuple[bool, s
 
     if engine == "veo3":
         key = google_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        if not key:
-            return False, "GEMINI_API_KEY 필요 (Veo 3)"
-        return True, "Google API 직접 연동"
+        if key:
+            return True, "Google API 직접 연동"
+        if _has_vertex_gemini_backend():
+            return True, "Vertex AI 서비스 계정 연동"
+        return False, "GEMINI_API_KEY 또는 Vertex AI 서비스 계정 필요 (Veo 3)"
 
     if engine == "sora2":
         key = os.getenv("OPENAI_API_KEY")
@@ -76,7 +92,7 @@ def _get_available_engines(preferred_engine: str) -> list[str]:
 
     # Check each engine's key availability
     engine_checks = {
-        "veo3": lambda: get_google_key(service="veo3") is not None,
+        "veo3": lambda: get_google_key(service="veo3") is not None or _has_vertex_gemini_backend(),
         "kling": lambda: bool(os.getenv("KLING_ACCESS_KEY")),
         "sora2": lambda: bool(os.getenv("OPENAI_API_KEY")),
     }

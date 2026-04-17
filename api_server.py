@@ -25,6 +25,14 @@ from routes.shared import cut_executor
 
 @asynccontextmanager
 async def _lifespan(app):
+    # Vertex AI SA-only mode. Settings UI can upload/reorder SA json files under data/vertex_sa.
+    try:
+        from modules.utils.vertex_sa_manager import refresh_runtime_vertex_env
+        refresh_runtime_vertex_env()
+        print("[Vertex SA] SA-only mode enabled")
+    except Exception as e:
+        print(f"[Vertex SA] 초기화 실패: {e}")
+
     # ProjectQuotaManager 초기화
     from modules.utils.project_quota import quota_manager, load_project_key_map
     project_map = {k: v for k, v in load_project_key_map().items() if any(ki.get("key") for ki in v)}
@@ -33,13 +41,20 @@ async def _lifespan(app):
     print(f"[QuotaManager] {len(project_map)}개 프로젝트, {total_keys}개 키 등록")
 
     # 크론 스케줄러
-    from modules.scheduler.cron import add_daily, add_weekly, start as cron_start
+    from modules.scheduler.cron import add_daily, add_weekly, set_hourly, start as cron_start
 
-    # 자동 배포 크론 비활성화 — 현재 수동 운영 중
-    # async def _cron_deploy():
-    #     from modules.scheduler.auto_deploy import run_auto_deploy
-    #     return await run_auto_deploy()
-    # add_daily("자동 배포", 2, 0, _cron_deploy)
+    auto_deploy_enabled = os.getenv("AUTO_DEPLOY_CRON_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+    if auto_deploy_enabled:
+        async def _cron_deploy():
+            from modules.scheduler.auto_deploy import run_auto_deploy
+            max_per_channel_raw = os.getenv("AUTO_DEPLOY_MAX_PER_CHANNEL", "3").strip()
+            max_per_channel = int(max_per_channel_raw) if max_per_channel_raw else None
+            return await run_auto_deploy(max_per_channel=max_per_channel)
+        deploy_hour = int(os.getenv("AUTO_DEPLOY_CRON_HOUR", "2"))
+        deploy_minute = int(os.getenv("AUTO_DEPLOY_CRON_MINUTE", "0"))
+        add_daily("자동 배포", deploy_hour, deploy_minute, _cron_deploy)
+    else:
+        print("[크론] 자동 배포 비활성화 — AUTO_DEPLOY_CRON_ENABLED=true 설정 시 활성화")
 
     def _cron_topics():
         from modules.scheduler.topic_generator import generate_weekly_topics
@@ -75,13 +90,30 @@ async def _lifespan(app):
         notify_daily_cost()
     add_daily("일일 비용 결산", 22, 0, _cron_daily_cost)
 
+    def _cron_billing_threshold():
+        from modules.utils.cost_tracker import check_configured_billing_threshold
+        return check_configured_billing_threshold(send_telegram=True)
+    try:
+        from modules.utils.cost_tracker import load_billing_settings
+        billing_settings = load_billing_settings()
+        set_hourly(
+            "청구 금액 임계치 확인",
+            int(billing_settings.get("cron_minute", 5)),
+            _cron_billing_threshold,
+            enabled=bool(billing_settings.get("cron_enabled", True)),
+        )
+        if not billing_settings.get("cron_enabled", True):
+            print("[크론] 청구 금액 알림 비활성화 — 설정 화면에서 활성화 가능")
+    except Exception as e:
+        print(f"[크론] 청구 금액 알림 등록 실패: {e}")
+
     def _cron_morning_briefing():
         from modules.utils.notify import notify_morning_briefing
         notify_morning_briefing()
     add_daily("모닝 브리핑", 8, 0, _cron_morning_briefing)
 
     cron_start()
-    print(f"[크론] 6개 작업 등록 완료")
+    print(f"[크론] 작업 등록 완료")
 
     yield
     cut_executor.shutdown(wait=False)

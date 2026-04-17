@@ -27,11 +27,9 @@ services:
       - ${DOWNLOAD_DIR:-C:/Users/Storm Credit/Downloads}:/app/downloads
       - ${OBSIDIAN_VAULT:-C:/Users/Storm Credit/Desktop/쇼츠/askanything}:/app/obsidian
       - ./.env:/app/.env
-      - ./vertex-sa-key.json:/app/vertex-sa-key.json:ro
-      - ./vertex-sa-key-exploratodo.json:/app/vertex-sa-key-exploratodo.json:ro
+      - ./vertex-sa-key-askanything.json:/app/vertex-sa-key-askanything.json:ro
       # wonderdrop SA키: 결제 미활성 → 활성화 후 주석 해제
       # - ./vertex-sa-key-wonderdrop.json:/app/vertex-sa-key-wonderdrop.json:ro
-      - ./vertex-sa-key-prismtale.json:/app/vertex-sa-key-prismtale.json:ro
       - ./data:/app/data
     restart: unless-stopped
 

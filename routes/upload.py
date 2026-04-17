@@ -25,6 +25,10 @@ class YouTubeUploadRequest(BaseModel):
     channel_id: str | None = None
     channel: str | None = Field(None, description="채널 프리셋 이름 (채널별 client_secret 선택용)")
     publish_at: str | None = Field(None, description="예약 공개 시간 (ISO 8601, e.g. 2026-03-20T15:00:00Z)")
+    format_type: str | None = Field(None, description="포맷 태그 (예: FACT, IF, WHO_WINS)")
+    series_id: str | None = Field(None, description="시리즈 내부 ID")
+    series_title: str | None = Field(None, description="시리즈 재생목록 제목")
+    obsidian_uri: str | None = Field(None, description="옵시디언 원문 링크 (내부 추적용)")
 
 
 class TikTokUploadRequest(BaseModel):
@@ -84,6 +88,7 @@ async def youtube_callback(code: str, state: str | None = None):
 @router.post("/youtube/upload")
 async def youtube_upload(req: YouTubeUploadRequest):
     from modules.upload.youtube import upload_video
+    from modules.utils.channel_config import get_upload_account
     from routes.shared import cut_executor
     try:
         # 경로 보안 검증: /assets/... → assets/... (선행 슬래시 제거)
@@ -95,6 +100,7 @@ async def youtube_upload(req: YouTubeUploadRequest):
             return {"error": "assets 디렉토리 내의 파일만 업로드할 수 있습니다."}
 
         loop = asyncio.get_running_loop()
+        upload_channel_id = req.channel_id or get_upload_account(req.channel, "youtube")
         result = await loop.run_in_executor(
             cut_executor,
             lambda: upload_video(
@@ -103,8 +109,12 @@ async def youtube_upload(req: YouTubeUploadRequest):
                 description=req.description,
                 tags=req.tags,
                 privacy=req.privacy,
-                channel_id=req.channel_id,
+                channel_id=upload_channel_id,
                 publish_at=req.publish_at,
+                format_type=req.format_type,
+                series_id=req.series_id,
+                series_title=req.series_title,
+                channel=req.channel or "",
             )
         )
         return result

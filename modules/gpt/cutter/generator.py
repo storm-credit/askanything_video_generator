@@ -69,6 +69,41 @@ def _should_run_fact_verify(topic_title: str, format_type: str | None, fact_cont
     return has_digits or any(k in title for k in risk_keywords)
 
 
+def _ensure_format_metadata_tags(cuts: list[dict], format_type: str | None) -> None:
+    """포맷 구조 태그가 description 메타데이터에서만 빠진 경우 보정."""
+    if not cuts or not format_type:
+        return
+
+    fmt = format_type.upper()
+    if fmt == "IF":
+        expected_roles = {
+            1: "SETUP",
+            2: "CHAIN_1",
+            3: "CHAIN_2",
+            4: "ESCALATE",
+            5: "CHAIN_3",
+            6: "BUILD",
+            7: "CLIMAX",
+            8: "PIVOT",
+            9: "REVEAL",
+        }
+        for idx, role in expected_roles.items():
+            if idx >= len(cuts):
+                continue
+            desc = cuts[idx].get("description", cuts[idx].get("text", "")) or ""
+            if f"[{role}]" not in desc.upper():
+                fixed = f"{desc.rstrip()} [{role}]".strip()
+                cuts[idx]["description"] = fixed
+                cuts[idx]["text"] = fixed
+
+    if fmt != "EMOTIONAL_SCI":
+        last_desc = cuts[-1].get("description", cuts[-1].get("text", "")) or ""
+        if "[LOOP]" not in last_desc.upper():
+            fixed = f"{last_desc.rstrip()} [LOOP]".strip()
+            cuts[-1]["description"] = fixed
+            cuts[-1]["text"] = fixed
+
+
 # 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
 def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   llm_provider: str = "gemini", llm_key_override: str = None,
@@ -228,6 +263,15 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             )
 
             if is_retryable and llm_provider == "gemini":
+                if os.getenv("GEMINI_BACKEND") == "vertex_ai":
+                    # Vertex AI는 SA 인증을 사용하므로 API 키 대신 현재 SA를 차단하고 재시도한다.
+                    _sa_key = get_current_sa_key()
+                    if _sa_key:
+                        mark_sa_key_blocked(_sa_key, block_seconds=60)
+                        print("  [Vertex SA 전환] 현재 서비스 계정 차단 후 재시도")
+                    time.sleep(min(2 ** (attempt + 1), 10))
+                    current_key = None
+                    continue
                 mark_key_exhausted(current_key, service="gemini")
                 exhausted_keys.add(current_key)
                 # Vertex AI SA 키 블록 (429 시 자동 로테이션)
@@ -313,9 +357,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             original_scripts = {c["script"].strip()[:30] for c in _original_cuts}
             expanded_scripts = {c["script"].strip()[:30] for c in expanded_cuts}
             preserved = original_scripts & expanded_scripts
-            if len(preserved) >= len(original_scripts) * 0.7:
+            if len(expanded_cuts) >= _cfg_min and len(preserved) >= len(original_scripts) * 0.7:
                 cuts = expanded_cuts
                 print(f"OK [컷 확장] {len(_original_cuts)}컷 → {len(cuts)}컷 (기존 {len(preserved)}/{len(original_scripts)}개 보존)")
+            elif len(expanded_cuts) < _cfg_min:
+                print(f"  [컷 확장 부족] {len(expanded_cuts)}컷 — 최소 {_cfg_min}컷 미달")
             else:
                 print(f"  [컷 확장 실패] 기존 컷 보존율 낮음 ({len(preserved)}/{len(original_scripts)}) — 원본 유지")
         except Exception as retry_err:
@@ -323,6 +369,55 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             if llm_provider == "gemini" and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str):
                 mark_key_exhausted(retry_key, service="gemini")
                 print(f"  [컷 수 재시도 429] {mask_key(retry_key)} 차단됨 — 기존 {len(cuts)}컷으로 진행")
+            else:
+                raise
+
+    if len(cuts) < _cfg_min:
+        exact_text = f"exactly {_cfg_min}" if _cfg_min == _cfg_max else f"between {_cfg_min} and {_cfg_max}"
+        print(f"-> [컷 수 강제 재생성] {len(cuts)}컷 → 목표 {_cfg_min}~{_cfg_max}컷")
+        if lang == "en":
+            strict_user = (
+                f"Topic: '{_safe_title}'. Regenerate the entire short-form video plan. "
+                f"Return {exact_text} cuts. Do not return fewer cuts. "
+                "Each cut needs script, description, and image_prompt. Preserve the format structure and channel style."
+            )
+        elif lang == "es":
+            strict_user = (
+                f"Tema: '{_safe_title}'. Regenera todo el plan del video corto. "
+                f"Devuelve {exact_text} cortes. No devuelvas menos cortes. "
+                "Cada corte necesita script, description e image_prompt. Conserva la estructura del formato y el estilo del canal."
+            )
+        else:
+            strict_user = (
+                f"주제: '{_safe_title}'. 숏폼 기획안을 전체 재생성하세요. "
+                f"반드시 {_cfg_min}~{_cfg_max}컷으로 반환하고, 최소 컷보다 적게 반환하지 마세요. "
+                "각 컷에는 script, description, image_prompt가 모두 필요합니다. 포맷 구조와 채널 스타일을 유지하세요."
+            )
+        if fact_context:
+            strict_user += f"\n\n{fact_context}"
+        try:
+            retry_key = (get_google_key(None, service="gemini", exclude=exhausted_keys) or current_key) if llm_provider == "gemini" else current_key
+            regen_cuts, regen_title, regen_tags, regen_description = _request_cuts(
+                llm_provider,
+                retry_key,
+                retry_system if "retry_system" in locals() else (inject_format_prompt(system_prompt, format_type, lang) if format_type else system_prompt),
+                strict_user,
+                model_override=llm_model,
+            )
+            if len(regen_cuts) > _cfg_max:
+                print(f"-> [컷 수 강제 재생성] {len(regen_cuts)}컷 → {_cfg_max}개로 트림")
+                regen_cuts = regen_cuts[:_cfg_max]
+            if len(regen_cuts) >= _cfg_min:
+                cuts = regen_cuts
+                title = regen_title or title
+                tags = regen_tags or tags
+                video_description = regen_description or video_description
+                print(f"OK [컷 수 강제 재생성] {len(cuts)}컷 확보")
+        except Exception as regen_err:
+            err_str = str(regen_err)
+            if llm_provider == "gemini" and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str):
+                mark_key_exhausted(retry_key, service="gemini")
+                print(f"  [컷 수 강제 재생성 429] {mask_key(retry_key)} 차단됨")
             else:
                 raise
 
@@ -376,6 +471,8 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
         if format_type:
             for _c in cuts:
                 _c["format_type"] = format_type.upper()
+                _c["topic"] = _topic_title
+            _ensure_format_metadata_tags(cuts, format_type)
         hard_fails = _validate_hard_fail(cuts, channel)
 
         # ⑤ 내러티브 아크 검증 — HOOK/LOOP/CLIMAX/PIVOT/RELEASE 구조 체크
@@ -391,6 +488,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             if has_hook_fail or has_loop_fail:
                 print("-> [아크 수정] 훅/루프 구조 검증으로 자동 수정 시도...")
                 cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model, channel)
+                _ensure_format_metadata_tags(cuts, format_type)
                 arc_issues_retry = _validate_narrative_arc(cuts, lang)
                 if arc_issues_retry:
                     print(f"  [아크] 수정 후 {len(arc_issues_retry)}개 남음 — 결과 유지")
@@ -418,13 +516,15 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             if has_structure_fail:
                 print("-> [HARD FAIL 수정] 구조 검증으로 자동 수정 시도 (1회)...")
                 cuts = _verify_highness_structure(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model, channel)
+                _ensure_format_metadata_tags(cuts, format_type)
             if has_visual_fail:
                 print("-> [HARD FAIL 수정] 이미지 프롬프트 검증으로 자동 수정 시도 (1회)...")
                 cuts = _verify_subject_match(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model)
             # 재검증
             hard_fails_retry = _validate_hard_fail(cuts, channel)
             if hard_fails_retry:
-                print(f"  [HARD FAIL] 수정 후에도 {len(hard_fails_retry)}개 남음 — 결과 유지 (수동 확인 권장)")
+                fail_text = "\n".join(f"- {f}" for f in hard_fails_retry)
+                raise ValueError(f"[HARD FAIL] 자동 수정 후에도 품질 문제가 남았습니다.\n{fail_text}")
             else:
                 print(f"OK [HARD FAIL] 자동 수정으로 모든 품질 문제 해결")
         if region_warns:
@@ -496,6 +596,16 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             if _post_last and any(_post_last.rstrip().endswith(p) for p in _bad_endings):
                 cuts[-1]["script"] = _pre_polish_last
                 print(f"[재검사] 마지막 컷 루프 복원 — 미완성 문장 감지")
+
+        if format_type:
+            for _c in cuts:
+                _c["format_type"] = format_type.upper()
+                _c["topic"] = _topic_title
+            _ensure_format_metadata_tags(cuts, format_type)
+        _post_polish_fails = _validate_hard_fail(cuts, channel)
+        if _post_polish_fails:
+            fail_text = "\n".join(f"- {f}" for f in _post_polish_fails)
+            raise ValueError(f"[HARD FAIL] post-polish 이후 품질 문제가 발생했습니다.\n{fail_text}")
 
         # ── polish 후 금지 표현 재필터링 ──
         if _forbidden and cuts:

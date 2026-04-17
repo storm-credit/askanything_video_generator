@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import os
 import base64
+import json
+import re
 
 
 def validate_image(image_path: str, prompt: str, api_key: str = None) -> dict:
@@ -35,8 +37,8 @@ def validate_image(image_path: str, prompt: str, api_key: str = None) -> dict:
         from modules.utils.gemini_client import create_gemini_client
         from google.genai import types
     except ImportError as ie:
-        print(f"[ImageValidator] import 실패 (통과 처리): {ie}")
-        return {"pass": True, "reason": f"import 에러: {str(ie)[:50]}", "score": -1}
+        print(f"[ImageValidator] import 실패 (실패 처리): {ie}")
+        return {"pass": False, "reason": f"import 에러: {str(ie)[:50]}", "score": 0}
 
     validation_prompt = f"""You are an image quality checker for YouTube Shorts.
 
@@ -88,7 +90,7 @@ Rules:
         from modules.gpt.cutter.parser import _extract_json
         result = _extract_json(text)
         if not isinstance(result, dict):
-            return {"pass": True, "reason": "파싱 실패 — 통과 처리"}
+            return {"pass": False, "reason": "검수 응답 파싱 실패", "score": 0}
 
         score = result.get("score", 0)
         result["pass"] = score >= 7
@@ -121,9 +123,8 @@ Rules:
                 return _result
             except Exception:
                 pass
-        # 최종 실패 시 통과 처리 (검수 때문에 전체가 멈추면 안 됨)
-        print(f"[ImageValidator] 검수 실패 (통과 처리): {e}")
-        return {"pass": True, "reason": f"검수 에러: {str(e)[:50]}", "score": -1}
+        print(f"[ImageValidator] 검수 실패 (실패 처리): {e}")
+        return {"pass": False, "reason": f"검수 에러: {str(e)[:50]}", "score": 0}
 
 
 def validate_and_retry(image_path: str, prompt: str, cut_index: int,
@@ -171,7 +172,7 @@ def validate_and_retry(image_path: str, prompt: str, cut_index: int,
                 )
         else:
             print(f"  [ImageValidator] 미지원 엔진 '{image_engine}' — 재생성 스킵")
-            return img_path
+            return image_path
 
         if new_path and os.path.exists(new_path):
             # 2차 검수

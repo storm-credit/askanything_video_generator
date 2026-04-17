@@ -75,6 +75,7 @@ def generate_video_veo(
     # 이미지 로드 (한 번만)
     with open(image_path, "rb") as f:
         img_bytes = f.read()
+    is_vertex_backend = os.getenv("GEMINI_BACKEND") == "vertex_ai"
     ext = os.path.splitext(image_path)[1].lower()
     mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/png")
@@ -98,20 +99,25 @@ def generate_video_veo(
 
         for attempt in range(MAX_KEY_RETRIES):
             # 키 선택 (이전에 실패한 키 제외)
-            if attempt == 0:
+            if is_vertex_backend:
+                final_key = current_key
+            elif attempt == 0:
                 final_key = current_key or get_google_key(service=service_tag, extra_keys=gemini_api_keys)
             else:
                 final_key = get_google_key(service=service_tag, exclude=tried_keys, extra_keys=gemini_api_keys)
 
-            if not final_key:
+            if not is_vertex_backend and not final_key:
                 break  # 이 모델에 사용 가능한 키 없음 → 다음 모델로
 
-            tried_keys.add(final_key)
+            if final_key:
+                tried_keys.add(final_key)
             from modules.utils.gemini_client import create_gemini_client
             client = create_gemini_client(api_key=final_key)
 
-            if attempt > 0:
+            if attempt > 0 and final_key:
                 print(f"-> [{model_label}] 컷 {index+1} 다른 키로 재시도 중... (시도 {attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_key)})")
+            elif attempt > 0:
+                print(f"-> [{model_label}] 컷 {index+1} 다른 SA로 재시도 중... (시도 {attempt+1}/{MAX_KEY_RETRIES})")
             elif model_idx == 0:
                 print(f"-> [{model_label}] 컷 {index+1} 이미지-투-비디오 렌더링 요청 중... ({model_id})")
             else:
@@ -131,8 +137,11 @@ def generate_video_veo(
             except Exception as e:
                 err_str = str(e)
                 if is_key_rotation_error(err_str):
-                    mark_key_exhausted(final_key, service_tag)
-                    print(f"[{model_label} 쿼터 초과] 컷 {index+1}: 키 차단됨 → 다른 키로 전환 시도...")
+                    if final_key and not is_vertex_backend:
+                        mark_key_exhausted(final_key, service_tag)
+                        print(f"[{model_label} 쿼터 초과] 컷 {index+1}: 키 차단됨 → 다른 키로 전환 시도...")
+                    else:
+                        print(f"[{model_label} Vertex 재시도] 컷 {index+1}: SA 전환 시도...")
                     continue  # 다음 키로 재시도
                 else:
                     print(f"[{model_label} 오류] 컷 {index+1} 요청 실패: {e}")
