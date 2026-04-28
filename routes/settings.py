@@ -139,7 +139,8 @@ async def health_check():
         "tavily": [_mask(tavily_key)] if _is_set(tavily_key) else [],
     }
 
-    missing = [k for k, v in keys.items() if not v]
+    required_keys = ("openai", "elevenlabs", "gemini")
+    missing = [k for k in required_keys if not keys.get(k)]
     google_key_count = count_google_keys()
     return {
         "status": "ok" if not missing else "missing_keys",
