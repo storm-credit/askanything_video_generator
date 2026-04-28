@@ -40,6 +40,7 @@ TAG_CHANNEL_MAP = {
 
 # 태그 추출 정규식
 TAG_RE = re.compile(r"\[(공통|KO전용|EN전용|ES전용|ES-US전용|ES-LATAM전용)\]")
+SPLIT_TAG_RE = re.compile(r"\[채널분화\]")
 
 # 포맷 태그 추출 정규식: [포맷:WHO_WINS], [포맷:IF], [포맷:EMOTIONAL_SCI], [포맷:FACT] 등 11종
 FORMAT_TAG_RE = re.compile(r"\[포맷:([A-Z_]+)\]")
@@ -165,6 +166,7 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
         is_timely = bool(TIMELY_TAG_RE.search(topic_name_raw))
         # 태그 제거 후 순수 주제명
         topic_name = TAG_RE.sub("", topic_name_raw)
+        topic_name = SPLIT_TAG_RE.sub("", topic_name)
         topic_name = FORMAT_TAG_RE.sub("", topic_name)
         topic_name = SERIES_TAG_RE.sub("", topic_name)
         topic_name = TIMELY_TAG_RE.sub("", topic_name).strip()
@@ -202,6 +204,7 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
                 title = _extract_field(lines, ["제목", "Title", "Título", "Titulo"])
                 description = _extract_field(lines, ["설명", "Description", "Descripción", "Descripcion"])
                 hashtags = _extract_field(lines, ["해시태그", "Hashtags"])
+                source_topic = _extract_field(lines, ["원본주제", "Source Topic", "Tema Base", "Tema Fuente"])
 
                 if not title:
                     continue
@@ -225,6 +228,8 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
                     "source_file": day_filename,
                     "source_section": f"Topic {topic_num}",
                     "source_channel_block": f"{channel_name} ({language})",
+                    "_llm_topic_override": source_topic or topic_name,
+                    "split_mode": "channel_specific" if SPLIT_TAG_RE.search(topic_name_raw) else None,
                     "imported_at": datetime.now().isoformat(),
                 })
         else:
@@ -258,6 +263,8 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
                     "source_file": day_filename,
                     "source_section": f"Topic {topic_num}",
                     "source_channel_block": f"auto ({topic_tag})",
+                    "_llm_topic_override": topic_name,
+                    "split_mode": "channel_specific" if SPLIT_TAG_RE.search(topic_name_raw) else None,
                     "imported_at": datetime.now().isoformat(),
                 })
 
@@ -345,6 +352,7 @@ def get_today_topics(channel: str | None = None,
                 "source_file": j.get("source_file"),
                 "source_section": j.get("source_section"),
                 "obsidian_uri": _build_obsidian_uri(path),
+                "split_mode": j.get("split_mode"),
                 "channels": {},
             }
         groups[key]["channels"][j["channel"]] = {
@@ -352,6 +360,7 @@ def get_today_topics(channel: str | None = None,
             "description": j["description"],
             "hashtags": j["hashtags"],
             "cuts": j.get("cuts", []),
+            "source_topic": j.get("_llm_topic_override") or j["topic_group"],
         }
 
     return {

@@ -31,6 +31,17 @@ class YouTubeUploadRequest(BaseModel):
     obsidian_uri: str | None = Field(None, description="옵시디언 원문 링크 (내부 추적용)")
 
 
+class YouTubeMetadataPreviewRequest(BaseModel):
+    title: str = Field("", max_length=100)
+    description: str = Field("", max_length=5000)
+    tags: list[str] = Field(default_factory=list)
+    privacy: str = Field("private")
+    channel: str | None = Field(None, description="채널 프리셋 이름")
+    publish_at: str | None = None
+    format_type: str | None = None
+    series_title: str | None = None
+
+
 class TikTokUploadRequest(BaseModel):
     video_path: str = Field(..., description="업로드할 동영상 경로")
     title: str = Field(..., max_length=150)
@@ -49,6 +60,17 @@ class InstagramUploadRequest(BaseModel):
 
 
 # ── YouTube ──────────────────────────────────────────────────────────
+
+
+def _resolve_youtube_publish_at(publish_at: str | None, channel: str | None) -> str | None:
+    """업로드와 메타데이터 preview가 같은 예약 보정 규칙을 쓰게 한다."""
+    if not publish_at:
+        return publish_at
+    if not channel:
+        return publish_at
+    from modules.scheduler.auto_deploy import _ensure_future_publish_at
+
+    return _ensure_future_publish_at(publish_at, channel, {})
 
 
 @router.get("/youtube/status")
@@ -101,6 +123,7 @@ async def youtube_upload(req: YouTubeUploadRequest):
 
         loop = asyncio.get_running_loop()
         upload_channel_id = req.channel_id or get_upload_account(req.channel, "youtube")
+        resolved_publish_at = _resolve_youtube_publish_at(req.publish_at, req.channel)
         result = await loop.run_in_executor(
             cut_executor,
             lambda: upload_video(
@@ -110,7 +133,7 @@ async def youtube_upload(req: YouTubeUploadRequest):
                 tags=req.tags,
                 privacy=req.privacy,
                 channel_id=upload_channel_id,
-                publish_at=req.publish_at,
+                publish_at=resolved_publish_at,
                 format_type=req.format_type,
                 series_id=req.series_id,
                 series_title=req.series_title,
@@ -124,6 +147,37 @@ async def youtube_upload(req: YouTubeUploadRequest):
         return {"error": str(e)}
     except Exception as e:
         return {"error": f"업로드 실패: {e}"}
+
+
+@router.post("/youtube/metadata/preview")
+async def youtube_metadata_preview(req: YouTubeMetadataPreviewRequest):
+    """YouTube 업로드 직전 서버 최종 메타데이터를 미리보기로 반환."""
+    from modules.upload.youtube.upload import _prepare_youtube_metadata
+    try:
+        description, tags = _prepare_youtube_metadata(req.description, req.tags)
+        adjusted_publish_at = _resolve_youtube_publish_at(req.publish_at, req.channel)
+        checks = {
+            "description_has_hash": "#" in description,
+            "tag_count": len(tags),
+            "shorts_tag_removed": all(tag.lower() not in {"shorts", "short", "쇼츠"} for tag in tags),
+            "series_playlist": bool(req.series_title),
+            "scheduled": bool(adjusted_publish_at),
+            "publish_at_adjusted": bool(req.publish_at and adjusted_publish_at != req.publish_at),
+        }
+        return {
+            "ok": True,
+            "title": req.title.strip(),
+            "description": description,
+            "tags": tags,
+            "privacy": "private" if adjusted_publish_at else req.privacy,
+            "publish_at": adjusted_publish_at,
+            "requested_publish_at": req.publish_at,
+            "format_type": req.format_type,
+            "series_title": req.series_title,
+            "checks": checks,
+        }
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
 
 
 @router.post("/youtube/disconnect")

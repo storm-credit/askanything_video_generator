@@ -53,6 +53,8 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
   // Abort
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
+  const generationIdRef = useRef<string | null>(null);
+  const multiGenerationIdsRef = useRef<Record<string, string>>({});
 
   const publishMode = "local" as const;
   const scheduledTime = "";
@@ -165,6 +167,8 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
           setLogs(prev => [...prev.slice(-99), `ERROR:${errMsg}`]);
           setErrorMessage(errMsg);
           setIsGenerating(false);
+        } else if (rawData.startsWith("GEN_ID|")) {
+          generationIdRef.current = rawData.slice(7);
         } else if (rawData.startsWith("WARN|")) {
           const warnMsg = rawData.slice(5);
           setLogs(prev => [...prev.slice(-99), `WARN:${warnMsg}`]);
@@ -214,7 +218,15 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
     for (const ac of Object.values(multiAbortRefs.current)) ac.abort();
     multiAbortRefs.current = {};
     setIsGenerating(false);
-    fetch(`${API_BASE}/api/cancel`, { method: "POST" }).catch(() => {});
+    const ids = [
+      generationIdRef.current,
+      ...Object.values(multiGenerationIdsRef.current),
+    ].filter((id): id is string => Boolean(id));
+    generationIdRef.current = null;
+    multiGenerationIdsRef.current = {};
+    for (const id of ids) {
+      fetch(`${API_BASE}/api/cancel?generation_id=${encodeURIComponent(id)}`, { method: "POST" }).catch(() => {});
+    }
   };
 
   const handleClearError = () => {
@@ -247,6 +259,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
       const p = parseInt(rawData.slice(5), 10);
       if (!isNaN(p)) setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], progress: p } }));
     } else if (rawData.startsWith("GEN_ID|")) {
+      multiGenerationIdsRef.current[ch] = rawData.slice(7);
       setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], genId: rawData.slice(7) } }));
     } else {
       setChannelResults(prev => ({ ...prev, [ch]: { ...prev[ch], logs: [...(prev[ch]?.logs || []).slice(-49), rawData] } }));
@@ -311,6 +324,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
       setErrorMessage(prev => prev ? `${prev}\n[${ch}] ${msg}` : `[${ch}] ${msg}`);
     } finally {
       reader?.cancel().catch(() => {});
+      delete multiAbortRefs.current[ch];
     }
   };
 
@@ -327,6 +341,7 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
     setPreviewData(null);
     setProgress(0);
     cancelledRef.current = false;
+    multiGenerationIdsRef.current = {};
 
     for (const ch of selectedChannels) {
       if (cancelledRef.current) break;

@@ -18,6 +18,14 @@ assets/
 data/
 !data/.gitkeep
 
+# Local scratch / generated diagnostics
+backups/
+tmp/
+tmp_*.log
+tmp_*.json
+syntax_check.txt
+modules/tmp_*.py
+
 # IDE files
 .vscode/
 .idea/

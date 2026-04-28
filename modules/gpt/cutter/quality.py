@@ -107,6 +107,11 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         failures.append(f"HOOK_WEAK: 첫 컷이 약한 패턴 포함 — '{first_script[:50]}'")
 
     warnings: list[str] = []
+    channel_name = (channel or "").lower().strip()
+    if channel_name in {"wonderdrop", "prismtale"} and "?" in first_script:
+        warnings.append(f"HOOK_STYLE_CHANNEL: {channel_name} 컷1은 질문형보다 선언형이 더 강함 — '{first_script[:40]}'")
+    if channel_name == "exploratodo" and len(first_script.split()) < 4:
+        warnings.append(f"HOOK_STYLE_CHANNEL: exploratodo 컷1이 너무 짧아 긴박감이 약할 수 있음 — '{first_script[:40]}'")
 
     # 1-b) Hook 길이 — 채널별 Cut1 글자/단어 수 (경고 전용, 하드 fail 아님)
     if channel:

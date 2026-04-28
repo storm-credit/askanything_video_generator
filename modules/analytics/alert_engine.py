@@ -200,7 +200,18 @@ def _send_alert(alert: dict[str, Any]) -> None:
     if vid:
         buttons = [{"text": "영상 보기", "url": f"https://youtube.com/shorts/{vid}"}]
 
-    _send(text, silent=alert["type"] != "viral", buttons=buttons or None)
+    _send(
+        text,
+        silent=alert["type"] != "viral",
+        buttons=buttons or None,
+        kind="analytics_alert",
+        meta={
+            "alert_type": alert.get("type", ""),
+            "channel": channel,
+            "title": title,
+            "video_id": vid or "",
+        },
+    )
 
 
 def run_alerts(channels: list[str] | None = None,

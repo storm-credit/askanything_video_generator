@@ -48,6 +48,34 @@ interface BillingSettings {
   updated_at?: string | null;
 }
 
+interface BillingOverviewChannelModel {
+  key: string;
+  label: string;
+  count: number;
+  usd: number;
+  krw: number;
+  unit_krw: number;
+}
+
+interface BillingOverviewChannel {
+  success: number;
+  failed: number;
+  total_usd: number;
+  total_krw: number;
+  video_count: number;
+  video_usd: number;
+  video_krw: number;
+  video_models: BillingOverviewChannelModel[];
+}
+
+interface BillingOverview {
+  date: string;
+  exchange_rate: number;
+  total_usd: number;
+  total_krw: number;
+  channels: Record<string, BillingOverviewChannel>;
+}
+
 interface VertexSaAccount {
   id: string;
   filename: string;
@@ -76,6 +104,103 @@ interface SchedulerJob {
   schedule: string;
   next_run: string;
   last_run?: string | null;
+}
+
+interface SchedulerRunResult {
+  topic?: string;
+  topic_group?: string;
+  source_topic?: string;
+  channel?: string;
+  status?: string;
+  error?: string | null;
+  publish_at?: string | null;
+  youtube_url?: string | null;
+  format_type?: string | null;
+}
+
+interface SchedulerChannelSummary {
+  target?: Record<string, number>;
+  scheduled?: Record<string, number>;
+  completed?: Record<string, number>;
+  rollout_holdback?: Record<string, number>;
+  rollout_pending?: Record<string, number>;
+  final_expected?: Record<string, number>;
+  publish_on_date?: Record<string, number>;
+  carryover_next_days?: Record<string, number>;
+}
+
+interface SchedulerRolloutItem {
+  id?: number;
+  topic_group?: string;
+  lead_channel?: string;
+  holdback_channels?: string[];
+  holdback_payload?: Record<string, SchedulerHoldbackPayload> | null;
+  source_topics?: Record<string, string>;
+  status?: string;
+  expand_after?: string | null;
+  lead_publish_at?: string | null;
+  lead_video_url?: string | null;
+  format_type?: string | null;
+  metric_views?: number | null;
+  threshold_views?: number | null;
+  last_error?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+interface SchedulerHoldbackPayload {
+  title?: string;
+  source_topic?: string;
+  _llm_topic_override?: string;
+  format_type?: string;
+  [key: string]: unknown;
+}
+
+interface SchedulerRolloutOverview {
+  enabled?: boolean;
+  lead_topics?: number;
+  holdback_total?: number;
+  pending_topics?: number;
+  pending_channels?: number;
+  items?: SchedulerRolloutItem[];
+}
+
+interface SchedulerRunStatus {
+  running: boolean;
+  current_date: string | null;
+  total: number;
+  completed: number;
+  failed: number;
+  current_task: string | null;
+  results: SchedulerRunResult[];
+  started_at: string | null;
+  finished_at: string | null;
+  stale_recovered?: boolean;
+  message?: string;
+  channel_summary?: SchedulerChannelSummary;
+  publish_dates?: Record<string, Record<string, number>>;
+  rollout_overview?: SchedulerRolloutOverview;
+}
+
+interface SchedulerPreviewStatus {
+  file: string | null;
+  date: string | null;
+  total: number;
+  channel_summary: SchedulerChannelSummary;
+  publish_dates: Record<string, Record<string, number>>;
+  rollout_overview?: SchedulerRolloutOverview | null;
+}
+
+interface SchedulerRolloutQueueSummary {
+  counts?: Record<string, number>;
+  due_now?: number;
+  pending?: number;
+  processing?: number;
+}
+
+interface SchedulerRolloutQueueStatus {
+  queue?: SchedulerRolloutQueueSummary;
+  items: SchedulerRolloutItem[];
 }
 
 interface SettingsModalProps {
@@ -134,6 +259,7 @@ export function SettingsModal({
   });
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingStatus, setBillingStatus] = useState<string>("");
+  const [billingOverview, setBillingOverview] = useState<BillingOverview | null>(null);
   const [vertexAccounts, setVertexAccounts] = useState<VertexSaAccount[]>([]);
   const [vertexLoading, setVertexLoading] = useState(false);
   const [vertexStatus, setVertexStatus] = useState("");
@@ -147,6 +273,22 @@ export function SettingsModal({
   const [schedulerJobs, setSchedulerJobs] = useState<SchedulerJob[]>([]);
   const [schedulerStatus, setSchedulerStatus] = useState("");
   const [schedulerLoading, setSchedulerLoading] = useState(false);
+  const [schedulerRunError, setSchedulerRunError] = useState("");
+  const [schedulerRunStatus, setSchedulerRunStatus] = useState<SchedulerRunStatus>({
+    running: false,
+    current_date: null,
+    total: 0,
+    completed: 0,
+    failed: 0,
+    current_task: null,
+    results: [],
+    started_at: null,
+    finished_at: null,
+  });
+  const [schedulerPreview, setSchedulerPreview] = useState<SchedulerPreviewStatus | null>(null);
+  const [schedulerRolloutQueue, setSchedulerRolloutQueue] = useState<SchedulerRolloutQueueStatus | null>(null);
+  const [schedulerRolloutError, setSchedulerRolloutError] = useState("");
+  const [schedulerRolloutRunning, setSchedulerRolloutRunning] = useState(false);
 
   // YouTube 연동 상태 로드
   useEffect(() => {
@@ -175,6 +317,7 @@ export function SettingsModal({
       if (res.ok) {
         const data = await res.json();
         setBillingSettings((prev) => ({ ...prev, ...(data.settings || {}) }));
+        setBillingOverview(data.overview || null);
       }
     } catch { /* server offline */ }
     setBillingLoading(false);
@@ -236,6 +379,55 @@ export function SettingsModal({
     setSchedulerLoading(false);
   }, []);
 
+  const fetchSchedulerRolloutQueue = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/scheduler/rollout-expansions?limit=8`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success !== false) {
+        setSchedulerRolloutQueue({
+          queue: data.queue || {},
+          items: Array.isArray(data.items) ? data.items : [],
+        });
+        setSchedulerRolloutError("");
+      } else {
+        setSchedulerRolloutError(data.message || data.detail || "롤아웃 큐 확인 실패");
+      }
+    } catch {
+      setSchedulerRolloutError("롤아웃 큐 확인 실패: 서버 연결을 확인하세요");
+    }
+  }, []);
+
+  const fetchSchedulerRunStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/scheduler/status`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setSchedulerRunStatus({
+          running: !!data.running,
+          current_date: data.current_date || null,
+          total: Number(data.total || 0),
+          completed: Number(data.completed || 0),
+          failed: Number(data.failed || 0),
+          current_task: data.current_task || null,
+          results: Array.isArray(data.results) ? data.results : [],
+          started_at: data.started_at || null,
+          finished_at: data.finished_at || null,
+          stale_recovered: !!data.stale_recovered,
+          message: data.message || "",
+          channel_summary: data.channel_summary || {},
+          publish_dates: data.publish_dates || {},
+          rollout_overview: data.rollout_overview || undefined,
+        });
+        setSchedulerRunError("");
+      } else {
+        setSchedulerRunError(data.message || data.detail || "배치 상태 확인 실패");
+      }
+    } catch {
+      setSchedulerRunError("배치 상태 확인 실패: 서버 연결을 확인하세요");
+    }
+    await fetchSchedulerRolloutQueue();
+  }, [fetchSchedulerRolloutQueue]);
+
   // Escape 키로 모달 닫기
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -250,8 +442,19 @@ export function SettingsModal({
     if (activeTab === "channels") fetchChannels();
     if (activeTab === "billing") fetchBillingSettings();
     if (activeTab === "vertex") fetchVertexAccounts();
-    if (activeTab === "cron") fetchSchedulerStatus();
-  }, [activeTab, fetchChannels, fetchBillingSettings, fetchVertexAccounts, fetchSchedulerStatus]);
+    if (activeTab === "cron") {
+      fetchSchedulerStatus();
+      fetchSchedulerRunStatus();
+    }
+  }, [activeTab, fetchChannels, fetchBillingSettings, fetchVertexAccounts, fetchSchedulerStatus, fetchSchedulerRunStatus]);
+
+  useEffect(() => {
+    if (activeTab !== "cron" || !schedulerRunStatus.running) return;
+    const timer = setInterval(() => {
+      fetchSchedulerRunStatus();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [activeTab, schedulerRunStatus.running, fetchSchedulerRunStatus]);
 
   const coreConfigs = KEY_CONFIGS.filter((c) => c.group === "core");
   const extraConfigs = KEY_CONFIGS.filter((c) => c.group === "extra");
@@ -518,6 +721,7 @@ export function SettingsModal({
           {activeTab === "billing" && (
             <BillingSettingsPanel
               settings={billingSettings}
+              overview={billingOverview}
               loading={billingLoading}
               status={billingStatus}
               onChange={(next) => setBillingSettings((prev) => ({ ...prev, ...next }))}
@@ -650,19 +854,43 @@ export function SettingsModal({
               jobs={schedulerJobs}
               loading={schedulerLoading}
               status={schedulerStatus}
-              onRefresh={fetchSchedulerStatus}
+              runError={schedulerRunError}
+              runStatus={schedulerRunStatus}
+              preview={schedulerPreview}
+              rolloutQueue={schedulerRolloutQueue}
+              rolloutError={schedulerRolloutError}
+              rolloutRunning={schedulerRolloutRunning}
+              onRefresh={() => {
+                fetchSchedulerStatus();
+                fetchSchedulerRunStatus();
+              }}
               onPreview={async () => {
                 setSchedulerStatus("오늘 할 일 스케줄 계산 중...");
                 try {
                   const res = await fetch(`${API_BASE}/api/scheduler/preview`);
                   const data = await res.json();
                   if (res.ok) {
-                    const total = data.total || data.summary?.total_videos || data.schedule?.length || 0;
-                    setSchedulerStatus(`오늘 할 일 미리보기 완료: ${total}개`);
+                    const total = Number(data.total_videos || data.total || data.summary?.total_videos || data.schedule?.length || 0);
+                    const holdback = Number(data.rollout_overview?.holdback_total || 0);
+                    setSchedulerPreview({
+                      file: data.file || null,
+                      date: data.date || null,
+                      total,
+                      channel_summary: data.channel_summary || {},
+                      publish_dates: data.publish_dates || {},
+                      rollout_overview: data.rollout_overview || null,
+                    });
+                    setSchedulerStatus(
+                      holdback > 0
+                        ? `오늘 할 일 미리보기 완료: 즉시 ${total}개 · 보류 ${holdback}개 · 최종 ${total + holdback}개`
+                        : `오늘 할 일 미리보기 완료: ${total}개`
+                    );
                   } else {
+                    setSchedulerPreview(null);
                     setSchedulerStatus(data.message || "미리보기 실패");
                   }
                 } catch {
+                  setSchedulerPreview(null);
                   setSchedulerStatus("미리보기 실패: 서버 연결을 확인하세요");
                 }
               }}
@@ -674,11 +902,41 @@ export function SettingsModal({
                   const data = await res.json();
                   if (res.ok && data.success) {
                     setSchedulerStatus(data.message || "오늘 할 일 자동 배포 시작됨");
+                    await fetchSchedulerRunStatus();
                   } else {
                     setSchedulerStatus(data.message || "자동 배포 시작 실패");
                   }
                 } catch {
                   setSchedulerStatus("자동 배포 시작 실패: 서버 연결을 확인하세요");
+                }
+              }}
+              onRunRolloutExpansion={async () => {
+                if (!confirm("판정 가능한 롤아웃 보류분을 지금 실행할까요? 기준 통과 시 나머지 채널 영상 생성/예약 업로드로 유료 API가 사용됩니다.")) return;
+                setSchedulerRolloutRunning(true);
+                setSchedulerStatus("롤아웃 보류분 판정 실행 중...");
+                try {
+                  const res = await fetch(`${API_BASE}/api/scheduler/rollout-expansions/run?limit=6`, { method: "POST" });
+                  const data = await res.json().catch(() => ({}));
+                  if (res.ok && data.success) {
+                    const processed = Number(data.processed || 0);
+                    const results = Array.isArray(data.results) ? data.results : [];
+                    const expanded = results.filter((item: { status?: string }) => item.status === "expanded").length;
+                    const retry = results.filter((item: { status?: string }) => String(item.status || "").includes("retry")).length;
+                    const deferred = results.filter((item: { status?: string }) => item.status === "deferred").length;
+                    setSchedulerStatus(
+                      processed > 0
+                        ? `롤아웃 판정 완료: 처리 ${processed}건 · 확장 ${expanded}건 · 재시도대기 ${retry}건 · 보류 ${deferred}건`
+                        : "롤아웃 판정 완료: 지금 처리할 후보 없음"
+                    );
+                    await fetchSchedulerRunStatus();
+                  } else {
+                    setSchedulerStatus(data.message || "롤아웃 판정 실행 실패");
+                    await fetchSchedulerRunStatus();
+                  }
+                } catch {
+                  setSchedulerStatus("롤아웃 판정 실행 실패: 서버 연결을 확인하세요");
+                } finally {
+                  setSchedulerRolloutRunning(false);
                 }
               }}
             />
@@ -944,17 +1202,192 @@ function SchedulerPanel({
   jobs,
   loading,
   status,
+  runError,
+  runStatus,
+  preview,
+  rolloutQueue,
+  rolloutError,
+  rolloutRunning,
   onRefresh,
   onPreview,
   onRunToday,
+  onRunRolloutExpansion,
 }: {
   jobs: SchedulerJob[];
   loading: boolean;
   status: string;
+  runError: string;
+  runStatus: SchedulerRunStatus;
+  preview: SchedulerPreviewStatus | null;
+  rolloutQueue: SchedulerRolloutQueueStatus | null;
+  rolloutError: string;
+  rolloutRunning: boolean;
   onRefresh: () => void;
   onPreview: () => void;
   onRunToday: () => void;
+  onRunRolloutExpansion: () => void;
 }) {
+  const channelMeta: Record<string, { label: string; badge: string }> = {
+    askanything: { label: "AskAnything", badge: "KO" },
+    wonderdrop: { label: "WonderDrop", badge: "EN" },
+    exploratodo: { label: "ExploraTodo", badge: "ES" },
+    prismtale: { label: "Prism Tale", badge: "ES-US" },
+  };
+  const channelOrder = ["askanything", "wonderdrop", "exploratodo", "prismtale"];
+
+  const formatRunTime = (value: string | null | undefined) => {
+    if (!value) return "-";
+    const dt = new Date(value);
+    return Number.isNaN(dt.getTime()) ? value : dt.toLocaleString("ko-KR");
+  };
+
+  const hasBucketValues = (bucket?: Record<string, number>) =>
+    Object.values(bucket || {}).some((value) => Number(value || 0) > 0);
+  const getHoldbackPayload = (item: SchedulerRolloutItem): Record<string, SchedulerHoldbackPayload> =>
+    item.holdback_payload && typeof item.holdback_payload === "object" && !Array.isArray(item.holdback_payload)
+      ? item.holdback_payload
+      : {};
+  const getHoldbackChannels = (item: SchedulerRolloutItem) => {
+    const payloadChannels = Object.keys(getHoldbackPayload(item));
+    const explicitChannels = item.holdback_channels || [];
+    return explicitChannels.length > 0 ? explicitChannels : payloadChannels;
+  };
+  const getSourceLabel = (payload: SchedulerHoldbackPayload) =>
+    String(payload.source_topic || payload._llm_topic_override || payload.title || "").trim();
+  const statusLabel: Record<string, string> = {
+    pending: "판정대기",
+    processing: "확장중",
+    expanded: "확장완료",
+    skipped: "스킵",
+    skipped_retention: "완시율스킵",
+    failed: "실패",
+  };
+  const statusClass = (value?: string | null) => {
+    const statusValue = String(value || "").toLowerCase();
+    if (["expanded", "success"].includes(statusValue)) return "bg-emerald-500/20 text-emerald-300";
+    if (["failed", "skipped", "skipped_retention"].includes(statusValue)) return "bg-red-500/20 text-red-300";
+    if (statusValue === "processing") return "bg-sky-500/20 text-sky-300";
+    return "bg-amber-500/15 text-amber-300";
+  };
+
+  const recentResults = [...(runStatus.results || [])].slice(-3).reverse();
+  const rolloutQueueItems = rolloutQueue?.items || [];
+  const rolloutCounts = rolloutQueue?.queue?.counts || {};
+  const rolloutDueNow = Number(rolloutQueue?.queue?.due_now || 0);
+  const renderChannelSummary = (
+    title: string,
+    summary: SchedulerChannelSummary | undefined,
+    rollout: SchedulerRolloutOverview | undefined | null,
+    subtitle?: string,
+  ) => {
+    if (!summary) return null;
+    const keys = new Set<string>();
+    [
+      summary.target,
+      summary.scheduled,
+      summary.completed,
+      summary.rollout_holdback,
+      summary.rollout_pending,
+      summary.final_expected,
+      summary.publish_on_date,
+      summary.carryover_next_days,
+    ].forEach((bucket) => {
+      Object.keys(bucket || {}).forEach((key) => keys.add(key));
+    });
+    const channels = [...channelOrder.filter((channel) => keys.has(channel)), ...[...keys].filter((channel) => !channelOrder.includes(channel))];
+    if (channels.length === 0) return null;
+
+    const hasCompleted = hasBucketValues(summary.completed);
+    const hasScheduled = hasBucketValues(summary.scheduled);
+    const primaryLabel = hasCompleted ? "완료" : hasScheduled ? "예약됨" : "진행";
+    const primaryBucket = hasCompleted ? summary.completed || {} : hasScheduled ? summary.scheduled || {} : {};
+    const holdbackBucket = summary.rollout_pending || summary.rollout_holdback || {};
+    const rolloutItems = rollout?.items || [];
+    const holdbackTotal = Number(rollout?.pending_channels ?? rollout?.holdback_total ?? 0);
+
+    return (
+      <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h4 className="text-xs font-semibold text-white">{title}</h4>
+            {subtitle && <p className="text-[10px] text-gray-500 mt-0.5">{subtitle}</p>}
+          </div>
+          {holdbackTotal > 0 && (
+            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-300">
+              보류 {holdbackTotal}개
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {channels.map((channel) => {
+            const meta = channelMeta[channel] || { label: channel, badge: "--" };
+            const primary = Number(primaryBucket[channel] || 0);
+            const target = Number(summary.target?.[channel] || 0);
+            const holdback = Number(holdbackBucket[channel] || 0);
+            const finalExpected = Number(summary.final_expected?.[channel] || target || primary + holdback);
+            const publishToday = Number(summary.publish_on_date?.[channel] || 0);
+            const carryover = Number(summary.carryover_next_days?.[channel] || 0);
+
+            return (
+              <div key={channel} className="rounded-lg bg-white/[0.03] px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-white">{meta.label}</p>
+                  <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] text-gray-300">{meta.badge}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  {primaryLabel} <span className="text-gray-200">{primary}</span>
+                  {holdback > 0 && <> · 보류 <span className="text-amber-300">{holdback}</span></>}
+                  {finalExpected > 0 && <> · 최종 <span className="text-emerald-300">{finalExpected}</span></>}
+                </p>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  오늘 공개 {publishToday}
+                  {carryover > 0 && <> · 다음날 {carryover}</>}
+                  {target > 0 && <> · Day 목표 {target}</>}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[10px] text-gray-500">
+          예약됨/완료는 실제 생성·예약된 수, 보류는 리드 채널 성과 확인 후 확장할 후보야.
+        </p>
+
+        {rolloutItems.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] text-gray-500">리드채널 실험</p>
+            {rolloutItems.map((item, index) => {
+              const holdbackChannels = getHoldbackChannels(item);
+              const sourceEntries = Object.entries(item.source_topics || {});
+              return (
+                <div key={`${item.topic_group || "topic"}-${index}`} className="rounded-lg bg-white/[0.03] px-3 py-2 text-[10px] text-gray-300">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-gray-200 break-words">{item.topic_group || "-"}</p>
+                    {item.status && (
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 ${statusClass(item.status)}`}>
+                        {statusLabel[item.status] || item.status}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-gray-500">
+                    리드 {item.lead_channel || "-"} · 보류 {holdbackChannels.join(", ") || "-"}
+                    {item.expand_after ? ` · 판정 ${formatRunTime(item.expand_after)}` : ""}
+                  </p>
+                  {sourceEntries.length > 0 && (
+                    <p className="mt-1 text-sky-300 break-words">
+                      원본주제 {sourceEntries.map(([channel, source]) => `${channel}: ${source}`).join(" · ")}
+                    </p>
+                  )}
+                  {item.last_error && <p className="mt-1 text-red-300 break-words">{item.last_error}</p>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       <p className="text-[10px] text-gray-500">
@@ -994,6 +1427,205 @@ function SchedulerPanel({
             오늘 할 일 실행
           </button>
         </div>
+
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-semibold text-white">오늘 할 일 실행 상태</h4>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                {runStatus.current_date ? `${runStatus.current_date} 기준` : "최근 실행 기록 없음"}
+              </p>
+            </div>
+            <span className={`text-[10px] px-2 py-1 rounded-full border ${
+              runStatus.running
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                : "border-white/10 bg-white/5 text-gray-400"
+            }`}>
+              {runStatus.running ? "실행 중" : "대기"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div className="rounded-lg bg-white/[0.03] px-3 py-2">
+              <p className="text-gray-500 mb-1">총 작업</p>
+              <p className="text-gray-200">{runStatus.total}</p>
+            </div>
+            <div className="rounded-lg bg-white/[0.03] px-3 py-2">
+              <p className="text-gray-500 mb-1">완료</p>
+              <p className="text-emerald-300">{runStatus.completed}</p>
+            </div>
+            <div className="rounded-lg bg-white/[0.03] px-3 py-2">
+              <p className="text-gray-500 mb-1">실패</p>
+              <p className="text-red-300">{runStatus.failed}</p>
+            </div>
+            <div className="rounded-lg bg-white/[0.03] px-3 py-2">
+              <p className="text-gray-500 mb-1">시작 시각</p>
+              <p className="text-gray-200">{runStatus.started_at ? formatRunTime(runStatus.started_at) : "-"}</p>
+            </div>
+          </div>
+
+          {runStatus.current_task && (
+            <div className="rounded-lg bg-sky-500/10 border border-sky-500/20 px-3 py-2 text-xs">
+              <p className="text-sky-300">현재 작업</p>
+              <p className="text-gray-200 mt-1 break-words">{runStatus.current_task}</p>
+            </div>
+          )}
+
+          {runStatus.stale_recovered && (
+            <p className="text-[10px] text-amber-300">
+              이전 서버 세션에서 남은 상태를 복구해 보여주는 중이야. 새 실행을 시작하면 최신 상태로 덮어써져.
+            </p>
+          )}
+          {runError && (
+            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[10px] text-red-300">
+              {runError}
+            </p>
+          )}
+          {!runStatus.current_task && runStatus.message && (
+            <p className="text-[10px] text-gray-500">{runStatus.message}</p>
+          )}
+
+          {recentResults.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-gray-500">최근 결과</p>
+              {recentResults.map((item, idx) => {
+                const displayTopic = item.topic || item.topic_group || "-";
+                const sourceTopic = item.source_topic && item.source_topic !== displayTopic ? item.source_topic : "";
+                return (
+                  <div key={`${item.channel || "ch"}-${displayTopic}-${idx}`} className="flex items-start justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="text-gray-200 break-words">{item.channel || "-"} · {displayTopic}</p>
+                      <p className="mt-1 text-[10px] text-gray-500">
+                        {item.format_type ? `${item.format_type} · ` : ""}
+                        {item.publish_at ? `예약 ${formatRunTime(item.publish_at)}` : "예약 시간 없음"}
+                      </p>
+                      {sourceTopic && <p className="mt-1 text-[10px] text-sky-300 break-words">원본주제: {sourceTopic}</p>}
+                      {item.youtube_url && <p className="mt-1 text-[10px] text-gray-500 break-words">{item.youtube_url}</p>}
+                      {item.error && <p className="text-red-300 mt-1 break-words">{item.error}</p>}
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${statusClass(item.status)}`}>
+                      {item.status || "-"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {preview && renderChannelSummary(
+          "오늘 할 일 미리보기",
+          preview.channel_summary,
+          preview.rollout_overview,
+          preview.file ? `${preview.file}${preview.date ? ` · ${preview.date}` : ""}` : undefined,
+        )}
+
+        {renderChannelSummary(
+          "최근 실행 채널별 요약",
+          runStatus.channel_summary,
+          runStatus.rollout_overview,
+          runStatus.current_date ? `${runStatus.current_date} 기준` : undefined,
+        )}
+
+        {(rolloutQueueItems.length > 0 || rolloutError) && (
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-semibold text-white">롤아웃 보류 큐</h4>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  리드 채널 24시간 성과를 본 뒤 나머지 채널을 확장하는 대기열입니다.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                {rolloutDueNow > 0 && (
+                  <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-1 text-[10px] text-sky-300">
+                    지금 판정 {rolloutDueNow}개
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={onRunRolloutExpansion}
+                  disabled={rolloutRunning || rolloutQueueItems.length === 0}
+                  className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-2.5 py-1.5 text-[10px] font-medium text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {rolloutRunning ? "판정 실행 중..." : "보류분 판정 실행"}
+                </button>
+              </div>
+            </div>
+
+            {rolloutError && (
+              <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[10px] text-red-300">
+                {rolloutError}
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-1.5 text-[10px]">
+              {[
+                ["pending", "판정대기"],
+                ["processing", "확장중"],
+                ["expanded", "완료"],
+                ["skipped", "스킵"],
+                ["failed", "실패"],
+              ].map(([key, label]) => (
+                <span key={key} className="rounded-full bg-white/[0.04] px-2 py-1 text-gray-400">
+                  {label} <span className="text-gray-200">{Number(rolloutCounts[key] || 0)}</span>
+                </span>
+              ))}
+            </div>
+            {rolloutDueNow === 0 && rolloutQueueItems.length > 0 && (
+              <p className="text-[10px] text-gray-500">
+                아직 판정 시간이 안 된 후보는 실행해도 업로드하지 않고 0건 처리로 끝납니다.
+              </p>
+            )}
+
+            {rolloutQueueItems.length === 0 ? (
+              <p className="text-[10px] text-gray-500">현재 보류 큐에 남은 항목이 없습니다.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {rolloutQueueItems.map((item, index) => {
+                  const payload = getHoldbackPayload(item);
+                  const holdbackChannels = getHoldbackChannels(item);
+                  const sourceEntries = Object.entries(payload)
+                    .map(([channel, value]) => [channel, getSourceLabel(value)] as const)
+                    .filter(([, value]) => value);
+                  return (
+                    <div key={`${item.id || item.topic_group || "rollout"}-${index}`} className="rounded-lg bg-white/[0.03] px-3 py-2 text-[10px] text-gray-300">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-gray-200 break-words">{item.topic_group || "-"}</p>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 ${statusClass(item.status)}`}>
+                          {statusLabel[item.status || ""] || item.status || "대기"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-gray-500">
+                        리드 {item.lead_channel || "-"} · 보류 {holdbackChannels.join(", ") || "-"}
+                        {item.format_type ? ` · ${item.format_type}` : ""}
+                      </p>
+                      <p className="mt-1 text-gray-500">
+                        리드 공개 {formatRunTime(item.lead_publish_at)} · 확장 판정 {formatRunTime(item.expand_after)}
+                      </p>
+                      {(item.metric_views != null || item.threshold_views != null) && (
+                        <p className="mt-1 text-gray-500">
+                          조회 {item.metric_views ?? "-"} / 기준 {item.threshold_views ?? "-"}
+                        </p>
+                      )}
+                      {sourceEntries.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {sourceEntries.slice(0, 4).map(([channel, source]) => (
+                            <p key={channel} className="text-sky-300 break-words">
+                              {channel}: {source}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {item.lead_video_url && <p className="mt-2 text-gray-500 break-words">{item.lead_video_url}</p>}
+                      {item.last_error && <p className="mt-2 text-red-300 break-words">{item.last_error}</p>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div>
           <h4 className="text-xs font-semibold text-gray-400 mb-2">등록된 크론</h4>
@@ -1249,6 +1881,7 @@ function VertexSaPanel({
 /* ─── 청구 금액 알림 설정 패널 ─── */
 function BillingSettingsPanel({
   settings,
+  overview,
   loading,
   status,
   onChange,
@@ -1256,6 +1889,7 @@ function BillingSettingsPanel({
   onCheck,
 }: {
   settings: BillingSettings;
+  overview: BillingOverview | null;
   loading: boolean;
   status: string;
   onChange: (next: Partial<BillingSettings>) => void;
@@ -1359,6 +1993,56 @@ function BillingSettingsPanel({
               </button>
               {status && <span className="text-[10px] text-gray-500">{status}</span>}
             </div>
+
+            {overview && (
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-white">오늘 비용 상세</p>
+                    <p className="text-[10px] text-gray-500">
+                      {overview.date} · 총 {overview.total_krw.toLocaleString()}원 · 환율 $1 = {overview.exchange_rate.toLocaleString()}원
+                    </p>
+                  </div>
+                  <span className="text-[10px] px-2 py-1 rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-300">
+                    비디오 {Object.values(overview.channels).reduce((sum, item) => sum + item.video_count, 0)}클립
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {Object.entries(overview.channels).length === 0 ? (
+                    <p className="text-[11px] text-gray-500">오늘 기록된 생성 비용이 아직 없습니다.</p>
+                  ) : Object.entries(overview.channels).map(([channel, info]) => (
+                    <div key={channel} className="rounded-lg bg-white/[0.03] border border-white/5 p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs text-white font-medium">{channel}</p>
+                          <p className="text-[10px] text-gray-500">
+                            성공 {info.success} · 실패 {info.failed} · 비디오 {info.video_count}클립
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-white font-medium">{info.total_krw.toLocaleString()}원</p>
+                          <p className="text-[10px] text-gray-500">영상 {info.video_krw.toLocaleString()}원</p>
+                        </div>
+                      </div>
+                      {info.video_models.length > 0 && (
+                        <div className="space-y-1.5">
+                          {info.video_models.map((model) => (
+                            <div key={`${channel}-${model.key}`} className="flex items-center justify-between gap-3 text-[11px]">
+                              <div className="text-gray-300">
+                                {model.label}
+                                <span className="text-gray-500"> · {model.count}클립 · {model.unit_krw.toLocaleString()}원/clip</span>
+                              </div>
+                              <div className="text-gray-200">{model.krw.toLocaleString()}원</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

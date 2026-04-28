@@ -17,20 +17,21 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "cjVigY5qzO86Huf0OWal",  # Eric (한국어 남성)
         "tts_speed": 1.3,  # 1.2→1.3 (시청자 피드백: 갑갑하다)
         "min_cuts": 8,
-        "max_cuts": 11,  # 빠른 말 + 30-40초 → 최대 11컷
-        "target_duration": "30-40",  # 실제 탑 31-39초, 업계 30-50초
-        # 포맷별 최적 컷 수 (tts_speed 1.3x 기준, 목표 30-40초)
+        "max_cuts": 10,  # 빠른 말 기준으로도 10컷 안에서 더 압축
+        "target_duration": "28-34",  # 최근 피드백 반영: 한국어는 짧고 강하게
+        # 포맷별 최적 컷 수 (tts_speed 1.3x 기준, 목표 28-34초)
         "format_cuts": {
-            "WHO_WINS":      {"min": 11, "max": 11},  # ~2.7s/컷 → 11컷=30s
-            "IF":            {"min": 10, "max": 11},  # ~3.1s/컷 → 10컷=31s
-            "EMOTIONAL_SCI": {"min": 8,  "max": 9},
-            "FACT":          {"min": 10, "max": 11},  # ~3.1s/컷 → 10컷=31s
-            "COUNTDOWN":     {"min": 8,  "max": 10},
+            "WHO_WINS":      {"min": 11, "max": 11},  # quality gate requires the full 11-cut duel structure
+            "IF":            {"min": 9,  "max": 10},
+            "EMOTIONAL_SCI": {"min": 8,  "max": 8},
+            "FACT":          {"min": 9,  "max": 10},
+            "COUNTDOWN":     {"min": 8,  "max": 9},
             "SCALE":         {"min": 7,  "max": 9},
-            "MYSTERY":       {"min": 8,  "max": 9},
-            "PARADOX":       {"min": 8,  "max": 9},   # FORMAT_CUT_GUIDE와 일치 (8~9컷)
+            "MYSTERY":       {"min": 8,  "max": 8},
+            "PARADOX":       {"min": 8,  "max": 8},
         },
-        "preferred_formats": ["WHO_WINS", "COUNTDOWN", "SCALE", "IF", "FACT", "MYSTERY"],
+        "preferred_formats": ["IF", "PARADOX", "FACT", "MYSTERY", "SCALE", "WHO_WINS"],
+        "blocked_formats": ["COUNTDOWN"],
         "voice_settings": {
             "stability": 0.35,
             "similarity_boost": 0.82,
@@ -56,20 +57,21 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "pNInz6obpgDQGcFmaJgB",  # Adam (영어 남성)
         "tts_speed": 1.05,  # 1.20→1.05 (시청자 피드백: 너무 빠름)
         "min_cuts": 8,
-        "max_cuts": 11,
-        "target_duration": "35-43",  # 실제 탑 28-41초, 스위트스팟 35-43초
-        # 포맷별 최적 컷 수 (tts_speed 1.05x 기준, 목표 35-43초)
+        "max_cuts": 10,
+        "target_duration": "30-36",  # 설명보다 압축감 우선
+        # 포맷별 최적 컷 수 (tts_speed 1.05x 기준, 목표 30-36초)
         "format_cuts": {
-            "WHO_WINS":      {"min": 11, "max": 11},  # ~2.8s/컷 → 11컷=31s (짧은문장이라 max)
-            "IF":            {"min": 10, "max": 11},  # ~3.7s/컷 → 10컷=37s
-            "EMOTIONAL_SCI": {"min": 9,  "max": 9},   # ~4.3s/컷 → 9컷=39s (단어수 상향)
-            "FACT":          {"min": 9,  "max": 10},  # ~3.5s/컷 → 9컷=32s (EN 단어수 축소)
-            "COUNTDOWN":     {"min": 8,  "max": 10},  # ~3.5s/컷 → 8컷=28s
-            "MYSTERY":       {"min": 8,  "max": 9},
-            "SCALE":         {"min": 8,  "max": 9},
-            "PARADOX":       {"min": 8,  "max": 9},   # FORMAT_CUT_GUIDE와 일치 (8~9컷)
+            "WHO_WINS":      {"min": 11, "max": 11},
+            "IF":            {"min": 9,  "max": 10},
+            "EMOTIONAL_SCI": {"min": 8,  "max": 8},
+            "FACT":          {"min": 8,  "max": 9},
+            "COUNTDOWN":     {"min": 8,  "max": 9},
+            "MYSTERY":       {"min": 8,  "max": 8},
+            "SCALE":         {"min": 7,  "max": 8},
+            "PARADOX":       {"min": 8,  "max": 8},
         },
-        "preferred_formats": ["FACT", "SCALE", "IF", "PARADOX", "EMOTIONAL_SCI", "MYSTERY"],
+        "preferred_formats": ["FACT", "PARADOX", "MYSTERY", "IF", "SCALE", "EMOTIONAL_SCI"],
+        "blocked_formats": ["WHO_WINS", "COUNTDOWN"],
         "voice_settings": {
             "stability": 0.45,  # 0.65→0.45 (단조로움 제거, 감정 표현력↑)
             "similarity_boost": 0.85,
@@ -95,20 +97,21 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성)
         "tts_speed": 1.05,  # 1.20→1.05 (시청자 피드백: 너무 빠름)
         "min_cuts": 8,
-        "max_cuts": 11,
-        "target_duration": "34-42",  # 실제 탑 34-45초, 긴 영상 +59% 성과
-        # 포맷별 최적 컷 수 (tts_speed 1.05x 기준, 목표 34-42초)
+        "max_cuts": 10,
+        "target_duration": "30-36",  # 최근 피드백 반영: 더 빠르고 날렵하게
+        # 포맷별 최적 컷 수 (tts_speed 1.05x 기준, 목표 30-36초)
         "format_cuts": {
-            "WHO_WINS":      {"min": 11, "max": 11},  # ~2.8s/컷 → 11컷=31s
-            "IF":            {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
-            "EMOTIONAL_SCI": {"min": 9,  "max": 9},
-            "FACT":          {"min": 10, "max": 10},  # ~3.7s/컷 → 10컷=37s
-            "PARADOX":       {"min": 9,  "max": 9},   # 단어수 상향 → 9컷=38s
-            "SCALE":         {"min": 8,  "max": 9},
-            "COUNTDOWN":     {"min": 8,  "max": 10},
-            "MYSTERY":       {"min": 8,  "max": 9},
+            "WHO_WINS":      {"min": 11, "max": 11},
+            "IF":            {"min": 9,  "max": 9},
+            "EMOTIONAL_SCI": {"min": 8,  "max": 8},
+            "FACT":          {"min": 9,  "max": 9},
+            "PARADOX":       {"min": 8,  "max": 8},
+            "SCALE":         {"min": 7,  "max": 8},
+            "COUNTDOWN":     {"min": 8,  "max": 9},
+            "MYSTERY":       {"min": 8,  "max": 8},
         },
-        "preferred_formats": ["IF", "WHO_WINS", "SCALE", "FACT", "COUNTDOWN", "PARADOX"],
+        "preferred_formats": ["PARADOX", "FACT", "IF", "MYSTERY", "SCALE"],
+        "blocked_formats": ["WHO_WINS", "COUNTDOWN"],
         "voice_settings": {
             "stability": 0.4,
             "similarity_boost": 0.82,
@@ -134,20 +137,21 @@ CHANNEL_PRESETS: dict[str, dict] = {
         "voice_id": "onwK4e9ZLuTAKqWW03F9",  # Daniel (스페인어 남성 — 미국 히스패닉 타겟)
         "tts_speed": 1.05,  # 1.20→1.05 (시청자 피드백: 너무 빠름)
         "min_cuts": 8,
-        "max_cuts": 11,
-        "target_duration": "38-48",  # 실제 탑 39-46초, 몰입형 최적
-        # 포맷별 최적 컷 수 (tts_speed 1.05x 기준, 목표 38-48초)
+        "max_cuts": 10,
+        "target_duration": "32-38",  # 몰입감은 유지하되 숏폼 압축감 복구
+        # 포맷별 최적 컷 수 (tts_speed 1.05x 기준, 목표 32-38초)
         "format_cuts": {
-            "WHO_WINS":      {"min": 11, "max": 11},  # ~2.8s/컷 → 11컷=31s (몰입형이라 긴컷유도)
-            "IF":            {"min": 11, "max": 11},  # ~3.7s/컷 → 11컷=41s
-            "EMOTIONAL_SCI": {"min": 9,  "max": 10},  # ~4.7s/컷 → 9컷=42s
-            "FACT":             {"min": 11, "max": 11},  # ~3.7s/컷 → 11컷=41s
-            "MYSTERY":   {"min": 8,  "max": 9},
-            "PARADOX":   {"min": 9,  "max": 9},   # 단어수 상향 → 9컷=44s
-            "SCALE":     {"min": 8,  "max": 9},
-            "COUNTDOWN": {"min": 8,  "max": 10},
+            "WHO_WINS":      {"min": 11, "max": 11},
+            "IF":            {"min": 9,  "max": 10},
+            "EMOTIONAL_SCI": {"min": 8,  "max": 9},
+            "FACT":          {"min": 9,  "max": 10},
+            "MYSTERY":       {"min": 8,  "max": 8},
+            "PARADOX":       {"min": 8,  "max": 8},
+            "SCALE":         {"min": 7,  "max": 8},
+            "COUNTDOWN":     {"min": 8,  "max": 9},
         },
-        "preferred_formats": ["EMOTIONAL_SCI", "MYSTERY", "PARADOX", "FACT", "IF", "COUNTDOWN"],
+        "preferred_formats": ["MYSTERY", "PARADOX", "FACT", "EMOTIONAL_SCI", "IF"],
+        "blocked_formats": ["WHO_WINS", "COUNTDOWN"],
         "voice_settings": {
             "stability": 0.55,
             "similarity_boost": 0.85,
@@ -171,6 +175,73 @@ CHANNEL_PRESETS: dict[str, dict] = {
     },
 }
 
+CHANNEL_TITLE_RULES: dict[str, str] = {
+    "askanything": (
+        "Title formula: one concrete subject + one impossible consequence or one direct curiosity question. "
+        "Questions are welcome when they feel immediate and punchy. Avoid vague endings like 비밀/정체 alone."
+    ),
+    "wonderdrop": (
+        "Title formula: one concrete subject + one declarative twist. Prefer a statement over a casual question. "
+        "Keep it crisp, cinematic, and proof-like."
+    ),
+    "exploratodo": (
+        "Title formula: exact object or place + one reversal or urgent curiosity gap. "
+        "Fast LATAM click energy, but still concrete. Avoid generic misterio titles without a subject."
+    ),
+    "prismtale": (
+        "Title formula: one hidden concrete object, place, or phenomenon + one ominous reveal. "
+        "Prefer mystery declarations over playful questions. If using secreto/misterio, pair it with a concrete noun."
+    ),
+}
+
+CHANNEL_HOOK_PROFILES: dict[str, str] = {
+    "askanything": (
+        "askanything = bold, punchy Korean curiosity hook. Strong questions are allowed and often preferred. "
+        "Open fast, sound conversational, and make the first line instantly repeatable."
+    ),
+    "wonderdrop": (
+        "wonderdrop = confident documentary opener. Prefer a calm declarative line over a casual question. "
+        "The first line should feel like the reveal already started."
+    ),
+    "exploratodo": (
+        "exploratodo = energetic LATAM opener. Fast, urgent, highly clickable. "
+        "Concrete nouns first, then the twist. Formal academic openings are bad."
+    ),
+    "prismtale": (
+        "prismtale = dark, cinematic mystery declaration. Ominous, precise, and intriguing. "
+        "Prefer a hidden-truth line over a casual question."
+    ),
+}
+
+CHANNEL_CUT1_VISUAL_RULES: dict[str, str] = {
+    "askanything": (
+        "Cut 1 visual anchor: one impossible scale anomaly or physical contradiction, one dominant hero subject, "
+        "aggressive contrast, fast-read silhouette, no clutter."
+    ),
+    "wonderdrop": (
+        "Cut 1 visual anchor: one hero object or creature, strong proof-like documentary composition, "
+        "clean background separation, premium realism, no collage."
+    ),
+    "exploratodo": (
+        "Cut 1 visual anchor: one concrete object or creature in a high-tension moment, vivid color split, "
+        "instant danger or reversal, center-weighted focus."
+    ),
+    "prismtale": (
+        "Cut 1 visual anchor: one hidden object, place, or silhouette clue inside darkness or fog, "
+        "single practical light source, ominous negative space, no busy collage."
+    ),
+}
+
+LEAD_CHANNEL_BY_FORMAT: dict[str, str] = {
+    "IF": "askanything",
+    "SCALE": "askanything",
+    "WHO_WINS": "askanything",
+    "FACT": "wonderdrop",
+    "PARADOX": "exploratodo",
+    "MYSTERY": "prismtale",
+    "EMOTIONAL_SCI": "askanything",
+}
+
 
 def get_upload_account(channel: str | None, platform: str) -> str | None:
     """채널의 플랫폼별 업로드 계정 ID를 반환합니다.
@@ -192,9 +263,72 @@ def get_channel_preset(channel: str | None) -> dict | None:
     return CHANNEL_PRESETS.get(channel)
 
 
+def normalize_format_for_channel(channel: str | None, format_type: str | None) -> tuple[str | None, str | None]:
+    """채널별 금지 포맷을 안전한 선호 포맷으로 치환한다."""
+    if not format_type:
+        return None, None
+
+    fmt = str(format_type).upper().strip()
+    if not fmt:
+        return None, None
+
+    preset = get_channel_preset(channel) or {}
+    blocked = {str(item).upper().strip() for item in preset.get("blocked_formats", [])}
+    if fmt not in blocked:
+        return fmt, None
+
+    preferred = [
+        str(item).upper().strip()
+        for item in preset.get("preferred_formats", [])
+        if str(item).upper().strip() not in blocked
+    ]
+    fallback = preferred[0] if preferred else "FACT"
+    reason = f"채널 보호 규칙: {channel}에서 {fmt} 차단 → {fallback}"
+    return fallback, reason
+
+
 def get_channel_names() -> list[str]:
     """등록된 채널 이름 목록 반환."""
     return list(CHANNEL_PRESETS.keys())
+
+
+def get_channel_title_rule(channel: str | None) -> str:
+    """채널별 제목 공식 설명."""
+    if not channel:
+        return "Title formula: one concrete subject + one curiosity gap."
+    return CHANNEL_TITLE_RULES.get(channel, "Title formula: one concrete subject + one curiosity gap.")
+
+
+def get_channel_hook_profile(channel: str | None) -> str:
+    """채널별 컷1 훅 성격 설명."""
+    if not channel:
+        return "default = short, strong, curiosity-driven opener."
+    return CHANNEL_HOOK_PROFILES.get(channel, "default = short, strong, curiosity-driven opener.")
+
+
+def get_channel_cut1_visual_rule(channel: str | None) -> str:
+    """채널별 컷1 비주얼 앵커 설명."""
+    if not channel:
+        return "Cut 1 visual anchor: one dominant hero subject, high contrast, no clutter."
+    return CHANNEL_CUT1_VISUAL_RULES.get(channel, "Cut 1 visual anchor: one dominant hero subject, high contrast, no clutter.")
+
+
+def pick_lead_channel(format_type: str | None, available_channels: list[str] | tuple[str, ...] | set[str]) -> str | None:
+    """포맷 기준 선행 배포 채널을 선택한다."""
+    channels = [str(ch) for ch in available_channels if ch]
+    if not channels:
+        return None
+
+    fmt = str(format_type or "FACT").upper().strip()
+    preferred = LEAD_CHANNEL_BY_FORMAT.get(fmt)
+    if preferred in channels:
+        return preferred
+
+    fallback_order = ["askanything", "wonderdrop", "exploratodo", "prismtale"]
+    for channel in fallback_order:
+        if channel in channels:
+            return channel
+    return channels[0]
 
 
 # ── 채널별 업로드 계정 영속성 (JSON 파일) ──

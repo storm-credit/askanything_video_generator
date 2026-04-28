@@ -77,6 +77,25 @@ async def analytics_cross_channel(refresh: bool = False):
     return {"success": True, "topics": analyze_topic_cross_channel(refresh)}
 
 
+@router.get("/analytics/global-topic-signals")
+async def analytics_global_topic_signals(
+    locale: str | None = None,
+    category: str | None = None,
+    format_hint: str | None = None,
+    limit: int = 80,
+):
+    """외부 나라별/글로벌 벤치마크 토픽 신호 조회."""
+    from modules.utils.global_topic_signals import list_signals
+
+    signals = list_signals(
+        locale=locale,
+        category=category,
+        format_hint=format_hint,
+        limit=limit,
+    )
+    return {"success": True, "signals": signals, "total": len(signals)}
+
+
 @router.get("/analytics/tone-report")
 async def analytics_tone_report():
     from modules.analytics.performance_tracker import get_tone_change_report

@@ -32,6 +32,8 @@ FRAGMENT: dict[str, str] = {
 
 === 구조 규칙 ===
 가정 상황 → 연쇄 결과 구조. 반드시 10~11컷으로 구성하라.
+이 포맷은 전역 "컷1 질문형 금지" 규칙을 명시적으로 덮어쓴다.
+컷1은 가정 자체를 묻는 질문 훅이어야 한다.
 
 컷 구조 (10-11컷):
 - 컷1  [SHOCK]:    가정 선언. "만약 ○○라면?" / "○○가 없어진다면?"
@@ -91,6 +93,8 @@ If any fail, rewrite entirely.
 
 === Structural Rules ===
 Premise → chain reaction structure. MUST be 10-11 cuts.
+This format EXPLICITLY overrides the generic "Cut 1 must not be a question" rule.
+Cut 1 SHOULD be the premise question itself.
 
 Cut structure (10-11 cuts):
 - Cut 1  [SHOCK]:    State the premise. "What if ○○?" / "What if ○○ disappeared?"
@@ -150,6 +154,8 @@ Si alguno falla, reescribir todo.
 
 === Reglas de Estructura ===
 Premisa → reacción en cadena. DEBE tener 10-11 cortes.
+Este formato ANULA explícitamente la regla genérica de "el Corte 1 no puede ser pregunta".
+El Corte 1 DEBE funcionar como la pregunta de premisa.
 
 Estructura (10-11 cortes):
 - Corte 1  [SHOCK]:    Premisa. "¿Qué pasaría si ○○?" / "¿Si ○○ desapareciera?"

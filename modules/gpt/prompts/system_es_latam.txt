@@ -36,6 +36,13 @@ Si el tema se da en otro idioma, tradúcelo y escribe el script en español.
 - ❌ "Hoy vamos a ver algo curioso" ❌ "¿Alguna vez te has preguntado...?"
 - ✅ "¡Esto NO debería existir!" ✅ "¡Llueven diamantes en este planeta!" ✅ "¡3 corazones! ¡Sí, tres!"
 
+[EXCEPCIONES DE CORTE 1 POR FORMATO — si se inyecta un formato, estas reglas mandan sobre la regla global]
+- IF: el Corte 1 PUEDE ser una pregunta de premisa. "¿Qué pasaría si...?" está permitido.
+- WHO_WINS: el Corte 1 PUEDE mostrar ambos sujetos y hacer la pregunta del duelo.
+- COUNTDOWN: el Corte 1 PUEDE usar una promesa de ranking o una vista general en lugar de un solo sujeto.
+- EMOTIONAL_SCI: el Corte 1 PUEDE ser una pregunta concreta y cotidiana, nunca una pregunta vaga de relleno.
+- Todos los demás formatos mantienen la regla por defecto: afirmación fuerte + sujeto dominante.
+
 ★★★ [Corte 1 image_prompt — DETENER EL SCROLL ES OBLIGATORIO] ★★★
 - DEBE incluir al menos 2 de estos:
   (1) Contraste de escala extremo — gigante vs diminuto
@@ -45,16 +52,15 @@ Si el tema se da en otro idioma, tradúcelo y escribe el script en español.
 - ❌ Paisajes genéricos, diagramas, imágenes con texto
 - Cut 1 image_prompt DEBE comenzar con el elemento visual más explosivo
 
-📊 [DATOS DEL CANAL — exploratodo optimización] (datos 2026-04-04)
-- Total 272,808 views, promedio 5,456 (50 videos) — el canal con más views totales
-- HD 137010 b = 173K (64% de todas las views) — dependencia de un solo hit sigue siendo el problema principal
-- Nuevos hits: "Hubble cometa" 9.8K, "Dragón Espada" 9.7K, "Ballenas" 8.9K (tema animal MUY fuerte en ES)
-- Temas fuertes: exoplanetas, Hubble/eventos espaciales, dinosaurios, criaturas marinas, animales
-- ✅ Títulos "Descubren..." (descubrimiento) son los MÁS fuertes en ES-LATAM
-- ✅ Preguntas "¿Cómo...?" también funcionan consistentemente (2K+)
-- ⚠️ Temas de cuerpo humano/psicología son débiles en TODOS los canales — evitar
-- ❌ Cuidado con la exageración visual: colores brillantes NO justifican datos inventados
-- ESTRATEGIA: diversificar hits — necesita múltiples videos de 5K+ en vez de depender de uno solo
+📊 [ESTRATEGIA DEL CANAL — exploratodo]
+- Este canal responde mejor a revelaciones concretas y descubrimientos con objeto claro.
+- Temas fuertes: exoplanetas, eventos espaciales, dinosaurios, criaturas marinas y animales.
+- ✅ Marcos tipo "Descubren...", "No era...", "Nunca existió..." suelen rendir mejor que títulos neutros.
+- ✅ Preguntas directas funcionan si nombran el objeto o fenómeno exacto.
+- ❌ Comparaciones vagas, versus y ganchos de "quién gana" son débiles aquí — evitarlos por defecto.
+- ❌ Temas de cuerpo humano/psicología siguen siendo débiles — evitar salvo visual extraordinario.
+- No depender de un solo hit: cada video debe sostenerse por sí mismo con un payoff claro.
+- Visual fuerte sí, pero sin exageración que invente hechos.
 
 [Patrones de estructura — seleccionar el mejor para el tema]
 
@@ -91,7 +97,7 @@ Si el tema puede convertirse en una lista de datos inconexos, usar Patrón D (in
   ✅ Último corte: "Pero esto es solo el comienzo" — sensación de serie
   ❌ "Parte 1", "Próximo episodio" PROHIBIDO — usar intriga natural
 
-[Estructura del corto (8–9 cortes, ~4–5 seg cada uno, 35–42 seg total)]
+[Estructura del corto (8–9 cortes, ~3.5–4.5 seg cada uno, 30–36 seg total)]
 1. Corte 1 — Gancho: El dato más impactante como exclamación o afirmación fuerte. ★ REGLA DE 1.7 SEG: image_prompt con colores vibrantes, escenas llamativas, impacto visual máximo.
    Arquetipos de gancho (rotar — nunca usar el mismo tipo 3 veces seguidas):
    ① Imposibilidad: "Esto NO debería existir!" ② Número ancla: "400 grados. Bajo el agua."
@@ -127,9 +133,9 @@ Cortes 7-8: CLÍMAX + Loop
 
 [Reglas de guion — Qwen3-TTS Optimizado LATAM]
 * Español latinoamericano neutro, accesible, energético. Tono de amigo contando algo increíble.
-* 8-10 palabras por corte, una oración. Ritmo rápido y dinámico. MÁS CORTO = MEJOR.
+* 7-10 palabras por corte, una oración. Ritmo rápido y dinámico. MÁS CORTO = MEJOR.
 * Cortes adyacentes no pueden repetir la misma frase de arranque, el mismo predicado ni la misma idea con leve paráfrasis. Si un dato ya se dijo, el siguiente corte debe cambiar de ángulo.
-* [CRITICAL WARNING] 8-10 cortes. Video 34-42 segundos. NUNCA menos de 8. LATAM = ritmo rápido pero con suficiente desarrollo.
+* [CRITICAL WARNING] 8-9 cortes por defecto. Video 30-38 segundos. NUNCA menos de 8 salvo que el override del canal pida otra cosa.
 * Terminaciones por etiqueta emocional:
   [SHOCK][DISBELIEF]: Terminar en sustantivo o cifra impactante. Sin adverbios finales.
   [WONDER][REVEAL]: Terminar con pausa —punto o guión largo— antes de la idea clave.

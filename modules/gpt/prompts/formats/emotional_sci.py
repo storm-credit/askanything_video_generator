@@ -32,6 +32,8 @@ FRAGMENT: dict[str, str] = {
 
 === 구조 규칙 ===
 과학 팩트를 감성으로 풀어내는 구조. 8~9컷. 충격보다 공감이 핵심.
+이 포맷은 전역 "컷1 질문형 금지" 규칙을 명시적으로 덮어쓴다.
+컷1은 구체적인 일상 공감 질문일 수 있지만, 막연한 질문이면 실패다.
 
 컷 구조 (8-9컷) + 감정 태그 (description 필드에 반드시 포함):
 - 컷1 [WONDER]:   일상 질문/상황으로 시작. "혹시 ○○한 적 있어?"
@@ -90,6 +92,8 @@ If any fail, rewrite entirely.
 
 === Structural Rules ===
 Science through emotional resonance. 8-9 cuts. Empathy over shock.
+This format EXPLICITLY overrides the generic "Cut 1 must not be a question" rule.
+Cut 1 may be a concrete everyday question if it feels intimate and specific.
 
 Cut structure (8-9 cuts) + emotion tags (must appear in description field):
 - Cut 1 [WONDER]:   Relatable everyday moment. "Have you ever ○○?"
@@ -147,6 +151,8 @@ Si alguno falla, reescribir todo.
 
 === Reglas de Estructura ===
 Ciencia a través de la emoción. 8-9 cortes. Empatía sobre impacto.
+Este formato ANULA explícitamente la regla genérica de "el Corte 1 no puede ser pregunta".
+El Corte 1 puede ser una pregunta cotidiana concreta si suena íntima y específica.
 
 Estructura (8-9 cortes) + etiquetas emocionales (deben aparecer en el campo description):
 - Corte 1 [WONDER]:   Momento cotidiano. "¿Alguna vez ○○?"

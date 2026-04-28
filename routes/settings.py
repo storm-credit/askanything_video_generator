@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import os
+import requests
 
 from fastapi import APIRouter, Query, UploadFile, File, HTTPException
 
@@ -49,6 +50,18 @@ async def key_usage():
 @router.get("/health")
 async def health_check():
     """각 API 키의 설정 상태를 개별적으로 반환합니다."""
+    def _candidate_qwen3_urls() -> list[str]:
+        configured = os.getenv("QWEN3_TTS_URL", "http://localhost:8010").strip() or "http://localhost:8010"
+        urls = [configured, "http://localhost:8010", "http://host.docker.internal:8010", "http://tts:8010"]
+        seen: set[str] = set()
+        result: list[str] = []
+        for raw in urls:
+            url = raw.rstrip("/")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            result.append(url)
+        return result
 
     def _is_set(val: str | None, placeholders: list[str] | None = None) -> bool:
         if not val or not val.strip():
@@ -74,6 +87,29 @@ async def health_check():
     except Exception:
         vertex_sa_count = 0
     vertex_ready = bool(is_vertex_backend and (vertex_creds.strip() or vertex_sa_count > 0))
+    tts_engine = os.getenv("TTS_ENGINE", "qwen3").strip().lower() or "qwen3"
+    qwen_tts_url = os.getenv("QWEN3_TTS_URL", "http://localhost:8010").strip() or "http://localhost:8010"
+    qwen_tts_health = {"ok": False, "status_code": None, "url": qwen_tts_url}
+    if tts_engine == "qwen3":
+        for candidate_url in _candidate_qwen3_urls():
+            try:
+                resp = requests.get(f"{candidate_url}/health", timeout=3)
+                qwen_tts_health = {
+                    "ok": resp.ok,
+                    "status_code": resp.status_code,
+                    "url": candidate_url,
+                }
+                if resp.ok:
+                    break
+            except Exception:
+                qwen_tts_health = {"ok": False, "status_code": None, "url": candidate_url}
+
+    next_sa = None
+    try:
+        from modules.utils.vertex_sa_manager import get_next_service_account
+        next_sa = get_next_service_account()
+    except Exception:
+        next_sa = None
 
     def _mask(val: str) -> str:
         if not val or len(val) <= 8:
@@ -112,6 +148,18 @@ async def health_check():
         "masked_keys": masked_keys,
         "google_key_count": google_key_count,
         "vertex_sa_count": vertex_sa_count,
+        "tts": {
+            "engine": tts_engine,
+            "qwen_ready": bool(qwen_tts_health["ok"]),
+            "qwen_status_code": qwen_tts_health["status_code"],
+            "qwen_url": qwen_tts_health["url"],
+            "elevenlabs_ready": keys["elevenlabs"],
+        },
+        "vertex": {
+            "backend": os.getenv("GEMINI_BACKEND", "gemini_api"),
+            "sa_only": os.getenv("VERTEX_SA_ONLY", "false").lower() in {"1", "true", "yes", "on"},
+            "next_account": next_sa,
+        },
     }
 
 
@@ -130,7 +178,12 @@ async def model_limits():
     service_map = {
         "gemini": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
         "imagen": ["imagen-4.0-generate-001", "imagen-4.0-fast-generate-001"],
-        "veo3": ["veo-3.0-generate-001", "veo-3.0-fast-generate-001"],
+        "veo3": [
+            "veo-3.1-generate-001",
+            "veo-3.1-fast-generate-001",
+            "veo-3.0-generate-001",
+            "veo-3.0-fast-generate-001",
+        ],
     }
 
     result = {}
@@ -560,8 +613,8 @@ async def test_vertex_service_account(req: dict | None = None):
 @router.get("/settings/billing")
 async def get_billing_settings():
     """청구 금액 임계치 알림 설정 조회."""
-    from modules.utils.cost_tracker import load_billing_settings
-    return {"ok": True, "settings": load_billing_settings()}
+    from modules.utils.cost_tracker import load_billing_settings, get_billing_overview
+    return {"ok": True, "settings": load_billing_settings(), "overview": get_billing_overview()}
 
 
 @router.put("/settings/billing")

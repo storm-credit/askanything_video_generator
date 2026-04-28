@@ -131,6 +131,26 @@ class MainOrchestrator:
         except Exception as exc:
             yield f"WARN|[PolishAgent] {self._safe_error(exc)} — 스킵\n"
 
+        try:
+            from modules.gpt.cutter import _validate_hard_fail, _validate_region_style
+
+            topic_title = ctx.topic.split("\n\n[원본 영상 내용]")[0].strip()
+            for cut in ctx.cuts:
+                cut.setdefault("format_type", ctx.format_type or "")
+                cut.setdefault("topic", topic_title)
+                cut.setdefault("topic_title", topic_title)
+            final_hard_fails = _validate_hard_fail(ctx.cuts, ctx.channel)
+            final_region_warns = _validate_region_style(ctx.cuts, ctx.channel)
+            if final_hard_fails:
+                yield f"ERROR|[QualityGate] 최종 HARD FAIL {len(final_hard_fails)}개 — 렌더 중단\n"
+                for failure in final_hard_fails[:8]:
+                    yield f"ERROR|  - {failure}\n"
+                return
+            if final_region_warns:
+                yield f"WARN|[QualityGate] 최종 지역 스타일 경고 {len(final_region_warns)}개\n"
+        except Exception as exc:
+            yield f"WARN|[QualityGate] 최종 검증 실패(무시): {self._safe_error(exc)}\n"
+
         yield "PROG|60\n"
 
         # ── Stage 2: Asset Production (병렬) ──

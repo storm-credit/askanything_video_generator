@@ -3,7 +3,7 @@
 api_server.py 시작 시 자동 등록. Docker 재시작해도 다시 등록.
 
 스케줄:
-  매주 일요일 21:00 KST → 주간 토픽 생성 (다음 주 7일분)
+  매주 목요일 09:00 KST → 주간 토픽 생성 (다음 주 7일분)
   매일 02:00 KST → 당일 Day 파일 자동 배포 (AUTO_DEPLOY_CRON_ENABLED=true일 때)
   매일 23:50 KST → 일일 성과 기록
 """
@@ -152,8 +152,17 @@ async def _scheduler_loop():
     print(f"[크론] 스케줄러 시작 ({len(_jobs)}개 작업)")
 
     # 헬스체크 — 등록된 잡 수 확인 + 텔레그램 알림
-    expected_jobs = 5
+    # 기본 상시 작업:
+    # - 일일 성과 기록
+    # - 재생목록 소급 분류
+    # - 일일 비용 결산
+    # - 모닝 브리핑
+    expected_jobs = 4
+    if os.getenv("WEEKLY_TOPICS_CRON_ENABLED", "false").lower() in {"1", "true", "yes", "on"}:
+        expected_jobs += 1
     if os.getenv("AUTO_DEPLOY_CRON_ENABLED", "false").lower() in {"1", "true", "yes", "on"}:
+        expected_jobs += 1
+    if os.getenv("ROLLOUT_EXPANSION_CRON_ENABLED", "true").lower() in {"1", "true", "yes", "on"}:
         expected_jobs += 1
     try:
         from modules.utils.cost_tracker import load_billing_settings
@@ -227,6 +236,7 @@ def stop():
 def get_status() -> dict[str, Any]:
     """현재 크론 상태 반환."""
     now = _now_kst()
+    day_names = ["월", "화", "수", "목", "금", "토", "일"]
     jobs_info = []
     for job in _jobs:
         if job.get("type") == "hourly":
@@ -236,7 +246,10 @@ def get_status() -> dict[str, Any]:
             schedule = f"매시간 {job['minute']:02d}분 KST"
         else:
             next_t = _next_run(job["hour"], job["minute"], job.get("weekday"))
-            schedule = f"{job['hour']:02d}:{job['minute']:02d} KST"
+            if job.get("weekday") is not None:
+                schedule = f"매주 {day_names[job['weekday']]} {job['hour']:02d}:{job['minute']:02d} KST"
+            else:
+                schedule = f"{job['hour']:02d}:{job['minute']:02d} KST"
         jobs_info.append({
             "name": job["name"],
             "type": job["type"],

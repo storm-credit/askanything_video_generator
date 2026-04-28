@@ -34,6 +34,93 @@ _batch_running = False
 _batch_stop = threading.Event()
 
 
+def _load_deploy_success_map(target_date_str: str) -> set[str]:
+    """auto_deploy 성공 결과를 topic/channel 키 집합으로 읽는다."""
+    try:
+        from modules.scheduler.auto_deploy import STATE_FILE
+
+        if not os.path.exists(STATE_FILE):
+            return set()
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        if state.get("current_date") != target_date_str:
+            return set()
+        completed: set[str] = set()
+        for row in state.get("results", []):
+            if row.get("status") != "success":
+                continue
+            channel = str(row.get("channel", "")).strip()
+            topic_group = str(row.get("topic_group") or row.get("topic") or "").strip()
+            if channel and topic_group:
+                completed.add(f"{topic_group}::{channel}")
+        return completed
+    except Exception:
+        return set()
+
+
+def _load_task_completion_map(target_date_str: str) -> set[str]:
+    try:
+        from modules.utils.today_tasks import get_completed_keys
+
+        return get_completed_keys(target_date_str)
+    except Exception:
+        return set()
+
+
+def _is_topic_header_marked(file_path: str, topic_group: str) -> bool:
+    """Day 헤더가 ✅/☑️/✔️ 처리되어 있는지 확인."""
+    if not file_path or not os.path.exists(file_path):
+        return False
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return False
+
+    for match in re.finditer(r"^## \d+\.\s*(.+)$", content, re.MULTILINE):
+        header = match.group(1).strip()
+        normalized = re.sub(r"^(?:✅|☑️|✔️)\s*", "", header).strip()
+        normalized = re.sub(r"\s+\[[^\]]+\]", "", normalized).strip()
+        if normalized == topic_group.strip():
+            return bool(re.match(r"^(?:✅|☑️|✔️)\s*", header))
+    return False
+
+
+def _has_generated_output(topic_name: str, channel: str) -> bool:
+    """토픽/채널 폴더에 실제 렌더 영상 산출물이 있는지 확인."""
+    slug = re.sub(r"[^\w\s-]", "", topic_name or "", flags=re.UNICODE).strip()
+    slug = re.sub(r"\s+", "_", slug).strip("_")
+    if not slug:
+        return False
+
+    folder_path = os.path.join("assets", f"{slug}_{channel}")
+    if not os.path.isdir(folder_path):
+        return False
+
+    candidate_dirs = [
+        os.path.join(folder_path, "video"),
+        os.path.join(folder_path, "video_clips"),
+    ]
+    for path in candidate_dirs:
+        if os.path.isdir(path):
+            try:
+                if any(
+                    entry.is_file() and entry.name.lower().endswith((".mp4", ".mov", ".webm"))
+                    for entry in os.scandir(path)
+                ):
+                    return True
+            except Exception:
+                continue
+
+    try:
+        return any(
+            entry.is_file() and entry.name.lower().endswith((".mp4", ".mov", ".webm"))
+            for entry in os.scandir(folder_path)
+        )
+    except Exception:
+        return False
+
+
 @router.post("/add")
 async def batch_add(req: BatchJobRequest):
     from modules.utils.batch import add_job
@@ -380,22 +467,26 @@ async def batch_today_topics(channel: str | None = None, date: str | None = None
     if not result.get("file"):
         return {"success": False, "message": f"{target_date.month}-{target_date.day} Day 파일을 찾을 수 없습니다", "topics": [], "current_date": target_date.strftime("%Y-%m-%d")}
 
-    # 완료 상태 체크: assets/{topic_slug}_{channel}/ 폴더 존재 여부
+    # 완료 상태 체크: Day 헤더 ✅ + auto_deploy 성공 상태 + 실제 생성 산출물
+    target_date_str = target_date.strftime("%Y-%m-%d")
+    deploy_success = _load_deploy_success_map(target_date_str)
+    task_completed = _load_task_completion_map(target_date_str)
     for topic in result["topics"]:
         topic_name = topic.get("topic_group", "")
-        # 슬러그 생성 (특수문자 제거)
-        slug = re.sub(r"[^\w\s-]", "", topic_name, flags=re.UNICODE).strip()
-        slug = re.sub(r"\s+", "_", slug).strip("_")
+        header_marked = _is_topic_header_marked(result.get("file_path", ""), topic_name)
+        topic_channels = list((topic.get("channels") or {}).keys())
         completed_channels = []
-        for ch in topic.get("channels", {}):
-            folder = f"{slug}_{ch}"
-            folder_path = os.path.join("assets", folder)
-            # 이미지가 있으면 완료로 판단
-            img_dir = os.path.join(folder_path, "images")
-            if os.path.isdir(img_dir) and len(os.listdir(img_dir)) > 0:
+        for ch in topic_channels:
+            state_key = f"{topic_name}::{ch}"
+            if ch in completed_channels:
+                continue
+            if state_key in task_completed or state_key in deploy_success or _has_generated_output(topic_name, ch):
                 completed_channels.append(ch)
+        topic["header_marked"] = header_marked
         topic["completed_channels"] = completed_channels
-        topic["is_completed"] = len(completed_channels) >= len(topic.get("channels", {})) and len(completed_channels) > 0
+        topic["is_completed"] = header_marked or (
+            len(completed_channels) >= len(topic_channels) and len(completed_channels) > 0
+        )
 
     # 이전/다음 Day 파일 찾기
     day_files = sorted(list_day_files())
@@ -429,6 +520,29 @@ async def batch_today_topics(channel: str | None = None, date: str | None = None
         "prev_date": prev_date,
         "next_date": next_date,
     }
+
+
+@router.get("/task-history")
+async def batch_task_history(
+    search: str | None = None,
+    channel: str | None = None,
+    status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 300,
+):
+    """오늘 할 일 실행/완료 DB 목록. 검색/채널/날짜 필터 지원."""
+    from modules.utils.today_tasks import list_task_history
+
+    tasks = list_task_history(
+        search=search,
+        channel=channel,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+    )
+    return {"success": True, "tasks": tasks, "total": len(tasks)}
 
 
 @router.get("/day-files")

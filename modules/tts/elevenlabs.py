@@ -174,7 +174,7 @@ EMOTION_VOICE_DESC = {
 
 # ── 채널 → Qwen3 기본 voice_desc ──
 CHANNEL_VOICE_DESC = {
-    "askanything": "Korean male, brisk short-form narration, tight rhythm, clipped endings, continuous energy throughout",
+    "askanything": "Korean male, brisk short-form narration, tight rhythm, clean phrase endings, continuous energy throughout",
     "wonderdrop": "English male, confident steady narration, same energy throughout",
     "exploratodo": "Spanish male, energetic steady narration, same energy throughout",
     "prismtale": "Spanish male, calm steady narration, same energy throughout",
@@ -190,6 +190,25 @@ EMOTION_SPEED_FACTOR: dict[str, float] = {e: 1.10 for e in _FAST_EMOTIONS}
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://localhost:8010")
 
+
+def _candidate_qwen3_urls() -> list[str]:
+    """환경별로 시도할 Qwen3-TTS base URL 목록."""
+    candidates = [
+        QWEN3_TTS_URL,
+        "http://localhost:8010",
+        "http://host.docker.internal:8010",
+        "http://tts:8010",
+    ]
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for raw in candidates:
+        url = (raw or "").strip().rstrip("/")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        normalized.append(url)
+    return normalized
+
 # ── 감정 태그 → ElevenLabs voice_settings 매핑 (2단계: FAST vs 채널기본) ──
 _EL_FAST = {"stability": 0.30, "style": 0.45}
 EMOTION_TO_EL_SETTINGS = {
@@ -204,7 +223,7 @@ CHANNEL_SPEAKER = {
     "askanything": "eric",      # 한국어 남성 — 깨끗하고 자연스러운 음색
     "wonderdrop": "ryan",       # 영어 남성 — 밝은 미국 남성, 깨끗한 중음
     "exploratodo": "dylan",     # 스페인어 LATAM — 활기찬 리듬감 있는 남성
-    "prismtale": "serena",       # 스페인어 US — 여성, 다크 미스터리 톤에 차별화
+    "prismtale": "dylan",       # 스페인어 US — 남성 앵커 유지, calm/dark voice_desc로 차별화
 }
 
 
@@ -229,31 +248,39 @@ def _generate_qwen3(text: str, output_path: str, language: str = "ko",
         print(f"  [Qwen3-TTS 경고] 미지원 speaker '{speaker}' → 'eric' 폴백")
         speaker = "eric"
 
-    for attempt in range(MAX_RETRIES):
-        try:
-            resp = requests.post(
-                f"{QWEN3_TTS_URL}/generate",
-                json={"text": text, "engine": "qwen3", "lang": language,
-                      "voice_desc": final_desc, "voice": speaker,
-                      **({"speed": speed} if speed else {})},
-                timeout=120,
-            )
-            if resp.status_code == 200 and len(resp.content) > 1000:
-                os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-                with open(output_path, "wb") as f:
-                    f.write(resp.content)
-                print(f"OK [Qwen3-TTS] 컷 음성 생성 완료! ({len(resp.content)//1024}KB)")
-                return output_path
-            else:
-                error_msg = resp.text[:100] if resp.status_code != 200 else "too small"
-                print(f"[Qwen3-TTS 실패] {resp.status_code}: {error_msg} (시도 {attempt+1}/{MAX_RETRIES})")
-        except Exception as e:
-            print(f"[Qwen3-TTS 연결 실패] {e} (시도 {attempt+1}/{MAX_RETRIES})")
+    payload = {
+        "text": text,
+        "engine": "qwen3",
+        "lang": language,
+        "voice_desc": final_desc,
+        "voice": speaker,
+        **({"speed": speed} if speed else {}),
+    }
 
-        if attempt < MAX_RETRIES - 1:
-            wait = 2 ** (attempt + 1)
-            print(f"  [Qwen3-TTS] {wait}초 후 재시도...")
-            time.sleep(wait)
+    for base_url in _candidate_qwen3_urls():
+        for attempt in range(MAX_RETRIES):
+            try:
+                resp = requests.post(
+                    f"{base_url}/generate",
+                    json=payload,
+                    timeout=(8, 120),
+                )
+                if resp.status_code == 200 and len(resp.content) > 1000:
+                    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+                    with open(output_path, "wb") as f:
+                        f.write(resp.content)
+                    print(f"OK [Qwen3-TTS] 컷 음성 생성 완료! ({len(resp.content)//1024}KB) via {base_url}")
+                    return output_path
+                error_msg = resp.text[:100] if resp.status_code != 200 else "too small"
+                print(f"[Qwen3-TTS 실패] {resp.status_code}: {error_msg} @ {base_url} (시도 {attempt+1}/{MAX_RETRIES})")
+            except Exception as e:
+                print(f"[Qwen3-TTS 연결 실패] {e} @ {base_url} (시도 {attempt+1}/{MAX_RETRIES})")
+
+            if attempt < MAX_RETRIES - 1:
+                wait = 2 ** (attempt + 1)
+                print(f"  [Qwen3-TTS] {wait}초 후 재시도...")
+                time.sleep(wait)
+        print(f"  [Qwen3-TTS] 다음 URL로 전환: {base_url}")
 
     return None
 

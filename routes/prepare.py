@@ -33,6 +33,7 @@ from routes.shared import (
     VOICE_MAP,
     VOICE_ID_TO_NAME,
 )
+from modules.utils.hero_cuts import pick_hero_indices
 
 router = APIRouter(prefix="/api", tags=["prepare"])
 
@@ -699,32 +700,6 @@ async def render_endpoint(req: RenderRequest):
         from modules.utils.keys import get_google_key
         from modules.utils.channel_config import get_channel_preset
 
-        def _extract_emotion_tag(description: str) -> str | None:
-            match = re.search(r"\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM|LOOP)\]", description or "", re.IGNORECASE)
-            return match.group(1).upper() if match else None
-
-        def _pick_hero_indices(cuts_data: list[dict]) -> list[int]:
-            priority_groups = [
-                {"SHOCK", "REVEAL"},
-                {"URGENCY", "DISBELIEF", "TENSION"},
-                {"WONDER", "IDENTITY", "LOOP", "CALM"},
-            ]
-            hero_indices: list[int] = []
-            seen: set[int] = set()
-            emotions = [_extract_emotion_tag(cut.get("description", "")) for cut in cuts_data]
-
-            for group in priority_groups:
-                for idx, emotion in enumerate(emotions):
-                    if emotion in group and idx not in seen:
-                        hero_indices.append(idx)
-                        seen.add(idx)
-                if hero_indices:
-                    break
-
-            if not hero_indices and cuts_data:
-                hero_indices = [0]
-            return hero_indices
-
         try:
             cuts = copy.deepcopy(session["cuts"])
             topic_folder = session["topic_folder"]
@@ -798,16 +773,25 @@ async def render_endpoint(req: RenderRequest):
 
                 prog = 10 + int(50 * ((i + 1) / len(scripts)))
                 yield {"data": f"PROG|{prog}\n"}
-                yield {"data": f"  -> 컷 {i+1}/{len(scripts)} 음성 완료\n"}
+                if audio_paths[-1]:
+                    yield {"data": f"  -> 컷 {i+1}/{len(scripts)} 음성 완료\n"}
+                else:
+                    yield {"data": f"WARN|  -> 컷 {i+1}/{len(scripts)} 음성 생성 실패\n"}
 
-            # 비디오 변환 (선택) — 히어로 컷(SHOCK/REVEAL)만 비디오 생성
+            # 실패 체크
+            failed = [i+1 for i, p in enumerate(audio_paths) if p is None]
+            if failed:
+                yield {"data": f"ERROR|[TTS 오류] 컷 {failed} 음성 생성 실패\n"}
+                return
+
+            # 비디오 변환 (선택) — TTS 성공 확인 후에만 실행해서 불필요한 Veo 비용을 막는다.
             visual_paths = list(image_paths)
             generated_video_count = 0
             active_video_engine = req.videoEngine
+            actual_veo_model = req.videoModel if req.videoModel and req.videoModel != "hero-only" else None
             if active_video_engine != "none":
                 hero_only = req.videoModel == "hero-only"
-                actual_veo_model = req.videoModel if req.videoModel and req.videoModel != "hero-only" else None
-                target_indices = _pick_hero_indices(cuts) if hero_only else list(range(len(cuts)))
+                target_indices = pick_hero_indices(cuts, req.formatType) if hero_only else list(range(len(cuts)))
                 skip_count = len(cuts) - len(target_indices)
                 if hero_only and skip_count > 0:
                     hero_labels = [f"{idx + 1}컷" for idx in target_indices]
@@ -833,6 +817,9 @@ async def render_endpoint(req: RenderRequest):
                                         description=desc,
                                         veo_model=actual_veo_model,
                                         gemini_api_keys=req.geminiKeys,
+                                        format_type=req.formatType,
+                                        camera_style=req.cameraStyle,
+                                        use_hero_profile=hero_only,
                                     ),
                             )
                             if vid:
@@ -845,18 +832,13 @@ async def render_endpoint(req: RenderRequest):
                             print(f"[컷 {i+1} 비디오 변환 실패] {exc}")
                             yield {"data": f"WARN|  -> 컷 {i+1}/{len(cuts)} 비디오 변환 예외, 정지 이미지 유지\n"}
 
-            # 실패 체크
-            failed = [i+1 for i, p in enumerate(audio_paths) if p is None]
-            if failed:
-                yield {"data": f"ERROR|[TTS 오류] 컷 {failed} 음성 생성 실패\n"}
-                return
-
             try:
                 from modules.utils.cost_tracker import record_asset_cost
 
                 record_asset_cost(
                     channel=req.channel or session.get("channel") or "unknown",
                     video_count=generated_video_count,
+                    video_model=os.getenv("VEO_MODEL") or actual_veo_model or req.videoModel,
                     tts_chars=sum(len(s or "") for s in scripts),
                 )
             except Exception as cost_exc:

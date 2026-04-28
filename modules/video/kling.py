@@ -6,7 +6,7 @@ import jwt
 import requests
 import base64
 
-from modules.utils.constants import get_motion_style
+from modules.utils.constants import build_video_generation_prompt
 
 
 def _generate_jwt(ak: str, sk: str) -> str:
@@ -21,7 +21,17 @@ def _generate_jwt(ak: str, sk: str) -> str:
     }
     return jwt.encode(payload, sk, headers=headers)
 
-def generate_video_from_image(image_path: str, prompt: str, index: int, topic_folder: str, ak_override: str = None, sk_override: str = None, description: str = "") -> str | None:
+def generate_video_from_image(
+    image_path: str,
+    prompt: str,
+    index: int,
+    topic_folder: str,
+    ak_override: str = None,
+    sk_override: str = None,
+    description: str = "",
+    format_type: str | None = None,
+    camera_style: str = "auto",
+) -> str | None:
     """
     Kling AI를 사용하여 정지 이미지를 5초짜리 시네마틱 숏폼 비디오로 변환합니다.
     """
@@ -50,6 +60,13 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     with open(image_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode("utf-8")
         
+    video_prompt = build_video_generation_prompt(
+        prompt,
+        description=description,
+        format_type=format_type,
+        camera_style=camera_style,
+    )
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}"
@@ -60,7 +77,7 @@ def generate_video_from_image(image_path: str, prompt: str, index: int, topic_fo
     payload = {
         "model": "kling-v1",
         "image": img_b64,
-        "prompt": f"{get_motion_style(prompt, description)}, 4K cinematic quality. {prompt}",
+        "prompt": video_prompt,
         "duration": "5"
     }
     

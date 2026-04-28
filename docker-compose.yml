@@ -12,6 +12,7 @@ services:
       - UVICORN_RELOAD=false
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002
       - DOWNLOAD_DIR=/app/downloads
+      - QWEN3_TTS_URL=http://tts:8010
     volumes:
       - ./api_server.py:/app/api_server.py
       - ./routes:/app/routes
@@ -27,11 +28,14 @@ services:
       - ${DOWNLOAD_DIR:-C:/Users/Storm Credit/Downloads}:/app/downloads
       - ${OBSIDIAN_VAULT:-C:/Users/Storm Credit/Desktop/쇼츠/askanything}:/app/obsidian
       - ./.env:/app/.env
-      - ./vertex-sa-key-askanything.json:/app/vertex-sa-key-askanything.json:ro
+      # Root Vertex SA removed. Use Settings > Vertex SA managed files only.
       # wonderdrop SA키: 결제 미활성 → 활성화 후 주석 해제
       # - ./vertex-sa-key-wonderdrop.json:/app/vertex-sa-key-wonderdrop.json:ro
       - ./data:/app/data
     restart: unless-stopped
+    networks:
+      - default
+      - tts-module
 
   frontend:
     build:
@@ -45,3 +49,8 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+networks:
+  tts-module:
+    external: true
+    name: tts-module_default

@@ -17,6 +17,7 @@ class VisualDirectorAgent(BaseAgent):
 
     async def execute(self, ctx: AgentContext) -> AsyncGenerator[str, None]:
         from modules.gpt.cutter import _enhance_image_prompts, _verify_subject_match
+        from modules.gpt.cutter.enhancer import ensure_visual_prompts_in_english
 
         if not ctx.cuts:
             yield "WARN|[VisualDirectorAgent] 컷이 없습니다.\n"
@@ -34,10 +35,28 @@ class VisualDirectorAgent(BaseAgent):
                 _enhance_image_prompts(ctx.cuts, topic_title,
                     ctx.language, key, ctx.channel, ctx.format_type))
 
+            ctx.cuts = await loop.run_in_executor(None, lambda:
+                ensure_visual_prompts_in_english(
+                    ctx.cuts,
+                    topic_title,
+                    key,
+                    ctx.channel,
+                    ctx.format_type,
+                ))
+
             # 비주얼 디렉터 후 주제 일치 재검증 (무관 피사체 방지)
             ctx.cuts = await loop.run_in_executor(None, lambda:
                 _verify_subject_match(ctx.cuts, topic_title,
                     spec.provider, key, ctx.language, spec.model_id))
+
+            ctx.cuts = await loop.run_in_executor(None, lambda:
+                ensure_visual_prompts_in_english(
+                    ctx.cuts,
+                    topic_title,
+                    key,
+                    ctx.channel,
+                    ctx.format_type,
+                ))
 
             yield f"[VisualDirectorAgent] 이미지 프롬프트 강화 완료\n"
         except Exception as exc:

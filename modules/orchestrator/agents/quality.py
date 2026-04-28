@@ -36,13 +36,20 @@ class QualityAgent(BaseAgent):
                 spec.provider, key, ctx.language, spec.model_id))
 
         # ② HARD FAIL 검증 (코드만 — LLM 불필요, 무료)
+        for cut in ctx.cuts:
+            cut.setdefault("format_type", ctx.format_type or "")
+            cut.setdefault("topic", topic_title)
+            cut.setdefault("topic_title", topic_title)
         hard_fails = _validate_hard_fail(ctx.cuts, ctx.channel)
         region_warns = _validate_region_style(ctx.cuts, ctx.channel)
 
         if hard_fails:
+            setattr(ctx, "quality_hard_fails", hard_fails)
             yield f"WARN|[QualityAgent] {len(hard_fails)}개 HARD FAIL 감지\n"
             for f in hard_fails:
                 yield f"WARN|  - {f}\n"
+        else:
+            setattr(ctx, "quality_hard_fails", [])
         if region_warns:
             yield f"WARN|[QualityAgent] {len(region_warns)}개 지역 스타일 경고\n"
         if not hard_fails and not region_warns:

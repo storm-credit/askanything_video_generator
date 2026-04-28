@@ -5,7 +5,10 @@
   Gemini 2.5 Flash: $0.15/M input,  $0.60/M output
   Gemini 2.0 Flash: $0.10/M input,  $0.40/M output
   Imagen 4 Std:     $0.04/image
-  Veo3:             $0.50/clip  (Vertex AI 추정)
+  Veo 3.1 Fast:     $0.10/sec × 8s = $0.80/clip
+  Veo 3.1 Std:      $0.20/sec × 8s = $1.60/clip
+  Veo 3.0 Fast:     $0.10/sec × 8s = $0.80/clip
+  Veo 3.0 Std:      $0.20/sec × 8s = $1.60/clip
   ElevenLabs:       $0.30/1K chars
 
 환율: 1 USD = EXCHANGE_RATE KRW (고정)
@@ -14,10 +17,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+from modules.utils.models import describe_video_model, get_model_label
 
 KST = timezone(timedelta(hours=9))
 EXCHANGE_RATE = int(os.getenv("EXCHANGE_RATE", "1380"))  # KRW per USD
@@ -30,9 +36,21 @@ PRICE = {
     "gemini-2.0-flash": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000},
     # 이미지/비디오/TTS
     "imagen4":          0.04,   # per image
-    "veo3":             0.50,   # per clip
+    "veo3":             float(os.getenv("VEO_PRICE_PER_CLIP_USD", "0.80")),   # per clip estimate
     "elevenlabs":       0.30 / 1_000,  # per char
     "whisper":          0.006 / 60,   # per second ($0.006/min)
+}
+
+DEFAULT_VEO_PRICES = {
+    "veo3": 0.80,
+    "veo-3.1-fast-generate-001": 0.80,
+    "veo-3.1-fast-generate-preview": 0.80,
+    "veo-3.1-generate-001": 1.60,
+    "veo-3.1-generate-preview": 1.60,
+    "veo-3.0-fast-generate-001": 0.80,
+    "veo-3.0-fast-generate-preview": 0.80,
+    "veo-3.0-generate-001": 1.60,
+    "veo-3.0-generate-preview": 1.60,
 }
 
 _DAILY_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", ".daily_cost.json")
@@ -169,10 +187,13 @@ def save_billing_settings(settings: dict) -> dict:
         "alert_key": str(settings.get("alert_key") or previous["alert_key"] or "billing-settings"),
         "updated_at": datetime.now(KST).isoformat(),
     }
-    if updated["threshold_krw"] > 0 and updated["total_krw"] >= updated["threshold_krw"]:
+    if updated["threshold_krw"] > 0 and updated["current_krw"] >= updated["threshold_krw"]:
         updated["cron_enabled"] = False
         updated["disabled_reason"] = "threshold_crossed"
         updated["disabled_at"] = datetime.now(KST).isoformat()
+    else:
+        updated.pop("disabled_reason", None)
+        updated.pop("disabled_at", None)
     _save_billing_settings_file(updated)
     os.environ["BILLING_CURRENT_KRW"] = str(updated["current_krw"])
     os.environ["BILLING_TOTAL_KRW"] = str(updated["total_krw"])
@@ -237,17 +258,17 @@ def build_billing_threshold_message(
     total_krw: int,
     threshold_krw: int = DEFAULT_BILLING_THRESHOLD_KRW,
 ) -> str:
-    over_krw = max(0, total_krw - threshold_krw)
+    over_krw = max(0, current_krw - threshold_krw)
     remaining_to_total = max(0, total_krw - current_krw)
-    ratio = (total_krw / threshold_krw * 100) if threshold_krw else 0
+    ratio = (current_krw / threshold_krw * 100) if threshold_krw else 0
     return "\n".join([
         f"🚨 <b>비용 경고 — {threshold_krw:,}원 초과</b>",
         "─────────────────────",
-        f"현재 표시: {current_krw:,}원 / {total_krw:,}원",
+        f"현재 사용액: {current_krw:,}원 / 총량 {total_krw:,}원",
         f"기준선: {threshold_krw:,}원",
         f"초과액: {over_krw:,}원",
         f"기준 대비: {ratio:.1f}%",
-        f"현재값에서 총액까지 차이: {remaining_to_total:,}원",
+        f"남은 총량: {remaining_to_total:,}원",
     ])
 
 
@@ -268,8 +289,8 @@ def check_billing_threshold(
     current = parse_krw(current_krw)
     total = parse_krw(total_krw)
     threshold = parse_krw(threshold_krw)
-    crossed = total >= threshold if threshold else False
-    over = max(0, total - threshold)
+    crossed = current >= threshold if threshold else False
+    over = max(0, current - threshold)
 
     result = {
         "current_krw": current,
@@ -296,7 +317,7 @@ def check_billing_threshold(
         return result
 
     previous = state.get(key, {})
-    if previous.get("crossed") and previous.get("sent") and int(previous.get("last_total_krw", 0)) >= threshold:
+    if previous.get("crossed") and previous.get("sent") and int(previous.get("last_current_krw", 0)) >= threshold:
         result["deduped"] = True
         return result
 
@@ -308,7 +329,16 @@ def check_billing_threshold(
     if send_telegram:
         try:
             from modules.utils.notify import _send
-            result["sent"] = bool(_send(message))
+            result["sent"] = bool(_send(
+                message,
+                kind="billing_threshold",
+                meta={
+                    "current_krw": current,
+                    "total_krw": total,
+                    "threshold_krw": threshold,
+                    "alert_key": alert_key,
+                },
+            ))
         except Exception as e:
             result["error"] = str(e)
 
@@ -344,6 +374,8 @@ def _llm_price(model: str) -> dict:
     for key, val in _LLM_PRICE_EXTRA.items():
         if m.startswith(key):
             return val
+    if m.startswith("gpt-"):
+        return _LLM_PRICE_EXTRA["gpt-4o"]
     return PRICE["gemini-2.5-flash"]
 
 
@@ -361,8 +393,26 @@ def calc_image_cost(count: int) -> float:
     return PRICE["imagen4"] * count
 
 
-def calc_video_cost(count: int) -> float:
-    return PRICE["veo3"] * count
+def _video_model_key(model: str | None = None) -> str:
+    value = (model or os.getenv("VEO_MODEL") or "veo3").strip().lower()
+    if value in {"", "auto", "default", "hero-only"}:
+        value = os.getenv("VEO_MODEL", "").strip().lower() or "veo3"
+    return value or "veo3"
+
+
+def _video_price_for_model(model: str | None = None) -> float:
+    """모델별 Veo 클립 단가. env override가 있으면 우선 사용한다."""
+    key = _video_model_key(model)
+    env_name = "VEO_PRICE_" + re.sub(r"[^A-Z0-9]+", "_", key.upper()).strip("_") + "_USD"
+    if os.getenv(env_name):
+        return float(os.getenv(env_name, "0"))
+    if os.getenv("VEO_PRICE_PER_CLIP_USD"):
+        return float(os.getenv("VEO_PRICE_PER_CLIP_USD", str(PRICE["veo3"])))
+    return float(DEFAULT_VEO_PRICES.get(key, PRICE["veo3"]))
+
+
+def calc_video_cost(count: int, model: str | None = None) -> float:
+    return _video_price_for_model(model) * count
 
 
 def calc_tts_cost(chars: int) -> float:
@@ -409,12 +459,14 @@ def record_generation_cost(
     llm_usd: float = 0.0,
     image_count: int = 0,
     video_count: int = 0,
+    video_model: str | None = None,
     tts_chars: int = 0,
     whisper_secs: float = 0.0,
 ) -> dict:
     """한 영상 생성 결과를 일별 집계에 저장. 해당 영상의 비용 dict 반환."""
+    video_model_key = _video_model_key(video_model)
     image_usd = calc_image_cost(image_count)
-    video_usd = calc_video_cost(video_count)
+    video_usd = calc_video_cost(video_count, video_model_key)
     tts_usd = calc_tts_cost(tts_chars)
     whisper_usd = whisper_secs * PRICE["whisper"]
     total_usd = llm_usd + image_usd + video_usd + tts_usd + whisper_usd
@@ -429,6 +481,7 @@ def record_generation_cost(
         "whisper_usd": whisper_usd,
         "image_count": image_count,
         "video_count": video_count,
+        "video_model": video_model_key,
         "tts_chars": tts_chars,
         "whisper_secs": whisper_secs,
         "total_usd": total_usd,
@@ -444,6 +497,7 @@ def record_generation_cost(
                 "success": 0, "failed": 0,
                 "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0, "whisper_usd": 0.0,
                 "image_count": 0, "video_count": 0, "tts_chars": 0, "whisper_secs": 0.0,
+                "video_models": {},
             }
         ch = data[today][channel]
         for k in ("success", "failed", "image_count", "video_count", "tts_chars"):
@@ -451,6 +505,10 @@ def record_generation_cost(
         ch["whisper_secs"] = ch.get("whisper_secs", 0.0) + entry["whisper_secs"]
         for k in ("llm_usd", "image_usd", "video_usd", "tts_usd", "whisper_usd"):
             ch[k] += entry.get(k, 0.0)
+        if video_count:
+            model_entry = ch.setdefault("video_models", {}).setdefault(video_model_key, {"count": 0, "usd": 0.0})
+            model_entry["count"] += video_count
+            model_entry["usd"] += video_usd
         _save_daily(data)
 
     return entry
@@ -461,12 +519,14 @@ def record_asset_cost(
     llm_usd: float = 0.0,
     image_count: int = 0,
     video_count: int = 0,
+    video_model: str | None = None,
     tts_chars: int = 0,
     whisper_secs: float = 0.0,
 ) -> dict:
     """실제 생성된 자산 비용만 일별 집계에 저장. 영상 성공/실패 카운트는 바꾸지 않는다."""
+    video_model_key = _video_model_key(video_model)
     image_usd = calc_image_cost(image_count)
-    video_usd = calc_video_cost(video_count)
+    video_usd = calc_video_cost(video_count, video_model_key)
     tts_usd = calc_tts_cost(tts_chars)
     whisper_usd = whisper_secs * PRICE["whisper"]
     total_usd = llm_usd + image_usd + video_usd + tts_usd + whisper_usd
@@ -481,6 +541,7 @@ def record_asset_cost(
         "whisper_usd": whisper_usd,
         "image_count": image_count,
         "video_count": video_count,
+        "video_model": video_model_key,
         "tts_chars": tts_chars,
         "whisper_secs": whisper_secs,
         "total_usd": total_usd,
@@ -496,6 +557,7 @@ def record_asset_cost(
                 "success": 0, "failed": 0,
                 "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0, "whisper_usd": 0.0,
                 "image_count": 0, "video_count": 0, "tts_chars": 0, "whisper_secs": 0.0,
+                "video_models": {},
             }
         ch = data[today][channel]
         for k in ("image_count", "video_count", "tts_chars"):
@@ -503,6 +565,10 @@ def record_asset_cost(
         ch["whisper_secs"] = ch.get("whisper_secs", 0.0) + entry["whisper_secs"]
         for k in ("llm_usd", "image_usd", "video_usd", "tts_usd", "whisper_usd"):
             ch[k] += entry.get(k, 0.0)
+        if video_count:
+            model_entry = ch.setdefault("video_models", {}).setdefault(video_model_key, {"count": 0, "usd": 0.0})
+            model_entry["count"] += video_count
+            model_entry["usd"] += video_usd
         _save_daily(data)
 
     return entry
@@ -516,6 +582,57 @@ def get_daily_summary(date: Optional[str] = None) -> Optional[dict]:
     return data.get(target)
 
 
+def get_billing_overview(date: Optional[str] = None) -> dict:
+    """설정 UI용 일일 비용 개요."""
+    target = date or _today_kst()
+    data = get_daily_summary(target) or {}
+    channels: dict[str, dict] = {}
+    grand_usd = 0.0
+
+    for channel, info in data.items():
+        total_usd = (
+            info.get("llm_usd", 0.0)
+            + info.get("image_usd", 0.0)
+            + info.get("video_usd", 0.0)
+            + info.get("tts_usd", 0.0)
+            + info.get("whisper_usd", 0.0)
+        )
+        grand_usd += total_usd
+        raw_models = info.get("video_models") or {}
+        video_models = []
+        for model_key, model_info in raw_models.items():
+            count = int(model_info.get("count", 0) or 0)
+            usd = float(model_info.get("usd", 0.0) or 0.0)
+            if count <= 0 and usd <= 0:
+                continue
+            video_models.append({
+                "key": model_key,
+                "label": get_model_label("veo3", model_key) or describe_video_model("veo3", model_key),
+                "count": count,
+                "usd": round(usd, 4),
+                "krw": usd_to_krw(usd),
+                "unit_krw": usd_to_krw(_video_price_for_model(model_key)),
+            })
+        channels[channel] = {
+            "success": int(info.get("success", 0) or 0),
+            "failed": int(info.get("failed", 0) or 0),
+            "total_usd": round(total_usd, 4),
+            "total_krw": usd_to_krw(total_usd),
+            "video_count": int(info.get("video_count", 0) or 0),
+            "video_usd": round(float(info.get("video_usd", 0.0) or 0.0), 4),
+            "video_krw": usd_to_krw(float(info.get("video_usd", 0.0) or 0.0)),
+            "video_models": video_models,
+        }
+
+    return {
+        "date": target,
+        "exchange_rate": EXCHANGE_RATE,
+        "total_usd": round(grand_usd, 4),
+        "total_krw": usd_to_krw(grand_usd),
+        "channels": channels,
+    }
+
+
 def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
     """단일 영상 완료 시 텔레그램 메시지 (원화 표)."""
     llm_krw   = usd_to_krw(entry["llm_usd"])
@@ -527,6 +644,9 @@ def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
 
     img_cnt = entry["image_count"]
     vid_cnt = entry["video_count"]
+    vid_model = entry.get("video_model") or _video_model_key(None)
+    vid_model_label = get_model_label("veo3", vid_model) or describe_video_model("veo3", vid_model)
+    vid_unit_krw = usd_to_krw(_video_price_for_model(vid_model)) if vid_cnt else 0
     tts_c   = entry["tts_chars"]
     wh_secs = entry.get("whisper_secs", 0.0)
 
@@ -538,7 +658,9 @@ def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
         "─────────────────────",
         f"{'LLM':<10}{'':<8}{llm_krw:>6,}원",
         f"{'Imagen4':<10}{img_cnt}장{'':<4}{img_krw:>6,}원",
-        f"{'Veo3':<10}{vid_cnt}클립{'':<3}{vid_krw:>6,}원",
+        f"{'Veo':<10}{vid_cnt}클립{'':<3}{vid_krw:>6,}원",
+        f"Veo 모델: {vid_model_label} ({vid_model})",
+        f"Veo 단가: {vid_unit_krw:,}원/clip",
         f"{'ElevenLabs':<10}{tts_c}자{'':<3}{tts_krw:>6,}원",
         f"{'Whisper':<10}{wh_secs:.0f}초{'':<3}{whisper_krw:>6,}원",
         "─────────────────────",

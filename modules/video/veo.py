@@ -10,11 +10,12 @@ import time
 import requests
 
 from modules.utils.keys import record_key_usage, mark_key_exhausted, get_google_key, mask_key
-from modules.utils.constants import is_key_rotation_error, get_motion_style
+from modules.utils.constants import is_key_rotation_error, build_video_generation_prompt
 from modules.utils.models import get_model_chain, get_service_tag
 
 # Veo 모델 옵션 (환경변수로 오버라이드 가능)
-DEFAULT_MODEL = "veo-3.0-generate-001"
+# 기본은 Shorts 운영 최적화: 최신 Fast 우선.
+DEFAULT_MODEL = "veo-3.1-fast-generate-001"
 POLL_INTERVAL_INITIAL = 5   # 초 (시작)
 POLL_INTERVAL_MID = 10      # 1분 후
 POLL_INTERVAL_LATE = 15     # 2분 후
@@ -56,6 +57,9 @@ def generate_video_veo(
     description: str = "",
     model_override: str | None = None,
     gemini_api_keys: str | None = None,
+    format_type: str | None = None,
+    camera_style: str = "auto",
+    use_hero_profile: bool = False,
 ) -> str | None:
     """
     Google Veo 3로 이미지를 비디오로 변환합니다.
@@ -80,14 +84,23 @@ def generate_video_veo(
     mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/png")
 
-    # 모델 체인: 파라미터 오버라이드 → 환경변수 → 기본 모델 체인
-    override_model = model_override or os.getenv("VEO_MODEL")
-    if override_model:
+    # 모델 체인: 환경변수 오버라이드 → 파라미터 오버라이드 → 히어로 프로필 → 기본 모델 체인
+    env_model = os.getenv("VEO_MODEL")
+    override_model = env_model or model_override
+    if override_model and override_model not in {"hero-only", "auto", "default"}:
         model_chain = [{"id": override_model, "tag": "override", "label": override_model}]
     else:
-        model_chain = get_model_chain("veo3")
+        profile = "hero-only" if use_hero_profile or override_model == "hero-only" else None
+        model_chain = get_model_chain("veo3", profile=profile)
         if not model_chain:
             model_chain = [{"id": DEFAULT_MODEL, "tag": "standard", "label": "Veo 3"}]
+
+    video_prompt = build_video_generation_prompt(
+        prompt,
+        description=description,
+        format_type=format_type,
+        camera_style=camera_style,
+    )
 
     for model_idx, model in enumerate(model_chain):
         model_id = model["id"]
@@ -96,8 +109,16 @@ def generate_video_veo(
 
         tried_keys: set[str] = set()
         current_key = api_key
+        max_retries = MAX_KEY_RETRIES
+        if is_vertex_backend:
+            try:
+                from modules.utils.gemini_client import count_available_sa_keys
 
-        for attempt in range(MAX_KEY_RETRIES):
+                max_retries = max(1, count_available_sa_keys())
+            except Exception:
+                max_retries = 1
+
+        for attempt in range(max_retries):
             # 키 선택 (이전에 실패한 키 제외)
             if is_vertex_backend:
                 final_key = current_key
@@ -115,9 +136,9 @@ def generate_video_veo(
             client = create_gemini_client(api_key=final_key)
 
             if attempt > 0 and final_key:
-                print(f"-> [{model_label}] 컷 {index+1} 다른 키로 재시도 중... (시도 {attempt+1}/{MAX_KEY_RETRIES}, 키: {mask_key(final_key)})")
+                print(f"-> [{model_label}] 컷 {index+1} 다른 키로 재시도 중... (시도 {attempt+1}/{max_retries}, 키: {mask_key(final_key)})")
             elif attempt > 0:
-                print(f"-> [{model_label}] 컷 {index+1} 다른 SA로 재시도 중... (시도 {attempt+1}/{MAX_KEY_RETRIES})")
+                print(f"-> [{model_label}] 컷 {index+1} 다른 SA로 재시도 중... (시도 {attempt+1}/{max_retries})")
             elif model_idx == 0:
                 print(f"-> [{model_label}] 컷 {index+1} 이미지-투-비디오 렌더링 요청 중... ({model_id})")
             else:
@@ -126,7 +147,7 @@ def generate_video_veo(
             try:
                 operation = client.models.generate_videos(
                     model=model_id,
-                    prompt=f"{get_motion_style(prompt, description)}, 4K cinematic quality. {prompt}",
+                    prompt=video_prompt,
                     image=types.Image(image_bytes=img_bytes, mime_type=mime_type),
                     config=types.GenerateVideosConfig(
                         numberOfVideos=1,

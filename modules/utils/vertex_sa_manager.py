@@ -264,23 +264,60 @@ def _upsert_env_values(values: dict[str, str]) -> None:
     env_path.write_text("\n".join(new_lines).rstrip() + "\n", encoding="utf-8")
 
 
-def refresh_runtime_vertex_env(reset_runtime: bool = True) -> dict[str, Any]:
-    """Force Vertex AI backend and clear legacy single-SA pinning."""
-    os.environ["GEMINI_BACKEND"] = "vertex_ai"
-    os.environ["VERTEX_SA_ONLY"] = "true"
-    os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
-    _upsert_env_values({
-        "GEMINI_BACKEND": "vertex_ai",
-        "VERTEX_SA_ONLY": "true",
-        "GOOGLE_APPLICATION_CREDENTIALS": "",
-    })
+def refresh_runtime_vertex_env(
+    reset_runtime: bool = True,
+    *,
+    force_backend: bool = True,
+    persist: bool = True,
+) -> dict[str, Any]:
+    """Vertex 런타임 모드를 동기화한다.
+
+    force_backend=True:
+        설정창에서 SA 목록을 바꾼 직후 Vertex backend를 활성화한다.
+        활성 SA가 있을 때만 SA-only로 전환한다.
+
+    force_backend=False:
+        현재 환경변수를 그대로 존중하면서 런타임 캐시만 새로고친다.
+    """
+    accounts = list_service_accounts(include_disabled=False)
+    enabled_count = len(accounts)
+    current_backend = os.getenv("GEMINI_BACKEND", "ai_studio").strip().lower() or "ai_studio"
+    current_sa_only = os.getenv("VERTEX_SA_ONLY", "").strip().lower() in {"1", "true", "yes", "on"}
+
+    backend = "vertex_ai" if force_backend else current_backend
+    sa_only = bool(enabled_count) if force_backend else current_sa_only
+
+    if backend == "vertex_ai":
+        os.environ["GEMINI_BACKEND"] = "vertex_ai"
+    if sa_only:
+        os.environ["VERTEX_SA_ONLY"] = "true"
+        os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+    elif force_backend:
+        os.environ["VERTEX_SA_ONLY"] = "false"
+
+    if persist:
+        values: dict[str, str] = {}
+        if force_backend or current_backend == "vertex_ai":
+            values["GEMINI_BACKEND"] = backend
+        if force_backend or current_sa_only or sa_only:
+            values["VERTEX_SA_ONLY"] = "true" if sa_only else "false"
+        if sa_only:
+            values["GOOGLE_APPLICATION_CREDENTIALS"] = ""
+        if values:
+            _upsert_env_values(values)
+
     if reset_runtime:
         try:
             from modules.utils import gemini_client
             gemini_client.refresh_sa_keys()
         except Exception:
             pass
-    return {"backend": "vertex_ai", "sa_only": True, "accounts": list_service_accounts()}
+    return {
+        "backend": backend,
+        "sa_only": sa_only,
+        "enabled_count": enabled_count,
+        "accounts": list_service_accounts(),
+    }
 
 
 def test_service_account(item_id: str | None = None) -> dict[str, Any]:

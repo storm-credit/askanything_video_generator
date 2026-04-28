@@ -11,6 +11,9 @@ import os
 import json
 import urllib.request
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+from modules.utils.models import describe_video_model
 
 try:
     import requests
@@ -22,6 +25,8 @@ _KST = timezone(timedelta(hours=9))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+_LOG_PATH = Path(__file__).resolve().parents[2] / "data" / "telegram_send_log.jsonl"
+_SUMMARY_DEDUPE_KINDS = {"morning_briefing", "daily_cost_summary", "deploy_summary"}
 
 # 채널별 이모지
 CHANNEL_EMOJI = {
@@ -35,10 +40,66 @@ CHANNEL_EMOJI = {
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8003")
 
 
-def _send(text: str, silent: bool = False, buttons: list = None) -> bool:
+def _append_send_log(entry: dict) -> None:
+    try:
+        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"[알림] Telegram 로그 저장 실패: {e}")
+
+
+def _recent_ok_send_exists(kind: str, meta: dict, window_seconds: int = 600) -> bool:
+    """요약 알림 중복 전송 방지. 같은 kind/meta가 최근에 성공했으면 스킵."""
+    try:
+        if not _LOG_PATH.exists():
+            return False
+        now = datetime.now(_KST)
+        lines = _LOG_PATH.read_text(encoding="utf-8").splitlines()[-300:]
+        for line in reversed(lines):
+            try:
+                item = json.loads(line)
+            except Exception:
+                continue
+            if item.get("kind") != kind or not item.get("ok"):
+                continue
+            if item.get("meta") != meta:
+                continue
+            ts_raw = item.get("ts")
+            if not ts_raw:
+                continue
+            sent_at = datetime.fromisoformat(ts_raw)
+            if sent_at.tzinfo is None:
+                sent_at = sent_at.replace(tzinfo=_KST)
+            if (now - sent_at.astimezone(_KST)).total_seconds() <= window_seconds:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def _send(text: str, silent: bool = False, buttons: list = None, *, kind: str = "generic", meta: dict | None = None) -> bool:
     """텔레그램 메시지 전송 (인라인 버튼 지원)."""
+    meta = meta or {}
+    log_entry = {
+        "ts": datetime.now(_KST).isoformat(),
+        "kind": kind,
+        "silent": bool(silent),
+        "has_buttons": bool(buttons),
+        "meta": meta,
+        "text_preview": text[:200],
+        "ok": False,
+    }
+    if kind in _SUMMARY_DEDUPE_KINDS and _recent_ok_send_exists(kind, meta):
+        print(f"[알림] 중복 요약 알림 스킵: {kind} {meta}")
+        log_entry["skipped"] = True
+        log_entry["error"] = "duplicate_summary_suppressed"
+        _append_send_log(log_entry)
+        return False
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print(f"[알림] Telegram 미설정 — {text[:50]}")
+        log_entry["error"] = "telegram_not_configured"
+        _append_send_log(log_entry)
         return False
     try:
         payload = {
@@ -53,6 +114,9 @@ def _send(text: str, silent: bool = False, buttons: list = None) -> bool:
             })
         if requests is not None:
             response = requests.post(f"{TELEGRAM_API}/sendMessage", json=payload, timeout=10)
+            log_entry["ok"] = bool(response.ok)
+            log_entry["status_code"] = response.status_code
+            _append_send_log(log_entry)
             return response.ok
         else:
             req = urllib.request.Request(
@@ -62,18 +126,38 @@ def _send(text: str, silent: bool = False, buttons: list = None) -> bool:
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=10):
+                log_entry["ok"] = True
+                log_entry["status_code"] = 200
+                _append_send_log(log_entry)
                 return True
     except Exception as e:
         print(f"[알림] Telegram 전송 실패: {e}")
+        log_entry["error"] = str(e)
+        _append_send_log(log_entry)
         return False
 
 
-def notify_success(channel: str, topic: str, video_url: str = None):
+def notify_success(
+    channel: str,
+    topic: str,
+    video_url: str = None,
+    *,
+    video_engine: str = "",
+    video_model: str = "",
+):
     """영상 생성+업로드 성공."""
     emoji = CHANNEL_EMOJI.get(channel, "📺")
     url_btn = []
     if video_url:
         url_btn = [{"text": "▶️ YouTube에서 보기", "url": video_url}]
+    model_text = ""
+    if video_engine or video_model:
+        parts = []
+        if video_engine:
+            parts.append(f"engine={video_engine}")
+        if video_model:
+            parts.append(f"model={describe_video_model(video_engine, video_model)}")
+        model_text = f"\n🎬 {' / '.join(parts)}"
 
     _send(
         f"━━━━━━━━━━━━━━━\n"
@@ -81,15 +165,33 @@ def notify_success(channel: str, topic: str, video_url: str = None):
         f"━━━━━━━━━━━━━━━\n"
         f"{emoji} <b>{channel}</b>\n"
         f"📌 {topic}\n"
+        f"{model_text}"
         f"⏰ {datetime.now(_KST).strftime('%Y-%m-%d %H:%M')} KST",
         buttons=url_btn,
+        kind="upload_success",
+        meta={"channel": channel, "topic": topic, "video_engine": video_engine, "video_model": video_model},
     )
 
 
-def notify_failure(channel: str, topic: str, error: str = ""):
+def notify_failure(
+    channel: str,
+    topic: str,
+    error: str = "",
+    *,
+    video_engine: str = "",
+    video_model: str = "",
+):
     """영상 생성 실패 — 재수행 버튼 포함."""
     emoji = CHANNEL_EMOJI.get(channel, "📺")
     err = error[:150] if error else "알 수 없는 오류"
+    model_text = ""
+    if video_engine or video_model:
+        parts = []
+        if video_engine:
+            parts.append(f"engine={video_engine}")
+        if video_model:
+            parts.append(f"model={describe_video_model(video_engine, video_model)}")
+        model_text = f"\n🎬 {' / '.join(parts)}"
 
     _send(
         f"━━━━━━━━━━━━━━━\n"
@@ -97,9 +199,12 @@ def notify_failure(channel: str, topic: str, error: str = ""):
         f"━━━━━━━━━━━━━━━\n"
         f"{emoji} <b>{channel}</b>\n"
         f"📌 {topic}\n"
+        f"{model_text}\n"
         f"💥 <code>{err}</code>\n"
         f"🔄 웹 UI에서 재수행 가능\n"
         f"⏰ {datetime.now(_KST).strftime('%Y-%m-%d %H:%M')} KST",
+        kind="generation_failure",
+        meta={"channel": channel, "topic": topic, "error": err, "video_engine": video_engine, "video_model": video_model},
     )
 
 
@@ -113,6 +218,8 @@ def notify_warning(context: str, message: str):
         f"{message}\n"
         f"⏰ {datetime.now(_KST).strftime('%H:%M')} KST",
         silent=True,
+        kind="warning",
+        meta={"context": context, "message": message[:200]},
     )
 
 
@@ -127,7 +234,7 @@ def notify_cost(channel: str, title: str, cost_entry: dict, video_url: str = "",
             text = f"{fmt_emoji} [{format_type}]\n" + text
         if video_url:
             text += f'\n🔗 <a href="{video_url}">YouTube 보기</a>'
-        _send(text)
+        _send(text, kind="cost_summary_single", meta={"channel": channel, "title": title, "format_type": format_type, "video_url": video_url})
     except Exception as e:
         print(f"[알림] 비용 알림 실패: {e}")
 
@@ -137,7 +244,7 @@ def notify_daily_cost(date: str = ""):
     try:
         from modules.utils.cost_tracker import build_daily_summary_text
         text = build_daily_summary_text(date or None)
-        _send(text)
+        _send(text, kind="daily_cost_summary", meta={"date": date or ""})
         _notify_env_billing_threshold()
     except Exception as e:
         print(f"[알림] 일일 결산 알림 실패: {e}")
@@ -169,6 +276,8 @@ def notify_deploy_summary(total: int, completed: int, failed: int, date: str):
         f"{bar}\n"
         f"✅ {completed}  ❌ {failed}  📦 {total}\n"
         f"⏰ {datetime.now(_KST).strftime('%H:%M')} KST",
+        kind="deploy_summary",
+        meta={"date": date, "total": total, "completed": completed, "failed": failed},
     )
 
 
@@ -176,14 +285,39 @@ def notify_morning_briefing():
     """☀️ 모닝 브리핑 — 어제 배포/비용/실패/성과 종합 리포트."""
     from datetime import timedelta, timezone
     KST = timezone(timedelta(hours=9))
-    yesterday = (datetime.now(KST) - timedelta(days=1)).strftime("%Y-%m-%d")
+    now_kst = datetime.now(KST)
+    today = now_kst.strftime("%Y-%m-%d")
+    yesterday = (now_kst - timedelta(days=1)).strftime("%Y-%m-%d")
 
     sections = [
         f"☀️ <b>모닝 브리핑 — {yesterday}</b>",
         "━━━━━━━━━━━━━━━━━━",
     ]
 
-    # 1. 비용 결산
+    # 0. 오늘 새벽 자동배포 결과. 어제 비용 결산과 혼동하지 않도록 맨 위에 분리 표시.
+    try:
+        state_path = Path("data") / "_deploy_state.json"
+        if state_path.exists():
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            if state.get("current_date") == today and state.get("finished_at"):
+                completed = int(state.get("completed", 0) or 0)
+                failed = int(state.get("failed", 0) or 0)
+                total = int(state.get("total", completed + failed) or 0)
+                label = "전체 성공" if failed == 0 and total and completed >= total else f"{failed}건 실패"
+                sections.append(
+                    f"<b>🌅 오늘 새벽 배치 — {today}</b>  ✅{completed} ❌{failed} 📦{total} ({label})"
+                )
+                failed_rows = [
+                    f"  - {r.get('channel')}: {r.get('topic')} — {str(r.get('error') or '')[:80]}"
+                    for r in state.get("results", [])
+                    if r.get("status") == "failed"
+                ]
+                if failed_rows:
+                    sections.append("\n".join(failed_rows[:5]))
+    except Exception:
+        pass
+
+    # 1. 어제 비용 결산
     try:
         from modules.utils.cost_tracker import get_daily_summary, usd_to_krw
         cost = get_daily_summary(yesterday)
@@ -198,10 +332,10 @@ def notify_morning_briefing():
                 total_success += info["success"]
                 total_failed += info["failed"]
                 grand_usd += ch_usd
-            sections.append(f"<b>📦 배포</b>  ✅{total_success} ❌{total_failed}  💰{usd_to_krw(grand_usd):,}원")
+            sections.append(f"\n<b>📦 어제 비용 기록 — {yesterday}</b>  ✅{total_success} ❌{total_failed}  💰{usd_to_krw(grand_usd):,}원")
             sections.extend(ch_lines)
         else:
-            sections.append("📦 배포 데이터 없음")
+            sections.append(f"\n📦 어제 비용 기록 없음 — {yesterday}")
     except Exception as e:
         sections.append(f"📦 비용 조회 실패: {e}")
 
@@ -246,4 +380,4 @@ def notify_morning_briefing():
         pass
 
     sections.append(f"\n⏰ {datetime.now(KST).strftime('%H:%M')} KST")
-    _send("\n".join(sections))
+    _send("\n".join(sections), kind="morning_briefing", meta={"date": yesterday})

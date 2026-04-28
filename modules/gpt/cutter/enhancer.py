@@ -1,8 +1,25 @@
 import json
+import re
 from typing import Any
 
 from .parser import _extract_json
 from .llm_client import _request_gemini_freeform, _request_gemini, _request_openai_freeform, _request_claude
+
+
+def _looks_english_visual_prompt(text: str) -> bool:
+    """비주얼 생성용 프롬프트가 영어 중심인지 느슨하게 판별."""
+    if not text:
+        return False
+    if re.search(r"[가-힣]", text):
+        return False
+    # 스페인어 강한 신호가 있으면 비영어로 본다.
+    if re.search(r"[¿¡]", text):
+        return False
+    lowered = text.lower()
+    spanish_markers = (" el ", " la ", " los ", " las ", " un ", " una ", " de ", " con ", " sobre ")
+    if sum(marker in f" {lowered} " for marker in spanish_markers) >= 3:
+        return False
+    return bool(re.search(r"[a-z]{3,}", lowered))
 
 
 def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str,
@@ -17,6 +34,8 @@ def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str
     from modules.utils.channel_config import get_channel_preset
     _preset = get_channel_preset(channel) if channel else None
     channel_style = (_preset or {}).get("visual_style", "cinematic realism, dramatic lighting")
+    from modules.utils.channel_config import get_channel_cut1_visual_rule
+    channel_cut1_rule = get_channel_cut1_visual_rule(channel)
 
     # 포맷별 비주얼 전략 — Cut 1 구성 방식과 전체 색감 방향 결정
     _format_visual_strategy = {
@@ -87,18 +106,24 @@ def _enhance_image_prompts(cuts: list[dict], topic: str, lang: str, api_key: str
 Topic: {topic}
 Format: {format_type or 'AUTO'}
 Channel style: {channel_style}
-Language: {lang}
+Source script language: {lang}
 
 FORMAT VISUAL STRATEGY (HIGHEST PRIORITY):
 {_format_visual_strategy if _format_visual_strategy else "No specific format — maximize visual impact freely."}
 
+CHANNEL CUT 1 VISUAL ANCHOR:
+{channel_cut1_rule}
+
 RULES:
 - CRITICAL: Do NOT introduce ANY subject not present in the script. The main subject in each script line MUST be the main subject in the image_prompt. Adding unrelated subjects = FAIL.
 - Cut 1 is the MOST IMPORTANT. It MUST stop the scroll. Include at least 2: extreme scale contrast, intense color contrast, surreal/impossible scene, eye-locking composition.
+- Cut 1 should use ONE dominant hero subject or one clearly intentional split concept. Avoid generic collage layouts unless the format explicitly requires a split frame.
 - Every image_prompt must START with the main subject from the script.
 - Describe SCENES, not keywords. Full sentences produce better images.
 - Each cut must use a DIFFERENT camera technique (close-up, wide shot, aerial, macro, etc.)
 - 9:16 vertical composition: place subject in upper or lower 1/3, leave top 15% and bottom 20% clear for subtitles.
+- OUTPUT LANGUAGE: Every image_prompt MUST be written in natural English only, regardless of the script language.
+- Keep the channel's visual identity distinct. Do NOT flatten all channels into the same style. Preserve channel-specific mood, palette, contrast, and tone from "Channel style".
 - Negative constraints: NO text, NO watermark, NO logo, NO diagrams, NO infographic, NO cartoon, NO anime, NO illustration.
 - 40-60 words per prompt (Cut 1 may use up to 70 words).
 - Output ONLY a JSON array of objects: [{{"cut": 1, "image_prompt": "..."}}, ...]
@@ -107,7 +132,7 @@ Current cuts:
 {json.dumps(scripts_and_prompts, ensure_ascii=False)}
 
 IMPORTANT — Color Continuity:
-- All cuts MUST share a consistent dominant color palette (format strategy overrides this if specified).
+- Keep a recognizable visual identity across cuts, but follow the FORMAT VISUAL STRATEGY when it calls for split lighting, escalation, darkening, or reversal color shifts.
 - Space topics: deep blue-black | Prehistoric: warm amber-green | Ocean: dark teal-blue | Earth: warm earth tones
 
 Rewrite ALL image_prompts. Make Cut 1 DRAMATICALLY (3x) more visually striking than the rest."""
@@ -132,6 +157,9 @@ Rewrite ALL image_prompts. Make Cut 1 DRAMATICALLY (3x) more visually striking t
             # 길이 검증: 너무 짧거나 길면 스킵
             if len(new_prompt) < 20 or len(new_prompt) > 500:
                 continue
+            if not _looks_english_visual_prompt(new_prompt):
+                print(f"  [비주얼 디렉터] 컷 {idx+1} 비영어 prompt 감지 — 스킵")
+                continue
 
             old_prompt = cuts[idx].get("prompt", "")
             cuts[idx]["prompt"] = new_prompt
@@ -148,6 +176,78 @@ Rewrite ALL image_prompts. Make Cut 1 DRAMATICALLY (3x) more visually striking t
     except Exception as e:
         print(f"  [비주얼 디렉터] 에러 — 원본 유지: {e}")
 
+    return cuts
+
+
+def ensure_visual_prompts_in_english(
+    cuts: list[dict],
+    topic: str,
+    api_key: str,
+    channel: str | None = None,
+    format_type: str | None = None,
+) -> list[dict]:
+    """마지막 안전망: 비영어 visual prompt를 영어로 정규화한다.
+
+    채널별 비주얼 스타일은 유지하되, Imagen/Veo에 들어가는 프롬프트 언어만 영어로 맞춘다.
+    """
+    if not cuts or not api_key:
+        return cuts
+
+    targets: list[dict[str, Any]] = []
+    for idx, cut in enumerate(cuts):
+        current = str(cut.get("prompt", "")).strip()
+        if current and not _looks_english_visual_prompt(current):
+            targets.append({
+                "cut": idx + 1,
+                "script": cut.get("script", ""),
+                "prompt": current,
+            })
+
+    if not targets:
+        return cuts
+
+    from modules.utils.channel_config import get_channel_preset
+
+    preset = get_channel_preset(channel) if channel else None
+    channel_style = (preset or {}).get("visual_style", "cinematic realism, dramatic lighting")
+    instruction = f"""Rewrite the following image prompts into natural English for image/video generation.
+
+Topic: {topic}
+Format: {format_type or 'AUTO'}
+Channel style: {channel_style}
+
+Rules:
+- Output English only.
+- Keep the exact same subject and scene intent.
+- Keep the channel's distinct visual identity; do not homogenize channels.
+- Do not add new subjects, text overlays, logos, diagrams, cartoons, or watermarks.
+- Preserve strong cinematic detail for Imagen and Veo.
+- Output ONLY a JSON array: [{{"cut": 1, "image_prompt": "..."}}]
+
+Items:
+{json.dumps(targets, ensure_ascii=False)}"""
+
+    try:
+        raw = _request_gemini_freeform(api_key, instruction, "gemini-2.5-flash")
+        result = _extract_json(raw)
+        if not isinstance(result, list):
+            return cuts
+        changed = 0
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            idx = int(item.get("cut", 0)) - 1
+            new_prompt = str(item.get("image_prompt", "")).strip()
+            if not (0 <= idx < len(cuts)) or len(new_prompt) < 20:
+                continue
+            if not _looks_english_visual_prompt(new_prompt):
+                continue
+            cuts[idx]["prompt"] = new_prompt
+            changed += 1
+        if changed:
+            print(f"OK [비주얼 영어화] {changed}개 prompt 영어 정규화 완료")
+    except Exception as e:
+        print(f"  [비주얼 영어화] 실패 — 원본 유지: {e}")
     return cuts
 
 

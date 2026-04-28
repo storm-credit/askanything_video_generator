@@ -7,7 +7,7 @@ import { API_BASE } from "../components/types";
 import { KeyStatus, KeyUsageStats, UploadTopicMeta } from "../components/types";
 import { SettingsModal } from "../components/SettingsModal";
 import { ProgressPanel } from "../components/ProgressPanel";
-import { CHANNEL_PRESETS } from "./constants";
+import { CHANNEL_PRESETS, VIDEO_MODEL_LABELS } from "./constants";
 
 // Hooks
 import { useLocalSettings } from "./hooks/useLocalSettings";
@@ -31,8 +31,12 @@ type PreflightSummary = {
   loading: boolean;
   vertexSaCount: number;
   nextSaLabel: string;
+  nextSaProjectId: string;
   veoReady: boolean;
   ttsReady: boolean;
+  ttsEngine: string;
+  qwenReady: boolean;
+  qwenStatusCode: number | null;
 };
 
 export default function Home() {
@@ -84,12 +88,17 @@ export default function Home() {
     loading: true,
     vertexSaCount: 0,
     nextSaLabel: "",
+    nextSaProjectId: "",
     veoReady: false,
     ttsReady: false,
+    ttsEngine: "qwen3",
+    qwenReady: false,
+    qwenStatusCode: null,
   });
 
   // Hooks
   const settings = useLocalSettings();
+  const todayChannelFilter = settings.selectedChannels.length === 1 ? settings.selectedChannels[0] : null;
   const platformAuth = usePlatformAuth();
   const sse = useSSEGenerate({
     settings,
@@ -135,22 +144,33 @@ export default function Home() {
       const health = healthRes.ok ? await healthRes.json() : null;
       const vertex = vertexRes.ok ? await vertexRes.json() : null;
       const vertexSaCount = Number(vertex?.enabled_count ?? health?.vertex_sa_count ?? 0);
-      const nextSa = vertex?.next_account;
+      const nextSa = vertex?.next_account ?? health?.vertex?.next_account;
       const nextSaLabel = nextSa ? `${nextSa.project_id} (${nextSa.filename})` : "";
+      const ttsEngine = String(health?.tts?.engine || "qwen3");
+      const qwenReady = Boolean(health?.tts?.qwen_ready);
+      const elevenlabsReady = Boolean(health?.tts?.elevenlabs_ready ?? health?.keys?.elevenlabs);
       setPreflightSummary({
         loading: false,
         vertexSaCount,
         nextSaLabel,
+        nextSaProjectId: nextSa?.project_id || "",
         veoReady: Boolean(health?.keys?.gemini) && (vertexSaCount > 0 || vertex?.backend === "vertex_ai"),
-        ttsReady: Boolean(health?.keys?.elevenlabs),
+        ttsReady: ttsEngine === "qwen3" ? qwenReady : elevenlabsReady,
+        ttsEngine,
+        qwenReady,
+        qwenStatusCode: health?.tts?.qwen_status_code ?? null,
       });
     } catch {
       setPreflightSummary({
         loading: false,
         vertexSaCount: 0,
         nextSaLabel: "",
+        nextSaProjectId: "",
         veoReady: false,
         ttsReady: false,
+        ttsEngine: "qwen3",
+        qwenReady: false,
+        qwenStatusCode: null,
       });
     }
   }, []);
@@ -194,6 +214,7 @@ export default function Home() {
   const remainLabel = (modelId: string): string => {
     if (!modelLimits || !modelLimits[modelId]) return "";
     const m = modelLimits[modelId];
+    if (!m.total_rpd || m.total_rpd <= 0) return "";
     return ` [${m.remaining}/${m.total_rpd}\ud68c]`;
   };
 
@@ -286,6 +307,13 @@ export default function Home() {
     }
     setShowTodayModal(false);
   };
+
+  const selectedChannelCount = Math.max(1, settings.selectedChannels.length || (settings.channel ? 1 : 0));
+  const estimatedHeroClips = settings.videoEngine === "none" ? 0 : selectedChannelCount * 2;
+  const selectedVideoModelKey = settings.videoModel || "";
+  const selectedVideoLabel = settings.videoEngine === "none"
+    ? "비디오 생성 안 함"
+    : (VIDEO_MODEL_LABELS[selectedVideoModelKey] || (selectedVideoModelKey || "Veo 3.1 Fast 기본"));
 
   return (
     <main className="min-h-screen relative flex flex-col items-center justify-center p-6 sm:p-24 bg-black overflow-hidden">
@@ -399,7 +427,10 @@ export default function Home() {
                 <button type="button"
                   onClick={async () => {
                     try {
-                      const res = await fetch(`${API_BASE}/api/batch/today-topics`);
+                      const params = new URLSearchParams();
+                      if (todayChannelFilter) params.set("channel", todayChannelFilter);
+                      const todayUrl = `${API_BASE}/api/batch/today-topics${params.toString() ? `?${params.toString()}` : ""}`;
+                      const res = await fetch(todayUrl);
                       const data = await res.json();
                       if (data.success && data.topics?.length > 0) {
                         setTodayTopics(data.topics);
@@ -531,10 +562,18 @@ export default function Home() {
                   detail={settings.videoEngine === "veo3" ? "현재 비디오 엔진으로 사용" : `현재 선택: ${settings.videoEngine}`}
                 />
                 <PreflightItem
+                  label="Veo 모델"
+                  value={selectedVideoLabel}
+                  ok={settings.videoEngine === "none" || preflightSummary.veoReady}
+                  detail={`예상 hero clip ${estimatedHeroClips}개 · 실제 모델은 서버 VEO_MODEL 우선`}
+                />
+                <PreflightItem
                   label="TTS 가능"
                   value={preflightSummary.loading ? "확인 중..." : (preflightSummary.ttsReady ? "가능" : "불가")}
                   ok={preflightSummary.ttsReady}
-                  detail="ElevenLabs 키 기준"
+                  detail={preflightSummary.ttsEngine === "qwen3"
+                    ? `Qwen3 ${preflightSummary.qwenReady ? "health OK" : `health 실패${preflightSummary.qwenStatusCode ? ` (${preflightSummary.qwenStatusCode})` : ""}`}`
+                    : "ElevenLabs 키 기준"}
                 />
                 <PreflightItem
                   label="해시태그 정책"
@@ -636,6 +675,7 @@ export default function Home() {
           onClose={() => setShowTodayModal(false)}
           todayTopics={todayTopics}
           todayFile={todayFile}
+          todayChannel={todayChannelFilter}
           todayDate={todayDate}
           todayPrevDate={todayPrevDate}
           todayNextDate={todayNextDate}
@@ -669,11 +709,15 @@ export default function Home() {
             initialTitle={uploadInitialTitle}
             initialDescription={uploadInitialDesc}
             initialTags={uploadInitialTags}
-            initialFormatType={uploadInitialFormatType}
-            initialSeriesTitle={uploadInitialSeriesTitle}
-            initialObsidianUri={uploadInitialObsidianUri}
-            platformAuth={platformAuth}
-          />}
+          initialFormatType={uploadInitialFormatType}
+          initialSeriesTitle={uploadInitialSeriesTitle}
+          initialObsidianUri={uploadInitialObsidianUri}
+          videoEngine={settings.videoEngine}
+          videoModelLabel={selectedVideoLabel}
+          estimatedHeroClips={estimatedHeroClips}
+          nextSaLabel={preflightSummary.nextSaLabel}
+          platformAuth={platformAuth}
+        />}
       </AnimatePresence>
 
       {/* Dashboard modal */}

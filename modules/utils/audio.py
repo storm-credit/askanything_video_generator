@@ -1,11 +1,39 @@
 """오디오 정규화 유틸리티 — ITU-R BS.1770 / EBU R 128 기반 LUFS 정규화"""
 import os
 import subprocess
+import subprocess
 import tempfile
 
 
 # YouTube/TikTok/Reels 권장 라우드니스 (-14 LUFS)
 TARGET_LUFS = -14.0
+
+
+def probe_audio_duration(audio_path: str) -> float:
+    """ffprobe로 오디오 길이(초)를 읽는다. 실패 시 0.0."""
+    if not audio_path or not os.path.exists(audio_path):
+        return 0.0
+
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                audio_path,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        duration = float((result.stdout or "").strip() or 0.0)
+        return max(duration, 0.0)
+    except Exception:
+        return 0.0
 
 
 def normalize_audio_lufs(audio_path: str, target_lufs: float = TARGET_LUFS) -> str:

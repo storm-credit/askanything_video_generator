@@ -13,41 +13,38 @@ from .parser import _split_yt_topic, _sanitize_llm_input
 from .llm_client import _request_cuts
 from .verifier import _verify_subject_match, _verify_highness_structure, _verify_facts
 from .quality import _validate_hard_fail, _validate_narrative_arc, _validate_region_style
-from .enhancer import _enhance_image_prompts, _rewrite_academic_tone, polish_scripts
+from .enhancer import _enhance_image_prompts, _rewrite_academic_tone, polish_scripts, ensure_visual_prompts_in_english
+
+_COUNTDOWN_CUE_PATTERN = re.compile(
+    r"(?i)\btop\s*\d+\b|#\d+\b|\b(?:ranking|ranked|tier list|clasificación|랭킹|순위)\b"
+)
+_WHO_WINS_QUESTION_PATTERN = re.compile(
+    r"(?i)\bwho(?:\s+\w+){0,2}\s+wins?\b|qui[eé]n\s+ganar[ií]a(?:\s+de\s+verdad)?\b|누가\s*(?:진짜\s*)?(?:이겨|더\s*강해)"
+)
 
 
 def _get_channel_hook_rules(channel: str | None, lang: str) -> str:
     """채널별 첫 컷 훅 스타일 규칙을 반환 — 생성 단계 주입용."""
-    if channel == "askanything":
-        if lang == "ko":
-            return (
-                "[Channel Hook Style] askanything: Cut 1 should feel like a bold Korean short-form hook. "
-                "Strong questions are allowed and encouraged if they create immediate curiosity. "
-                "Prefer direct, punchy, conversational phrasing. Avoid weak openers like '알고 있었어?' or '오늘은'."
-            )
-    if channel == "wonderdrop":
-        return (
-            "[Channel Hook Style] wonderdrop: Cut 1 should sound like a confident documentary line. "
-            "Prefer a declarative opener over a casual question. "
-            "Calm authority, cinematic clarity, no slang, no overhype."
-        )
-    if channel == "exploratodo":
-        return (
-            "[Channel Hook Style] exploratodo: Cut 1 should be energetic, immediate, and highly clickable in neutral LATAM Spanish. "
-            "A strong exclamatory or urgent hook is welcome. "
-            "Avoid formal or academic openings."
-        )
-    if channel == "prismtale":
-        return (
-            "[Channel Hook Style] prismtale: Cut 1 should feel like a dark mystery declaration. "
-            "Prefer enigmatic, ominous, cinematic first lines over casual questions. "
-            "Sound intriguing, not loud or playful."
-        )
+    from modules.utils.channel_config import get_channel_hook_profile
+    if channel:
+        return f"[Channel Hook Style] {get_channel_hook_profile(channel)}"
     if lang == "ko":
         return "[Channel Hook Style] Cut 1 should be short, punchy, and immediately curiosity-inducing."
     if lang == "es":
         return "[Channel Hook Style] El corte 1 debe ser corto, claro e inmediatamente intrigante."
     return "[Channel Hook Style] Cut 1 should be short, clear, and immediately intriguing."
+
+
+def _get_channel_title_rules(channel: str | None) -> str:
+    """채널별 제목 공식을 반환."""
+    from modules.utils.channel_config import get_channel_title_rule
+    return f"[Channel Title Formula] {get_channel_title_rule(channel)}"
+
+
+def _get_channel_cut1_scene_rules(channel: str | None) -> str:
+    """채널별 컷1 비주얼 앵커 설명."""
+    from modules.utils.channel_config import get_channel_cut1_visual_rule
+    return f"[Channel Cut 1 Visual Anchor] {get_channel_cut1_visual_rule(channel)}"
 
 
 def _should_run_fact_verify(topic_title: str, format_type: str | None, fact_context: str | None) -> bool:
@@ -88,13 +85,14 @@ def _ensure_format_metadata_tags(cuts: list[dict], format_type: str | None) -> N
             9: "REVEAL",
         }
         for idx, role in expected_roles.items():
-            if idx >= len(cuts):
+            cut_index = idx - 1
+            if cut_index >= len(cuts):
                 continue
-            desc = cuts[idx].get("description", cuts[idx].get("text", "")) or ""
+            desc = cuts[cut_index].get("description", cuts[cut_index].get("text", "")) or ""
             if f"[{role}]" not in desc.upper():
                 fixed = f"{desc.rstrip()} [{role}]".strip()
-                cuts[idx]["description"] = fixed
-                cuts[idx]["text"] = fixed
+                cuts[cut_index]["description"] = fixed
+                cuts[cut_index]["text"] = fixed
 
     if fmt != "EMOTIONAL_SCI":
         last_desc = cuts[-1].get("description", cuts[-1].get("text", "")) or ""
@@ -102,6 +100,37 @@ def _ensure_format_metadata_tags(cuts: list[dict], format_type: str | None) -> N
             fixed = f"{last_desc.rstrip()} [LOOP]".strip()
             cuts[-1]["description"] = fixed
             cuts[-1]["text"] = fixed
+
+
+def _strip_countdown_cues(text: str) -> str:
+    """TOP N/랭킹 신호를 일반 reveal 제목으로 정리한다."""
+    if not text:
+        return text
+
+    cleaned = _COUNTDOWN_CUE_PATTERN.sub("", text)
+    cleaned = re.sub(r"(?i)\bmost\b", "", cleaned)
+    cleaned = re.sub(r"(?i)\bm[aá]s\b", "", cleaned)
+    cleaned = re.sub(r"\s*[,/|-]\s*", ": ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"\s+([:?!])", r"\1", cleaned)
+    cleaned = re.sub(r":\s*:", ": ", cleaned)
+    return cleaned.strip(" ,:-")
+
+
+def _soften_who_wins_cues(text: str, lang: str) -> str:
+    """직접 대결 신호를 비교/차이형 제목으로 약화한다."""
+    if not text:
+        return text
+
+    connector = "와" if lang == "ko" else "y" if lang == "es" else "and"
+    cleaned = re.sub(r"(?i)\s+\bvs\.?\b\s+", f" {connector} ", text)
+    cleaned = re.sub(r"(?i)\s+\bversus\b\s+", f" {connector} ", cleaned)
+    cleaned = _WHO_WINS_QUESTION_PATTERN.sub("", cleaned)
+    cleaned = re.sub(r"\s*[,/|-]\s*", ": ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"\s+([:?!])", r"\1", cleaned)
+    cleaned = re.sub(r":\s*:", ": ", cleaned)
+    return cleaned.strip(" ,:-?")
 
 
 # 컷 자동 구성 함수 (천만 뷰 쇼츠 기획 전문가 - 멀티 LLM 지원)
@@ -126,6 +155,36 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     os.makedirs(os.path.join(base_path, "images"), exist_ok=True)
     os.makedirs(os.path.join(base_path, "audio"), exist_ok=True)
     os.makedirs(os.path.join(base_path, "video"), exist_ok=True)
+
+    requested_format = str(format_type or "").upper().strip() or None
+    if not requested_format:
+        try:
+            from modules.gpt.prompts.formats import detect_format_type
+            requested_format = detect_format_type(_topic_title, lang)
+            if requested_format:
+                print(f"-> [포맷 감지] {_topic_title} → {requested_format}")
+        except Exception:
+            requested_format = None
+
+    if channel:
+        from modules.utils.channel_config import normalize_format_for_channel
+        normalized_format, format_guard_reason = normalize_format_for_channel(channel, requested_format)
+    else:
+        normalized_format, format_guard_reason = requested_format, None
+    format_type = normalized_format
+
+    if format_guard_reason:
+        print(f"-> [포맷 가드] {format_guard_reason}")
+    if requested_format == "COUNTDOWN" and format_type != "COUNTDOWN":
+        normalized_topic = _strip_countdown_cues(_topic_title)
+        if normalized_topic and normalized_topic != _topic_title:
+            print(f"-> [토픽 가드] COUNTDOWN 신호 제거 → {normalized_topic}")
+            _topic_title = normalized_topic
+    if requested_format == "WHO_WINS" and format_type != "WHO_WINS":
+        normalized_topic = _soften_who_wins_cues(_topic_title, lang)
+        if normalized_topic and normalized_topic != _topic_title:
+            print(f"-> [토픽 가드] WHO_WINS 신호 완화 → {normalized_topic}")
+            _topic_title = normalized_topic
 
     # System Prompt — 외부 파일에서 로드 (modules/gpt/prompts/)
     from modules.gpt.prompts import load_system_prompt, inject_channel_config, inject_format_prompt
@@ -189,6 +248,12 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     channel_hook_rules = _get_channel_hook_rules(channel, lang)
     if channel_hook_rules:
         user_content += f"\n\n{channel_hook_rules}\n[Critical] This rule applies MOST strongly to Cut 1. Different channels must have visibly different first-line energy."
+    channel_title_rules = _get_channel_title_rules(channel)
+    if channel_title_rules:
+        user_content += f"\n\n{channel_title_rules}\n[Critical] The output title MUST follow this formula. Generic 'secret/truth/TOP 3' shells without a concrete subject are forbidden."
+    channel_cut1_scene_rules = _get_channel_cut1_scene_rules(channel)
+    if channel_cut1_scene_rules:
+        user_content += f"\n\n{channel_cut1_scene_rules}\n[Critical] Cut 1 image_prompt and Cut 1 script must feel like the same scroll-stopping idea."
 
     # 레퍼런스 영상 분석 주입 (XML 구조화)
     if reference_url:
@@ -541,8 +606,10 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
         try:
             _vd_key = _verify_key()
             cuts = _enhance_image_prompts(cuts, _topic_title, lang, _vd_key, channel, format_type)
+            cuts = ensure_visual_prompts_in_english(cuts, _topic_title, _vd_key, channel, format_type)
             # 비주얼 디렉터 후 주제 일치 재검증 (공룡 같은 무관 피사체 방지)
             cuts = _verify_subject_match(cuts, _topic_title, llm_provider, _verify_key(), lang, llm_model)
+            cuts = ensure_visual_prompts_in_english(cuts, _topic_title, _vd_key, channel, format_type)
         except Exception as _vd_err:
             print(f"[비주얼 디렉터] 스킵 (원본 유지): {_vd_err}")
     else:

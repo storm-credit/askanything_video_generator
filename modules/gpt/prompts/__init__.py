@@ -64,7 +64,7 @@ You MUST write ALL "script" fields and the "title" field in {lang_name}.
 NEVER write scripts in English. All "script" fields MUST be in {lang_name} only.
 The "image_prompt" and "description" fields must remain in English.
 The narrator will speak in {lang_name}, so the script must be natural {lang_name}.
-IMPORTANT: {lang_name} sentences tend to be longer than English. Keep each script to 8-15 words equivalent (~4-6 seconds) to maintain 40-50 second total video length. Write 8-10 cuts minimum.
+IMPORTANT: {lang_name} sentences tend to be longer than English. Keep each script to 7-11 words equivalent (~3-4 seconds) and avoid filler so the total video stays compact. Write 8-9 cuts by default unless channel override says otherwise.
 """
 
     return prompt

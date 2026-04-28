@@ -18,8 +18,18 @@ IMAGEN_MODELS = [
 ]
 # Nano Banana는 별도 API 방식이라 imagen.py에서 직접 폴백 호출
 
-# Veo 모델 체인: Standard (RPM 2) → Fast (RPM 2)
+# Veo 모델 체인:
+#   - 일반 운영: Fast 우선 (비용/속도 최적화)
+#   - hero-only: Standard 우선 (핵심 컷 품질 우선)
 VEO_MODELS = [
+    {"id": "veo-3.1-fast-generate-001", "tag": "fast", "label": "Veo 3.1 Fast"},
+    {"id": "veo-3.1-generate-001", "tag": "standard", "label": "Veo 3.1"},
+    {"id": "veo-3.0-fast-generate-001", "tag": "fast", "label": "Veo 3 Fast"},
+    {"id": "veo-3.0-generate-001", "tag": "standard", "label": "Veo 3"},
+]
+VEO_MODELS_HERO = [
+    {"id": "veo-3.1-generate-001", "tag": "standard", "label": "Veo 3.1"},
+    {"id": "veo-3.1-fast-generate-001", "tag": "fast", "label": "Veo 3.1 Fast"},
     {"id": "veo-3.0-generate-001", "tag": "standard", "label": "Veo 3"},
     {"id": "veo-3.0-fast-generate-001", "tag": "fast", "label": "Veo 3 Fast"},
 ]
@@ -35,8 +45,10 @@ MODEL_RATE_LIMITS = {
     "imagen-4.0-fast-generate-001": {"rpm": 10, "rpd": 100, "note": "무료"},
     "imagen-3.0-generate-002": {"rpm": 10, "rpd": 100, "note": "무료"},
     # Veo
-    "veo-3.0-generate-001": {"rpm": 2, "rpd": 6, "note": "무료"},
-    "veo-3.0-fast-generate-001": {"rpm": 2, "rpd": 6, "note": "무료"},
+    "veo-3.1-generate-001": {"rpm": 50, "rpd": 0, "note": "Vertex fixed quota / pricing page 기준"},
+    "veo-3.1-fast-generate-001": {"rpm": 50, "rpd": 0, "note": "Vertex fixed quota / pricing page 기준"},
+    "veo-3.0-generate-001": {"rpm": 10, "rpd": 0, "note": "Vertex fixed quota"},
+    "veo-3.0-fast-generate-001": {"rpm": 10, "rpd": 0, "note": "Vertex fixed quota"},
     # OpenAI
     "gpt-4o": {"rpm": 500, "rpd": 10000, "note": "유료"},
     "gpt-4o-mini": {"rpm": 500, "rpd": 10000, "note": "유료"},
@@ -55,8 +67,36 @@ _CHAINS = {
 }
 
 
-def get_model_chain(service: str) -> list[dict]:
+def get_model_label(service: str, model_id: str | None) -> str:
+    """서비스/모델 ID를 사람이 읽기 쉬운 라벨로 변환."""
+    raw = (model_id or "").strip()
+    if not raw:
+        return ""
+    for chain in (get_model_chain(service), get_model_chain(service, profile="hero-only")):
+        for model in chain:
+            if model["id"] == raw:
+                return model.get("label", raw)
+    return raw
+
+
+def describe_video_model(video_engine: str, video_model: str | None) -> str:
+    """알림/로그용 비디오 모델 라벨."""
+    engine = (video_engine or "").strip().lower()
+    model = (video_model or "").strip()
+    if not engine:
+        return model or "-"
+    if engine != "veo3":
+        return model or engine
+    if not model or model == "hero-only":
+        chain = " -> ".join(model_meta["label"] for model_meta in get_model_chain("veo3", profile="hero-only"))
+        return f"Hero-only ({chain})"
+    return get_model_label("veo3", model)
+
+
+def get_model_chain(service: str, profile: str | None = None) -> list[dict]:
     """서비스별 모델 폴백 순서 반환."""
+    if service == "veo3" and profile == "hero-only":
+        return VEO_MODELS_HERO
     return _CHAINS.get(service, [])
 
 
@@ -64,7 +104,11 @@ def get_service_tag(service: str, model_id: str) -> str:
     """모델 ID에 대응하는 서비스:태그 문자열 반환.
     예: get_service_tag("imagen", "imagen-4.0-generate-001") → "imagen:standard"
     """
-    for model in get_model_chain(service):
-        if model["id"] == model_id:
-            return f"{service}:{model['tag']}"
+    chains = [get_model_chain(service)]
+    if service == "veo3":
+        chains.append(get_model_chain(service, profile="hero-only"))
+    for chain in chains:
+        for model in chain:
+            if model["id"] == model_id:
+                return f"{service}:{model['tag']}"
     return service

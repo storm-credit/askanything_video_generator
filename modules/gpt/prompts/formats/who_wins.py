@@ -31,6 +31,9 @@ FRAGMENT: dict[str, str] = {
 
 === 구조 규칙 ===
 컷 구조 (11컷 필수):
+이 포맷은 전역 "컷1 단일 피사체" 규칙을 명시적으로 덮어쓴다.
+컷1은 두 대상을 동시에 보여주고 대결 질문을 던져야 한다.
+
 - 컷1  [SHOCK]:   두 대상 동시 등장. "○○ vs ○○, 진짜 싸우면 누가 이겨?"
 - 컷2  [INTRO_A]: A 등장 소개 — 이름+한 줄 인상
 - 컷3  [FACT_A]:  A의 가장 강력한 능력/스펙
@@ -95,6 +98,9 @@ If any fail, rewrite entirely.
 
 === Structural Rules ===
 Cut structure (11 cuts required):
+This format EXPLICITLY overrides the generic single-subject Cut 1 rule.
+Cut 1 SHOULD show both opponents together and ask the matchup question.
+
 - Cut 1  [SHOCK]:   Both subjects together. "○○ vs ○○ — who actually wins?"
 - Cut 2  [INTRO_A]: Introduce A — name + one-line impression
 - Cut 3  [FACT_A]:  A's single most powerful stat or ability
@@ -159,6 +165,9 @@ Si alguno falla, reescribir todo.
 
 === Reglas de Estructura ===
 Estructura (11 cortes obligatorio):
+Este formato ANULA explícitamente la regla genérica de un solo sujeto en el Corte 1.
+El Corte 1 DEBE mostrar a ambos oponentes y plantear la pregunta del duelo.
+
 - Corte 1  [SHOCK]:   Ambos sujetos. "¿○○ vs ○○, quién ganaría de verdad?"
 - Corte 2  [INTRO_A]: Presentar A — nombre + impresión en una línea
 - Corte 3  [FACT_A]:  La habilidad más poderosa de A

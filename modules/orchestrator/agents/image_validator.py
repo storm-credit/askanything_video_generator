@@ -93,7 +93,13 @@ Rules:
             return {"pass": False, "reason": "검수 응답 파싱 실패", "score": 0}
 
         score = result.get("score", 0)
-        result["pass"] = score >= 7
+        model_pass = result.get("pass")
+        if isinstance(model_pass, str):
+            model_pass = model_pass.strip().lower() in {"1", "true", "yes", "pass"}
+        if model_pass is None:
+            result["pass"] = score >= 7
+        else:
+            result["pass"] = bool(model_pass) and score >= 7
         return result
 
     except Exception as e:

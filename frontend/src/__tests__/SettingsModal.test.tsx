@@ -32,19 +32,21 @@ const defaultProps = {
 describe("SettingsModal", () => {
   it("renders modal with title", () => {
     render(<SettingsModal {...defaultProps} />);
-    expect(screen.getByText("API 키 설정")).toBeInTheDocument();
+    expect(screen.getByText("설정")).toBeInTheDocument();
+    expect(screen.getByText("API 키, 엔진, 채널 관리")).toBeInTheDocument();
   });
 
   it("shows required key sections", () => {
     render(<SettingsModal {...defaultProps} />);
+    expect(screen.getByText("Google API Key")).toBeInTheDocument();
     expect(screen.getByText("OpenAI API Key")).toBeInTheDocument();
     expect(screen.getByText("ElevenLabs API Key")).toBeInTheDocument();
   });
 
   it("shows server status indicators", () => {
     render(<SettingsModal {...defaultProps} />);
-    const setTexts = screen.getAllByText(".env 설정됨");
-    expect(setTexts.length).toBeGreaterThan(0);
+    expect(screen.getByText("서버 설정됨")).toBeInTheDocument();
+    expect(screen.getByText("1키 등록됨")).toBeInTheDocument();
   });
 
   it("shows footer key counts", () => {
@@ -84,9 +86,10 @@ describe("SettingsModal", () => {
     expect(screen.getByText("저장 경로")).toBeInTheDocument();
   });
 
-  it("shows LLM engine keys section", () => {
+  it("shows extra engine keys section", () => {
     render(<SettingsModal {...defaultProps} />);
-    expect(screen.getByText("Gemini API Key")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("추가 엔진"));
     expect(screen.getByText("Claude API Key")).toBeInTheDocument();
+    expect(screen.getByText("Kling Access Key")).toBeInTheDocument();
   });
 });

@@ -24,8 +24,33 @@ async def scheduler_status():
     return get_status()
 
 
+@router.get("/rollout-expansions")
+async def scheduler_rollout_expansions(status: str | None = None, limit: int = 50):
+    """Lead-channel-first holdback 확장 큐 조회."""
+    from modules.scheduler.rollout_queue import get_queue_summary, list_candidates
+
+    return {
+        "success": True,
+        "queue": get_queue_summary(),
+        "items": list_candidates(status=status, limit=limit),
+    }
+
+
+@router.post("/rollout-expansions/run")
+async def scheduler_run_rollout_expansions(limit: int = 6):
+    """24시간 경과한 holdback 확장을 즉시 실행."""
+    from modules.scheduler.auto_deploy import process_rollout_expansions
+
+    return await process_rollout_expansions(limit=limit)
+
+
 @router.post("/run")
-async def scheduler_run(date: str | None = None, dry_run: bool = False, max_per_channel: int | None = None):
+async def scheduler_run(
+    date: str | None = None,
+    dry_run: bool = False,
+    max_per_channel: int | None = None,
+    video_engine: str | None = None,
+):
     """자동 배포 실행. dry_run=true면 스케줄만 계산."""
     from modules.scheduler.auto_deploy import run_auto_deploy
     from datetime import datetime as _dt
@@ -34,12 +59,41 @@ async def scheduler_run(date: str | None = None, dry_run: bool = False, max_per_
     target = _dt.strptime(date, "%Y-%m-%d") if date else None
 
     if dry_run:
-        result = await run_auto_deploy(target, dry_run=True, max_per_channel=max_per_channel)
+        result = await run_auto_deploy(target, dry_run=True, max_per_channel=max_per_channel, video_engine=video_engine)
         return result
 
     # 비동기 실행 (즉시 응답, 백그라운드에서 진행)
-    asyncio.create_task(run_auto_deploy(target, max_per_channel=max_per_channel))
-    return {"success": True, "message": "자동 배포 시작됨. /api/scheduler/status로 진행 상태 확인"}
+    task = asyncio.create_task(
+        run_auto_deploy(target, max_per_channel=max_per_channel, video_engine=video_engine)
+    )
+    await asyncio.sleep(0)
+
+    if task.done():
+        try:
+            return task.result()
+        except Exception as exc:
+            return {"success": False, "message": f"자동 배포 시작 실패: {str(exc)[:200]}"}
+
+    from modules.scheduler.auto_deploy import get_status
+
+    status = get_status()
+    if not status.get("running"):
+        return {
+            "success": False,
+            "message": "자동 배포 시작을 확인하지 못했습니다.",
+            "status": status,
+        }
+
+    return {
+        "success": True,
+        "accepted": True,
+        "message": "자동 배포 시작됨. /api/scheduler/status로 진행 상태 확인",
+        "status": {
+            "running": True,
+            "current_date": status.get("current_date"),
+            "started_at": status.get("started_at"),
+        },
+    }
 
 
 @router.get("/cron")

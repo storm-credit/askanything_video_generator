@@ -172,6 +172,13 @@ def fetch_channel_stats(channel: str, max_results: int = 50) -> dict[str, Any]:
     if not videos:
         return {"channel": channel, "videos": [], "summary": {}}
 
+    try:
+        from modules.utils.upload_history import upsert_videos
+
+        upsert_videos(channel, videos, source="youtube_api")
+    except Exception as e:
+        print(f"[YouTube Stats] {channel}: 업로드 히스토리 DB 저장 실패 — {e}")
+
     total_views = sum(v["views"] for v in videos)
     avg_views = total_views / len(videos) if videos else 0
 
@@ -204,6 +211,39 @@ def fetch_channel_stats(channel: str, max_results: int = 50) -> dict[str, Any]:
         pass
 
     return result
+
+
+def fetch_video_stats(channel: str, video_id: str) -> dict[str, Any] | None:
+    """단일 YouTube 영상 통계를 가져온다."""
+    api_key = _get_api_key(channel)
+    if not api_key or not video_id:
+        return None
+    try:
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={
+                "part": "snippet,statistics,contentDetails",
+                "id": video_id,
+                "key": api_key,
+            },
+            timeout=10,
+        )
+        data = resp.json()
+        item = (data.get("items") or [None])[0]
+        if not item:
+            return None
+        return {
+            "video_id": item.get("id", video_id),
+            "title": item.get("snippet", {}).get("title", ""),
+            "published_at": item.get("snippet", {}).get("publishedAt", ""),
+            "views": int(item.get("statistics", {}).get("viewCount", 0)),
+            "likes": int(item.get("statistics", {}).get("likeCount", 0)),
+            "comments": int(item.get("statistics", {}).get("commentCount", 0)),
+            "duration": item.get("contentDetails", {}).get("duration", ""),
+        }
+    except Exception as e:
+        print(f"[YouTube Stats] {channel}: 단일 영상 통계 조회 실패 — {e}")
+        return None
 
 
 def fetch_all_channels_stats() -> dict[str, Any]:

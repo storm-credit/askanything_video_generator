@@ -18,12 +18,35 @@ interface UploadModalProps {
   initialFormatType?: string;
   initialSeriesTitle?: string | null;
   initialObsidianUri?: string;
+  videoEngine?: string;
+  videoModelLabel?: string;
+  estimatedHeroClips?: number;
+  nextSaLabel?: string;
   platformAuth: PlatformAuth;
 }
+
+type MetadataPreview = {
+  ok: boolean;
+  title?: string;
+  description?: string;
+  tags?: string[];
+  privacy?: string;
+  publish_at?: string | null;
+  series_title?: string | null;
+  error?: string;
+  checks?: {
+    description_has_hash: boolean;
+    tag_count: number;
+    shorts_tag_removed: boolean;
+    series_playlist: boolean;
+    scheduled: boolean;
+  };
+};
 
 export function UploadModal({
   show, onClose, generatedVideoPath, uploadChannel, topic,
   initialTitle, initialDescription, initialTags, initialFormatType, initialSeriesTitle, initialObsidianUri,
+  videoEngine, videoModelLabel, estimatedHeroClips = 0, nextSaLabel,
   platformAuth,
 }: UploadModalProps) {
   const normalizeYoutubeTags = (value: string): string[] => {
@@ -65,6 +88,7 @@ export function UploadModal({
   const [uploadResult, setUploadResult] = useState<{ success: boolean; url?: string; error?: string; scheduled_at?: string } | null>(null);
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
+  const [metadataPreview, setMetadataPreview] = useState<MetadataPreview | null>(null);
 
   const {
     ytConnected, ytChannels, ytSelectedChannel, setYtSelectedChannel,
@@ -151,6 +175,7 @@ export function UploadModal({
     (uploadPlatform === "instagram" && !igConnected);
   const hashtagsInDesc = (uploadDescription.match(/#[^\s#]+/g) || []).map((tag) => tag.slice(1));
   const youtubeTags = normalizeYoutubeTags([...hashtagsInDesc, uploadTags].join(","));
+  const youtubeTagsKey = youtubeTags.join(",");
   const finalYoutubeDescription = normalizeYoutubeDescription(uploadDescription);
   const finalYoutubePrivacy = scheduleEnabled ? "비공개 업로드 후 예약 공개" : (
     uploadPrivacy === "public" ? "공개" : uploadPrivacy === "unlisted" ? "미등록" : "비공개"
@@ -158,6 +183,54 @@ export function UploadModal({
   const finalScheduleLabel = scheduleEnabled && scheduleDate
     ? new Date(scheduleDate).toLocaleString("ko-KR")
     : "즉시 업로드";
+  const serverYoutubeDescription = metadataPreview?.ok ? (metadataPreview.description || "") : finalYoutubeDescription;
+  const serverYoutubeTags = metadataPreview?.ok ? (metadataPreview.tags || []) : youtubeTags;
+
+  useEffect(() => {
+    if (!show || uploadPlatform !== "youtube") {
+      setMetadataPreview(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/youtube/metadata/preview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            title: uploadTitle || topic,
+            description: uploadDescription,
+            tags: youtubeTags,
+            privacy: scheduleEnabled ? "private" : uploadPrivacy,
+            publish_at: scheduleEnabled && scheduleDate ? new Date(scheduleDate).toISOString() : null,
+            format_type: initialFormatType || undefined,
+            series_title: initialSeriesTitle || undefined,
+          }),
+        });
+        setMetadataPreview(await res.json());
+      } catch {
+        if (!controller.signal.aborted) setMetadataPreview(null);
+      }
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [
+    show,
+    uploadPlatform,
+    uploadTitle,
+    uploadDescription,
+    uploadTags,
+    uploadPrivacy,
+    scheduleEnabled,
+    scheduleDate,
+    initialFormatType,
+    initialSeriesTitle,
+    topic,
+    youtubeTagsKey,
+  ]);
 
   return (
     <motion.div
@@ -406,14 +479,14 @@ export function UploadModal({
               <div className="space-y-1.5 text-xs">
                 <p className="text-gray-400">{uploadPlatform === "instagram" ? "캡션" : "설명"}</p>
                 <p className="text-gray-200 whitespace-pre-wrap break-words">
-                  {uploadPlatform === "youtube" ? (finalYoutubeDescription || "-") : (uploadDescription.trim() || "-")}
+                  {uploadPlatform === "youtube" ? (serverYoutubeDescription || "-") : (uploadDescription.trim() || "-")}
                 </p>
               </div>
               {uploadPlatform === "youtube" && (
                 <>
                   <div className="space-y-1.5 text-xs">
                     <p className="text-gray-400">태그</p>
-                    <p className="text-gray-200 break-words">{youtubeTags.length > 0 ? youtubeTags.map((tag) => `#${tag}`).join(" ") : "-"}</p>
+                    <p className="text-gray-200 break-words">{serverYoutubeTags.length > 0 ? serverYoutubeTags.map((tag) => `#${tag}`).join(" ") : "-"}</p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div className="rounded-lg bg-black/20 px-3 py-2">
@@ -424,6 +497,29 @@ export function UploadModal({
                       <p className="text-gray-500 mb-1">공개/예약</p>
                       <p className="text-gray-200 break-words">{finalYoutubePrivacy} · {finalScheduleLabel}</p>
                     </div>
+                    <div className="rounded-lg bg-black/20 px-3 py-2">
+                      <p className="text-gray-500 mb-1">생성 모델</p>
+                      <p className="text-gray-200 break-words">
+                        {videoEngine === "none" ? "비디오 생성 안 함" : (videoModelLabel || "서버 기본값")}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-black/20 px-3 py-2">
+                      <p className="text-gray-500 mb-1">다음 Vertex SA</p>
+                      <p className="text-gray-200 break-words">{nextSaLabel || "미확인"}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-black/20 px-3 py-2 text-xs">
+                    <p className="text-gray-500 mb-1">예상 생성 힌트</p>
+                    <p className="text-gray-200 break-words">
+                      포맷 {initialFormatType || "미지정"} · hero clip 예상 {estimatedHeroClips}개
+                    </p>
+                  </div>
+                  <div className={`rounded-lg px-3 py-2 text-xs ${metadataPreview?.ok === false ? "bg-red-500/10 border border-red-500/20" : "bg-emerald-500/10 border border-emerald-500/20"}`}>
+                    <p className={metadataPreview?.ok === false ? "text-red-300" : "text-emerald-300"}>
+                      {metadataPreview?.ok === false
+                        ? `서버 최종 검수 실패: ${metadataPreview.error || "메타데이터 확인 필요"}`
+                        : `서버 최종 검수 통과 · 태그 ${metadataPreview?.checks?.tag_count ?? serverYoutubeTags.length}/5개 · 설명 # 없음`}
+                    </p>
                   </div>
                 </>
               )}
@@ -435,7 +531,7 @@ export function UploadModal({
 
             <button
               onClick={handleUpload}
-              disabled={uploading || !uploadTitle.trim() || (scheduleEnabled && !scheduleDate)}
+              disabled={uploading || !uploadTitle.trim() || (scheduleEnabled && !scheduleDate) || metadataPreview?.ok === false}
               className={`w-full py-3 disabled:bg-gray-700 disabled:text-gray-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
                 uploadPlatform === "youtube" ? "bg-red-600 hover:bg-red-500" :
                 uploadPlatform === "tiktok" ? "bg-gray-700 hover:bg-gray-600" :

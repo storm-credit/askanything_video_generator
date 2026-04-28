@@ -196,6 +196,41 @@ const BrandOutro: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
+const TitleOverlay: React.FC<{ title: string }> = ({ title }) => {
+  const frame = useCurrentFrame();
+  const opacity = interpolate(frame, [0, 8, 44, 56], [0, 1, 1, 0], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+  const translateY = interpolate(frame, [0, 12], [-16, 0], { extrapolateRight: 'clamp' });
+
+  return (
+    <AbsoluteFill style={{ pointerEvents: 'none' }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: 104,
+          left: 72,
+          right: 72,
+          opacity,
+          transform: `translateY(${translateY}px)`,
+          color: 'white',
+          fontSize: 58,
+          lineHeight: 1.12,
+          fontWeight: 900,
+          textShadow: '0 5px 18px rgba(0,0,0,0.9)',
+          WebkitTextStroke: '1px rgba(0,0,0,0.55)',
+          wordBreak: 'keep-all',
+          overflowWrap: 'break-word',
+          textAlign: 'center',
+        }}
+      >
+        {title}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 const FADE_IN_FRAMES = 6;   // 250ms @ 24fps
 const CROSS_FRAMES = 6;      // cross-dissolve 오버랩 길이 (visual only)
 
@@ -228,7 +263,7 @@ const CrossDissolveVisual: React.FC<{
 const BGM_VOLUME = 0.25;  // TTS 대비 25% 볼륨 (fallback when no timestamps)
 const BGM_VOLUME_SPEECH = 0.15;  // Speech active: duck to 15%
 const BGM_VOLUME_SILENCE = 0.35; // No speech: raise to 35%
-const BGM_RAMP_FRAMES = 5;       // Smooth transition over 5 frames
+const BGM_RAMP_FRAMES = 8;       // Smooth transition over 8 frames
 const BGM_INTRO_FRAMES = 12;     // 첫 0.5초(12f@24fps) BGM 풀 볼륨 인트로
 
 // Build global word timeline from all cuts with their absolute frame offsets
@@ -241,9 +276,11 @@ function buildGlobalWordTimeline(
   for (let i = 0; i < cuts.length; i++) {
     const cutOffset = startFrames[i];
     for (const w of cuts[i].word_timestamps) {
+      const startFrame = Math.max(0, cutOffset + Math.round(w.start * fps) - 1);
+      const endFrame = Math.max(startFrame, cutOffset + Math.round(w.end * fps) + 1);
       timeline.push({
-        startFrame: cutOffset + Math.round(w.start * fps),
-        endFrame: cutOffset + Math.round(w.end * fps),
+        startFrame,
+        endFrame,
       });
     }
   }
@@ -276,8 +313,12 @@ function getDynamicBgmVolume(
     );
   }
 
-  // 첫 0.5초 인트로: BGM 풀 볼륨으로 시작 → 나레이션 전에 음악 존재감 확보
+  // 첫 훅이 바로 시작하면 BGM도 speech ducking을 따른다.
   if (frame < BGM_INTRO_FRAMES) {
+    const speechStartsImmediately = timeline[0]?.startFrame <= BGM_INTRO_FRAMES;
+    if (speechStartsImmediately && frame >= timeline[0].startFrame) {
+      return BGM_VOLUME_SPEECH;
+    }
     return BGM_VOLUME_SILENCE;
   }
 
@@ -409,6 +450,12 @@ export const Main: React.FC<{
           </Sequence>
         );
       })}
+
+      {title && (
+        <Sequence from={introFrames} durationInFrames={64}>
+          <TitleOverlay title={title} />
+        </Sequence>
+      )}
 
       {/* 본편 — Audio + Caption 레이어 (정확한 타이밍, 오버랩 없음) */}
       {cuts.map((cut, index) => {

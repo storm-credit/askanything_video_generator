@@ -30,7 +30,7 @@ SORA_SLOWDOWN_AT = 12        # 이 횟수 이후 폴링 간격 확대
 VIDEO_DOWNLOAD_TIMEOUT = 60  # 초
 MAX_IMAGE_SIZE_MB = 20       # Base64 인코딩 전 최대 이미지 크기
 
-from modules.utils.constants import get_motion_style
+from modules.utils.constants import build_video_generation_prompt
 
 
 def _has_vertex_gemini_backend() -> bool:
@@ -124,6 +124,9 @@ def generate_video_from_image(
     description: str = "",
     veo_model: str | None = None,
     gemini_api_keys: str | None = None,
+    format_type: str | None = None,
+    camera_style: str = "auto",
+    use_hero_profile: bool = False,
 ) -> str | None:
     """
     선택된 엔진으로 이미지를 비디오로 변환합니다.
@@ -146,7 +149,20 @@ def generate_video_from_image(
         return None
 
     for eng in engines_to_try:
-        result = _try_engine(eng, image_path, prompt, index, topic_folder, google_api_key, description=description, veo_model=veo_model, gemini_api_keys=gemini_api_keys)
+        result = _try_engine(
+            eng,
+            image_path,
+            prompt,
+            index,
+            topic_folder,
+            google_api_key,
+            description=description,
+            veo_model=veo_model,
+            gemini_api_keys=gemini_api_keys,
+            format_type=format_type,
+            camera_style=camera_style,
+            use_hero_profile=use_hero_profile,
+        )
         if result is not None:
             return result
         print(f"[비디오 엔진] {eng} 실패 → 다음 엔진 시도")
@@ -165,6 +181,9 @@ def _try_engine(
     description: str = "",
     veo_model: str | None = None,
     gemini_api_keys: str | None = None,
+    format_type: str | None = None,
+    camera_style: str = "auto",
+    use_hero_profile: bool = False,
 ) -> str | None:
     """단일 엔진으로 비디오 생성을 시도합니다. 일시적 에러 시 1회 재시도."""
     import time as _time
@@ -173,13 +192,41 @@ def _try_engine(
         try:
             if engine == "veo3":
                 from modules.video.veo import generate_video_veo
-                return generate_video_veo(image_path, prompt, index, topic_folder, google_api_key, description=description, model_override=veo_model, gemini_api_keys=gemini_api_keys)
+                return generate_video_veo(
+                    image_path,
+                    prompt,
+                    index,
+                    topic_folder,
+                    google_api_key,
+                    description=description,
+                    model_override=veo_model,
+                    gemini_api_keys=gemini_api_keys,
+                    format_type=format_type,
+                    camera_style=camera_style,
+                    use_hero_profile=use_hero_profile,
+                )
 
             if engine == "sora2":
-                return _generate_via_openai_sora(image_path, prompt, index, topic_folder, description=description)
+                return _generate_via_openai_sora(
+                    image_path,
+                    prompt,
+                    index,
+                    topic_folder,
+                    description=description,
+                    format_type=format_type,
+                    camera_style=camera_style,
+                )
 
             if engine == "kling":
-                return _generate_via_kling_direct(image_path, prompt, index, topic_folder, description=description)
+                return _generate_via_kling_direct(
+                    image_path,
+                    prompt,
+                    index,
+                    topic_folder,
+                    description=description,
+                    format_type=format_type,
+                    camera_style=camera_style,
+                )
         except Exception as e:
             err_str = str(e)
             is_transient = any(t.lower() in err_str.lower() for t in _transient_errors)
@@ -195,7 +242,13 @@ def _try_engine(
 
 
 def _generate_via_openai_sora(
-    image_path: str, prompt: str, index: int, topic_folder: str, description: str = ""
+    image_path: str,
+    prompt: str,
+    index: int,
+    topic_folder: str,
+    description: str = "",
+    format_type: str | None = None,
+    camera_style: str = "auto",
 ) -> str | None:
     """OpenAI Sora 2 API를 통한 비디오 생성"""
     api_key = os.getenv("OPENAI_API_KEY")
@@ -222,13 +275,19 @@ def _generate_via_openai_sora(
         img_b64 = base64.b64encode(f.read()).decode("utf-8")
 
     mime_type = mimetypes.guess_type(image_path)[0] or "image/png"
+    video_prompt = build_video_generation_prompt(
+        prompt,
+        description=description,
+        format_type=format_type,
+        camera_style=camera_style,
+    )
 
     try:
         response = client.responses.create(
             model="sora",
             input=[
                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
-                {"type": "text", "text": f"{get_motion_style(prompt, description)}, 4K quality. {prompt}"},
+                {"type": "text", "text": video_prompt},
             ],
             tools=[{"type": "video_generation", "resolution": "1080p", "duration": 8}],
         )
@@ -277,11 +336,25 @@ def _generate_via_openai_sora(
 
 
 def _generate_via_kling_direct(
-    image_path: str, prompt: str, index: int, topic_folder: str, description: str = ""
+    image_path: str,
+    prompt: str,
+    index: int,
+    topic_folder: str,
+    description: str = "",
+    format_type: str | None = None,
+    camera_style: str = "auto",
 ) -> str | None:
     """기존 Kling AI 직접 연동"""
     from modules.video.kling import generate_video_from_image as kling_generate
-    return kling_generate(image_path, prompt, index, topic_folder, description=description)
+    return kling_generate(
+        image_path,
+        prompt,
+        index,
+        topic_folder,
+        description=description,
+        format_type=format_type,
+        camera_style=camera_style,
+    )
 
 
 def _download_video(

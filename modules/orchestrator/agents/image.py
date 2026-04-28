@@ -183,6 +183,21 @@ class ImageAgent(BaseAgent):
                     yield f"  -> 컷1 A/B 최선 선택 완료 (원본 교체)\n"
                 else:
                     yield f"  -> 컷1 A/B 점수 측정 완료 (원본 유지)\n"
+                try:
+                    from modules.orchestrator.agents.image_validator import validate_and_retry
+                    validated = validate_and_retry(
+                        ctx.visual_paths[0], ctx.cuts[0].get("prompt", ""), 0, ctx.topic_folder,
+                        api_key=ctx.gemini_keys_override or ctx.llm_key,
+                        image_engine=ctx.image_engine,
+                        image_model=ctx.image_model,
+                        gemini_keys=ctx.gemini_keys_override,
+                        topic=ctx.topic,
+                    )
+                    if validated and validated != ctx.visual_paths[0]:
+                        ctx.visual_paths[0] = validated
+                        yield f"  -> 컷1 최종 이미지 검수 후 교체\n"
+                except Exception as exc:
+                    yield f"WARN|  -> 컷1 최종 이미지 검수 실패(유지): {exc}\n"
             status = "OK" if ctx.visual_paths[i] else "FAILED"
             yield f"  -> 컷 {i+1} 이미지 {status}\n"
 

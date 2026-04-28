@@ -7,6 +7,7 @@
 import os
 import sys
 import io
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,7 +17,7 @@ from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-load_dotenv(override=True)
+load_dotenv(Path(__file__).resolve().with_name(".env"), override=True)
 
 from routes.shared import cut_executor
 
@@ -25,11 +26,16 @@ from routes.shared import cut_executor
 
 @asynccontextmanager
 async def _lifespan(app):
-    # Vertex AI SA-only mode. Settings UI can upload/reorder SA json files under data/vertex_sa.
+    # Vertex runtime sync. Startup should respect the configured backend instead of forcing SA-only.
     try:
         from modules.utils.vertex_sa_manager import refresh_runtime_vertex_env
-        refresh_runtime_vertex_env()
-        print("[Vertex SA] SA-only mode enabled")
+        vertex_runtime = refresh_runtime_vertex_env(force_backend=False, persist=False)
+        print(
+            "[Vertex SA] runtime sync "
+            f"backend={vertex_runtime.get('backend')} "
+            f"sa_only={vertex_runtime.get('sa_only')} "
+            f"enabled_accounts={vertex_runtime.get('enabled_count', 0)}"
+        )
     except Exception as e:
         print(f"[Vertex SA] 초기화 실패: {e}")
 
@@ -56,14 +62,36 @@ async def _lifespan(app):
     else:
         print("[크론] 자동 배포 비활성화 — AUTO_DEPLOY_CRON_ENABLED=true 설정 시 활성화")
 
-    def _cron_topics():
-        from modules.scheduler.topic_generator import generate_weekly_topics
-        from datetime import datetime, timedelta, timezone
-        _kst = timezone(timedelta(hours=9))
-        now = datetime.now(_kst)
-        monday = now + timedelta(days=(7 - now.weekday()))
-        return generate_weekly_topics(monday, days=7)
-    add_weekly("주간 토픽 생성", 0, 9, 0, _cron_topics)  # 매주 월요일 오전 9시
+    rollout_expansion_enabled = os.getenv("ROLLOUT_EXPANSION_CRON_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    async def _cron_rollout_expansion():
+        from modules.scheduler.auto_deploy import process_rollout_expansions
+        limit_raw = os.getenv("ROLLOUT_EXPANSION_LIMIT", "6").strip()
+        limit = int(limit_raw) if limit_raw else 6
+        return await process_rollout_expansions(limit=limit)
+    set_hourly(
+        "리드채널 자동 확장",
+        int(os.getenv("ROLLOUT_EXPANSION_CRON_MINUTE", "20")),
+        _cron_rollout_expansion,
+        enabled=rollout_expansion_enabled,
+    )
+    if not rollout_expansion_enabled:
+        print("[크론] 리드채널 자동 확장 비활성화")
+
+    weekly_topics_enabled = os.getenv("WEEKLY_TOPICS_CRON_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+    if weekly_topics_enabled:
+        def _cron_topics():
+            from modules.scheduler.topic_generator import generate_weekly_topics
+            from datetime import datetime, timedelta, timezone
+            _kst = timezone(timedelta(hours=9))
+            now = datetime.now(_kst)
+            monday = now + timedelta(days=(7 - now.weekday()))
+            return generate_weekly_topics(monday, days=7)
+        topics_weekday = int(os.getenv("WEEKLY_TOPICS_CRON_WEEKDAY", "3"))  # 0=월 ... 3=목
+        topics_hour = int(os.getenv("WEEKLY_TOPICS_CRON_HOUR", "9"))
+        topics_minute = int(os.getenv("WEEKLY_TOPICS_CRON_MINUTE", "0"))
+        add_weekly("주간 토픽 생성", topics_weekday, topics_hour, topics_minute, _cron_topics)
+    else:
+        print("[크론] 주간 토픽 생성 비활성화 — 수동 실행만 허용")
 
     def _cron_record():
         from modules.analytics.performance_tracker import record_daily

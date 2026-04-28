@@ -3,6 +3,15 @@
 import { useState, useEffect } from "react";
 import { loadSetting, saveSetting, setHydrated, CHANNEL_PRESETS } from "../constants";
 
+const LEGACY_VIDEO_MODEL_MAP: Record<string, string> = {
+  "veo-3.1-generate-preview": "veo-3.1-generate-001",
+  "veo-3.1-fast-generate-preview": "veo-3.1-fast-generate-001",
+  "veo-3.0-generate-preview": "veo-3.0-generate-001",
+  "veo-3.0-fast-generate-preview": "veo-3.0-fast-generate-001",
+};
+
+const normalizeVideoModel = (value: string): string => LEGACY_VIDEO_MODEL_MAP[value] || value;
+
 export function useLocalSettings() {
   const [qualityPreset, setQualityPreset] = useState(() => loadSetting("qualityPreset", "best"));
   const [llmProvider, setLlmProvider] = useState(() => loadSetting("llmProvider", "gemini"));
@@ -10,7 +19,7 @@ export function useLocalSettings() {
   const [imageEngine, setImageEngine] = useState(() => loadSetting("imageEngine", "imagen"));
   const [imageModel, setImageModel] = useState(() => loadSetting("imageModel", ""));
   const [videoEngine, setVideoEngine] = useState(() => loadSetting("videoEngine", "veo3"));
-  const [videoModel, setVideoModel] = useState(() => loadSetting("videoModel", "hero-only"));
+  const [videoModel, setVideoModelState] = useState(() => normalizeVideoModel(loadSetting("videoModel", "hero-only")));
   const [testMode, setTestMode] = useState(() => loadSetting("testMode", false));
   const [language, setLanguage] = useState(() => loadSetting("language", "ko"));
   const [cameraStyle, setCameraStyle] = useState(() => loadSetting("cameraStyle", "auto"));
@@ -37,7 +46,7 @@ export function useLocalSettings() {
     setImageEngine(_load("imageEngine", "imagen"));
     setImageModel(_load("imageModel", ""));
     setVideoEngine(_load("videoEngine", "veo3"));
-    setVideoModel(_load("videoModel", "hero-only"));
+    setVideoModelState(normalizeVideoModel(_load("videoModel", "hero-only")));
     setTestMode(_load("testMode", false));
     setLanguage(_load("language", "ko"));
     setCameraStyle(_load("cameraStyle", "auto"));
@@ -80,6 +89,10 @@ export function useLocalSettings() {
   useEffect(() => {
     try { localStorage.setItem("askanything_output_path", outputPath); } catch {}
   }, [outputPath]);
+
+  const setVideoModel = (value: string) => {
+    setVideoModelState(normalizeVideoModel(value));
+  };
 
   const applyPreset = (preset: string) => {
     setQualityPreset(preset);

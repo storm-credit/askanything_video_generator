@@ -1,10 +1,14 @@
 import os
 import re
 import json
+import math
 import shutil
 import subprocess
 import tempfile
 from datetime import datetime
+
+from modules.transcription.whisper import build_fallback_word_timestamps
+from modules.utils.audio import probe_audio_duration
 
 # 브랜드 이미지 (brand/ → assets/로 자동 복사하여 Remotion에서 접근)
 BRAND_DIR = "brand"
@@ -305,14 +309,32 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
         )):
             DEFAULT_CUT_SEC = 5.0
             MIN_CUT_SEC = 2.0
-            TAIL_PADDING = 0.4
-            if word_timestamps:
-                audio_end = word_timestamps[-1].get("end", 0)
-                duration_sec = max(MIN_CUT_SEC, audio_end + TAIL_PADDING)
+            TAIL_PADDING = 0.7
+            TIMESTAMP_GAP_TOLERANCE = 0.35
+            audio_duration_sec = probe_audio_duration(audio_path)
+            effective_timestamps = word_timestamps or []
+
+            if audio_duration_sec > 0:
+                covered_until = float(effective_timestamps[-1].get("end", 0.0)) if effective_timestamps else 0.0
+                needs_fallback = (
+                    not effective_timestamps
+                    or covered_until + TIMESTAMP_GAP_TOLERANCE < audio_duration_sec
+                )
+                if needs_fallback and _script:
+                    fallback = build_fallback_word_timestamps(_script, audio_duration_sec)
+                    if fallback:
+                        effective_timestamps = fallback
+
+            if effective_timestamps:
+                covered_until = float(effective_timestamps[-1].get("end", 0.0))
+                duration_anchor = max(covered_until, audio_duration_sec)
+                duration_sec = max(MIN_CUT_SEC, duration_anchor + TAIL_PADDING)
+            elif audio_duration_sec > 0:
+                duration_sec = max(MIN_CUT_SEC, audio_duration_sec + TAIL_PADDING)
             else:
                 duration_sec = DEFAULT_CUT_SEC
 
-            frames = max(int(duration_sec * fps), fps)
+            frames = max(math.ceil(duration_sec * fps), fps)
             cuts_duration += frames
 
             abs_visual = os.path.abspath(visual_path)
@@ -320,7 +342,7 @@ def create_remotion_video(visual_paths: list[str], audio_paths: list[str], scrip
             cut_entry: dict = {
                 "visual_path": path_map.get(abs_visual, visual_path),
                 "audio_path": path_map.get(abs_audio, audio_path),
-                "word_timestamps": word_timestamps or [],
+                "word_timestamps": effective_timestamps,
                 "duration_in_frames": frames,
             }
 

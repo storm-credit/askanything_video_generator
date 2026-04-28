@@ -30,6 +30,7 @@ from routes.shared import (
     VOICE_MAP,
     VOICE_ID_TO_NAME,
 )
+from modules.utils.hero_cuts import pick_hero_indices
 
 router = APIRouter(tags=["generate"])
 
@@ -438,6 +439,13 @@ async def generate_video_endpoint(req: GenerateRequest):
                 cut["script"] = prepare_spoken_script(cut.get("script", ""), language)
             scripts = [cut["script"] for cut in cuts]
 
+            video_target_indices = set(range(len(cuts)))
+            if video_model_override == "hero-only":
+                video_target_indices = set(pick_hero_indices(cuts, req.formatType))
+            if active_video_engine != "none" and video_model_override == "hero-only":
+                label = ", ".join(str(i + 1) for i in sorted(video_target_indices)) or "-"
+                yield {"data": f"[비디오] hero-only 모드 — Veo 대상 컷: {label} (나머지는 Ken Burns)\n"}
+
             # 이미지 엔진에 따라 생성 함수 선택
             gen_image_fn = generate_image_imagen if image_engine == "imagen" else generate_image_dalle
 
@@ -526,7 +534,11 @@ async def generate_video_endpoint(req: GenerateRequest):
                         video_result[0] = generate_video_from_image(
                             img_path, cut["prompt"], i, topic_folder, active_video_engine, cut_video_key,
                             description=cut.get("description", ""),
-                            veo_model=_actual_veo_model, gemini_api_keys=gemini_keys_override,
+                            veo_model=_actual_veo_model,
+                            gemini_api_keys=gemini_keys_override,
+                            format_type=req.formatType,
+                            camera_style=req.cameraStyle,
+                            use_hero_profile=video_model_override == "hero-only",
                         )
                     except Exception as exc:
                         with errors_lock:
@@ -570,21 +582,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                 _should_video = False
                 if img_path and active_video_engine != "none":
                     if video_model_override == "hero-only":
-                        # Hero cut만: 포맷별 핵심 감정 태그 컷만 비디오 생성 (비용 절감)
-                        _hero_by_format = {
-                            "WHO_WINS": {"SHOCK", "REVEAL", "DISBELIEF"},
-                            "IF": {"SHOCK", "REVEAL", "URGENCY"},
-                            "EMOTIONAL_SCI": {"WONDER", "REVEAL"},
-                            "FACT": {"SHOCK", "REVEAL"},
-                            "COUNTDOWN": {"SHOCK", "REVEAL"},
-                            "SCALE": {"SHOCK", "REVEAL"},
-                            "PARADOX": {"SHOCK", "REVEAL", "DISBELIEF"},
-                            "MYSTERY": {"SHOCK", "TENSION", "REVEAL"},
-                        }
-                        _hero_emotions = _hero_by_format.get((req.formatType or "FACT").upper(), {"SHOCK", "REVEAL"})
-                        _cut_desc = cut.get("description", "")
-                        _is_hero = any(f"[{e}]" in _cut_desc for e in _hero_emotions)
-                        if _is_hero:
+                        if i in video_target_indices:
                             _should_video = True
                         else:
                             print(f"[컷 {i+1}] 히어로 컷 아님 → Ken Burns 사용")
@@ -899,6 +897,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                             if str(p or "").lower().split("?")[0].endswith((".mp4", ".webm", ".mov"))
                         ) if active_video_engine != "none" else 0
                     ),
+                    video_model=os.getenv("VEO_MODEL") or video_model_override,
                     tts_chars=sum(len(s) for s in scripts if s),
                 )
             except Exception:

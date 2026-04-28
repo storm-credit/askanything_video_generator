@@ -70,14 +70,55 @@ def _interpolate_segment(
         return []
     char_counts = [max(len(w), 1) for w in words]
     total_chars = sum(char_counts)
-    duration = max(t_end - t_start, 0.08 * len(words))
+    available = max(t_end - t_start, 0.0)
+    if available <= 0:
+        return [{"word": w, "start": round(t_start, 3), "end": round(t_start, 3)} for w in words]
+
     t = t_start
+    elapsed = 0.0
     result = []
-    for w, chars in zip(words, char_counts):
-        dur = duration * chars / total_chars
-        result.append({"word": w, "start": round(t, 3), "end": round(t + dur, 3)})
-        t += dur
+    for index, (w, chars) in enumerate(zip(words, char_counts)):
+        if index == len(words) - 1:
+            next_t = t_end
+        else:
+            elapsed += available * chars / total_chars
+            next_t = min(t_start + elapsed, t_end)
+        result.append({"word": w, "start": round(t, 3), "end": round(max(next_t, t), 3)})
+        t = max(next_t, t)
     return result
+
+
+def _normalize_timestamp_rows(rows: list[dict], total_end: float | None = None) -> list[dict]:
+    """비단조/역전 타임스탬프를 렌더 친화적으로 정리한다."""
+    normalized: list[dict] = []
+    cursor = 0.0
+
+    for row in rows:
+        word = str(row.get("word") or "").strip()
+        if not word:
+            continue
+        start = max(float(row.get("start", cursor) or cursor), cursor)
+        end = max(float(row.get("end", start) or start), start)
+        if total_end is not None:
+            start = min(start, total_end)
+            end = min(max(end, start), total_end)
+        normalized.append({"word": word, "start": round(start, 3), "end": round(end, 3)})
+        cursor = end
+
+    return normalized
+
+
+def build_fallback_word_timestamps(script: str, audio_duration: float) -> list[dict]:
+    """Whisper 실패 시 스크립트와 오디오 길이만으로 coarse timestamps 생성."""
+    script_words = [word for word in script.split() if word]
+    if not script_words:
+        return []
+
+    total_end = max(float(audio_duration or 0.0), 0.12 * len(script_words))
+    return _normalize_timestamp_rows(
+        _interpolate_segment(script_words, 0.0, total_end),
+        total_end=total_end,
+    )
 
 
 def align_words_with_script(whisper_words: list[dict], script: str, lang: str = "ko") -> list[dict]:
@@ -114,7 +155,7 @@ def align_words_with_script(whisper_words: list[dict], script: str, lang: str = 
             if text is None:
                 break  # script 범위 초과 → 드롭
             aligned.append({"word": text, "start": w["start"], "end": w["end"]})
-        return aligned
+        return _normalize_timestamp_rows(aligned)
 
     # ── Case 2: LCS 앵커 정렬 + 보간 ────────────────────────────────────
     norm_script  = [_normalize_word(w) for w in script_words]
@@ -128,7 +169,10 @@ def align_words_with_script(whisper_words: list[dict], script: str, lang: str = 
     # 앵커 없음 → 전체 균등 분배
     if not anchors:
         print(f"  [자막 정렬] LCS 앵커 0개 — 글자 수 비례 균등 분배 ({lang})")
-        return _interpolate_segment(script_words, t_total_start, t_total_end)
+        return _normalize_timestamp_rows(
+            _interpolate_segment(script_words, t_total_start, t_total_end),
+            total_end=t_total_end,
+        )
 
     anchor_map: dict[int, tuple[float, float]] = {
         si: (whisper_words[wi]["start"], whisper_words[wi]["end"])
@@ -163,7 +207,7 @@ def align_words_with_script(whisper_words: list[dict], script: str, lang: str = 
     matched_ratio = len(anchors) / len(script_words) * 100
     print(f"  [자막 정렬] LCS 앵커 {len(anchors)}/{len(script_words)}개 매칭 ({matched_ratio:.0f}%) — 나머지 보간 ({lang})")
 
-    return result
+    return _normalize_timestamp_rows(result, total_end=t_total_end)
 
 
 def generate_word_timestamps(audio_path: str, api_key: str | None = None, language: str = "ko") -> list[dict]:

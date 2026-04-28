@@ -25,6 +25,8 @@ FRAGMENT: dict[str, str] = {
 
 [포맷: COUNTDOWN TOP N 랭킹 — 반드시 준수]
 이 영상은 "TOP N 카운트다운"의 구조다. 제목에 TOP 3/TOP 5처럼 숫자가 있으면 그 숫자를 정확히 따른다. 무기 TOP 주제에 숫자가 없으면 기본 TOP 3다. N위부터 1위까지 텐션이 자연스럽게 상승한다.
+이 포맷은 전역 "컷1 단일 피사체" 규칙을 명시적으로 덮어쓴다.
+컷1은 숫자 약속이 선명하다면 overview/콜라주형 도입이 가능하다.
 
 컷 구조 (8~10컷):
 - 컷1  [SHOCK]:   "세계에서 가장 X한 것 TOP N" — 제목 숫자로 약속. 질문형 금지.
@@ -87,6 +89,8 @@ If any check fails, rewrite everything.
 
 [FORMAT: COUNTDOWN TOP N Ranking — STRICTLY FOLLOW]
 This video is a "TOP N countdown" structure. If the title says TOP 3/TOP 5, follow that exact number. If a weapon topic has no explicit number, default to TOP 3. Tension naturally escalates from Nth to 1st place.
+This format EXPLICITLY overrides the generic single-subject Cut 1 rule.
+Cut 1 may open with a ranked promise or broad overview if the number hook is crystal clear.
 
 Cut structure (8~10 cuts):
 - Cut 1  [SHOCK]:   "The TOP N most X things in the world" — promise with the title's number. NO questions.
@@ -149,6 +153,8 @@ Si falla cualquier verificación, reescribir todo.
 
 [FORMATO: COUNTDOWN TOP N Ranking — SEGUIR ESTRICTAMENTE]
 Este video es una estructura de "TOP N cuenta regresiva." Si el título dice TOP 3/TOP 5, sigue ese número exacto. Si un tema de armas no trae número explícito, usa TOP 3. La tensión sube naturalmente del puesto N al 1° lugar.
+Este formato ANULA explícitamente la regla genérica de un solo sujeto en el Corte 1.
+El Corte 1 puede abrir con una promesa de ranking o una vista general si el gancho numérico es clarísimo.
 
 Estructura de cortes (8~10 cortes):
 - Corte 1  [SHOCK]:   "Las TOP N cosas más X del mundo" — promesa con el número del título. SIN preguntas.

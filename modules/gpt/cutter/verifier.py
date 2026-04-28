@@ -4,15 +4,8 @@ from .llm_client import _request_gemini_freeform, _request_openai_freeform
 
 def _get_channel_hook_profile(channel: str | None) -> str:
     """채널별 컷1 훅 성격 가이드."""
-    if channel == "askanything":
-        return "askanything = bold, punchy Korean curiosity hook. Strong questions allowed. Weak 'did you know' style is bad."
-    if channel == "wonderdrop":
-        return "wonderdrop = calm, authoritative documentary opener. Prefer declarative cinematic confidence over casual questions."
-    if channel == "exploratodo":
-        return "exploratodo = energetic LATAM opener. Fast, urgent, high-click energy. Formal tone is bad."
-    if channel == "prismtale":
-        return "prismtale = dark, mysterious declaration. Ominous and cinematic. Avoid playful or generic openers."
-    return "default = short, strong, curiosity-driven opener."
+    from modules.utils.channel_config import get_channel_hook_profile as _get_profile
+    return _get_profile(channel)
 
 
 def _verify_subject_match(cuts: list[dict], topic: str,

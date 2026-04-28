@@ -50,6 +50,14 @@ export type RenderResult = {
   errorMsg?: string;
 };
 
+export const VIDEO_MODEL_LABELS: Record<string, string> = {
+  "hero-only": "Hero Only",
+  "veo-3.1-fast-generate-001": "Veo 3.1 Fast",
+  "veo-3.1-generate-001": "Veo 3.1 Standard",
+  "veo-3.0-fast-generate-001": "Veo 3 Fast",
+  "veo-3.0-generate-001": "Veo 3 Standard",
+};
+
 // LLM/Image/Video model options (requires remainLabel function from caller)
 export const getLLM_MODELS = (remainLabel: (id: string) => string): Record<string, { value: string; label: string }[]> => ({
   gemini: [
@@ -85,8 +93,11 @@ export const getIMAGE_MODELS = (remainLabel: (id: string) => string): Record<str
 
 export const getVIDEO_MODELS = (remainLabel: (id: string) => string): Record<string, { value: string; label: string }[]> => ({
   veo3: [
-    { value: "", label: `Veo 3 Standard (\uae30\ubcf8)${remainLabel("veo-3.0-generate-001")}` },
+    { value: "", label: `Veo 3.1 Fast (\uae30\ubcf8)${remainLabel("veo-3.1-fast-generate-001")}` },
+    { value: "veo-3.1-fast-generate-001", label: `Veo 3.1 Fast${remainLabel("veo-3.1-fast-generate-001")}` },
+    { value: "veo-3.1-generate-001", label: `Veo 3.1 Standard${remainLabel("veo-3.1-generate-001")}` },
     { value: "veo-3.0-fast-generate-001", label: `Veo 3 Fast${remainLabel("veo-3.0-fast-generate-001")}` },
+    { value: "veo-3.0-generate-001", label: `Veo 3 Standard${remainLabel("veo-3.0-generate-001")}` },
     { value: "hero-only", label: "Hero Only (SHOCK/REVEAL\ub9cc \uc601\uc0c1)" },
   ],
   sora2: [{ value: "", label: "Sora 2 (\uae30\ubcf8)" }],

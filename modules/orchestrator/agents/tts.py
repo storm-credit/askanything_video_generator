@@ -20,8 +20,12 @@ class TTSAgent(BaseAgent):
 
     async def execute(self, ctx: AgentContext) -> AsyncGenerator[str, None]:
         from modules.tts.elevenlabs import generate_tts, prepare_spoken_script
-        from modules.transcription.whisper import generate_word_timestamps, align_words_with_script
-        from modules.utils.audio import normalize_audio_lufs
+        from modules.transcription.whisper import (
+            align_words_with_script,
+            build_fallback_word_timestamps,
+            generate_word_timestamps,
+        )
+        from modules.utils.audio import normalize_audio_lufs, probe_audio_duration
         from modules.utils.channel_config import get_channel_preset
 
         if not ctx.cuts:
@@ -54,7 +58,7 @@ class TTSAgent(BaseAgent):
             # 감정 태그 추출
             emotion = None
             desc = cut.get("description", cut.get("text", ""))
-            for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY", "CALM"]:
+            for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY", "CALM", "LOOP"]:
                 if f"[{tag}]" in desc:
                     emotion = tag
                     break
@@ -87,6 +91,9 @@ class TTSAgent(BaseAgent):
                     timestamps = align_words_with_script(raw_ts, spoken_script, lang=ctx.language)
                 except Exception as exc:
                     print(f"[TTSAgent] 컷 {i+1} 타임스탬프 실패: {exc}")
+            if audio_path and not timestamps:
+                audio_duration = probe_audio_duration(audio_path)
+                timestamps = build_fallback_word_timestamps(spoken_script, audio_duration)
 
             return i, audio_path, timestamps
 

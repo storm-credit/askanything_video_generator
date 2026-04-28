@@ -35,6 +35,13 @@ If the topic is given in a non-English language, translate it and write the scri
 - ❌ "This is an interesting fact" ❌ "Today we'll look at..." ❌ "Have you ever wondered..."
 - ✅ "A black hole stretches you like spaghetti" ✅ "This should not exist" ✅ "It rains diamonds on this planet"
 
+[FORMAT-SPECIFIC CUT 1 OVERRIDES — when a format fragment is injected, this block outranks the generic rule above]
+- IF: Cut 1 MAY be a premise question. "What if...?" is allowed and preferred.
+- WHO_WINS: Cut 1 MAY show both subjects together and ask the duel question.
+- COUNTDOWN: Cut 1 MAY use a ranked promise or overview composition instead of one solo subject.
+- EMOTIONAL_SCI: Cut 1 MAY be a concrete relatable question, but never a vague filler question.
+- All other formats should keep the default declarative + single-subject Cut 1 rule.
+
 ★★★ [Cut 1 image_prompt — SCROLL-STOPPING MANDATORY] ★★★
 - Cut 1 image is the ONLY chance to stop the scroll in the Shorts feed. If it fails, nothing else matters.
 - MUST include at least 2 of these:
@@ -47,15 +54,15 @@ If the topic is given in a non-English language, translate it and write the scri
 - ✅ "A single glowing jellyfish in pitch-black ocean, extreme contrast"
 - Cut 1 image_prompt MUST start with the most visually shocking element
 
-📊 [CHANNEL DATA — wonderdrop optimization] (2026-04-04 data)
-- Total 27.7K views, avg 555 per video (50 videos) — lowest of 4 channels
-- Top performers: "Sword Dragon" 1.3K, "Moon Moving Away" 1.3K, "Honey Egyptian Tombs" 1.2K, "Lightning vs Sun" 1.2K
-- Strong categories: dinosaur/fossil (avg 750+), space/astronomy (avg 650+), history facts (avg 600+)
-- ⚠️ Human body/psychology topics extremely weak (under 100 views in EN) — AVOID
-- ❌ Explanatory "How/Why" titles perform worse: "How Do Whales Hold Their Breath" → weak
-- ✅ Declarative/visual titles perform best: "The Exoplanet That Smells Like Rotten Eggs" → strong
-- ❌ Videos over 45 seconds tend to underperform — keep it tight
-- ✅ Netflix-documentary visual style: clean, one subject centered, cinematic lighting
+📊 [CHANNEL STRATEGY — wonderdrop]
+- This channel works best with one concrete subject + one surprising fact or paradox.
+- Strong lanes: dinosaurs/fossils, space/astronomy, visually clean history surprises.
+- ✅ Declarative visual framing beats generic explanatory "How/Why" framing.
+- ✅ Concrete nouns and tangible images outperform abstract curiosity.
+- ❌ "Who wins", versus, and broad comparison hooks are currently weak here — avoid by default.
+- ❌ Human body/psychology topics remain weak unless the visual is unusually striking.
+- Keep runtimes tight, usually under ~42 seconds.
+- Visual tone: clean documentary, centered subject, cinematic light, low clutter.
 
 [Structure Patterns — auto-select the best fit for the topic]
 
@@ -91,7 +98,7 @@ If the topic risks becoming a list of unconnected facts, use Pattern D (investig
   ✅ Last cut: "But this is just the beginning" — series feel
   ❌ "Part 1", "Next episode" labels FORBIDDEN — use natural intrigue instead
 
-[Pattern A: Haynes Structure (8–9 cuts, ~4–5 sec each, 35–45 sec total)]
+[Pattern A: Haynes Structure (8–9 cuts, ~3.5–4.5 sec each, 30–36 sec total)]
 1. Cut 1 — Hook: Drop the most shocking fact as a declarative statement. NO questions. ★ 1.7-SEC RULE: image_prompt MUST have extreme visual impact (scale, color contrast, surreal).
    Hook archetypes (rotate — never use same type 3x in a row):
    ① Impossibility: "This should NOT exist" ② Number anchor: "400 degrees. Underwater."
@@ -122,12 +129,12 @@ If the topic risks becoming a list of unconnected facts, use Pattern D (investig
    ❌ "I already told you at the beginning" — meta 4th-wall breaking FORBIDDEN
 
 [Script Rules — Qwen3-TTS Optimized]
-* Calm cinematic documentary voice. 8-12 words per cut mandatory (3-4 sec). Under 6 = FAIL. One sentence. Vary structures. SHORTER = BETTER.
+* Calm cinematic documentary voice. 7-11 words per cut mandatory (2.5-4 sec). Under 6 = FAIL. One sentence. Vary structures. SHORTER = BETTER.
 * Adjacent cuts must not repeat the same opening phrase, predicate, or core wording with light paraphrase. If a fact angle is already stated, the next cut must move to a different angle.
 * NEVER start with academic phrases: "According to research", "Scientists discovered", "Studies show", "Researchers found" → Drop the fact directly.
   ❌ "According to NASA, this planet has diamond rain" → ✅ "This planet rains diamonds."
   ❌ "Researchers discovered that..." → ✅ "This creature hasn't aged in 200 years."
-* [CRITICAL WARNING] 8-10 cuts. Target 35-45 seconds. NEVER less than 8 cuts. Sweet spot is 35-43 seconds.
+* [CRITICAL WARNING] 8-9 cuts by default. Target 30-38 seconds. NEVER less than 8 cuts unless the channel override says otherwise.
 * USE can't/won't/doesn't. AVOID would've/could've (Qwen3 garbles these).
 * Sentence endings by emotion tag (voice_desc carries tone — do NOT over-write):
   [SHOCK]     Short declarative punch: "...and it's only getting worse."
