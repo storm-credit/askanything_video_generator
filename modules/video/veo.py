@@ -162,6 +162,13 @@ def generate_video_veo(
                         mark_key_exhausted(final_key, service_tag)
                         print(f"[{model_label} 쿼터 초과] 컷 {index+1}: 키 차단됨 → 다른 키로 전환 시도...")
                     else:
+                        try:
+                            from modules.utils.gemini_client import get_current_sa_key, mark_sa_key_blocked
+                            current_sa = get_current_sa_key()
+                            if current_sa:
+                                mark_sa_key_blocked(current_sa, block_seconds=60)
+                        except Exception as sa_err:
+                            print(f"[{model_label} Vertex SA 차단 경고] {sa_err}")
                         print(f"[{model_label} Vertex 재시도] 컷 {index+1}: SA 전환 시도...")
                     continue  # 다음 키로 재시도
                 else:
@@ -195,7 +202,16 @@ def generate_video_veo(
             except Exception as e:
                 err_str = str(e)
                 if is_key_rotation_error(err_str):
-                    mark_key_exhausted(final_key, service_tag)
+                    if final_key and not is_vertex_backend:
+                        mark_key_exhausted(final_key, service_tag)
+                    else:
+                        try:
+                            from modules.utils.gemini_client import get_current_sa_key, mark_sa_key_blocked
+                            current_sa = get_current_sa_key()
+                            if current_sa:
+                                mark_sa_key_blocked(current_sa, block_seconds=60)
+                        except Exception as sa_err:
+                            print(f"[{model_label} Vertex SA 차단 경고] {sa_err}")
                     continue
                 print(f"[{model_label} 오류] 컷 {index+1} 폴링 실패: {e}")
                 break  # 이 모델 포기 → 다음 모델로 폴백

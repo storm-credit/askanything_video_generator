@@ -72,15 +72,24 @@ def _ensure_format_metadata_tags(cuts: list[dict], format_type: str | None) -> N
         return
 
     fmt = format_type.upper()
+    emotion_tag_pattern = re.compile(
+        r"\[(SHOCK|WONDER|TENSION|REVEAL|URGENCY|DISBELIEF|IDENTITY|CALM|LOOP)\]",
+        re.IGNORECASE,
+    )
+
+    def _set_cut_desc(cut: dict, desc: str) -> None:
+        cut["description"] = desc
+        cut["text"] = desc
+
     if fmt == "IF":
         expected_roles = {
-            1: "SETUP",
-            2: "CHAIN_1",
-            3: "CHAIN_2",
-            4: "ESCALATE",
-            5: "CHAIN_3",
-            6: "BUILD",
-            7: "CLIMAX",
+            1: "SHOCK",
+            2: "SETUP",
+            3: "CHAIN_1",
+            4: "CHAIN_2",
+            5: "ESCALATE",
+            6: "CHAIN_3",
+            7: "BUILD",
             8: "PIVOT",
             9: "REVEAL",
         }
@@ -91,15 +100,25 @@ def _ensure_format_metadata_tags(cuts: list[dict], format_type: str | None) -> N
             desc = cuts[cut_index].get("description", cuts[cut_index].get("text", "")) or ""
             if f"[{role}]" not in desc.upper():
                 fixed = f"{desc.rstrip()} [{role}]".strip()
-                cuts[cut_index]["description"] = fixed
-                cuts[cut_index]["text"] = fixed
+                _set_cut_desc(cuts[cut_index], fixed)
+
+    if fmt == "EMOTIONAL_SCI":
+        # 감성과학은 호기심/공감 기반 포맷이라 [SHOCK]가 hard fail이다.
+        # 생성·rewrite 어느 단계에서 들어와도 게이트 직전에 안전 태그로 치환한다.
+        for cut_index, cut in enumerate(cuts):
+            desc = cut.get("description", cut.get("text", "")) or ""
+            replacement = "[WONDER]" if cut_index == 0 else "[TENSION]"
+            fixed = re.sub(r"\[SHOCK\]", replacement, desc, flags=re.IGNORECASE)
+            if cut_index == 0 and not emotion_tag_pattern.search(fixed):
+                fixed = f"{fixed.rstrip()} [WONDER]".strip()
+            if fixed != desc:
+                _set_cut_desc(cut, fixed)
 
     if fmt != "EMOTIONAL_SCI":
         last_desc = cuts[-1].get("description", cuts[-1].get("text", "")) or ""
         if "[LOOP]" not in last_desc.upper():
             fixed = f"{last_desc.rstrip()} [LOOP]".strip()
-            cuts[-1]["description"] = fixed
-            cuts[-1]["text"] = fixed
+            _set_cut_desc(cuts[-1], fixed)
 
 
 def _strip_countdown_cues(text: str) -> str:

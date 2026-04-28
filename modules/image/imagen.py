@@ -162,6 +162,14 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
                 if is_key_rotation_error(error_msg):
                     if final_api_key and not is_vertex_backend:
                         mark_key_exhausted(final_api_key, service_tag)
+                    elif is_vertex_backend:
+                        try:
+                            from modules.utils.gemini_client import get_current_sa_key, mark_sa_key_blocked
+                            current_sa = get_current_sa_key()
+                            if current_sa:
+                                mark_sa_key_blocked(current_sa, block_seconds=60)
+                        except Exception as sa_err:
+                            print(f"  [{model_label} Vertex SA 차단 경고] {sa_err}")
                     # 지수 백오프: 다음 키 시도 전 잠시 대기
                     backoff = exponential_backoff_wait(key_attempt, base=2.0, max_wait=30)
                     if final_api_key and not is_vertex_backend:
@@ -295,6 +303,13 @@ def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_k
                         mark_key_exhausted(final_key, service_tag)
                         print(f"  [Nano Banana 키 전환] 컷 {index+1}: {mask_key(final_key)} 차단 → 다른 키로")
                     else:
+                        try:
+                            from modules.utils.gemini_client import get_current_sa_key, mark_sa_key_blocked
+                            current_sa = get_current_sa_key()
+                            if current_sa:
+                                mark_sa_key_blocked(current_sa, block_seconds=60)
+                        except Exception as sa_err:
+                            print(f"  [Nano Banana Vertex SA 차단 경고] {sa_err}")
                         print(f"  [Nano Banana Vertex 재시도] 컷 {index+1}: 다른 SA로 전환")
                     continue
                 print(f"  [Nano Banana] {model_name} 실패: {e}")

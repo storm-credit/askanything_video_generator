@@ -96,8 +96,6 @@ export function UploadModal({
     handlePlatformAuth, checkPlatformStatus,
   } = platformAuth;
 
-  if (!show) return null;
-
   const handleUpload = async () => {
     if (!generatedVideoPath) return;
     setUploading(true);
@@ -206,6 +204,7 @@ export function UploadModal({
             publish_at: scheduleEnabled && scheduleDate ? new Date(scheduleDate).toISOString() : null,
             format_type: initialFormatType || undefined,
             series_title: initialSeriesTitle || undefined,
+            channel: uploadChannel || undefined,
           }),
         });
         setMetadataPreview(await res.json());
@@ -228,9 +227,12 @@ export function UploadModal({
     scheduleDate,
     initialFormatType,
     initialSeriesTitle,
+    uploadChannel,
     topic,
     youtubeTagsKey,
   ]);
+
+  if (!show) return null;
 
   return (
     <motion.div

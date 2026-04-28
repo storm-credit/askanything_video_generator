@@ -231,6 +231,38 @@ async def generate_video_endpoint(req: GenerateRequest):
         cut1_ab_variants: list = []
         video_desc = ""
         video_tags: list = []
+        cost_recorded = False
+        generation_completed = False
+        generation_cancelled = False
+
+        def _record_generation_cost_once(
+            *,
+            success: bool,
+            llm_usd: float = 0.0,
+            image_count: int = 0,
+            video_count: int = 0,
+            video_model: str | None = None,
+            tts_chars: int = 0,
+        ) -> None:
+            nonlocal cost_recorded
+            if cost_recorded:
+                return
+            try:
+                from modules.utils.cost_tracker import record_generation_cost
+                record_generation_cost(
+                    channel=req.channel or "unknown",
+                    success=success,
+                    llm_usd=llm_usd,
+                    image_count=image_count,
+                    video_count=video_count,
+                    video_model=video_model,
+                    tts_chars=tts_chars,
+                )
+            except Exception:
+                pass  # 비용 기록 실패가 파이프라인을 중단하면 안 됨
+            finally:
+                cost_recorded = True
+
         # 새 작업 등록 (요청별 이벤트로 격리, 자동 취소 없음)
         import time as _t
         cancel_event = threading.Event()
@@ -401,11 +433,13 @@ async def generate_video_endpoint(req: GenerateRequest):
                 yield {"data": f"INFO|검수용 초안 생성 완료 (job_id={_review_job_id})\n"}
                 yield {"data": f"REVIEW_READY|{json.dumps(review_payload, ensure_ascii=False)}\n"}
                 yield {"data": "PROG|100\n"}
+                generation_completed = True
                 yield {"data": f"DONE|{topic_folder}\n"}
                 return
 
             # 취소 체크포인트 1: LLM 기획 후
             if _is_cancelled():
+                generation_cancelled = True
                 yield {"data": "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"}
                 return
 
@@ -644,6 +678,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 취소 체크포인트 2: 컷 생성 후
             if _is_cancelled():
+                generation_cancelled = True
                 yield {"data": "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"}
                 return
 
@@ -663,6 +698,7 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 취소 체크포인트 3: 렌더링 시작 전
             if _is_cancelled():
+                generation_cancelled = True
                 yield {"data": "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"}
                 return
 
@@ -879,29 +915,30 @@ async def generate_video_endpoint(req: GenerateRequest):
 
             # 비용 추적 (단일 생성 경로)
             try:
-                from modules.utils.cost_tracker import record_generation_cost, calc_llm_cost
+                from modules.utils.cost_tracker import calc_llm_cost
                 _n_cuts = len(cuts) if cuts else 0
                 _llm_model = req.llmModel or "gemini-2.5-pro"
                 # LLM 토큰 추정: 시스템 프롬프트 ~10K + 검증/강화 ~5K, 출력 ~500/cut
                 _est_input = 15000 + _n_cuts * 500
                 _est_output = _n_cuts * 500
                 _llm_usd = calc_llm_cost(_llm_model, _est_input, _est_output)
-                record_generation_cost(
-                    channel=req.channel or "unknown",
-                    success=True,
-                    llm_usd=_llm_usd,
-                    image_count=_n_cuts + len(cut1_ab_variants if "cut1_ab_variants" in locals() else []),
-                    video_count=(
-                        sum(
-                            1 for p in visual_paths
-                            if str(p or "").lower().split("?")[0].endswith((".mp4", ".webm", ".mov"))
-                        ) if active_video_engine != "none" else 0
-                    ),
-                    video_model=os.getenv("VEO_MODEL") or video_model_override,
-                    tts_chars=sum(len(s) for s in scripts if s),
-                )
             except Exception:
-                pass  # 비용 기록 실패가 파이프라인을 중단하면 안 됨
+                _n_cuts = len(cuts) if cuts else 0
+                _llm_usd = 0.0
+            _record_generation_cost_once(
+                success=True,
+                llm_usd=_llm_usd,
+                image_count=_n_cuts + len(cut1_ab_variants if "cut1_ab_variants" in locals() else []),
+                video_count=(
+                    sum(
+                        1 for p in visual_paths
+                        if str(p or "").lower().split("?")[0].endswith((".mp4", ".webm", ".mov"))
+                    ) if active_video_engine != "none" else 0
+                ),
+                video_model=os.getenv("VEO_MODEL") or video_model_override,
+                tts_chars=sum(len(s) for s in scripts if s),
+            )
+            generation_completed = True
 
             yield {"data": f"DONE|{relative_video_path}|{thumb_relative}\n"}
 
@@ -921,6 +958,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                 safe_msg = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", err_str[:200])
                 yield {"data": f"ERROR|[시스템 오류] {safe_msg}\n"}
           finally:
+            if not generation_completed and not generation_cancelled:
+                _record_generation_cost_once(success=False)
             # 작업 완료/취소 후 정리
             with generation_lock:
                 active_generation_ids.discard(generation_id)

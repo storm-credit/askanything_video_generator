@@ -1157,8 +1157,11 @@ async def _prepare_render_upload_via_preview_flow(
     description = preview_data.get("description") or ""
     tags = [str(t).lstrip("#").strip() for t in (preview_data.get("tags") or []) if str(t).strip()][:5]
 
+    from modules.upload.youtube.upload import _prepare_youtube_metadata
     from modules.upload.youtube import upload_video as yt_upload
     from modules.utils.channel_config import get_upload_account
+
+    description, tags = _prepare_youtube_metadata(description, tags)
 
     sched_dt = datetime.fromisoformat(publish_at.replace("Z", "+00:00"))
     if sched_dt.tzinfo is None:
@@ -1404,7 +1407,6 @@ async def run_auto_deploy(target_date: datetime | None = None,
             "started_at": datetime.now(KST).isoformat(),
             "finished_at": None,
         }
-        _save_state()
 
     try:
         # 1. Day 파일 파싱

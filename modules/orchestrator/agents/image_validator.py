@@ -178,7 +178,7 @@ def validate_and_retry(image_path: str, prompt: str, cut_index: int,
                 )
         else:
             print(f"  [ImageValidator] 미지원 엔진 '{image_engine}' — 재생성 스킵")
-            return image_path
+            raise RuntimeError(f"Image validation failed and engine '{image_engine}' cannot regenerate")
 
         if new_path and os.path.exists(new_path):
             # 2차 검수
@@ -187,9 +187,10 @@ def validate_and_retry(image_path: str, prompt: str, cut_index: int,
                 print(f"  [ImageValidator] 컷 {cut_index+1} 재생성 후 통과 (score={result2.get('score', '?')})")
                 return new_path
             else:
-                print(f"  [ImageValidator] 컷 {cut_index+1} 재생성도 실패 — 원본 사용")
-                return image_path
+                reason = result2.get("reason", "unknown")
+                print(f"  [ImageValidator] 컷 {cut_index+1} 재생성도 실패 — 파이프라인 중단")
+                raise RuntimeError(f"Image validation failed after regeneration: {reason}")
+        raise RuntimeError("Image validation failed and regeneration returned no image")
     except Exception as e:
         print(f"  [ImageValidator] 컷 {cut_index+1} 재생성 실패: {e}")
-
-    return image_path
+        raise

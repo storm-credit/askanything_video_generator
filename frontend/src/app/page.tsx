@@ -279,10 +279,10 @@ export default function Home() {
 
   // Today topic select handler
   const handleSelectTodayTopic = (t: any) => {
-    const topicName = t.topic_group?.replace(/^[^\s]+\s*/, "") || t.topic_group;
+    const topicName = t.topic_group || t.topic || "";
     setTopic(topicName);
-    setTodayCuts(null);
     const channelMeta: Record<string, UploadTopicMeta> = {};
+    const channelCuts: Record<string, any[]> = {};
     if (t.channels) {
       for (const [ch, chData] of Object.entries(t.channels as Record<string, any>)) {
         channelMeta[ch] = {
@@ -295,9 +295,13 @@ export default function Home() {
           sourceSection: t.source_section || "",
           obsidianUri: t.obsidian_uri || "",
         };
+        if (Array.isArray(chData.cuts) && chData.cuts.length > 0) {
+          channelCuts[ch] = chData.cuts;
+        }
       }
     }
     setTodayMeta(Object.keys(channelMeta).length > 0 ? channelMeta : null);
+    setTodayCuts(Object.keys(channelCuts).length > 0 ? channelCuts : null);
     const topicChannels = Object.keys(t.channels || {});
     if (topicChannels.length > 0) {
       settings.setSelectedChannels(topicChannels);

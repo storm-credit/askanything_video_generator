@@ -85,7 +85,7 @@ class PrepareRequest(BaseModel):
     @field_validator("imageEngine")
     @classmethod
     def valid_image_engine(cls, v: str) -> str:
-        allowed = {"imagen", "dalle"}
+        allowed = {"imagen", "dalle", "nano_banana"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 이미지 엔진: {v}. 허용: {allowed}")
         return v
