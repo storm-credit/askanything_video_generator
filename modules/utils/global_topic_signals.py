@@ -57,7 +57,7 @@ def ensure_db() -> None:
         conn.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_global_topic_signals_score
-            ON global_topic_signals(locale, views DESC, published_at DESC)
+            ON global_topic_signals(locale, published_at DESC, views DESC)
             """
         )
         conn.execute(
@@ -151,7 +151,7 @@ def list_signals(
     sql = "SELECT * FROM global_topic_signals"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY views DESC, published_at DESC, fetched_at DESC LIMIT ?"
+    sql += " ORDER BY published_at DESC, views DESC, fetched_at DESC LIMIT ?"
     params.append(max(1, min(int(limit), 500)))
     with _connect() as conn:
         rows = conn.execute(sql, params).fetchall()

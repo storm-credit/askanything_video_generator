@@ -169,7 +169,7 @@ def _search_video_ids(
     params: dict[str, Any] = {
         "part": "snippet",
         "type": "video",
-        "order": "viewCount",
+        "order": os.getenv("TOPIC_BENCHMARK_SEARCH_ORDER", "viewCount").strip() or "viewCount",
         "videoDuration": "short",
         "maxResults": min(max_results, 50),
         "safeSearch": "none",
