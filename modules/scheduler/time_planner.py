@@ -43,8 +43,8 @@ CHANNEL_WINDOWS = {
     },
 }
 
-LEAD_CHANNEL_FIRST_ENABLED = os.getenv("LEAD_CHANNEL_FIRST_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
-LEAD_CHANNEL_FIRST_GROUPS_PER_DAY = max(0, int(os.getenv("LEAD_CHANNEL_FIRST_GROUPS_PER_DAY", "1")))
+LEAD_CHANNEL_FIRST_ENABLED = os.getenv("LEAD_CHANNEL_FIRST_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+LEAD_CHANNEL_FIRST_GROUPS_PER_DAY = max(0, int(os.getenv("LEAD_CHANNEL_FIRST_GROUPS_PER_DAY", "0")))
 
 
 def _get_window_bounds(base_date: datetime, window: dict[str, Any]) -> tuple[datetime, datetime, float]:

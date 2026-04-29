@@ -62,7 +62,7 @@ async def _lifespan(app):
     else:
         print("[크론] 자동 배포 비활성화 — AUTO_DEPLOY_CRON_ENABLED=true 설정 시 활성화")
 
-    rollout_expansion_enabled = os.getenv("ROLLOUT_EXPANSION_CRON_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    rollout_expansion_enabled = os.getenv("ROLLOUT_EXPANSION_CRON_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
     async def _cron_rollout_expansion():
         from modules.scheduler.auto_deploy import process_rollout_expansions
         limit_raw = os.getenv("ROLLOUT_EXPANSION_LIMIT", "6").strip()
