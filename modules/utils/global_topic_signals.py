@@ -158,12 +158,37 @@ def list_signals(
     return [dict(row) for row in rows]
 
 
+def get_signal_summary() -> dict[str, Any]:
+    """Return a compact health summary for external benchmark signals."""
+    ensure_db()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                MAX(views) AS max_views,
+                MAX(fetched_at) AS last_fetched_at,
+                COUNT(DISTINCT source_channel) AS source_channels
+            FROM global_topic_signals
+            """
+        ).fetchone()
+    return dict(row) if row else {
+        "total": 0,
+        "max_views": 0,
+        "last_fetched_at": None,
+        "source_channels": 0,
+    }
+
+
 def build_topic_signals_context(limit: int = 30) -> str:
     """Compact prompt context for topic generation."""
     signals = list_signals(limit=limit)
     if not signals:
         return (
-            "외부 나라별/글로벌 벤치마크 신호 없음 — 내부 4채널 성과와 최신성 후보를 우선한다."
+            "외부 나라별/글로벌 벤치마크 신호 0건 — "
+            "YOUTUBE_API_KEY_BENCHMARK 또는 TOPIC_BENCHMARK_SEARCH_QUERIES/"
+            "TOPIC_BENCHMARK_CHANNEL_IDS 설정을 확인해야 한다. "
+            "이 상태에서는 100만뷰 외부 모티브가 약해지고 내부 4채널 성과/최신성 후보만 보조로 쓰인다."
         )
 
     lines = [

@@ -559,12 +559,25 @@ def _get_global_topic_signals_context() -> str:
     """외부 나라별/글로벌 벤치마크 신호를 토픽 생성 컨텍스트로 압축한다."""
     try:
         from modules.utils.global_topic_signals import build_topic_signals_context
+        from modules.utils.youtube_benchmark import refresh_global_topic_signals
 
         limit = int(os.getenv("TOPIC_GLOBAL_SIGNALS_LIMIT", "30"))
-        return build_topic_signals_context(limit=limit)
+        refresh_note = ""
+        if os.getenv("TOPIC_BENCHMARK_AUTO_REFRESH", "true").lower() in {"1", "true", "yes", "on"}:
+            result = refresh_global_topic_signals(force=False)
+            if result.get("skipped"):
+                refresh_note = f"외부 벤치마크 수집 상태: {result.get('reason')}"
+            else:
+                refresh_note = (
+                    "외부 벤치마크 수집 상태: "
+                    f"scanned={result.get('scanned', 0)}, stored={result.get('stored', 0)}, "
+                    f"min_views={result.get('min_views', 0)}"
+                )
+        context = build_topic_signals_context(limit=limit)
+        return f"{refresh_note}\n{context}".strip() if refresh_note else context
     except Exception as e:
         print(f"[토픽 생성] 글로벌 토픽 신호 로드 실패: {e}")
-        return "외부 나라별/글로벌 벤치마크 신호 로드 실패 — 내부 4채널 성과를 우선한다."
+        return "외부 나라별/글로벌 벤치마크 신호 로드 실패 — 100만뷰 외부 모티브 수집 상태 점검 필요."
 
 
 def _get_last_day_number() -> int:

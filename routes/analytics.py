@@ -96,6 +96,14 @@ async def analytics_global_topic_signals(
     return {"success": True, "signals": signals, "total": len(signals)}
 
 
+@router.post("/analytics/global-topic-signals/refresh")
+async def analytics_global_topic_signals_refresh(force: bool = True):
+    """외부 YouTube 100만뷰 벤치마크 신호를 수집한다."""
+    from modules.utils.youtube_benchmark import refresh_global_topic_signals
+
+    return refresh_global_topic_signals(force=force)
+
+
 @router.get("/analytics/tone-report")
 async def analytics_tone_report():
     from modules.analytics.performance_tracker import get_tone_change_report
