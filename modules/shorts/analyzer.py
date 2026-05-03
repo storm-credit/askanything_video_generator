@@ -99,9 +99,12 @@ def _extract_metadata(url: str) -> dict[str, Any]:
 def _transcribe(audio_path: str, api_key: str | None = None) -> str:
     """Whisper API로 전사. 전체 텍스트 반환."""
     from openai import OpenAI
+    from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
 
-    key = api_key or os.getenv("OPENAI_API_KEY")
+    key = get_openai_api_key(api_key)
     if not key:
+        if is_openai_api_disabled():
+            raise RuntimeError("OpenAI API가 비활성화되어 Whisper 전사를 실행하지 않습니다.")
         raise RuntimeError("Whisper 전사에 OPENAI_API_KEY가 필요합니다.")
 
     client = OpenAI(api_key=key)
@@ -223,8 +226,11 @@ Return ONLY this JSON:
         raw = _request_claude(key, system_prompt, user_content)
     else:
         from modules.gpt.cutter import _request_openai_freeform
-        key = llm_key or os.getenv("OPENAI_API_KEY")
+        from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
+        key = get_openai_api_key(llm_key)
         if not key:
+            if is_openai_api_disabled():
+                raise RuntimeError("OpenAI API가 비활성화되어 분석 LLM을 실행하지 않습니다.")
             raise RuntimeError("OpenAI API 키가 없습니다.")
         raw = _request_openai_freeform(key, system_prompt, user_content)
 

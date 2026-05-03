@@ -198,7 +198,8 @@ class ModelRouter:
             from modules.utils.keys import count_available_keys
             return count_available_keys(extra_keys=ctx.gemini_keys_override) > 0
         elif provider == "openai":
-            key = ctx.api_key_override or os.getenv("OPENAI_API_KEY", "")
+            from modules.utils.provider_policy import get_openai_api_key
+            key = get_openai_api_key(ctx.api_key_override)
             return bool(key) and not key.startswith("sk-proj-YOUR")
         elif provider == "claude":
             return bool(os.getenv("ANTHROPIC_API_KEY", ""))
@@ -249,7 +250,8 @@ class BaseAgent(ABC):
             return get_google_key(ctx.llm_key, service=service,
                                   extra_keys=ctx.gemini_keys_override) or ""
         elif spec.provider == "openai":
-            return ctx.api_key_override or os.getenv("OPENAI_API_KEY", "")
+            from modules.utils.provider_policy import get_openai_api_key
+            return get_openai_api_key(ctx.api_key_override)
         elif spec.provider == "claude":
             return ctx.llm_key or os.getenv("ANTHROPIC_API_KEY", "")
         return ""

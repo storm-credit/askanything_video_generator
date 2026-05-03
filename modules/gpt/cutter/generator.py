@@ -230,8 +230,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
         if not final_api_key:
             raise EnvironmentError("Claude API 키가 제공되지 않았습니다. .env에 ANTHROPIC_API_KEY를 설정하세요.")
     else:
-        final_api_key = api_key_override or os.getenv("OPENAI_API_KEY")
+        from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
+        final_api_key = get_openai_api_key(api_key_override)
         if not final_api_key:
+            if is_openai_api_disabled():
+                raise EnvironmentError("OpenAI API가 비활성화되어 GPT 기획을 실행하지 않습니다.")
             raise EnvironmentError("OpenAI API 키가 제공되지 않았습니다. .env에 OPENAI_API_KEY를 설정하세요.")
 
     print(f"-> [기획 전문가] {provider_label} 기반 스크립트 및 기획안 작성 중...")

@@ -12,10 +12,13 @@ from PIL import Image, ImageOps
 from modules.utils.constants import MASTER_STYLE
 from modules.utils.cache import get_cached_image, save_to_cache
 from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
+from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
 
 def generate_image(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None, topic: str = "") -> str:
-    final_api_key = api_key or os.getenv("OPENAI_API_KEY")
+    final_api_key = get_openai_api_key(api_key)
     if not final_api_key:
+        if is_openai_api_disabled():
+            raise EnvironmentError("OpenAI API가 비활성화되어 DALL-E 이미지를 생성하지 않습니다.")
         raise EnvironmentError("OpenAI API 키가 제공되지 않았습니다.")
     
     client = OpenAI(api_key=final_api_key, timeout=120)

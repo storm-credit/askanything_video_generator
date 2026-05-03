@@ -936,8 +936,12 @@ async def process_rollout_expansions(limit: int = 6) -> dict[str, Any]:
                 publish_at = publish_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                 title = ""
                 source_topic = ""
+                metadata_description = ""
+                metadata_hashtags = ""
                 if isinstance(channel_data, dict):
                     title = str(channel_data.get("title") or "").strip()
+                    metadata_description = str(channel_data.get("description") or "").strip()
+                    metadata_hashtags = str(channel_data.get("hashtags") or "").strip()
                     source_topic = str(
                         channel_data.get("source_topic")
                         or channel_data.get("_llm_topic_override")
@@ -957,6 +961,9 @@ async def process_rollout_expansions(limit: int = 6) -> dict[str, Any]:
                         series_title=str(candidate.get("series_title") or "").strip() or None,
                         task_date=lead_task_date,
                         topic_group=topic_group,
+                        metadata_title=title,
+                        metadata_description=metadata_description,
+                        metadata_hashtags=metadata_hashtags,
                     )
                     upsert_task_status(
                         task_date=lead_task_date,
@@ -1062,6 +1069,9 @@ async def _prepare_render_upload_via_preview_flow(
     task_date: str | None = None,
     topic_group: str | None = None,
     video_engine_override: str | None = None,
+    metadata_title: str | None = None,
+    metadata_description: str | None = None,
+    metadata_hashtags: str | list[str] | None = None,
 ) -> dict[str, Any]:
     """웹 미리보기 플로우와 동일하게 prepare → render → upload를 순차 실행."""
     preview_payload = {
@@ -1153,13 +1163,30 @@ async def _prepare_render_upload_via_preview_flow(
         raise RuntimeError("[렌더 오류] 최종 영상 경로를 받지 못했습니다.")
 
     abs_video_path = os.path.abspath(video_path.lstrip("/"))
-    title = preview_data.get("title") or topic
-    description = preview_data.get("description") or ""
-    tags = [str(t).lstrip("#").strip() for t in (preview_data.get("tags") or []) if str(t).strip()][:5]
+    raw_title = str(metadata_title or "").strip()
+    preview_title = str(preview_data.get("title") or "").strip()
+    description = str(metadata_description or "").strip() or preview_data.get("description") or ""
+    metadata_tag_values: list[str] = []
+    if isinstance(metadata_hashtags, list):
+        metadata_tag_values = [str(t).strip() for t in metadata_hashtags if str(t).strip()]
+    elif metadata_hashtags:
+        metadata_tag_values = [str(metadata_hashtags).strip()]
+    preview_tag_values = [str(t).strip() for t in (preview_data.get("tags") or []) if str(t).strip()]
+    tags = metadata_tag_values + preview_tag_values
 
     from modules.upload.youtube.upload import _prepare_youtube_metadata
     from modules.upload.youtube import upload_video as yt_upload
-    from modules.utils.channel_config import get_upload_account
+    from modules.utils.channel_config import choose_channel_upload_title, get_upload_account
+
+    title, title_audit = choose_channel_upload_title(
+        channel,
+        raw_title,
+        preview_title,
+        topic,
+        format_type,
+    )
+    for note in title_audit:
+        print(f"  [메타데이터 가드] {note}")
 
     description, tags = _prepare_youtube_metadata(description, tags)
 
@@ -1194,6 +1221,7 @@ async def _prepare_render_upload_via_preview_flow(
         "youtube_url": f"{yt_result.get('url', '')} (예약: {yt_publish_at})",
         "publish_at": publish_at,
         "title": title,
+        "metadata_audit": {"title": title_audit},
         "cut_count": len(cuts),
         "tts_chars": sum(len(str(c.get("script", ""))) for c in cuts),
     }
@@ -1556,6 +1584,13 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 _item_title = item.get("title", "")
                 _source_section = str(item.get("source_section") or "").strip()
                 _topic_for_llm = str(item.get("_llm_topic_override") or "").strip()
+                if (
+                    lang != "ko"
+                    and _item_title
+                    and _item_title != topic
+                    and (not _topic_for_llm or _topic_for_llm == topic or _topic_for_llm == item.get("topic_group"))
+                ):
+                    _topic_for_llm = str(_item_title).strip()
                 if not _topic_for_llm:
                     prefer_channel_title = bool(
                         _item_title
@@ -1614,6 +1649,9 @@ async def run_auto_deploy(target_date: datetime | None = None,
                         task_date=date_str,
                         topic_group=job.get("topic_group") or topic,
                         video_engine_override=video_engine,
+                        metadata_title=job.get("title"),
+                        metadata_description=job.get("description"),
+                        metadata_hashtags=job.get("hashtags"),
                     )
 
                 task_result["status"] = "success"

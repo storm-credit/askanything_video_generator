@@ -3,6 +3,7 @@
 채널을 선택하면 언어, 목소리, TTS 속도, 플랫폼 등 기본값이 자동 적용됩니다.
 사용자가 개별 항목을 오버라이드할 수 있습니다.
 """
+import re
 
 # 채널별 기본 프리셋
 # voice_id: ElevenLabs 음성 ID (Eric=한국어, Adam=영어)
@@ -231,6 +232,151 @@ CHANNEL_CUT1_VISUAL_RULES: dict[str, str] = {
         "single practical light source, ominous negative space, no busy collage."
     ),
 }
+
+_TITLE_LABEL_RE = re.compile(r"^\s*(?:제목|title|titulo|título)\s*:\s*", re.IGNORECASE)
+_HANGUL_RE = re.compile(r"[가-힣]")
+_WORD_RE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+")
+_GENERIC_TITLE_RE = {
+    "ko": re.compile(r"^(?:그\s*)?(?:비밀|정체|이유|진실)$"),
+    "en": re.compile(
+        r"^(?:the\s+)?(?:secret|mystery|truth|reason)(?:\s+(?:behind|of|about|why))?$",
+        re.IGNORECASE,
+    ),
+    "es": re.compile(
+        r"^(?:el|la|los|las)?\s*(?:secreto|misterio|verdad|raz[oó]n)(?:\s+(?:de|del|detr[aá]s|sobre))?$",
+        re.IGNORECASE,
+    ),
+}
+_ENGLISH_START_RE = re.compile(r"^(?:what if|the secret|the mystery|the truth|why |how )\b", re.IGNORECASE)
+_SPANISH_MARK_RE = re.compile(r"[¿¡]")
+_FORBIDDEN_TITLE_CHARS_RE = re.compile(r"[\r\n#]")
+_LATIN_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "behind", "by", "de", "del", "el", "en", "for",
+    "from", "how", "if", "is", "la", "las", "los", "of", "on", "or", "que", "si", "the",
+    "this", "to", "what", "why", "y",
+}
+
+
+def _clean_public_title(title: str | None) -> str:
+    text = str(title or "").strip()
+    text = _TITLE_LABEL_RE.sub("", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip(" \"'`*-")
+
+
+def _public_title_word_count(title: str) -> int:
+    return len(_WORD_RE.findall(title))
+
+
+def _content_token_count(title: str) -> int:
+    tokens = [token.lower() for token in _WORD_RE.findall(title)]
+    return len([token for token in tokens if token not in _LATIN_STOPWORDS and len(token) > 1])
+
+
+def get_channel_title_quality_errors(
+    channel: str | None,
+    title: str | None,
+    format_type: str | None = None,
+    *,
+    strict: bool = False,
+) -> list[str]:
+    """채널별 공개 제목 품질 오류를 반환한다.
+
+    strict=True는 Day 파일 저장을 막아야 하는 구조/언어 오류만 잡고,
+    strict=False는 업로드 직전 fallback 선택용으로 더 예민하게 평가한다.
+    """
+    channel_name = str(channel or "").strip().lower()
+    title_text = _clean_public_title(title)
+    fmt = str(format_type or "").upper().strip()
+    preset = get_channel_preset(channel_name) or {}
+    lang = str(preset.get("language") or "").strip().lower()
+    errors: list[str] = []
+
+    if not title_text:
+        return ["제목이 비어 있음"]
+    if _FORBIDDEN_TITLE_CHARS_RE.search(title_text):
+        errors.append("제목에 줄바꿈 또는 # 포함")
+    if _TITLE_LABEL_RE.search(str(title or "")):
+        errors.append("제목 필드 라벨이 제목 값에 섞임")
+
+    if channel_name != "askanything" and _HANGUL_RE.search(title_text):
+        errors.append("비한국 채널 제목에 한글 포함")
+    if channel_name == "wonderdrop" and _SPANISH_MARK_RE.search(title_text):
+        errors.append("wonderdrop 제목에 스페인어 문장부호 포함")
+    if channel_name in {"exploratodo", "prismtale"} and _ENGLISH_START_RE.search(title_text):
+        errors.append("스페인어 채널 제목이 영어식 제목으로 시작")
+
+    generic_re = _GENERIC_TITLE_RE.get(lang)
+    if generic_re and generic_re.match(title_text):
+        errors.append("구체 명사 없는 generic 제목")
+
+    lowered = title_text.lower()
+    for phrase in preset.get("forbidden_phrases", []) or []:
+        phrase_text = str(phrase).strip().lower()
+        if phrase_text and phrase_text in lowered:
+            errors.append(f"채널 금지 표현 포함: {phrase}")
+
+    if strict:
+        return errors
+
+    if channel_name == "askanything":
+        compact_len = len(re.sub(r"\s+", "", title_text))
+        if compact_len > 18:
+            errors.append("askanything 제목이 18자 초과")
+    elif _public_title_word_count(title_text) > 10:
+        errors.append(f"{channel_name} 제목이 10단어 초과")
+
+    if channel_name == "wonderdrop":
+        if title_text.endswith("?") and fmt != "IF":
+            errors.append("wonderdrop은 IF 외 질문형보다 선언형 우선")
+        if re.search(r"(?i)\b(?:who\s+wins|vs\.?|versus)\b", title_text):
+            errors.append("wonderdrop 제목에 대결/vs 신호 포함")
+        if lowered.startswith("what if") and fmt != "IF":
+            errors.append("wonderdrop 제목이 What If로 시작")
+    elif channel_name == "exploratodo":
+        if re.search(r"(?i)\b(?:vs\.?|versus)\b", title_text):
+            errors.append("exploratodo 제목에 대결/vs 신호 포함")
+    elif channel_name == "prismtale":
+        if re.search(r"(?i)\b(?:secreto|misterio)\b", title_text) and _content_token_count(title_text) < 2:
+            errors.append("prismtale 미스터리 제목에 구체 명사 부족")
+
+    if channel_name in {"wonderdrop", "exploratodo", "prismtale"} and _content_token_count(title_text) < 2:
+        errors.append("제목에 구체 content token 부족")
+
+    return errors
+
+
+def choose_channel_upload_title(
+    channel: str | None,
+    metadata_title: str | None,
+    preview_title: str | None,
+    topic: str | None,
+    format_type: str | None = None,
+) -> tuple[str, list[str]]:
+    """업로드 직전 채널별 제목 fallback을 선택한다."""
+    candidates = [
+        ("Day", _clean_public_title(metadata_title)),
+        ("Preview", _clean_public_title(preview_title)),
+        ("Topic", _clean_public_title(topic)),
+    ]
+    audit: list[str] = []
+    day_errors: list[str] = []
+
+    for source, candidate in candidates:
+        if not candidate:
+            continue
+        errors = get_channel_title_quality_errors(channel, candidate, format_type, strict=False)
+        if not errors:
+            if source != "Day" and day_errors:
+                audit.append(f"Day 제목 가드: {'; '.join(day_errors[:3])} -> {source} 제목 사용")
+            return candidate, audit
+        if source == "Day":
+            day_errors = errors
+
+    fallback = next((candidate for _, candidate in candidates if candidate), "")
+    if day_errors:
+        audit.append(f"Day 제목 가드 경고: {'; '.join(day_errors[:3])}")
+    return fallback, audit
 
 LEAD_CHANNEL_BY_FORMAT: dict[str, str] = {
     "IF": "askanything",

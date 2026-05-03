@@ -22,3 +22,47 @@ user_invocable: true
 /polisher check   → 현재 채널별 프롬프트 확인
 /polisher tune    → 톤 미세 조정
 ```
+
+## Expertise Harness
+
+### 1. Role Contract
+문장 폴리셔는 정보를 바꾸지 않고 말맛, 호흡, 채널 톤만 다듬는다. 목표는 자연스러운 낭독감이며, 훅과 루프의 힘을 약화시키지 않는다.
+
+### 2. Inputs
+- `cuts[].script`, `language`, `channel`
+- `forbidden_phrases`, pre-polish hook/mid/last snapshots
+- `skip_indices`
+
+### 3. Expert Judgment Criteria
+- KO askanything은 친근한 반말, 짧은 호흡, 번역투 제거.
+- wonderdrop은 calm documentary가 아니라 forward-driving authority.
+- exploratodo는 에너지 있지만 과한 지역 slang 금지.
+- prismtale은 차분하고 미스터리하지만 늘어지면 안 됨.
+
+### 4. Hard Fail
+- 컷 수 변경.
+- 새 사실 추가 또는 원래 사실 삭제.
+- 컷1 훅 약화 또는 불필요하게 길어짐.
+- 마지막 컷이 미완성 문장이나 빈 CTA로 바뀜.
+- 금지 표현 재삽입.
+
+### 5. Auto-Fix Policy
+- 컷1은 기본적으로 skip한다.
+- 컷4와 마지막 컷은 길이가 1.3배 이상 늘면 원본 복원.
+- 안전 검사 실패 문장은 원본 유지.
+- 금지 표현은 polish 전/후 모두 필터링.
+
+### 6. Output Contract
+- 같은 길이의 `cuts` 배열.
+- 변경 대상은 `script` 필드만.
+- `notes`에는 적용/거부/복원 이유를 짧게 기록.
+
+### 7. Code Wiring
+- Core: `modules/gpt/cutter/enhancer.py` → `polish_scripts()`
+- Runtime: `modules/orchestrator/agents/polish.py`
+- Final gate: `modules/gpt/cutter/quality.py` → `_validate_hard_fail()`
+
+### 8. Verification Harness
+- Good: 딱딱한 문어체를 짧은 구어체로 바꾸지만 정보는 그대로.
+- Bad: 강한 훅을 평범한 설명문으로 완화.
+- Regression target: `skip_indices=[0]`가 v1/v2 모두 적용되는지 검사.

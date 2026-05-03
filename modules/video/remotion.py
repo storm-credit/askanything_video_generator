@@ -24,6 +24,16 @@ OUTRO_DURATION_FRAMES = 24         # 1초 @ 24fps
 CHANNELS_DIR = os.path.join(BRAND_DIR, "channels")
 
 
+def _to_relative(path: str) -> str:
+    normalized = str(path or "").replace("\\", "/")
+    marker = "assets/"
+    if normalized.startswith(marker):
+        return normalized[len(marker):]
+    if f"/{marker}" in normalized:
+        return normalized.split(f"/{marker}", 1)[1]
+    return normalized
+
+
 def _resolve_brand_asset(asset_name: str, channel: str | None = None) -> str | None:
     """채널별 브랜드 에셋 경로를 반환합니다.
 

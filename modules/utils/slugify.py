@@ -1,7 +1,21 @@
+import os
 import re
+import sys
 
 # Okt() 인스턴스 캐시 (JVM 초기화 비용 ~2-3초 → 최초 1회만)
 _okt_instance = None
+
+
+def _truthy(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _should_use_konlpy() -> bool:
+    if _truthy(os.getenv("SLUGIFY_USE_KONLPY")):
+        return True
+    if _truthy(os.getenv("SLUGIFY_DISABLE_KONLPY")):
+        return False
+    return sys.version_info < (3, 14)
 
 
 def _get_okt():
@@ -24,9 +38,12 @@ def slugify_topic(topic: str, lang: str = "ko") -> str:
 
     if lang == "ko":
         try:
-            okt = _get_okt()
-            nouns = okt.nouns(topic)
-            keywords = "_".join(nouns[:2]) if nouns else topic
+            if _should_use_konlpy():
+                okt = _get_okt()
+                nouns = okt.nouns(topic)
+                keywords = "_".join(nouns[:2]) if nouns else topic
+            else:
+                keywords = topic
         except Exception as e:
             print(f"[Slugify] 형태소 분석 실패, 원문 사용: {e}")
             keywords = topic

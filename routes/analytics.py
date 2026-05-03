@@ -79,6 +79,7 @@ async def analytics_cross_channel(refresh: bool = False):
 
 @router.get("/analytics/global-topic-signals")
 async def analytics_global_topic_signals(
+    market: str | None = None,
     locale: str | None = None,
     category: str | None = None,
     format_hint: str | None = None,
@@ -88,6 +89,7 @@ async def analytics_global_topic_signals(
     from modules.utils.global_topic_signals import list_signals
 
     signals = list_signals(
+        market=market,
         locale=locale,
         category=category,
         format_hint=format_hint,
@@ -102,6 +104,48 @@ async def analytics_global_topic_signals_refresh(force: bool = True):
     from modules.utils.youtube_benchmark import refresh_global_topic_signals
 
     return refresh_global_topic_signals(force=force)
+
+
+@router.post("/analytics/external-video-audit")
+async def analytics_external_video_audit(
+    url: str | None = None,
+    market: str | None = None,
+    locale: str | None = None,
+    limit: int = 3,
+    min_views: int | None = None,
+    force: bool = False,
+    vision: bool = False,
+    keep_video: bool = False,
+):
+    """외부 벤치마크 쇼츠의 초반 화면/훅을 로컬 샘플링 분석한다."""
+    from modules.analytics.external_video_audit import audit_benchmark_videos, audit_external_video
+
+    if url:
+        return audit_external_video(
+            url,
+            market=market,
+            locale=locale,
+            force=force,
+            vision=vision,
+            keep_video=keep_video,
+        )
+    return audit_benchmark_videos(
+        market=market,
+        locale=locale,
+        limit=limit,
+        min_views=min_views,
+        force=force,
+        vision=vision,
+        keep_video=keep_video,
+    )
+
+
+@router.get("/analytics/external-video-audit/reports")
+async def analytics_external_video_audit_reports(limit: int = 50):
+    """저장된 외부 쇼츠 초반 화면/훅 분석 리포트 목록."""
+    from modules.analytics.external_video_audit import list_audit_reports
+
+    return {"success": True, "reports": list_audit_reports(limit=limit)}
 
 
 @router.get("/analytics/tone-report")

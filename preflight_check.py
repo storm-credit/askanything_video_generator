@@ -10,6 +10,30 @@ def add_check(status: str, message: str):
     CHECKS.append((status, message))
 
 
+def load_local_env():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        return
+    except Exception:
+        env_path = Path(".env")
+        if not env_path.exists():
+            return
+
+    try:
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except Exception:
+        pass
+
+
 def check_python_version():
     if sys.version_info >= (3, 10):
         add_check("PASS", f"Python version: {sys.version.split()[0]}")
@@ -76,7 +100,11 @@ def check_paths():
 
 
 def check_env_keys():
-    required_keys = ["OPENAI_API_KEY", "ELEVENLABS_API_KEY"]
+    from modules.utils.provider_policy import is_openai_api_disabled
+
+    required_keys = ["ELEVENLABS_API_KEY"]
+    if not is_openai_api_disabled():
+        required_keys.insert(0, "OPENAI_API_KEY")
     optional_keys = ["TAVILY_API_KEY", "KLING_ACCESS_KEY", "KLING_SECRET_KEY", "IMAGEMAGICK_BINARY"]
 
     for key in required_keys:
@@ -98,7 +126,7 @@ def print_report() -> int:
 
     print("=== AskAnything Preflight Check ===")
     for status, message in CHECKS:
-        icon = {"PASS": "✅", "WARN": "⚠️", "FAIL": "❌"}[status]
+        icon = {"PASS": "OK", "WARN": "WARN", "FAIL": "FAIL"}[status]
         print(f"{icon} [{status}] {message}")
 
     fail_count = sum(1 for s, _ in CHECKS if s == "FAIL")
@@ -117,6 +145,7 @@ def print_report() -> int:
 
 
 if __name__ == "__main__":
+    load_local_env()
     check_python_version()
     check_commands()
     check_python_packages()

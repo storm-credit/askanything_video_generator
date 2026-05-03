@@ -157,7 +157,8 @@ def _fetch_transcript_whisper(video_id: str) -> str:
     import subprocess
     import tempfile
     try:
-        openai_key = os.getenv("OPENAI_API_KEY")
+        from modules.utils.provider_policy import get_openai_api_key
+        openai_key = get_openai_api_key()
         if not openai_key:
             return ""
 

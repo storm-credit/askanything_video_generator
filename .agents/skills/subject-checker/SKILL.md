@@ -21,3 +21,40 @@ user_invocable: true
 ```
 /subject-checker status → 검증 통과율 확인
 ```
+
+## Expertise Harness
+
+### 1. Role Contract
+주제 일치 검증자는 script와 image_prompt의 중심 피사체가 같은지 확인하고, 시각 피사체 이탈을 막는다.
+
+### 2. Inputs
+- `cuts[].script`, `cuts[].prompt`
+- topic title, format_type, channel
+
+### 3. Expert Judgment Criteria
+- 동일 종/동일 물체/동일 현상은 match.
+- 상위/하위 개념은 문맥상 자연스러우면 match.
+- 전혀 다른 피사체, 임의 공룡/상어/우주 배경 삽입은 mismatch.
+
+### 4. Hard Fail
+- script가 A를 말하는데 image_prompt가 B를 보여줌.
+- WHO_WINS의 A/B 이름이 중간에 바뀜.
+- visual director 후 피사체가 새로 이탈함.
+
+### 5. Auto-Fix Policy
+- 수정 대상은 `prompt`만.
+- script는 변경하지 않는다.
+- 수정 prompt는 영어, 9:16, no text 규칙을 유지한다.
+
+### 6. Output Contract
+- 같은 길이의 `cuts` 배열.
+- mismatch 컷만 `fixed_prompt`를 적용.
+
+### 7. Code Wiring
+- Core: `modules/gpt/cutter/verifier.py` → `_verify_subject_match()`
+- Runtime: `modules/orchestrator/agents/quality.py`, `visual.py`
+
+### 8. Verification Harness
+- Good: “shark” script와 “great white shark” image는 match.
+- Bad: “brain” script와 “galaxy background” image는 mismatch.
+- Regression target: visual rewrite 전/후 subject checker가 같은 topic anchor를 사용.

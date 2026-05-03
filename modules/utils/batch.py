@@ -18,7 +18,7 @@ from typing import Any
 
 DB_PATH = os.path.join("data", "batch_queue.db")
 _lock = threading.Lock()
-_db_initialized = False
+_db_initialized_path: str | None = None
 
 
 def _ensure_column(conn, table: str, column: str, ddl: str):
@@ -29,11 +29,12 @@ def _ensure_column(conn, table: str, column: str, ddl: str):
 
 
 def _init_db():
-    global _db_initialized
-    if _db_initialized:
+    global _db_initialized_path
+    db_path = os.path.abspath(DB_PATH)
+    if _db_initialized_path == db_path and os.path.exists(db_path):
         return
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10)
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
 
     conn.execute("""
@@ -76,7 +77,7 @@ def _init_db():
 
     conn.commit()
     conn.close()
-    _db_initialized = True
+    _db_initialized_path = db_path
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -116,7 +117,7 @@ def add_job(topic: str, language: str = "ko", camera_style: str = "dynamic",
             if row["cnt"] > 0:
                 print(f"[배치 경고] 동일 주제가 이미 큐에 있습니다: {topic[:30]}...")
             cur = conn.execute(
-                "INSERT INTO batch_jobs (topic, language, camera_style, bgm_theme, llm_provider, video_engine, image_engine, channel, status, prompt_status, fact_check_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'draft', 'pending', ?)",
+                "INSERT INTO batch_jobs (topic, language, camera_style, bgm_theme, llm_provider, video_engine, image_engine, channel, status, prompt_status, fact_check_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'draft', 'pending', ?)",
                 (topic, language, camera_style, bgm_theme, llm_provider, video_engine, image_engine, channel, datetime.now().isoformat()),
             )
             conn.commit()

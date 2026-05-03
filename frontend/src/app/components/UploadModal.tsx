@@ -36,6 +36,8 @@ type MetadataPreview = {
   error?: string;
   checks?: {
     description_has_hash: boolean;
+    description_has_public_hashtags?: boolean;
+    public_hashtag_count?: number;
     tag_count: number;
     shorts_tag_removed: boolean;
     series_playlist: boolean;
@@ -93,7 +95,7 @@ export function UploadModal({
   const {
     ytConnected, ytChannels, ytSelectedChannel, setYtSelectedChannel,
     ttConnected, igConnected,
-    handlePlatformAuth, checkPlatformStatus,
+    handlePlatformAuth,
   } = platformAuth;
 
   const handleUpload = async () => {
@@ -117,7 +119,7 @@ export function UploadModal({
           tags: allTags,
           privacy: scheduleEnabled ? "private" : uploadPrivacy,
           channel_id: (() => {
-            const matched = ytChannels.find((ch: any) => ch.title?.toLowerCase().replace(/\s/g, '') === (uploadChannel || '').toLowerCase().replace(/\s/g, ''));
+            const matched = ytChannels.find((ch) => ch.title?.toLowerCase().replace(/\s/g, '') === (uploadChannel || '').toLowerCase().replace(/\s/g, ''));
             return matched?.id || ytSelectedChannel || undefined;
           })(),
           channel: uploadChannel || undefined,
@@ -183,6 +185,8 @@ export function UploadModal({
     : "즉시 업로드";
   const serverYoutubeDescription = metadataPreview?.ok ? (metadataPreview.description || "") : finalYoutubeDescription;
   const serverYoutubeTags = metadataPreview?.ok ? (metadataPreview.tags || []) : youtubeTags;
+  const serverPublicHashtagCount = metadataPreview?.checks?.public_hashtag_count
+    ?? ((serverYoutubeDescription.match(/#[^\s#]+/g) || []).length);
 
   useEffect(() => {
     if (!show || uploadPlatform !== "youtube") {
@@ -199,7 +203,7 @@ export function UploadModal({
           body: JSON.stringify({
             title: uploadTitle || topic,
             description: uploadDescription,
-            tags: youtubeTags,
+            tags: youtubeTagsKey ? youtubeTagsKey.split(",") : [],
             privacy: scheduleEnabled ? "private" : uploadPrivacy,
             publish_at: scheduleEnabled && scheduleDate ? new Date(scheduleDate).toISOString() : null,
             format_type: initialFormatType || undefined,
@@ -471,7 +475,7 @@ export function UploadModal({
               <div className="flex items-center justify-between gap-3">
                 <h4 className="text-sm font-semibold text-white">최종 업로드 미리보기</h4>
                 <span className="text-[10px] text-gray-500">
-                  {uploadPlatform === "youtube" ? "설명 # 제거 후 업로드" : "현재 입력값 기준"}
+                  {uploadPlatform === "youtube" ? "설명 하단 해시태그 포함" : "현재 입력값 기준"}
                 </span>
               </div>
               <div className="space-y-1.5 text-xs">
@@ -520,7 +524,7 @@ export function UploadModal({
                     <p className={metadataPreview?.ok === false ? "text-red-300" : "text-emerald-300"}>
                       {metadataPreview?.ok === false
                         ? `서버 최종 검수 실패: ${metadataPreview.error || "메타데이터 확인 필요"}`
-                        : `서버 최종 검수 통과 · 태그 ${metadataPreview?.checks?.tag_count ?? serverYoutubeTags.length}/5개 · 설명 # 없음`}
+                        : `서버 최종 검수 통과 · 태그 ${metadataPreview?.checks?.tag_count ?? serverYoutubeTags.length}/5개 · 공개 해시태그 ${serverPublicHashtagCount}/5개`}
                     </p>
                   </div>
                 </>

@@ -10,16 +10,36 @@ from .playlists import add_to_playlist, add_to_format_playlist, add_to_series_pl
 from .engagement import _build_related_comment, _post_pinned_comment
 
 
+_FORBIDDEN_YOUTUBE_TAGS = {"shorts", "short", "쇼츠"}
+_YOUTUBE_HASHTAG_RE = re.compile(r"(?<!\w)#([\w가-힣ぁ-んァ-ヶ一-龥ÁÉÍÓÚÜÑáéíóúüñ-]+)")
+_PUBLIC_HASHTAG_UNSAFE_RE = re.compile(r"[^\w가-힣ぁ-んァ-ヶ一-龥ÁÉÍÓÚÜÑáéíóúüñ]", re.UNICODE)
+
+
+def _iter_youtube_tag_candidates(tags: list[str] | None):
+    for tag in tags or []:
+        text = str(tag).strip()
+        if not text:
+            continue
+        hashtag_matches = _YOUTUBE_HASHTAG_RE.findall(text)
+        if hashtag_matches:
+            yield from hashtag_matches
+            continue
+        for value in re.split(r"[,;\n]+", text):
+            value = value.strip()
+            if value:
+                yield value
+
+
 def _sanitize_youtube_tags(tags: list[str] | None) -> list[str]:
-    forbidden = {"shorts", "short", "쇼츠"}
     cleaned: list[str] = []
     seen: set[str] = set()
-    for tag in tags or []:
-        value = str(tag).replace("#", "").strip()
+    for tag in _iter_youtube_tag_candidates(tags):
+        value = re.sub(r"\s+", " ", str(tag).replace("#", " ").strip())
+        value = value.strip(" ,.;:!?")
         if not value:
             continue
         lowered = value.lower()
-        if lowered in forbidden or lowered in seen:
+        if lowered in _FORBIDDEN_YOUTUBE_TAGS or lowered in seen:
             continue
         seen.add(lowered)
         cleaned.append(value)
@@ -28,14 +48,36 @@ def _sanitize_youtube_tags(tags: list[str] | None) -> list[str]:
     return cleaned
 
 
+def _extract_youtube_hashtags(description: str | None) -> list[str]:
+    return _YOUTUBE_HASHTAG_RE.findall(str(description or ""))
+
+
 def _sanitize_youtube_description(description: str | None) -> str:
-    """YouTube 본문 설명에서 공개 해시태그 토큰을 최종 제거."""
+    """중복/금지 태그 방지를 위해 기존 hashtag token은 제거 후 footer로 재구성."""
     text = str(description or "")
-    text = re.sub(r"(?<!\w)#[\w가-힣ぁ-んァ-ヶ一-龥ÁÉÍÓÚÜÑáéíóúüñ-]+", "", text)
+    text = _YOUTUBE_HASHTAG_RE.sub("", text)
     text = text.replace("#", "")
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return "\n".join(line.rstrip() for line in text.splitlines()).strip()
+
+
+def _format_public_hashtags(tags: list[str]) -> str:
+    public_tags: list[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        value = re.sub(r"\s+", "", str(tag).strip())
+        value = _PUBLIC_HASHTAG_UNSAFE_RE.sub("", value)
+        if not value:
+            continue
+        lowered = value.lower()
+        if lowered in _FORBIDDEN_YOUTUBE_TAGS or lowered in seen:
+            continue
+        seen.add(lowered)
+        public_tags.append(f"#{value}")
+        if len(public_tags) >= 5:
+            break
+    return " ".join(public_tags)
 
 
 def _prepare_youtube_metadata(description: str | None, tags: list[str] | None) -> tuple[str, list[str]]:
@@ -43,19 +85,26 @@ def _prepare_youtube_metadata(description: str | None, tags: list[str] | None) -
 
     프론트/자동배포/수동 API 어느 경로로 들어와도 같은 규칙을 적용한다.
     """
+    description_tags = _extract_youtube_hashtags(description)
+    cleaned_tags = _sanitize_youtube_tags([*(tags or []), *description_tags])
     cleaned_description = _sanitize_youtube_description(description)
-    cleaned_tags = _sanitize_youtube_tags(tags)
-    forbidden = {"shorts", "short", "쇼츠"}
+    public_hashtags = _format_public_hashtags(cleaned_tags)
+    if public_hashtags:
+        cleaned_description = f"{cleaned_description}\n\n{public_hashtags}" if cleaned_description else public_hashtags
 
-    if "#" in cleaned_description:
-        raise ValueError("YouTube 설명 본문에는 #해시태그를 넣을 수 없습니다.")
     if len(cleaned_tags) > 5:
         raise ValueError("YouTube 태그는 최대 5개까지만 허용됩니다.")
-    bad_tags = [tag for tag in cleaned_tags if tag.lower() in forbidden]
+    bad_tags = [tag for tag in cleaned_tags if tag.lower() in _FORBIDDEN_YOUTUBE_TAGS]
     if bad_tags:
         raise ValueError(f"YouTube 태그에 금지어가 포함되어 있습니다: {', '.join(bad_tags)}")
     if any("#" in tag for tag in cleaned_tags):
         raise ValueError("YouTube 태그에는 # 문자를 포함할 수 없습니다.")
+    public_tag_names = _YOUTUBE_HASHTAG_RE.findall(cleaned_description)
+    if len(public_tag_names) > 5:
+        raise ValueError("YouTube 설명 공개 해시태그는 최대 5개까지만 허용됩니다.")
+    bad_public_tags = [tag for tag in public_tag_names if tag.lower() in _FORBIDDEN_YOUTUBE_TAGS]
+    if bad_public_tags:
+        raise ValueError(f"YouTube 설명 공개 해시태그에 금지어가 포함되어 있습니다: {', '.join(bad_public_tags)}")
 
     return cleaned_description, cleaned_tags
 

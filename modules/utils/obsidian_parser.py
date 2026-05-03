@@ -28,6 +28,22 @@ CHANNEL_LANG_MAP = {
     "prismtale": "es",
 }
 
+
+def _build_llm_topic_override(
+    *,
+    channel_name: str,
+    language: str,
+    title: str,
+    source_topic: str,
+    topic_name: str,
+) -> str:
+    """스크립트 생성용 앵커를 채널 언어 기준으로 고른다."""
+    if source_topic:
+        return source_topic
+    if language != "ko" and title and title != topic_name:
+        return title
+    return topic_name
+
 # 태그 → 대상 채널 매핑
 TAG_CHANNEL_MAP = {
     "공통": ["askanything", "wonderdrop", "exploratodo", "prismtale"],
@@ -211,6 +227,14 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
 
                 cuts = _extract_cuts(lines)
 
+                llm_topic_override = _build_llm_topic_override(
+                    channel_name=channel_name,
+                    language=language,
+                    title=title,
+                    source_topic=source_topic,
+                    topic_name=topic_name,
+                )
+
                 jobs.append({
                     "topic": title,
                     "language": language,
@@ -228,7 +252,7 @@ def parse_day_file(file_path: str) -> list[dict[str, Any]]:
                     "source_file": day_filename,
                     "source_section": f"Topic {topic_num}",
                     "source_channel_block": f"{channel_name} ({language})",
-                    "_llm_topic_override": source_topic or topic_name,
+                    "_llm_topic_override": llm_topic_override,
                     "split_mode": "channel_specific" if SPLIT_TAG_RE.search(topic_name_raw) else None,
                     "imported_at": datetime.now().isoformat(),
                 })

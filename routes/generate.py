@@ -31,6 +31,7 @@ from routes.shared import (
     VOICE_ID_TO_NAME,
 )
 from modules.utils.hero_cuts import pick_hero_indices
+from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
 
 router = APIRouter(tags=["generate"])
 
@@ -101,6 +102,8 @@ class GenerateRequest(BaseModel):
         allowed = {"kling", "sora2", "veo3", "blender", "none"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
+        if v == "sora2" and is_openai_api_disabled():
+            raise ValueError("OpenAI API 비활성화 상태에서는 Sora 2를 사용할 수 없습니다.")
         return v
 
     @field_validator("imageEngine")
@@ -109,6 +112,8 @@ class GenerateRequest(BaseModel):
         allowed = {"dalle", "imagen", "nano_banana"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 이미지 엔진: {v}. 허용: {allowed}")
+        if v == "dalle" and is_openai_api_disabled():
+            raise ValueError("OpenAI API 비활성화 상태에서는 DALL-E를 사용할 수 없습니다.")
         return v
 
     @field_validator("llmProvider")
@@ -117,6 +122,8 @@ class GenerateRequest(BaseModel):
         allowed = {"openai", "gemini", "claude"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}. 허용: {allowed}")
+        if v == "openai" and is_openai_api_disabled():
+            raise ValueError("OpenAI API 비활성화 상태에서는 GPT 기획을 사용할 수 없습니다.")
         return v
 
 
@@ -208,7 +215,7 @@ async def generate_video_endpoint(req: GenerateRequest):
     from modules.utils.channel_config import get_channel_preset
 
     topic = req.topic
-    api_key_override = req.apiKey
+    api_key_override = get_openai_api_key(req.apiKey)
     elevenlabs_key_override = req.elevenlabsKey
     video_engine = req.videoEngine
     image_engine = req.imageEngine

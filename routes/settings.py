@@ -71,7 +71,8 @@ async def health_check():
                 return False
         return True
 
-    openai_key = os.getenv("OPENAI_API_KEY", "")
+    from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
+    openai_key = get_openai_api_key()
     elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     gemini_keys = os.getenv("GEMINI_API_KEYS", "")
@@ -139,7 +140,7 @@ async def health_check():
         "tavily": [_mask(tavily_key)] if _is_set(tavily_key) else [],
     }
 
-    required_keys = ("openai", "elevenlabs", "gemini")
+    required_keys = ("elevenlabs", "gemini") if is_openai_api_disabled() else ("openai", "elevenlabs", "gemini")
     missing = [k for k in required_keys if not keys.get(k)]
     google_key_count = count_google_keys()
     return {
@@ -214,7 +215,8 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
     is_vertex_backend = os.getenv("GEMINI_BACKEND") == "vertex_ai"
 
     # OpenAI 키: DALL-E/GPT/Sora2 선택 시 필수, Whisper 자막은 경고만
-    openai_key = api_key_override or os.getenv("OPENAI_API_KEY", "")
+    from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
+    openai_key = get_openai_api_key(api_key_override)
     openai_missing = not openai_key or openai_key.startswith("sk-proj-YOUR")
     openai_needed_for = []
     if llm_provider == "openai":
@@ -224,10 +226,12 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
     if video_engine == "sora2":
         openai_needed_for.append("Sora2 비디오")
 
-    if openai_missing and openai_needed_for:
+    if openai_needed_for and is_openai_api_disabled():
+        errors.append(f"OpenAI API 비활성화 ({' + '.join(openai_needed_for)} 사용 불가)")
+    elif openai_missing and openai_needed_for:
         openai_needed_for.append("Whisper 자막")
         errors.append(f"OPENAI_API_KEY ({' + '.join(openai_needed_for)}에 필수)")
-    elif openai_missing:
+    elif openai_missing and not is_openai_api_disabled():
         # Whisper만 필요 — Gemini 기반 구성에서는 경고만 (자막 없이 진행 가능)
         print("  [경고] OPENAI_API_KEY 미설정 — Whisper 자막 타임스탬프 사용 불가")
 
@@ -263,8 +267,8 @@ def _validate_keys(api_key_override: str | None, elevenlabs_key_override: str | 
         if not kling_ak or kling_ak.startswith("YOUR"):
             errors.append("KLING_ACCESS_KEY (Kling 비디오 엔진에 필수)")
 
-    if video_engine == "sora2":
-        openai_check = api_key_override or os.getenv("OPENAI_API_KEY", "")
+    if video_engine == "sora2" and not is_openai_api_disabled():
+        openai_check = get_openai_api_key(api_key_override)
         if not openai_check or openai_check.startswith("sk-proj-YOUR"):
             errors.append("OPENAI_API_KEY (Sora 2 비디오 엔진에 필수)")
 
@@ -374,6 +378,9 @@ def _get_env_vars_for_key_type(key_type: str) -> list[str]:
     if key_type == "gemini":
         return ["GEMINI_API_KEYS", "GEMINI_API_KEY", "GOOGLE_API_KEY"]
     if key_type == "openai":
+        from modules.utils.provider_policy import is_openai_api_disabled
+        if is_openai_api_disabled():
+            return []
         return ["OPENAI_API_KEY"]
     if key_type == "elevenlabs":
         return ["ELEVENLABS_API_KEY"]
@@ -428,6 +435,10 @@ async def add_env_key(req: dict):
         return {"ok": False, "error": "키가 비어있음"}
 
     env_var_map = {"gemini": "GEMINI_API_KEYS", "openai": "OPENAI_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY"}
+    if key_type == "openai":
+        from modules.utils.provider_policy import is_openai_api_disabled
+        if is_openai_api_disabled():
+            return {"ok": False, "error": "OpenAI API 비활성화 상태에서는 OpenAI 키를 저장하지 않습니다."}
     env_var = env_var_map.get(key_type, "GEMINI_API_KEYS")
 
     env_path = "/app/.env"

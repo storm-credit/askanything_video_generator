@@ -34,6 +34,7 @@ from routes.shared import (
     VOICE_ID_TO_NAME,
 )
 from modules.utils.hero_cuts import pick_hero_indices
+from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
 
 router = APIRouter(prefix="/api", tags=["prepare"])
 
@@ -88,6 +89,8 @@ class PrepareRequest(BaseModel):
         allowed = {"imagen", "dalle", "nano_banana"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 이미지 엔진: {v}. 허용: {allowed}")
+        if v == "dalle" and is_openai_api_disabled():
+            raise ValueError("OpenAI API 비활성화 상태에서는 DALL-E를 사용할 수 없습니다.")
         return v
 
     @field_validator("videoEngine")
@@ -96,6 +99,8 @@ class PrepareRequest(BaseModel):
         allowed = {"veo3", "kling", "sora2", "none"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 비디오 엔진: {v}. 허용: {allowed}")
+        if v == "sora2" and is_openai_api_disabled():
+            raise ValueError("OpenAI API 비활성화 상태에서는 Sora 2를 사용할 수 없습니다.")
         return v
 
     @field_validator("llmProvider")
@@ -104,6 +109,8 @@ class PrepareRequest(BaseModel):
         allowed = {"gemini", "openai", "claude"}
         if v not in allowed:
             raise ValueError(f"지원하지 않는 LLM 프로바이더: {v}. 허용: {allowed}")
+        if v == "openai" and is_openai_api_disabled():
+            raise ValueError("OpenAI API 비활성화 상태에서는 GPT 기획을 사용할 수 없습니다.")
         return v
 
 
@@ -262,7 +269,7 @@ async def prepare_endpoint(req: PrepareRequest):
                             print(f"[컷 {i+1} Nano Banana 실패 → DALL-E 폴백] {exc}")
                             yield {"data": f"  -> 컷 {i+1} Nano Banana 실패, DALL-E로 폴백\n"}
                         # DALL-E 폴백
-                        _dalle_key = req.apiKey or os.getenv("OPENAI_API_KEY")
+                        _dalle_key = get_openai_api_key(req.apiKey)
                         if _dalle_key:
                             try:
                                 _topic2 = prep_topic
@@ -706,7 +713,7 @@ async def render_endpoint(req: RenderRequest):
             video_title = session["title"]
             image_paths = session["image_paths"]
             language = session["language"]
-            api_key_override = req.apiKey or os.getenv("OPENAI_API_KEY", "")
+            api_key_override = get_openai_api_key(req.apiKey)
             elevenlabs_key_override = req.elevenlabsKey or os.getenv("ELEVENLABS_API_KEY", "")
 
             # 채널 프리셋 fallback: cameraStyle은 사용자가 명시 선택한 값을 유지.

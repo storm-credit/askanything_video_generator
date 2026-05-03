@@ -13,6 +13,7 @@ def validate_keys(
 ) -> list[str]:
     """파이프라인 시작 전 필수 키 검증. 누락된 키 이름 목록을 반환."""
     from modules.utils.keys import get_google_key
+    from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
 
     # Vertex AI SA키 환경이면 GEMINI_API_KEY 없어도 OK
     _is_vertex = bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS")) or os.getenv("GEMINI_BACKEND") == "vertex_ai"
@@ -20,7 +21,7 @@ def validate_keys(
     errors = []
 
     # OpenAI 키: DALL-E/GPT/Sora2 선택 시 필수, Whisper 자막은 경고만
-    openai_key = api_key_override or os.getenv("OPENAI_API_KEY", "")
+    openai_key = get_openai_api_key(api_key_override)
     openai_missing = not openai_key or openai_key.startswith("sk-proj-YOUR")
     openai_needed_for = []
     if llm_provider == "openai":
@@ -30,10 +31,12 @@ def validate_keys(
     if video_engine == "sora2":
         openai_needed_for.append("Sora2 비디오")
 
-    if openai_missing and openai_needed_for:
+    if openai_needed_for and is_openai_api_disabled():
+        errors.append(f"OpenAI API 비활성화 ({' + '.join(openai_needed_for)} 사용 불가)")
+    elif openai_missing and openai_needed_for:
         openai_needed_for.append("Whisper 자막")
         errors.append(f"OPENAI_API_KEY ({' + '.join(openai_needed_for)}에 필수)")
-    elif openai_missing:
+    elif openai_missing and not is_openai_api_disabled():
         print("  [경고] OPENAI_API_KEY 미설정 — Whisper 자막 타임스탬프 사용 불가")
 
     # Imagen / Nano Banana 사용 시 Google 키 필요 (Vertex SA키면 스킵)
@@ -71,8 +74,8 @@ def validate_keys(
         if not kling_ak or kling_ak.startswith("YOUR"):
             errors.append("KLING_ACCESS_KEY (Kling 비디오 엔진에 필수)")
 
-    if video_engine == "sora2":
-        openai_check = api_key_override or os.getenv("OPENAI_API_KEY", "")
+    if video_engine == "sora2" and not is_openai_api_disabled():
+        openai_check = get_openai_api_key(api_key_override)
         if not openai_check or openai_check.startswith("sk-proj-YOUR"):
             errors.append("OPENAI_API_KEY (Sora 2 비디오 엔진에 필수)")
 

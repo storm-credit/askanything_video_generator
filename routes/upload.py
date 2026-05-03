@@ -156,8 +156,11 @@ async def youtube_metadata_preview(req: YouTubeMetadataPreviewRequest):
     try:
         description, tags = _prepare_youtube_metadata(req.description, req.tags)
         adjusted_publish_at = _resolve_youtube_publish_at(req.publish_at, req.channel)
+        public_hashtags = re.findall(r"(?<!\w)#[\w가-힣ぁ-んァ-ヶ一-龥ÁÉÍÓÚÜÑáéíóúüñ-]+", description)
         checks = {
             "description_has_hash": "#" in description,
+            "description_has_public_hashtags": bool(public_hashtags),
+            "public_hashtag_count": len(public_hashtags),
             "tag_count": len(tags),
             "shorts_tag_removed": all(tag.lower() not in {"shorts", "short", "쇼츠"} for tag in tags),
             "series_playlist": bool(req.series_title),

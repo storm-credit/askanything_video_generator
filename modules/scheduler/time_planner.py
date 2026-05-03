@@ -102,6 +102,8 @@ def _schedule_channel_items(
             scheduled.append({
                 "topic": topic_name,
                 "title": topic_title,
+                "description": topic_item.get("description", "") if isinstance(topic_item, dict) else "",
+                "hashtags": topic_item.get("hashtags", "") if isinstance(topic_item, dict) else "",
                 "channel": channel,
                 "topic_group": topic_item.get("topic_group", topic_name) if isinstance(topic_item, dict) else topic_name,
                 "format_type": topic_item.get("format_type", "FACT") if isinstance(topic_item, dict) else "FACT",
@@ -123,6 +125,17 @@ def _schedule_channel_items(
             })
 
     return scheduled
+
+
+def _build_schedule_llm_topic_override(channel: str, ch_title: str, topic_name: str, source_topic: Any) -> str | None:
+    """Source Topic이 없으면 비한국 채널은 채널별 제목을 생성 앵커로 쓴다."""
+    source_text = str(source_topic or "").strip()
+    if source_text:
+        return source_text
+    title_text = str(ch_title or "").strip()
+    if channel != "askanything" and title_text and title_text != topic_name:
+        return title_text
+    return None
 
 
 def _apply_lead_channel_first(topics: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -330,12 +343,15 @@ def calculate_schedule(topics: list[dict],
                 channel_topics[ch] = []
             # 채널별 제목이 있으면 사용, 없으면 토픽명
             ch_title = ch_data.get("title", topic_name) if isinstance(ch_data, dict) else topic_name
+            source_topic = ch_data.get("source_topic") if isinstance(ch_data, dict) else None
             channel_topics[ch].append({
                 "topic": topic_name,
                 "title": ch_title,
+                "description": ch_data.get("description", "") if isinstance(ch_data, dict) else "",
+                "hashtags": ch_data.get("hashtags", "") if isinstance(ch_data, dict) else "",
                 "format_type": format_type,
                 "topic_group": topic_name,
-                "_llm_topic_override": ch_data.get("source_topic") if isinstance(ch_data, dict) else None,
+                "_llm_topic_override": _build_schedule_llm_topic_override(ch, ch_title, topic_name, source_topic),
                 "split_mode": topic.get("split_mode"),
                 "series_title": topic.get("series_title"),
                 "source_file": topic.get("source_file") or topic.get("day_file"),

@@ -69,7 +69,9 @@ _GEMINI_RESPONSE_SCHEMA = {
 
 def _request_openai(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str | None:
     """OpenAI GPT API로 기획안을 생성합니다."""
+    from modules.utils.provider_policy import require_openai_api_enabled
     from openai import OpenAI
+    require_openai_api_enabled("OpenAI GPT")
     model = model_override or os.getenv("OPENAI_MODEL", "gpt-4o")
     client = OpenAI(api_key=api_key, timeout=120)
     response = client.chat.completions.create(
@@ -88,7 +90,9 @@ def _request_openai(api_key: str, system_prompt: str, user_content: str, model_o
 
 def _request_openai_freeform(api_key: str, system_prompt: str, user_content: str, model_override: str | None = None) -> str:
     """OpenAI API — schema 제약 없이 자유 형식 JSON 응답 (analyzer 등 용도)."""
+    from modules.utils.provider_policy import require_openai_api_enabled
     from openai import OpenAI
+    require_openai_api_enabled("OpenAI GPT")
     model = model_override or os.getenv("OPENAI_MODEL", "gpt-4o")
     client = OpenAI(api_key=api_key, timeout=120)
     response = client.chat.completions.create(

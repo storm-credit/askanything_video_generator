@@ -54,3 +54,41 @@ Run this skill when:
 - Changing fallback/retry logic
 - Optimizing for cost reduction
 - Reviewing prompt token usage
+
+## Expertise Harness
+
+### 1. Role Contract
+비용 최적화 에이전트는 품질을 크게 떨어뜨리지 않는 선에서 중복 호출, cache miss, 비싼 fallback, 잘못된 비용 기록을 줄인다.
+
+### 2. Inputs
+- provider/model, token usage, cache hit state
+- image/video/TTS engine selection, retry/fallback logs
+- `modules/utils/cost_tracker.py` daily records
+
+### 3. Expert Judgment Criteria
+- 실제 API 성공 지점에서 비용을 기록한다.
+- cache hit는 생성 비용으로 계산하지 않는다.
+- 비싼 엔진 fallback은 품질/필요성 근거가 있어야 한다.
+
+### 4. Hard Fail
+- cache hit인데 API 비용을 기록.
+- v2 orchestration 비용 누락.
+- OpenAI disabled policy인데 OpenAI fallback 호출.
+- 환율/가격표가 stale인데 production billing에 사용.
+
+### 5. Auto-Fix Policy
+- route-level count 추정보다 provider success hook 기록을 우선한다.
+- provider/model/from_cache를 cost event에 포함한다.
+- 가격 불명 모델은 warning + unknown tier로 분리한다.
+
+### 6. Output Contract
+- `cost_events`, `daily_total`, `by_provider`, `by_engine`, `warnings`
+
+### 7. Code Wiring
+- Tracker: `modules/utils/cost_tracker.py`
+- Policy: `modules/utils/provider_policy.py`
+- Routes: `routes/generate.py`, `routes/prepare.py`
+
+### 8. Verification Harness
+- Good: Imagen cache hit은 $0, 실제 생성만 image cost에 반영.
+- Bad: 생성된 이미지 파일 개수만 보고 비용을 계산.

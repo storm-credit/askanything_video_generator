@@ -10,15 +10,18 @@ const LEGACY_VIDEO_MODEL_MAP: Record<string, string> = {
   "veo-3.0-fast-generate-preview": "veo-3.0-fast-generate-001",
 };
 
+const normalizeProvider = (value: string): string => (value === "openai" ? "gemini" : value);
+const normalizeImageEngine = (value: string): string => (value === "dalle" ? "imagen" : value);
+const normalizeVideoEngine = (value: string): string => (value === "sora2" ? "veo3" : value);
 const normalizeVideoModel = (value: string): string => LEGACY_VIDEO_MODEL_MAP[value] || value;
 
 export function useLocalSettings() {
   const [qualityPreset, setQualityPreset] = useState(() => loadSetting("qualityPreset", "best"));
-  const [llmProvider, setLlmProvider] = useState(() => loadSetting("llmProvider", "gemini"));
+  const [llmProvider, setLlmProvider] = useState(() => normalizeProvider(loadSetting("llmProvider", "gemini")));
   const [llmModel, setLlmModel] = useState(() => loadSetting("llmModel", ""));
-  const [imageEngine, setImageEngine] = useState(() => loadSetting("imageEngine", "imagen"));
+  const [imageEngine, setImageEngine] = useState(() => normalizeImageEngine(loadSetting("imageEngine", "imagen")));
   const [imageModel, setImageModel] = useState(() => loadSetting("imageModel", ""));
-  const [videoEngine, setVideoEngine] = useState(() => loadSetting("videoEngine", "veo3"));
+  const [videoEngine, setVideoEngine] = useState(() => normalizeVideoEngine(loadSetting("videoEngine", "veo3")));
   const [videoModel, setVideoModelState] = useState(() => normalizeVideoModel(loadSetting("videoModel", "hero-only")));
   const [testMode, setTestMode] = useState(() => loadSetting("testMode", false));
   const [language, setLanguage] = useState(() => loadSetting("language", "ko"));
@@ -41,11 +44,11 @@ export function useLocalSettings() {
       try { const v = localStorage.getItem(`aa_${key}`); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
     };
     setQualityPreset(_load("qualityPreset", "best"));
-    setLlmProvider(_load("llmProvider", "gemini"));
+    setLlmProvider(normalizeProvider(_load("llmProvider", "gemini")));
     setLlmModel(_load("llmModel", ""));
-    setImageEngine(_load("imageEngine", "imagen"));
+    setImageEngine(normalizeImageEngine(_load("imageEngine", "imagen")));
     setImageModel(_load("imageModel", ""));
-    setVideoEngine(_load("videoEngine", "veo3"));
+    setVideoEngine(normalizeVideoEngine(_load("videoEngine", "veo3")));
     setVideoModelState(normalizeVideoModel(_load("videoModel", "hero-only")));
     setTestMode(_load("testMode", false));
     setLanguage(_load("language", "ko"));

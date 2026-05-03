@@ -32,7 +32,6 @@ export function EnginePanel({ settings, isGenerating, remainLabel }: EnginePanel
           </div>
           <select value={llmProvider} onChange={(e) => { setLlmProvider(e.target.value); setLlmModel(""); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="LLM \uc5d4\uc9c4 \uc120\ud0dd" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
             <option value="gemini" className="bg-gray-900">Gemini</option>
-            <option value="openai" className="bg-gray-900">GPT</option>
             <option value="claude" className="bg-gray-900">Claude</option>
           </select>
           {LLM_MODELS[llmProvider]?.length > 1 && (
@@ -49,7 +48,6 @@ export function EnginePanel({ settings, isGenerating, remainLabel }: EnginePanel
           <select value={imageEngine} onChange={(e) => { setImageEngine(e.target.value); setImageModel(""); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="\uc774\ubbf8\uc9c0 \uc5d4\uc9c4 \uc120\ud0dd" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
             <option value="imagen" className="bg-gray-900">Imagen</option>
             <option value="nano_banana" className="bg-gray-900">Nano Banana</option>
-            <option value="dalle" className="bg-gray-900">DALL-E</option>
           </select>
           {IMAGE_MODELS[imageEngine]?.length > 1 && (
             <select value={imageModel} onChange={(e) => { setImageModel(e.target.value); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="\uc774\ubbf8\uc9c0 \ubaa8\ub378 \uc120\ud0dd" className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-gray-500 focus:outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
@@ -64,7 +62,6 @@ export function EnginePanel({ settings, isGenerating, remainLabel }: EnginePanel
           </div>
           <select value={videoEngine} onChange={(e) => { setVideoEngine(e.target.value); setVideoModel(""); setQualityPreset("manual"); }} disabled={isGenerating} aria-label="\ube44\ub514\uc624 \uc5d4\uc9c4 \uc120\ud0dd" className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-colors">
             <option value="veo3" className="bg-gray-900">Veo 3</option>
-            <option value="sora2" className="bg-gray-900">Sora 2</option>
             <option value="kling" className="bg-gray-900">Kling</option>
             <option value="blender" className="bg-gray-900">Blender 3D</option>
             <option value="none" className="bg-gray-900">\uc5c6\uc74c</option>

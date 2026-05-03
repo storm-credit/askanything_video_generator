@@ -31,6 +31,7 @@ VIDEO_DOWNLOAD_TIMEOUT = 60  # 초
 MAX_IMAGE_SIZE_MB = 20       # Base64 인코딩 전 최대 이미지 크기
 
 from modules.utils.constants import build_video_generation_prompt
+from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
 
 
 def _has_vertex_gemini_backend() -> bool:
@@ -51,6 +52,8 @@ def get_available_engines() -> list[dict]:
     """프론트엔드에 표시할 사용 가능한 엔진 목록을 반환합니다."""
     available = []
     for key, info in SUPPORTED_ENGINES.items():
+        if key == "sora2" and is_openai_api_disabled():
+            continue
         available.append({"id": key, **info})
     return available
 
@@ -69,9 +72,9 @@ def check_engine_available(engine: str, google_key: str = None) -> tuple[bool, s
         return False, "GEMINI_API_KEY 또는 Vertex AI 서비스 계정 필요 (Veo 3)"
 
     if engine == "sora2":
-        key = os.getenv("OPENAI_API_KEY")
+        key = get_openai_api_key()
         if not key:
-            return False, "OPENAI_API_KEY 필요 (Sora 2)"
+            return False, "OpenAI API 비활성화 또는 OPENAI_API_KEY 필요 (Sora 2)"
         return True, "OpenAI API 직접 연동"
 
     if engine == "kling":
@@ -94,7 +97,7 @@ def _get_available_engines(preferred_engine: str) -> list[str]:
     engine_checks = {
         "veo3": lambda: get_google_key(service="veo3") is not None or _has_vertex_gemini_backend(),
         "kling": lambda: bool(os.getenv("KLING_ACCESS_KEY")),
-        "sora2": lambda: bool(os.getenv("OPENAI_API_KEY")),
+        "sora2": lambda: bool(get_openai_api_key()),
     }
 
     # Preferred engine first
@@ -251,9 +254,9 @@ def _generate_via_openai_sora(
     camera_style: str = "auto",
 ) -> str | None:
     """OpenAI Sora 2 API를 통한 비디오 생성"""
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     if not api_key:
-        print("[Sora 2 오류] OPENAI_API_KEY가 없습니다.")
+        print("[Sora 2 오류] OpenAI API가 비활성화되어 있거나 OPENAI_API_KEY가 없습니다.")
         return None
 
     try:

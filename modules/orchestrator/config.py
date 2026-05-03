@@ -2,7 +2,7 @@
 
 핵심 원칙:
   - 기본 LLM은 Gemini (Pro=창작, Flash=검증/폴리시)
-  - Claude/GPT는 Gemini 429 장애 시 자동 폴백 전용
+  - OpenAI/GPT는 프로젝트 정책상 폴백에서 제외
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ MODELS: dict[str, ModelSpec] = {
     # Claude (유료)
     "claude-sonnet-4-20250514": ModelSpec("claude", "claude-sonnet-4-20250514", "medium", 3.0, 15.0),
     "claude-haiku-4-5-20251001": ModelSpec("claude", "claude-haiku-4-5-20251001", "cheap", 0.80, 4.0),
-    # OpenAI (유료)
+    # OpenAI (유료, 정책상 기본 라우팅 제외)
     "gpt-4o": ModelSpec("openai", "gpt-4o", "medium", 2.50, 10.0),
     "gpt-4o-mini": ModelSpec("openai", "gpt-4o-mini", "cheap", 0.15, 0.60),
     "gpt-4.1": ModelSpec("openai", "gpt-4.1", "medium", 2.0, 8.0),
@@ -40,11 +40,11 @@ MODELS: dict[str, ModelSpec] = {
 AGENT_MODEL_DEFAULTS: dict[str, dict] = {
     "ScriptAgent": {
         "preferred": ["gemini-2.5-pro"],
-        "fallback": ["claude-sonnet-4-20250514", "gpt-4o"],
+        "fallback": ["gemini-2.5-flash", "gemini-2.0-flash"],
     },
     "QualityAgent": {
         "preferred": ["gemini-2.5-flash"],
-        "fallback": ["gemini-2.0-flash", "gpt-4o-mini"],
+        "fallback": ["gemini-2.0-flash"],
     },
     "VisualDirectorAgent": {
         "preferred": ["gemini-2.5-flash"],
