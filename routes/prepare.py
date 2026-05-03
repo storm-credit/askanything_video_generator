@@ -701,7 +701,7 @@ async def render_endpoint(req: RenderRequest):
         # lazy imports
         from modules.tts.elevenlabs import generate_tts, prepare_spoken_script
         from modules.utils.audio import normalize_audio_lufs
-        from modules.transcription.whisper import generate_word_timestamps
+        from modules.transcription.whisper import align_words_with_script, generate_word_timestamps
         from modules.video.remotion import create_remotion_video
         from modules.video.engines import generate_video_from_image
         from modules.utils.keys import get_google_key
@@ -717,8 +717,19 @@ async def render_endpoint(req: RenderRequest):
             elevenlabs_key_override = req.elevenlabsKey or os.getenv("ELEVENLABS_API_KEY", "")
 
             # 채널 프리셋 fallback: cameraStyle은 사용자가 명시 선택한 값을 유지.
-            if req.channel:
-                _ch_preset = get_channel_preset(req.channel)
+            effective_channel = req.channel or session.get("channel")
+            effective_tts_speed = req.ttsSpeed
+            effective_caption_size = req.captionSize
+            effective_caption_y = req.captionY
+            if effective_channel:
+                _ch_preset = get_channel_preset(effective_channel)
+                if _ch_preset:
+                    if _ch_preset.get("tts_speed") is not None:
+                        effective_tts_speed = _ch_preset["tts_speed"]
+                    if _ch_preset.get("caption_size"):
+                        effective_caption_size = _ch_preset["caption_size"]
+                    if _ch_preset.get("caption_y"):
+                        effective_caption_y = _ch_preset["caption_y"]
 
             # 수정된 스크립트 반영
             script_updates = {c["index"]: c["script"] for c in req.cuts if "script" in c}
@@ -740,12 +751,12 @@ async def render_endpoint(req: RenderRequest):
             elif req.voiceId:
                 render_voice_id = req.voiceId
             if not render_voice_id:
-                render_preset = get_channel_preset(req.channel)
+                render_preset = get_channel_preset(effective_channel)
                 if render_preset:
                     render_voice_id = render_preset.get("voice_id")
                     render_voice_settings = render_preset.get("voice_settings")
             else:
-                _rp = get_channel_preset(req.channel)
+                _rp = get_channel_preset(effective_channel)
                 if _rp:
                     render_voice_settings = _rp.get("voice_settings")
 
@@ -771,11 +782,11 @@ async def render_endpoint(req: RenderRequest):
                             topic_folder,
                             elevenlabs_key_override,
                             language=language,
-                            speed=req.ttsSpeed,
+                            speed=effective_tts_speed,
                             voice_id=render_voice_id,
                             voice_settings=render_voice_settings,
                             emotion=e,
-                            channel=req.channel,
+                            channel=effective_channel,
                             already_prepared=True,
                         ),
                     )
@@ -793,6 +804,7 @@ async def render_endpoint(req: RenderRequest):
                         words = await loop.run_in_executor(
                             None, lambda a=audio_paths[-1]: generate_word_timestamps(a, api_key_override, language=language)
                         )
+                        words = align_words_with_script(words, script, lang=language)
                     except Exception as exc:
                         print(f"[컷 {i+1} Whisper 실패] {exc}")
                 word_timestamps_list.append(words or [])
@@ -862,7 +874,7 @@ async def render_endpoint(req: RenderRequest):
                 from modules.utils.cost_tracker import record_asset_cost
 
                 record_asset_cost(
-                    channel=req.channel or session.get("channel") or "unknown",
+                    channel=effective_channel or "unknown",
                     video_count=generated_video_count,
                     video_model=os.getenv("VEO_MODEL") or actual_veo_model or req.videoModel,
                     tts_chars=sum(len(s or "") for s in scripts),
@@ -885,9 +897,9 @@ async def render_endpoint(req: RenderRequest):
                         visual_paths, audio_paths, scripts,
                         word_timestamps_list, topic_folder, title=video_title,
                         camera_style=req.cameraStyle, bgm_theme=req.bgmTheme,
-                        channel=req.channel, platforms=req.platforms,
-                        caption_size=req.captionSize,
-                        caption_y=req.captionY,
+                        channel=effective_channel, platforms=req.platforms,
+                        caption_size=effective_caption_size,
+                        caption_y=effective_caption_y,
                         descriptions=[cut.get("description", "") for cut in cuts],
                     ),
                 )

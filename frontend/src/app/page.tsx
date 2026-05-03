@@ -114,6 +114,21 @@ export default function Home() {
   const detectedRefUrl = isYouTubeUrl(topic) ? topic.trim() : undefined;
 
   // Settings key management
+  const getSettingsErrorMessage = async (response: Response): Promise<string> => {
+    const fallback = `HTTP ${response.status} ${response.statusText || "요청 실패"}`;
+    try {
+      const data = await response.json();
+      const detail = data?.detail || data?.error || data?.message;
+      if (Array.isArray(detail)) {
+        const messages = detail.map((item) => item?.msg || item?.message || String(item)).filter(Boolean);
+        return messages.length ? messages.join("\n") : fallback;
+      }
+      return typeof detail === "string" ? detail : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
   const fetchKeyStatus = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/health`);
@@ -189,18 +204,26 @@ export default function Home() {
   const addKey = async (configId: string) => {
     const value = (inputValues[configId] || "").trim();
     if (!value) return;
-    setSavedKeys((prev) => {
-      const existing = prev[configId] || [];
-      if (existing.includes(value)) return prev;
-      return { ...prev, [configId]: [...existing, value] };
-    });
-    setInputValues((prev) => ({ ...prev, [configId]: "" }));
     try {
-      await fetch(`${API_BASE}/api/settings/add-env-key`, {
+      const res = await fetch(`${API_BASE}/api/settings/add-env-key`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keyType: configId, key: value }),
       });
-    } catch {}
+      if (!res.ok) throw new Error(await getSettingsErrorMessage(res));
+      const data = await res.json().catch(() => ({ ok: true }));
+      if (data?.ok === false || data?.success === false) throw new Error(data?.error || data?.message || "키 저장 실패");
+      setSavedKeys((prev) => {
+        const existing = prev[configId] || [];
+        if (existing.includes(value)) return prev;
+        return { ...prev, [configId]: [...existing, value] };
+      });
+      setInputValues((prev) => ({ ...prev, [configId]: "" }));
+      sse.setErrorMessage(null);
+      fetchKeyStatus();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "키 저장 실패";
+      sse.setErrorMessage(`[설정 오류] ${message}`);
+    }
   };
 
   const removeKey = (configId: string, index: number) => {
@@ -302,6 +325,7 @@ export default function Home() {
     }
     setTodayMeta(Object.keys(channelMeta).length > 0 ? channelMeta : null);
     setTodayCuts(Object.keys(channelCuts).length > 0 ? channelCuts : null);
+    if (t.format_type) settings.setFormatType(t.format_type);
     const topicChannels = Object.keys(t.channels || {});
     if (topicChannels.length > 0) {
       settings.setSelectedChannels(topicChannels);

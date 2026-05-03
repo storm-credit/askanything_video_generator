@@ -607,7 +607,7 @@ export function SettingsModal({
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
           {activeTab === "core" && (
             <>
-              <p className="text-[10px] text-gray-500">Google 또는 OpenAI 중 하나 + ElevenLabs = 최소 구성</p>
+              <p className="text-[10px] text-gray-500">Google + 활성 TTS = 최소 구성. OpenAI는 선택 기능이 켜진 경우에만 사용</p>
               {coreConfigs.map((config) => (
                 <KeySection
                   key={config.id}

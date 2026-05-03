@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pytest
+
 from modules.scheduler.time_planner import KST, calculate_schedule
 from modules.upload.youtube.upload import _prepare_youtube_metadata
 from modules.utils.channel_config import choose_channel_upload_title
@@ -9,24 +11,27 @@ from modules.utils.obsidian_parser import parse_day_file
 def test_youtube_metadata_appends_public_hashtag_footer():
     description, tags = _prepare_youtube_metadata(
         "귀여워 보이지만, 사실은 생존을 위한 약속입니다. #OldTag #Shorts",
-        ["#해달", "#동물", "#심해", "#생존전략", "#과학", "#초과태그"],
+        ["#해달", "#동물", "#심해", "#생존전략"],
     )
 
-    assert tags == ["해달", "동물", "심해", "생존전략", "과학"]
-    assert description.endswith("#해달 #동물 #심해 #생존전략 #과학")
-    assert "#OldTag" not in description
+    assert tags == ["해달", "동물", "심해", "생존전략", "OldTag"]
+    assert description.endswith("#해달 #동물 #심해 #생존전략 #OldTag")
     assert "#Shorts" not in description
     assert description.count("#") == 5
 
 
-def test_youtube_metadata_keeps_manual_description_hashtags_when_tags_empty():
-    description, tags = _prepare_youtube_metadata(
-        "Why sea otters hold hands while sleeping.\n\n#SeaOtter #OceanLife",
-        [],
-    )
+def test_youtube_metadata_requires_exactly_five_tags():
+    with pytest.raises(ValueError, match="정확히 5개"):
+        _prepare_youtube_metadata(
+            "Why sea otters hold hands while sleeping.\n\n#SeaOtter #OceanLife",
+            [],
+        )
 
-    assert tags == ["SeaOtter", "OceanLife"]
-    assert description == "Why sea otters hold hands while sleeping.\n\n#SeaOtter #OceanLife"
+    with pytest.raises(ValueError, match="정확히 5개"):
+        _prepare_youtube_metadata(
+            "귀여워 보이지만, 사실은 생존을 위한 약속입니다.",
+            ["#해달", "#동물", "#심해", "#생존전략", "#과학", "#초과태그"],
+        )
 
 
 def test_schedule_keeps_day_file_public_metadata():

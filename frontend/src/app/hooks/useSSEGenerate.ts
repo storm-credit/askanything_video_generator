@@ -76,6 +76,12 @@ export function useSSEGenerate({ settings, savedKeys, topic, todayCuts, todayMet
       if (contentType.includes("application/json")) {
         const data = await response.json();
         const detail = data?.detail || data?.error || data?.message;
+        if (Array.isArray(detail)) {
+          const messages = detail
+            .map((item) => item?.msg || item?.message || item?.detail || String(item))
+            .filter(Boolean);
+          return messages.length ? messages.join("\n") : fallback;
+        }
         return typeof detail === "string" ? detail : fallback;
       }
       const text = await response.text();

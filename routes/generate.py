@@ -13,7 +13,7 @@ import shutil
 import traceback
 import copy
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
@@ -72,6 +72,12 @@ class GenerateRequest(BaseModel):
     workflowMode: str = "fast"  # fast(즉시 렌더) / review(초안만 생성, 검수 후 렌더)
     maxCuts: int | None = None  # 테스트 모드: 컷 수 제한 (예: 3)
     seriesTitle: str | None = None  # 시리즈 재생목록 제목 (배치 전용)
+
+    @model_validator(mode="after")
+    def default_video_model_for_engine(self):
+        if self.videoEngine == "veo3" and not self.videoModel:
+            self.videoModel = "hero-only"
+        return self
 
     @field_validator("workflowMode")
     @classmethod
@@ -1036,6 +1042,7 @@ async def generate_video_v2(req: GenerateRequest):
         elevenlabs_key=req.elevenlabsKey,
         gemini_keys_override=req.geminiKeys,
         format_type=req.formatType,
+        series_title=req.seriesTitle,
     )
 
     orchestrator = MainOrchestrator()

@@ -172,7 +172,7 @@ async def batch_start():
         from modules.image.dalle import generate_image as generate_image_dalle
         from modules.image.imagen import generate_image_imagen
         from modules.tts.elevenlabs import generate_tts
-        from modules.transcription.whisper import generate_word_timestamps
+        from modules.transcription.whisper import align_words_with_script, generate_word_timestamps
         from modules.video.remotion import create_remotion_video
         from modules.utils.audio import normalize_audio_lufs
         from modules.utils.keys import get_google_key, count_google_keys
@@ -250,8 +250,10 @@ async def batch_start():
                         words = []
                         if aud:
                             _aud, _lang = aud, job["language"]
+                            _script_for_align = cut.get("script", "")
                             try:
                                 words = await loop.run_in_executor(None, lambda a=_aud, l=_lang: generate_word_timestamps(a, language=l))
+                                words = align_words_with_script(words, _script_for_align, lang=_lang)
                             except Exception as _ts_exc:
                                 print(f"[배치] 컷 {i+1} 타임스탬프 실패 — 렌더 폴백 사용: {_ts_exc}")
                         word_ts_list.append(words)

@@ -132,9 +132,8 @@ class ImageAgent(BaseAgent):
                         ", extreme close-up of mysterious artifact or clue, dark background, spotlight isolation",
                     ],
                 }
-                variant_suffixes = _format_variants.get(
-                    ctx.format_type or "", _format_variants["FACT"]
-                )
+                fmt = (ctx.format_type or cut.get("format_type") or "FACT").upper()
+                variant_suffixes = _format_variants.get(fmt, _format_variants["FACT"])
                 for vi, suffix in enumerate(variant_suffixes):
                     try:
                         vkey = _get_image_key()

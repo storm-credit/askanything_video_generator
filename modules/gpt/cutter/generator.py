@@ -407,8 +407,8 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             retry_key = get_google_key(None, service="gemini", exclude=exhausted_keys) or current_key
         else:
             retry_key = current_key
-        # 포맷 시스템 프롬프트 재주입 (확장 요청에도 포맷 구조 규칙 적용)
-        retry_system = inject_format_prompt(system_prompt, format_type, lang) if format_type else system_prompt
+        # system_prompt에는 이미 포맷 규칙이 주입되어 있으므로 확장 요청에서는 그대로 재사용한다.
+        retry_system = system_prompt
         # 기존 컷 데이터를 포함하여 확장만 요청 (전체 재생성 대신)
         existing_cuts_json = json.dumps(
             [{"script": c["script"], "description": c.get("text", ""), "image_prompt": c.get("prompt", "")} for c in cuts],
@@ -487,7 +487,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
             regen_cuts, regen_title, regen_tags, regen_description = _request_cuts(
                 llm_provider,
                 retry_key,
-                retry_system if "retry_system" in locals() else (inject_format_prompt(system_prompt, format_type, lang) if format_type else system_prompt),
+                retry_system if "retry_system" in locals() else system_prompt,
                 strict_user,
                 model_override=llm_model,
             )
@@ -712,6 +712,11 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
 
     # v2 오케스트라 모드: fact_context도 반환 (QualityAgent에서 사용)
     if _skip_verify or _skip_polish or _skip_visual_director:
+        if format_type:
+            for _c in cuts:
+                _c["format_type"] = format_type.upper()
+                _c["topic"] = _topic_title
+            _ensure_format_metadata_tags(cuts, format_type)
         return cuts, topic_folder, title, tags, video_description, fact_context
 
     return cuts, topic_folder, title, tags, video_description, ""

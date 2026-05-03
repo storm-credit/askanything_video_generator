@@ -43,8 +43,6 @@ def _sanitize_youtube_tags(tags: list[str] | None) -> list[str]:
             continue
         seen.add(lowered)
         cleaned.append(value)
-        if len(cleaned) >= 5:
-            break
     return cleaned
 
 
@@ -92,8 +90,8 @@ def _prepare_youtube_metadata(description: str | None, tags: list[str] | None) -
     if public_hashtags:
         cleaned_description = f"{cleaned_description}\n\n{public_hashtags}" if cleaned_description else public_hashtags
 
-    if len(cleaned_tags) > 5:
-        raise ValueError("YouTube 태그는 최대 5개까지만 허용됩니다.")
+    if len(cleaned_tags) != 5:
+        raise ValueError(f"YouTube 태그는 정확히 5개가 필요합니다. 현재 {len(cleaned_tags)}개입니다.")
     bad_tags = [tag for tag in cleaned_tags if tag.lower() in _FORBIDDEN_YOUTUBE_TAGS]
     if bad_tags:
         raise ValueError(f"YouTube 태그에 금지어가 포함되어 있습니다: {', '.join(bad_tags)}")

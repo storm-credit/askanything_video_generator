@@ -656,6 +656,45 @@ def _get_channel_title_hard_errors(block: str) -> list[str]:
     return errors
 
 
+def _get_channel_metadata_hard_errors(block: str) -> list[str]:
+    """채널별 공개 메타데이터 필수 필드와 정확히 5개 태그를 검증한다."""
+    errors: list[str] = []
+    topic_sections = re.findall(r"(^## \d+\..*?)(?=^## \d+\.|\Z)", block, re.DOTALL | re.MULTILINE)
+    banned_tags = {"short", "shorts", "쇼츠"}
+    for section in topic_sections:
+        header_match = re.search(r"^## \d+\.\s+(.+?)(?:\s+\[|$)", section, re.MULTILINE)
+        topic_label = (header_match.group(1) if header_match else "?").strip()
+        for channel in ["askanything", "wonderdrop", "exploratodo", "prismtale"]:
+            channel_match = re.search(
+                rf"^### {channel}\s*\([^)]+\)(.*?)(?=^### |\Z)",
+                section,
+                re.DOTALL | re.MULTILINE,
+            )
+            if not channel_match:
+                continue
+            body = channel_match.group(1)
+            title_match = re.search(r"^\s*(?:제목|Title|Titulo|Título):\s*(.+)$", body, re.MULTILINE)
+            desc_match = re.search(r"^\s*(?:설명(?:\s*\(본문\))?|Description|Descripcion|Descripción):\s*(.+)$", body, re.MULTILINE)
+            tags_match = re.search(r"^\s*(?:해시태그|Hashtags):\s*(.+)$", body, re.MULTILINE)
+            if not title_match or not title_match.group(1).strip():
+                errors.append(f"{topic_label} / {channel}: 공개 제목 누락")
+            if not desc_match or not desc_match.group(1).strip():
+                errors.append(f"{topic_label} / {channel}: Description 누락")
+            if not tags_match or not tags_match.group(1).strip():
+                errors.append(f"{topic_label} / {channel}: Hashtags 누락")
+                continue
+            tags = [t.strip().lstrip("#") for t in re.split(r"[\s,]+", tags_match.group(1).strip()) if t.strip()]
+            tags = [t for t in tags if t]
+            if len(tags) != 5:
+                errors.append(f"{topic_label} / {channel}: 해시태그 {len(tags)}개 — 정확히 5개 필요")
+            banned_found = [t for t in tags if t.lower() in banned_tags]
+            if banned_found:
+                errors.append(f"{topic_label} / {channel}: shorts류 금지 태그 포함 ({', '.join(banned_found)})")
+            if desc_match and "#" in desc_match.group(1):
+                errors.append(f"{topic_label} / {channel}: Description 줄에는 # 금지 — Hashtags 필드를 사용")
+    return errors
+
+
 def _get_hard_validation_errors(block: str, expected_day: int) -> list[str]:
     """자동 저장을 막아야 하는 구조 오류."""
     errors = []
@@ -701,8 +740,8 @@ def _get_hard_validation_errors(block: str, expected_day: int) -> list[str]:
     for idx, line in enumerate(hashtag_lines, start=1):
         tags = [t.strip().lstrip("#") for t in re.split(r"[\s,]+", line.strip()) if t.strip()]
         tags = [t for t in tags if t]
-        if len(tags) > 5:
-            errors.append(f"해시태그 라인 {idx}: {len(tags)}개 — 최대 5개만 허용")
+        if len(tags) != 5:
+            errors.append(f"해시태그 라인 {idx}: {len(tags)}개 — 정확히 5개 필요")
         banned_found = [t for t in tags if t.lower() in banned_tags]
         if banned_found:
             errors.append(f"해시태그 라인 {idx}: shorts류 금지 태그 포함 ({', '.join(banned_found)})")
@@ -711,6 +750,7 @@ def _get_hard_validation_errors(block: str, expected_day: int) -> list[str]:
         if "#" in line:
             errors.append(f"설명 라인 {idx}: Day 파일 Description 줄에는 # 금지 — 해시태그 필드를 사용")
     errors.extend(_get_channel_title_hard_errors(block))
+    errors.extend(_get_channel_metadata_hard_errors(block))
     errors.extend(_get_topic_payoff_errors(block))
     return errors
 

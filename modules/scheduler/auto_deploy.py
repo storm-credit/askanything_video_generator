@@ -432,7 +432,18 @@ def _ensure_future_publish_at(
 
 
 def _preflight_tts() -> bool:
-    """TTS 서버 헬스체크 — 배치 시작 전 연결 확인."""
+    """TTS 헬스체크 — 활성 TTS 엔진에 맞춰 배치 시작 전 연결 확인."""
+    engine = os.getenv("TTS_ENGINE", "qwen3").strip().lower()
+    if engine in {"elevenlabs", "eleven_labs"}:
+        if os.getenv("ELEVENLABS_API_KEY", "").strip():
+            print("[사전 체크] ElevenLabs TTS 키 확인 완료")
+            return True
+        print("[사전 체크] ElevenLabs TTS 키 누락")
+        return False
+    if engine in {"auto", "fallback"} and os.getenv("ELEVENLABS_API_KEY", "").strip():
+        print("[사전 체크] ElevenLabs fallback 사용 가능")
+        return True
+
     import requests
     configured_url = os.getenv("QWEN3_TTS_URL", "").strip()
     candidates = [
@@ -489,9 +500,8 @@ def _reorder_by_topic_group(schedule: list[dict]) -> list[dict]:
 
     기존: publish_at 시간순 (채널 뒤섞임)
     변경: 주제1(4채널) → 주제2(4채널) → 주제3(4채널)
-    채널 순서: askanything → wonderdrop → exploratodo → prismtale
+    그룹 내부 순서: 예약 시간이 가장 이른 채널부터 처리
     """
-    channel_order = {"askanything": 0, "wonderdrop": 1, "exploratodo": 2, "prismtale": 3}
     groups: dict[str, list[dict]] = {}
     group_order: list[str] = []
 
@@ -504,11 +514,19 @@ def _reorder_by_topic_group(schedule: list[dict]) -> list[dict]:
 
     reordered = []
     for key in group_order:
-        items = sorted(groups[key], key=lambda x: channel_order.get(x.get("channel", ""), 99))
+        items = sorted(groups[key], key=_schedule_publish_sort_key)
         reordered.extend(items)
 
     print(f"[스케줄] 주제별 그룹핑: {len(group_order)}주제 × {len(schedule)//max(len(group_order),1)}채널")
     return reordered
+
+
+def _schedule_publish_sort_key(item: dict[str, Any]) -> datetime:
+    publish_at = item.get("publish_at")
+    if isinstance(publish_at, datetime):
+        return publish_at
+    parsed = _parse_publish_at_kst(item.get("publish_at_iso"))
+    return parsed or datetime.max.replace(tzinfo=KST)
 
 
 def _save_state():
@@ -636,6 +654,14 @@ def _read_state_file() -> dict[str, Any] | None:
     except Exception as e:
         print(f"[자동 배포] 상태 파일 읽기 실패(무시): {e}")
         return None
+
+
+def _restore_previous_state_for_date(target_date_str: str) -> None:
+    """시작 전 검증 실패로 종료할 때 같은 날짜의 기존 성공 상태를 보존한다."""
+    global _deploy_status
+    previous = _read_state_file()
+    if previous and previous.get("current_date") == target_date_str:
+        _deploy_status = {**_deploy_status, **previous, "running": False, "current_task": None}
 
 
 def _clean_youtube_url(value: str | None) -> str:
@@ -1195,6 +1221,8 @@ async def _prepare_render_upload_via_preview_flow(
         sched_dt = sched_dt.replace(tzinfo=timezone.utc)
     yt_publish_at = sched_dt.isoformat()
     account_id = get_upload_account(channel, "youtube")
+    if not account_id:
+        raise RuntimeError(f"YouTube 업로드 계정 매핑 누락: {channel}")
     print(f"  [업로드] YouTube 예약 업로드 시작... ({yt_publish_at})")
     yt_result = await asyncio.get_running_loop().run_in_executor(
         None,
@@ -1440,6 +1468,8 @@ async def run_auto_deploy(target_date: datetime | None = None,
         # 1. Day 파일 파싱
         result = get_today_topics(target_date=target_date)
         if not result.get("file") or not result.get("topics"):
+            if not dry_run and lock_acquired:
+                _restore_previous_state_for_date(date_str)
             return {
                 "success": False,
                 "message": f"{target_date.strftime('%m-%d')} Day 파일 없음",
@@ -1449,6 +1479,8 @@ async def run_auto_deploy(target_date: datetime | None = None,
         if day_file_path:
             conflicts = find_day_file_topic_conflicts(day_file_path)
             if conflicts:
+                if not dry_run and lock_acquired:
+                    _restore_previous_state_for_date(date_str)
                 return {
                     "success": False,
                     "file": result.get("file"),
@@ -1485,13 +1517,9 @@ async def run_auto_deploy(target_date: datetime | None = None,
         # 3. 사전 헬스체크 — TTS 서버 연결 확인
         tts_ok = _preflight_tts()
         if not tts_ok:
-            _deploy_status.update({
-                "total": len(schedule),
-                "finished_at": datetime.now(KST).isoformat(),
-            })
-            _save_state()
-            _notify_batch_abort("TTS 서버(Qwen3) 연결 불가 — 배치 중단")
-            return {"success": False, "message": "TTS 서버 연결 불가. Docker 확인 필요."}
+            _restore_previous_state_for_date(date_str)
+            _notify_batch_abort("TTS 연결 불가 — 배치 중단")
+            return {"success": False, "message": "TTS 연결 불가. TTS_ENGINE 설정과 키/서버 상태를 확인하세요."}
 
         # 4. 주제별 그룹핑 — 같은 주제의 채널들을 연속 처리
         schedule = _reorder_by_topic_group(schedule)
@@ -1536,6 +1564,14 @@ async def run_auto_deploy(target_date: datetime | None = None,
         should_notify_summary = True
         occupied_slots = _build_slot_reservations(schedule)
         consecutive_tts_fails = 0  # TTS 연속 실패 카운터
+        original_group_channels: dict[str, set[str]] = {}
+        for original_item in schedule:
+            group_key = original_item.get("topic_group") or original_item.get("topic") or ""
+            channel_key = original_item.get("channel") or ""
+            if not group_key or not channel_key:
+                continue
+            original_group_channels.setdefault(group_key, set()).add(channel_key)
+        original_group_totals = {key: len(value) for key, value in original_group_channels.items()}
 
         for item in schedule:
             # 중복 방지: 이전 배포에서 성공한 토픽 스킵
@@ -1712,7 +1748,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     topic_group = job.get("topic_group", "")
                     if topic_group:
                         rollout_pending = bool(item.get("rollout_strategy") == "lead_channel_first" and item.get("holdback_channels"))
-                        group_total = sum(1 for s in schedule if s.get("topic_group") == topic_group)
+                        group_total = original_group_totals.get(topic_group) or sum(1 for s in schedule if s.get("topic_group") == topic_group)
                         group_success = sum(1 for r in _deploy_status["results"] if r.get("topic_group") == topic_group and r.get("status") == "success")
                         if not rollout_pending and group_success >= group_total:
                             try:

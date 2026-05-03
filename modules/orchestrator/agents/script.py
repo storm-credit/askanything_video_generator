@@ -60,6 +60,12 @@ class ScriptAgent(BaseAgent):
 
         # 컨텍스트에 결과 기록
         ctx.cuts = cuts
+        detected_format = next(
+            (str(c.get("format_type", "")).upper() for c in cuts if c.get("format_type")),
+            "",
+        )
+        if detected_format:
+            ctx.format_type = detected_format
         ctx.topic_folder = topic_folder
         ctx.title = title
         ctx.tags = tags

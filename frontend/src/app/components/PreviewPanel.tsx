@@ -280,7 +280,6 @@ export function PreviewPanel({
                       <option value="fast">Fast</option>
                       <option value="ultra">Ultra</option>
                       <option value="nano_banana">Nano Banana</option>
-                      <option value="dalle">DALL-E</option>
                     </select>
                   </div>
                 </div>
