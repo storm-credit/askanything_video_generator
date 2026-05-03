@@ -756,9 +756,28 @@ async def render_endpoint(req: RenderRequest):
             audio_paths = []
             word_timestamps_list = []
             for i, script in enumerate(scripts):
+                cut_desc = cuts[i].get("description", cuts[i].get("text", "")) if i < len(cuts) else ""
+                cut_emotion = None
+                for tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY", "CALM", "LOOP"]:
+                    if f"[{tag}]" in cut_desc:
+                        cut_emotion = tag
+                        break
                 try:
                     aud = await loop.run_in_executor(
-                        None, lambda idx=i, s=script: generate_tts(s, idx, topic_folder, elevenlabs_key_override, language=language, speed=req.ttsSpeed, voice_id=render_voice_id, voice_settings=render_voice_settings, already_prepared=True)
+                        None,
+                        lambda idx=i, s=script, e=cut_emotion: generate_tts(
+                            s,
+                            idx,
+                            topic_folder,
+                            elevenlabs_key_override,
+                            language=language,
+                            speed=req.ttsSpeed,
+                            voice_id=render_voice_id,
+                            voice_settings=render_voice_settings,
+                            emotion=e,
+                            channel=req.channel,
+                            already_prepared=True,
+                        ),
                     )
                     if aud:
                         aud = normalize_audio_lufs(aud)

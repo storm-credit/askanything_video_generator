@@ -225,7 +225,24 @@ async def batch_start():
                         _batch_preset = get_channel_preset(job.get("channel"))
                         if _batch_preset:
                             _batch_vs = _batch_preset.get("voice_settings")
-                        aud = await loop.run_in_executor(None, lambda idx=i, c=cut: generate_tts(c["script"], idx, topic_folder, language=job["language"], voice_settings=_batch_vs))
+                        _batch_emotion = None
+                        _batch_desc = cut.get("description", cut.get("text", ""))
+                        for _tag in ["SHOCK", "WONDER", "TENSION", "REVEAL", "URGENCY", "DISBELIEF", "IDENTITY", "CALM", "LOOP"]:
+                            if f"[{_tag}]" in _batch_desc:
+                                _batch_emotion = _tag
+                                break
+                        aud = await loop.run_in_executor(
+                            None,
+                            lambda idx=i, c=cut, e=_batch_emotion: generate_tts(
+                                c["script"],
+                                idx,
+                                topic_folder,
+                                language=job["language"],
+                                voice_settings=_batch_vs,
+                                emotion=e,
+                                channel=job.get("channel"),
+                            ),
+                        )
                         if aud:
                             aud = normalize_audio_lufs(aud)
                         audio_paths.append(aud)
@@ -233,7 +250,10 @@ async def batch_start():
                         words = []
                         if aud:
                             _aud, _lang = aud, job["language"]
-                            words = await loop.run_in_executor(None, lambda a=_aud, l=_lang: generate_word_timestamps(a, language=l))
+                            try:
+                                words = await loop.run_in_executor(None, lambda a=_aud, l=_lang: generate_word_timestamps(a, language=l))
+                            except Exception as _ts_exc:
+                                print(f"[배치] 컷 {i+1} 타임스탬프 실패 — 렌더 폴백 사용: {_ts_exc}")
                         word_ts_list.append(words)
                         scripts.append(cut["script"])
 
