@@ -198,7 +198,16 @@ async def batch_start():
                         llm_key = get_google_key(None, service="gemini", exclude=_excluded) if job["llm_provider"] == "gemini" else None
                         try:
                             cuts, topic_folder, title, _tags, _desc, _fact_ctx = await loop.run_in_executor(
-                                None, lambda k=llm_key: generate_cuts(job["topic"], lang=job["language"], llm_provider=job["llm_provider"], llm_key_override=k)
+                                None,
+                                lambda k=llm_key: generate_cuts(
+                                    job["topic"],
+                                    lang=job["language"],
+                                    llm_provider=job["llm_provider"],
+                                    llm_key_override=k,
+                                    channel=job.get("channel"),
+                                    format_type=job.get("format_type"),
+                                    series_title=job.get("series_title"),
+                                ),
                             )
                             break
                         except Exception as _e:

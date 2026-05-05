@@ -1125,6 +1125,7 @@ async def _prepare_render_upload_via_preview_flow(
         "language": language,
         "channel": channel,
         "formatType": format_type,
+        "seriesTitle": series_title,
         "imageEngine": "imagen",
         "videoEngine": "none",
         "llmProvider": "gemini",

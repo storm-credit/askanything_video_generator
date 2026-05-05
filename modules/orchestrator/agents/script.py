@@ -44,6 +44,8 @@ class ScriptAgent(BaseAgent):
                 llm_model=spec.model_id,
                 reference_url=ctx.reference_url,
                 format_type=ctx.format_type,
+                series_title=ctx.series_title,
+                series_context=self._build_series_context(ctx),
                 _skip_verify=True,
                 _skip_visual_director=True,
                 _skip_polish=True,
@@ -75,6 +77,22 @@ class ScriptAgent(BaseAgent):
         self._record_estimated_llm(ctx, spec.model_id)
 
         yield f"[ScriptAgent] {len(cuts)}컷 기획 완료. '{title}'\n"
+
+    def _build_series_context(self, ctx: AgentContext) -> str | None:
+        fmt = (ctx.format_type or "").upper()
+        if fmt != "WHO_WINS" and not ctx.series_title:
+            return None
+        lines = [
+            "current_topic: " + (ctx.topic.split(chr(10))[0].strip() or ctx.topic[:120]),
+        ]
+        if ctx.series_title:
+            lines.insert(0, f"series_title: {ctx.series_title}")
+        if ctx.series_id:
+            lines.append(f"series_id: {ctx.series_id}")
+        lines.append(
+            "continuity_rule: keep the VS/tournament running; use this matchup as the current episode and tease the next challenger in the final cut."
+        )
+        return "\n".join(lines)
 
     def _record_estimated_llm(self, ctx: AgentContext, model_id: str) -> None:
         text_size = len(ctx.topic or "") + len(ctx.fact_context or "") + len(ctx.title or "") + len(ctx.description or "")

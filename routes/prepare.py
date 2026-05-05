@@ -72,6 +72,7 @@ class PrepareRequest(BaseModel):
     videoEngine: str = "none"
     channel: str | None = None
     formatType: str | None = None
+    seriesTitle: str | None = None
     referenceUrl: str | None = None
     maxCuts: int | None = None
 
@@ -163,6 +164,8 @@ class GenerateScriptsRequest(BaseModel):
     lang: str = "ko"
     channel: str = ""
     num_cuts: int = 8
+    formatType: str | None = None
+    seriesTitle: str | None = None
 
 
 # ── POST /api/prepare (SSE) ──────────────────────────────────────
@@ -211,6 +214,7 @@ async def prepare_endpoint(req: PrepareRequest):
                     channel=req.channel, llm_model=req.llmModel,
                     reference_url=prep_ref_url,
                     format_type=req.formatType,
+                    series_title=req.seriesTitle,
                 ),
             )
 
@@ -318,6 +322,7 @@ async def prepare_endpoint(req: PrepareRequest):
                     "topic": req.topic,
                     "channel": req.channel or "",
                     "language": req.language,
+                    "series_title": req.seriesTitle,
                     "cut1_ab_variants": cut1_ab_variants,
                     "_created": _time.time(),
                 }
@@ -335,6 +340,7 @@ async def prepare_endpoint(req: PrepareRequest):
                             "topic": req.topic,
                             "channel": req.channel or "",
                             "language": req.language,
+                            "series_title": req.seriesTitle,
                             "created_at": __import__("datetime").datetime.now().isoformat(),
                         }
                     }, _f, ensure_ascii=False, indent=2)
@@ -371,7 +377,7 @@ async def prepare_endpoint(req: PrepareRequest):
                 preview_cuts.append(cut_data)
 
             yield {"data": "PROG|100\n"}
-            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'description': video_desc, 'tags': video_tags, 'cuts': preview_cuts}, ensure_ascii=False)}\n"}
+            yield {"data": f"PREVIEW|{json.dumps({'sessionId': session_id, 'title': video_title, 'description': video_desc, 'tags': video_tags, 'cuts': preview_cuts, 'seriesTitle': req.seriesTitle}, ensure_ascii=False)}\n"}
 
         except Exception as e:
             traceback.print_exc()
@@ -1139,7 +1145,14 @@ async def generate_scripts(req: GenerateScriptsRequest):
 
     try:
         from modules.gpt.cutter import generate_cuts
-        cuts_list, _folder, title, tags, _desc, _fact_ctx = generate_cuts(topic, lang=req.lang, channel=req.channel, llm_provider="gemini")
+        cuts_list, _folder, title, tags, _desc, _fact_ctx = generate_cuts(
+            topic,
+            lang=req.lang,
+            channel=req.channel,
+            llm_provider="gemini",
+            format_type=req.formatType,
+            series_title=req.seriesTitle,
+        )
 
         # 이미지 수에 맞춤
         img_count = len(glob.glob(os.path.join(folder_path, "images", "cut_*.png")))
@@ -1153,6 +1166,7 @@ async def generate_scripts(req: GenerateScriptsRequest):
             json.dump({
                 "cuts": cuts_list, "title": title, "tags": tags,
                 "metadata": {"topic": topic, "channel": req.channel, "language": req.lang,
+                             "format_type": req.formatType, "series_title": req.seriesTitle,
                              "created_at": datetime.now().isoformat()}
             }, f, ensure_ascii=False, indent=2)
 

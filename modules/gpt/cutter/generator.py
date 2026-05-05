@@ -21,6 +21,61 @@ _COUNTDOWN_CUE_PATTERN = re.compile(
 _WHO_WINS_QUESTION_PATTERN = re.compile(
     r"(?i)\bwho(?:\s+\w+){0,2}\s+wins?\b|qui[eé]n\s+ganar[ií]a(?:\s+de\s+verdad)?\b|누가\s*(?:진짜\s*)?(?:이겨|더\s*강해)"
 )
+_SERIES_TAG_PATTERN = re.compile(r"\[시리즈:([^\]]+)\]")
+
+
+def _extract_series_title(topic: str) -> str | None:
+    match = _SERIES_TAG_PATTERN.search(topic or "")
+    if not match:
+        return None
+    return match.group(1).strip() or None
+
+
+def _build_series_context_instruction(
+    format_type: str | None,
+    lang: str,
+    series_title: str | None = None,
+    series_context: str | None = None,
+) -> str:
+    """WHO_WINS 시리즈 정보를 실제 생성 프롬프트에 주입한다."""
+    if (format_type or "").upper() != "WHO_WINS":
+        return ""
+
+    safe_title = _sanitize_llm_input(series_title or "", max_len=120)
+    safe_context = _sanitize_llm_input(series_context or "", max_len=1000)
+    if not safe_title and not safe_context:
+        return ""
+
+    lines = ["<series_context>"]
+    if safe_title:
+        lines.append(f"series_title: {safe_title}")
+    if safe_context:
+        lines.append(safe_context)
+    lines.append("</series_context>")
+    context_block = "\n".join(lines)
+
+    if lang == "en":
+        instruction = (
+            "[Series Instruction] This WHO_WINS episode is part of a continuing tournament, not a one-off VS video. "
+            "The title MUST include the series title plus an EP marker when available. "
+            "Cut 2 should naturally mention the current champion or previous winner if that information exists. "
+            "Cut 11 MUST tease the next challenger or next episode."
+        )
+    elif lang == "es":
+        instruction = (
+            "[Instrucción de serie] Este episodio WHO_WINS pertenece a un torneo continuo, no a un VS aislado. "
+            "El título DEBE incluir el nombre de la serie y una marca EP cuando sea posible. "
+            "El corte 2 debe mencionar al campeón actual o ganador anterior si existe esa información. "
+            "El corte 11 DEBE adelantar el próximo rival o episodio."
+        )
+    else:
+        instruction = (
+            "[시리즈 지시] 이 WHO_WINS 에피소드는 단발 VS가 아니라 연속 토너먼트다. "
+            "제목은 시리즈명과 가능하면 EP 표식을 포함해야 한다. "
+            "컷2는 이전 승자/현재 챔피언 정보가 있으면 자연스럽게 언급한다. "
+            "컷11은 다음 도전자 또는 다음 편을 반드시 예고한다."
+        )
+    return f"\n\n{context_block}\n{instruction}"
 
 
 def _get_channel_hook_rules(channel: str | None, lang: str) -> str:
@@ -158,12 +213,17 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
                   channel: str | None = None, llm_model: str | None = None,
                   reference_url: str | None = None,
                   format_type: str | None = None,
+                  series_title: str | None = None,
+                  series_context: str | None = None,
                   *, _skip_verify: bool = False, _skip_visual_director: bool = False,
                   _skip_polish: bool = False) -> tuple[list[dict[str, Any]], str, str, list[str], str, str]:
     # YouTube 자막 포함된 topic에서 제목/자막 분리
     _topic_title, _topic_content = _split_yt_topic(topic)
     if not _topic_title:
         _topic_title = topic
+    inferred_series_title = series_title or _extract_series_title(topic)
+    if inferred_series_title:
+        _topic_title = _SERIES_TAG_PATTERN.sub("", _topic_title).strip()
     topic_folder = slugify_topic(_topic_title, lang)
     # 채널별 폴더 분리 (멀티채널 병렬 생성 시 파일 충돌 방지)
     if channel:
@@ -276,6 +336,7 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
     channel_cut1_scene_rules = _get_channel_cut1_scene_rules(channel)
     if channel_cut1_scene_rules:
         user_content += f"\n\n{channel_cut1_scene_rules}\n[Critical] Cut 1 image_prompt and Cut 1 script must feel like the same scroll-stopping idea."
+    user_content += _build_series_context_instruction(format_type, lang, inferred_series_title, series_context)
 
     # 레퍼런스 영상 분석 주입 (XML 구조화)
     if reference_url:

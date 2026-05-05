@@ -390,6 +390,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     llm_model=llm_model_override,
                     reference_url=ref_url,
                     format_type=req.formatType,
+                    series_title=req.seriesTitle,
                 ),
             )
 
@@ -423,6 +424,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                     draft_tags=json.dumps(video_tags, ensure_ascii=False),
                     draft_cuts_json=json.dumps(cuts, ensure_ascii=False),
                     script_hash=_batch_hash(_all_scripts),
+                    series_title=req.seriesTitle,
+                    format_type=req.formatType,
                 )
                 review_payload = {
                     "job_id": _review_job_id,
@@ -438,6 +441,8 @@ async def generate_video_endpoint(req: GenerateRequest):
                     "script_version": 1,
                     "prompt_version": 1,
                     "script_hash": _batch_hash(_all_scripts),
+                    "series_title": req.seriesTitle,
+                    "format_type": req.formatType,
                 }
                 review_json_path = os.path.join("assets", topic_folder, "review_draft.json")
                 os.makedirs(os.path.dirname(review_json_path), exist_ok=True)
