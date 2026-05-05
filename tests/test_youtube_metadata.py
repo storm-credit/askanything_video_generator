@@ -2,6 +2,7 @@ from datetime import datetime
 
 import pytest
 
+from modules.scheduler.auto_deploy import _merge_youtube_tag_candidates
 from modules.scheduler.time_planner import KST, calculate_schedule
 from modules.upload.youtube.upload import _prepare_youtube_metadata
 from modules.utils.channel_config import choose_channel_upload_title
@@ -48,6 +49,24 @@ def test_youtube_metadata_trims_day_and_preview_tag_union_to_five():
     assert tags == ["Sharks", "Ocean", "Animals", "Myth", "Science"]
     assert description.count("#") == 5
     assert "#Predators" not in description
+
+
+def test_auto_deploy_keeps_day_metadata_tags_to_five_before_upload():
+    tags = _merge_youtube_tag_candidates(
+        "#Sharks #Ocean #Animals #Myth #Science",
+        ["#Predators", "#Nature", "#OceanTruth", "#ScienceFacts"],
+    )
+
+    assert tags == ["Sharks", "Ocean", "Animals", "Myth", "Science"]
+
+
+def test_auto_deploy_preview_tags_only_fill_missing_metadata_slots():
+    tags = _merge_youtube_tag_candidates(
+        "#Sharks #Ocean #Animals",
+        ["#Myth", "#Science", "#Predators"],
+    )
+
+    assert tags == ["Sharks", "Ocean", "Animals", "Myth", "Science"]
 
 
 def test_schedule_keeps_day_file_public_metadata():

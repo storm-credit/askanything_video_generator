@@ -127,6 +127,27 @@ def _soften_who_wins_cues(text: str, lang: str) -> str:
     return cleaned.strip(" ,:-?")
 
 
+def _merge_youtube_tag_candidates(
+    metadata_hashtags: str | list[str] | None,
+    preview_tags: list[str] | None,
+) -> list[str]:
+    """Day metadata wins; preview tags only fill missing slots up to 5."""
+    from modules.upload.youtube.upload import _sanitize_youtube_tags
+
+    metadata_tag_values: list[str] = []
+    if isinstance(metadata_hashtags, list):
+        metadata_tag_values = [str(t).strip() for t in metadata_hashtags if str(t).strip()]
+    elif metadata_hashtags:
+        metadata_tag_values = [str(metadata_hashtags).strip()]
+
+    metadata_tags = _sanitize_youtube_tags(metadata_tag_values)
+    if len(metadata_tags) >= 5:
+        return metadata_tags[:5]
+
+    preview_tag_values = [str(t).strip() for t in (preview_tags or []) if str(t).strip()]
+    return _sanitize_youtube_tags([*metadata_tag_values, *preview_tag_values])[:5]
+
+
 def _normalize_format_for_channel(channel: str, format_type: str | None) -> tuple[str | None, str | None]:
     """채널별 금지 포맷을 안전한 선호 포맷으로 치환한다."""
     try:
@@ -1231,13 +1252,7 @@ async def _prepare_render_upload_via_preview_flow(
     raw_title = str(metadata_title or "").strip()
     preview_title = str(preview_data.get("title") or "").strip()
     description = str(metadata_description or "").strip() or preview_data.get("description") or ""
-    metadata_tag_values: list[str] = []
-    if isinstance(metadata_hashtags, list):
-        metadata_tag_values = [str(t).strip() for t in metadata_hashtags if str(t).strip()]
-    elif metadata_hashtags:
-        metadata_tag_values = [str(metadata_hashtags).strip()]
-    preview_tag_values = [str(t).strip() for t in (preview_data.get("tags") or []) if str(t).strip()]
-    tags = metadata_tag_values + preview_tag_values
+    tags = _merge_youtube_tag_candidates(metadata_hashtags, preview_data.get("tags") or [])
 
     from modules.upload.youtube.upload import _prepare_youtube_metadata
     from modules.upload.youtube import upload_video as yt_upload
