@@ -277,6 +277,26 @@ def _build_slot_reservations(schedule: list[dict[str, Any]]) -> dict[str, list[d
     return occupied
 
 
+def _merge_slot_reservations(*sources: dict[str, list[datetime]] | None) -> dict[str, list[datetime]]:
+    """여러 예약 슬롯 목록을 채널별로 합친다."""
+    merged: dict[str, list[datetime]] = {}
+    for source in sources:
+        if not source:
+            continue
+        for channel, slots in source.items():
+            channel_key = str(channel or "").strip()
+            if not channel_key:
+                continue
+            for slot in slots or []:
+                if not isinstance(slot, datetime):
+                    continue
+                slot_kst = slot.astimezone(KST) if slot.tzinfo else slot.replace(tzinfo=KST)
+                merged.setdefault(channel_key, []).append(slot_kst)
+    for slots in merged.values():
+        slots.sort()
+    return merged
+
+
 def _release_slot_reservation(occupied_slots: dict[str, list[datetime]], channel: str, publish_dt: datetime | None) -> None:
     """현재 아이템의 기존 슬롯을 점유 목록에서 제거."""
     if not publish_dt:
@@ -1562,7 +1582,16 @@ async def run_auto_deploy(target_date: datetime | None = None,
         _save_state()
 
         should_notify_summary = True
-        occupied_slots = _build_slot_reservations(schedule)
+        reserved_history_slots = _build_occupied_slots_from_task_history(
+            datetime.now(KST) - timedelta(minutes=5)
+        )
+        occupied_slots = _merge_slot_reservations(
+            reserved_history_slots,
+            _build_slot_reservations(schedule),
+        )
+        if reserved_history_slots:
+            reserved_count = sum(len(slots) for slots in reserved_history_slots.values())
+            print(f"[자동 배포] 기존 예약 슬롯 {reserved_count}개 반영")
         consecutive_tts_fails = 0  # TTS 연속 실패 카운터
         original_group_channels: dict[str, set[str]] = {}
         for original_item in schedule:
