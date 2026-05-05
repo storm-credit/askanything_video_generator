@@ -354,42 +354,40 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
             warnings.append("FORMAT_SCALE_SOFT: 컷1 [SHOCK] 태그 권장 — 스케일 충격이 약할 수 있음")
-        # 수치 밀도 — 권장 (warning)
+        # 수치 밀도 — 프롬프트 HARD FAIL과 일치
         cuts_without_scale = sum(
             1 for c in cuts
             if not re.search(r'\d', c.get("script", ""))
         )
         if cuts_without_scale >= 2:
-            warnings.append(f"FORMAT_SCALE_SOFT: 수치 없는 컷 {cuts_without_scale}개 (권장 최대 1개)")
+            failures.append(f"FORMAT_SCALE: 수치/배율 없는 컷 {cuts_without_scale}개 — 2개 이상은 실패")
 
     elif fmt_type == "PARADOX":
         # 컷1 [SHOCK] — 권장 (warning)
         first_desc = cuts[0].get("description", cuts[0].get("text", ""))
         if "SHOCK" not in first_desc.upper():
             warnings.append("FORMAT_PARADOX_SOFT: 컷1 [SHOCK] 태그 권장 — 통념 전복 임팩트 약화 가능")
-        # 반전 횟수: 0개는 포맷 붕괴 (hard fail), 1개는 권장 (warning)
+        # 반전 횟수 — 프롬프트 HARD FAIL과 일치
         reversal_count = sum(
             1 for c in cuts
             if any(t in (c.get("description", "") or c.get("text", "")).upper()
                    for t in ("REVEAL", "DISBELIEF"))
         )
-        if reversal_count == 0:
-            failures.append("FORMAT_PARADOX: 반전 0개 — PARADOX 포맷은 최소 1개 REVEAL/DISBELIEF 필수")
-        elif reversal_count < 2:
-            warnings.append(f"FORMAT_PARADOX_SOFT: 반전 {reversal_count}개 (권장 2단계 이상)")
+        if reversal_count < 2:
+            failures.append(f"FORMAT_PARADOX: 반전 {reversal_count}개 — 최소 2단계 REVEAL/DISBELIEF 필수")
 
     elif fmt_type == "FACT":
         # REVEAL 존재 (뼈대 — hard fail)
         has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
         if not has_reveal:
             failures.append("FORMAT_FACT: [REVEAL] 태그 없음 — 핵심 사실 공개 컷 필수")
-        # 수치 밀도 — 권장 (warning)
+        # 수치 밀도 — 프롬프트 HARD FAIL과 일치
         cuts_without_numbers = sum(
             1 for c in cuts
             if not re.search(r'\d', c.get("script", ""))
         )
         if cuts_without_numbers >= 3:
-            warnings.append(f"FORMAT_FACT_SOFT: 수치 없는 컷 {cuts_without_numbers}개 (권장 최대 2개)")
+            failures.append(f"FORMAT_FACT: 수치 없는 컷 {cuts_without_numbers}개 — 3개 이상은 실패")
 
     elif fmt_type == "MYSTERY":
         # 컷1 [SHOCK] — 권장 (warning)

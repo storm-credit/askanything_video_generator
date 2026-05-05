@@ -161,12 +161,17 @@ def validate_and_retry(image_path: str, prompt: str, cut_index: int,
         if image_engine in ("imagen", "nano_banana"):
             if image_engine == "imagen":
                 from modules.image.imagen import generate_image_imagen
+                from modules.utils.cache import invalidate_cache
+                from modules.utils.constants import MASTER_STYLE
+
+                invalidate_cache(MASTER_STYLE + prompt)
                 img_key = get_google_key(None, service="imagen", extra_keys=gemini_keys)
                 new_path = generate_image_imagen(
                     prompt, cut_index, topic_folder, img_key,
                     model_override=image_model,
                     gemini_api_keys=gemini_keys,
                     topic=topic,
+                    skip_cache=True,
                 )
             else:
                 from modules.image.imagen import generate_image_nano_banana

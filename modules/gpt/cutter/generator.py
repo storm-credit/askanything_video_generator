@@ -388,13 +388,20 @@ def generate_cuts(topic: str, api_key_override: str = None, lang: str = "ko",
         raise RuntimeError(f"[{provider_label}] 모든 재시도 실패 ({max_key_attempts}회)") from last_error
 
     # 채널×포맷별 min/max_cuts — 확장/트림 전에 먼저 계산
+    from modules.gpt.prompts.formats import get_format_cut_override
     from modules.utils.channel_config import get_channel_preset as _get_cuts_preset
     _cuts_preset = _get_cuts_preset(channel) if channel else None
-    _format_cuts = (_cuts_preset or {}).get("format_cuts", {}).get(format_type or "", {}) if format_type else {}
-    _cfg_max = _format_cuts.get("max") or (_cuts_preset or {}).get("max_cuts", 10)
-    _cfg_min = _format_cuts.get("min") or (_cuts_preset or {}).get("min_cuts", 8)
+    _channel_max = (_cuts_preset or {}).get("max_cuts", 10)
+    _channel_min = (_cuts_preset or {}).get("min_cuts", 8)
+    _guide_min, _guide_max = get_format_cut_override(format_type, _channel_min, _channel_max)
+    _fmt_key = (format_type or "").upper()
+    _format_cuts = (_cuts_preset or {}).get("format_cuts", {}).get(_fmt_key, {}) if _fmt_key else {}
+    _cfg_max = _format_cuts.get("max") or _guide_max
+    _cfg_min = _format_cuts.get("min") or _guide_min
     if _format_cuts:
         print(f"-> [포맷 컷 수] {format_type} × {channel}: {_cfg_min}~{_cfg_max}컷 적용")
+    elif format_type and (_guide_min, _guide_max) != (_channel_min, _channel_max):
+        print(f"-> [포맷 컷 수] {format_type}: {_cfg_min}~{_cfg_max}컷 가이드 적용")
 
     # 컷 수 검증 — 초과 시 트림, 부족 시 기존 컷 기반 확장 요청 (전체 재생성 방지)
     if len(cuts) > _cfg_max:

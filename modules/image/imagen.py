@@ -53,7 +53,16 @@ def generate_image_with_quota(prompt: str, index: int, topic_folder: str = "defa
     raise last_error or RuntimeError(f"[QuotaManager] 컷 {index+1}: 모든 프로젝트 소진")
 
 
-def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None, model_override: str | None = None, gemini_api_keys: str | None = None, topic: str = "") -> str:
+def generate_image_imagen(
+    prompt: str,
+    index: int,
+    topic_folder: str = "default_topic",
+    api_key: str | None = None,
+    model_override: str | None = None,
+    gemini_api_keys: str | None = None,
+    topic: str = "",
+    skip_cache: bool = False,
+) -> str:
     """
     Google Imagen 4 API로 이미지를 생성합니다.
     429 에러 시 다른 키로 자동 전환, 전 키 소진 시 Fast 모델로 자동 폴백.
@@ -64,14 +73,17 @@ def generate_image_imagen(prompt: str, index: int, topic_folder: str = "default_
 
     # ── 캐시 확인 ──
     cache_key_prompt = MASTER_STYLE + prompt
-    cached = get_cached_image(cache_key_prompt)
-    if cached:
-        image_dir = f"assets/{topic_folder}/images"
-        os.makedirs(image_dir, exist_ok=True)
-        filename = os.path.join(image_dir, f"cut_{index:02}.png")
-        shutil.copy2(cached, filename)
-        print(f"[이미지 캐시] 히트 — 재생성 스킵 (컷 {index+1})")
-        return filename
+    if not skip_cache:
+        cached = get_cached_image(cache_key_prompt)
+        if cached:
+            image_dir = f"assets/{topic_folder}/images"
+            os.makedirs(image_dir, exist_ok=True)
+            filename = os.path.join(image_dir, f"cut_{index:02}.png")
+            shutil.copy2(cached, filename)
+            print(f"[이미지 캐시] 히트 — 재생성 스킵 (컷 {index+1})")
+            return filename
+    else:
+        print(f"[이미지 캐시] 우회 — 검수 재생성 (컷 {index+1})")
 
     # 모델 체인: 파라미터 오버라이드 → 환경변수 → 기본 모델 체인
     override_model = model_override or os.getenv("IMAGEN_MODEL")

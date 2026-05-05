@@ -202,6 +202,14 @@ class MainOrchestrator:
             if not ctx.cuts:
                 yield f"ERROR|[소스 생성 오류] 전체 컷 실패 — 렌더링 불가\n"
                 return
+            ctx.scripts = [c.get("script", "") for c in ctx.cuts]
+
+            post_asset_fails = self._validate_post_asset_cuts(ctx)
+            if post_asset_fails:
+                yield f"ERROR|[AssetGate] 실패 컷 제거 후 포맷 구조 붕괴 {len(post_asset_fails)}개 — 렌더 중단\n"
+                for failure in post_asset_fails[:8]:
+                    yield f"ERROR|  - {failure}\n"
+                return
 
         yield "PROG|75\n"
 
@@ -335,6 +343,47 @@ class MainOrchestrator:
             shutil.copy2(os.path.abspath(video_path), dl_path)
         except Exception as exc:
             print(f"[Orchestrator] Downloads 복사 실패: {exc}")
+
+    @staticmethod
+    def _validate_post_asset_cuts(ctx: AgentContext) -> list[str]:
+        """Validate that removing failed asset cuts did not break format structure."""
+        failures: list[str] = []
+        topic_title = ctx.topic.split("\n\n[원본 영상 내용]")[0].strip()
+        for cut in ctx.cuts:
+            cut.setdefault("format_type", ctx.format_type or "")
+            cut.setdefault("topic", topic_title)
+            cut.setdefault("topic_title", topic_title)
+
+        try:
+            from modules.gpt.cutter import _validate_hard_fail
+            failures.extend(_validate_hard_fail(ctx.cuts, ctx.channel))
+        except Exception as exc:
+            failures.append(f"POST_ASSET_HARD_FAIL_CHECK_ERROR: {exc}")
+
+        fmt = (ctx.format_type or next(
+            (str(c.get("format_type", "")).upper() for c in ctx.cuts if c.get("format_type")),
+            "",
+        )).upper()
+        try:
+            from modules.gpt.prompts.formats import get_format_cut_override
+            from modules.utils.channel_config import get_channel_preset
+
+            preset = get_channel_preset(ctx.channel) if ctx.channel else None
+            channel_min = (preset or {}).get("min_cuts", 8)
+            channel_max = (preset or {}).get("max_cuts", 10)
+            min_cuts, max_cuts = get_format_cut_override(fmt, channel_min, channel_max)
+            format_cuts = (preset or {}).get("format_cuts", {}).get(fmt, {}) if fmt else {}
+            min_cuts = format_cuts.get("min") or min_cuts
+            max_cuts = format_cuts.get("max") or max_cuts
+            if len(ctx.cuts) < min_cuts or len(ctx.cuts) > max_cuts:
+                failures.append(
+                    f"FORMAT_CUT_COUNT_AFTER_ASSET: {fmt or 'DEFAULT'} {len(ctx.cuts)}컷 "
+                    f"(필수 {min_cuts}~{max_cuts}컷)"
+                )
+        except Exception as exc:
+            failures.append(f"POST_ASSET_CUT_COUNT_CHECK_ERROR: {exc}")
+
+        return failures
 
     @staticmethod
     def _safe_error(exc: Exception) -> str:
