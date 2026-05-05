@@ -21,6 +21,33 @@ CHANNEL_BENCHMARK_TARGETS: list[tuple[str, str, str]] = [
     ("prismtale", "US_HISPANIC", "es"),
 ]
 
+CHANNEL_ORCHESTRA_POLICIES: dict[str, dict[str, str]] = {
+    "askanything": {
+        "expert": "KO market strategist",
+        "push": "KR 100만뷰 신호가 있는 우주/행성, 스케일, 상식 반전형 IF/FACT/SCALE을 우선 선발",
+        "test": "KR exact 신호가 부족한 카테고리는 내부 상위 성과가 있을 때만 테스트 슬롯으로 제한",
+        "avoid": "KR 벤치마크 없는 잡지식, 일반 뇌과학, 설명형 동물/역사 토픽을 공통 슬롯에 올리지 말 것",
+    },
+    "wonderdrop": {
+        "expert": "US Shorts strategist",
+        "push": "US 100만뷰 표본이 두꺼운 동물, 우주, 공룡, 심해 FACT/IF 모티브를 강하게 선발",
+        "test": "WonderDrop 내부 평균이 낮으므로 질문형보다 증거형 선언 제목으로 A/B 테스트",
+        "avoid": "WHO_WINS, casual What If, vs 남발, 추상 mystery 제목은 US 벤치마크 근거 없으면 제외",
+    },
+    "exploratodo": {
+        "expert": "LATAM Spanish strategist",
+        "push": "MX/스페인어 100만뷰에서 확인된 우주 IF, 공룡/동물/심해 FACT를 빠른 LATAM 제목으로 선발",
+        "test": "MX exact가 부족하면 Spanish locale 신호를 보조하되 LATAM 어휘와 리듬으로 재작성",
+        "avoid": "영어식 The Secret/What If 직역, 느린 설명형, 주어 없는 misterio 제목 금지",
+    },
+    "prismtale": {
+        "expert": "US Hispanic Spanish strategist",
+        "push": "US_HISPANIC 100만뷰가 있는 동물, 공룡, 인체, 우주 FACT/IF를 dark concrete mystery로 선발",
+        "test": "mystery 톤은 유지하되 반드시 장소/물체/수치가 보이는 구체 피사체를 붙일 것",
+        "avoid": "secreto/misterio 단어만 있는 빈 제목, 과도한 LATAM slang, 추상 공포 분위기만 있는 토픽 금지",
+    },
+}
+
 
 def _connect() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
@@ -307,6 +334,74 @@ def get_signal_summary(*, benchmark_filters: bool = False) -> dict[str, Any]:
     }
 
 
+def _top_values(rows: list[dict[str, Any]], field: str, limit: int = 3) -> str:
+    counts: dict[str, int] = {}
+    views: dict[str, list[int]] = {}
+    for row in rows:
+        key = str(row.get(field) or "?").strip() or "?"
+        counts[key] = counts.get(key, 0) + 1
+        views.setdefault(key, []).append(int(row.get("views") or 0))
+    if not counts:
+        return "none"
+    ranked = sorted(
+        counts,
+        key=lambda key: (counts[key], sum(views[key]) / max(1, len(views[key]))),
+        reverse=True,
+    )[:limit]
+    return ", ".join(
+        f"{key}({counts[key]},avg={round(sum(views[key]) / max(1, len(views[key])))})"
+        for key in ranked
+    )
+
+
+def _build_orchestra_expert_directives() -> list[str]:
+    """Turn external benchmark rows into hard channel directives for the topic orchestra."""
+    primary_min_views = _benchmark_min_views()
+    fallback_min_views = _benchmark_fallback_min_views()
+    min_market_signals = _benchmark_min_signals_per_market()
+    lines = [
+        "\n### orchestra expert directives",
+        "총괄 오케스트라 판정: 아래는 참고 메모가 아니라 topic selection gate다.",
+        "각 전문가가 market별 100만뷰 근거를 보고 push/test/avoid를 결정한다.",
+    ]
+    for channel, market, locale in CHANNEL_BENCHMARK_TARGETS:
+        exact_rows = list_signals(
+            market=market,
+            locale=locale,
+            limit=500,
+            min_views=primary_min_views,
+        )
+        evidence_rows = exact_rows
+        evidence_label = f"primary>={primary_min_views}"
+        if len(evidence_rows) < min_market_signals and fallback_min_views < primary_min_views:
+            fallback_rows = list_signals(
+                market=market,
+                locale=locale,
+                limit=500,
+                min_views=fallback_min_views,
+            )
+            if len(fallback_rows) > len(evidence_rows):
+                evidence_rows = fallback_rows
+                evidence_label = f"fallback>={fallback_min_views}"
+        policy = CHANNEL_ORCHESTRA_POLICIES.get(channel, {})
+        lines.extend([
+            f"- [{channel}] expert={policy.get('expert', 'channel strategist')} "
+            f"market={market} locale={locale} evidence={len(evidence_rows)} tier={evidence_label} "
+            f"primary_1m={len(exact_rows)} max_views={max([int(r.get('views') or 0) for r in evidence_rows], default=0)}",
+            f"  category_evidence: {_top_values(evidence_rows, 'category')}",
+            f"  format_evidence: {_top_values(evidence_rows, 'format_hint')}",
+            f"  hook_evidence: {_top_values(evidence_rows, 'hook')}",
+            f"  push: {policy.get('push', '')}",
+            f"  test: {policy.get('test', '')}",
+            f"  avoid: {policy.get('avoid', '')}",
+        ])
+    lines.extend([
+        "오케스트라 우선순위: exact market 100만뷰 evidence > same-locale fallback > 내부 최근 성과 > 일반 카테고리 균형.",
+        "Final Editor는 각 Day의 Topic 3 채널분화 슬롯에 위 expert directive가 최소 1회 이상 반영됐는지 확인한다.",
+    ])
+    return lines
+
+
 def build_topic_signals_context(limit: int = 30) -> str:
     """Compact prompt context for topic generation."""
     per_target_limit = max(3, min(12, int(limit) // max(1, len(CHANNEL_BENCHMARK_TARGETS))))
@@ -383,6 +478,7 @@ def build_topic_signals_context(limit: int = 30) -> str:
             f"market 후보가 {min_market_signals}개 미만이면 fallback>={fallback_min_views}까지 확장한다."
         ),
     ]
+    lines.extend(_build_orchestra_expert_directives())
     for channel, market, locale, rows, tier_label in target_rows:
         lines.append(f"\n### {channel} benchmark market={market} locale={locale} tier={tier_label}")
         if not rows:

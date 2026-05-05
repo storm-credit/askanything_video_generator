@@ -72,6 +72,9 @@ def test_topic_signal_context_groups_by_channel_market(tmp_path, monkeypatch):
     assert "wonderdrop benchmark market=US locale=en" in context
     assert "exploratodo benchmark market=MX locale=es" in context
     assert "prismtale benchmark market=US_HISPANIC locale=es" in context
+    assert "orchestra expert directives" in context
+    assert "[wonderdrop] expert=US Shorts strategist" in context
+    assert "topic selection gate" in context
     assert "[market:US]" in context
     assert "[market:MX]" in context
 
