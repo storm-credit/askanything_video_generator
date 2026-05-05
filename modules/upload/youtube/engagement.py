@@ -59,7 +59,7 @@ def _build_related_comment(video_id: str, title: str, tags: list[str],
         return "\n".join(lines)
 
     except Exception as e:
-        print(f"[고정 댓글] 관련 영상 조회 실패: {e}")
+        print(f"[고정 댓글] 관련 영상 조회 스킵: {e}")
         return None
 
 

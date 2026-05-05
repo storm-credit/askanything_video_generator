@@ -240,7 +240,7 @@ def upload_video(
                 youtube_url=video_url,
             )
         except Exception as e:
-            print(f"   [오늘할일 DB] 업로드 직후 완료 기록 실패 (업로드는 성공): {e}")
+            print(f"   [오늘할일 DB] 경고: 업로드 직후 완료 기록 스킵 (영상 업로드는 성공): {e}")
 
     try:
         from modules.utils.upload_history import upsert_videos
@@ -255,7 +255,7 @@ def upload_video(
             source="upload_success",
         )
     except Exception as e:
-        print(f"   [업로드 히스토리] DB 저장 실패 (업로드는 성공): {e}")
+        print(f"   [업로드 히스토리] 경고: DB 저장 스킵 (영상 업로드는 성공): {e}")
 
     # 재생목록 자동 추가
     try:
@@ -263,14 +263,14 @@ def upload_video(
         if playlist_id:
             result["playlist_id"] = playlist_id
     except Exception as e:
-        print(f"   [재생목록] 자동 추가 실패 (업로드는 성공): {e}")
+        print(f"   [재생목록] 경고: 자동 추가 스킵 (영상 업로드는 성공): {e}")
 
     # 포맷별 재생목록 추가
     if format_type:
         try:
             add_to_format_playlist(video_id, format_type, channel_id, channel)
         except Exception as e:
-            print(f"   [포맷 재생목록] 추가 실패 (업로드는 성공): {e}")
+            print(f"   [포맷 재생목록] 경고: 추가 스킵 (영상 업로드는 성공): {e}")
 
     # 시리즈별 재생목록 추가
     if series_title:
@@ -279,7 +279,7 @@ def upload_video(
             if series_playlist_id:
                 result["series_playlist_id"] = series_playlist_id
         except Exception as e:
-            print(f"   [시리즈 재생목록] 추가 실패 (업로드는 성공): {e}")
+            print(f"   [시리즈 재생목록] 경고: 추가 스킵 (영상 업로드는 성공): {e}")
 
     # 고정 댓글 — 같은 카테고리 과거 영상 링크
     try:
