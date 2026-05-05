@@ -44,7 +44,7 @@ def test_record_who_wins_episode_persists_next_matchup(tmp_path, monkeypatch):
     assert runtime["last_matchup"] == "로마 군단 vs 중세 기사"
     assert runtime["last_winner"] == "로마 군단"
     assert runtime["next_matchup"] == "바이킹 vs 스파르타"
-    assert runtime["continuation_status"] == "continue"
+    assert runtime["continuation_status"] == "continue_relative"
     assert runtime["should_continue"] is True
     assert runtime["episodes"][0]["youtube_url"] == "https://youtube.com/shorts/FsAgFUZUXVU"
 
@@ -85,6 +85,7 @@ def test_active_series_context_holds_low_view_teaser(tmp_path, monkeypatch):
         channel="askanything",
         format_type="WHO_WINS",
         view_count=3000,
+        continue_min_views=10000,
     )
 
     context = series_state.build_active_series_context()
@@ -92,9 +93,53 @@ def test_active_series_context_holds_low_view_teaser(tmp_path, monkeypatch):
     assert "현재 업로드 성과 기준을 통과한 필수 후속 VS 없음" in context
     assert "[성과 보류 VS]" in context
     assert "바이킹 vs 스파르타" in context
-    assert "조회수 3,000 < 연속 기준 10,000" in context
+    assert "조회수 3,000 < 채널 연속 기준 10,000" in context
     assert "필수 편성 금지" in context
     assert "반드시 다음 Day 후보" not in context
+
+
+def test_channel_relative_views_can_promote_three_thousand_views(tmp_path, monkeypatch):
+    series_dir = tmp_path / "series"
+    stats_dir = tmp_path / "stats"
+    stats_dir.mkdir()
+    monkeypatch.setattr(series_state, "SERIES_DIR", series_dir)
+    monkeypatch.setattr(series_state, "STATS_DIR", stats_dir)
+    stats_payload = {
+        "channel": "askanything",
+        "videos": [
+            {"video_id": "target", "title": "로마 군단 vs 중세 기사", "views": 2975},
+            {"video_id": "a", "title": "A", "views": 805},
+            {"video_id": "b", "title": "B", "views": 1487},
+            {"video_id": "c", "title": "C", "views": 1825},
+            {"video_id": "d", "title": "D", "views": 1554},
+            {"video_id": "e", "title": "E", "views": 3171},
+            {"video_id": "f", "title": "F", "views": 1344},
+            {"video_id": "g", "title": "G", "views": 36},
+            {"video_id": "h", "title": "H", "views": 1481},
+            {"video_id": "i", "title": "I", "views": 3003},
+        ],
+    }
+    (stats_dir / "askanything_stats.json").write_text(json.dumps(stats_payload), encoding="utf-8")
+
+    series_state.record_who_wins_episode(
+        series_title="최강역사대전",
+        topic="로마 군단 vs 중세 기사",
+        title="로마 군단 vs 중세 기사",
+        cuts=[
+            {"script": "승자는 로마 군단.", "format_type": "WHO_WINS"},
+            {"script": "다음엔 바이킹이랑 스파르타가 붙으면 누가 이길까?", "format_type": "WHO_WINS"},
+        ],
+        channel="askanything",
+        video_url="https://youtube.com/shorts/target",
+        format_type="WHO_WINS",
+    )
+
+    context = series_state.build_active_series_context()
+
+    assert "[필수 후속 VS]" in context
+    assert "바이킹 vs 스파르타" in context
+    assert "반드시 다음 Day 후보" in context
+    assert "평균" in context
 
 
 def test_generation_validation_rejects_single_who_wins_without_series_tag():

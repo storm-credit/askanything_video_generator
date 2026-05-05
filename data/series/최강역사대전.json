@@ -19,25 +19,25 @@
         "youtube_url": "https://youtube.com/shorts/FsAgFUZUXVU",
         "publish_at": "2026-05-03T13:00:00Z",
         "source_file": "Day 33 (5-3).md",
-        "recorded_at": "2026-05-05T16:58:17.874391+00:00",
-        "view_count": 3000,
-        "continue_min_views": 10000,
-        "continuation_status": "hold_low_views",
-        "should_continue": false,
-        "continuation_reason": "조회수 3,000 < 연속 기준 10,000"
+        "recorded_at": "2026-05-05T17:03:05.912548+00:00",
+        "view_count": 2975,
+        "continue_min_views": 2500,
+        "continuation_status": "continue_relative",
+        "should_continue": true,
+        "continuation_reason": "조회수 2,975 >= 채널 연속 기준 2,500 (평균 1.55배, 중앙값 1.88배, 상위 20%)"
       }
     ],
-    "updated_at": "2026-05-05T16:58:17.874391+00:00",
+    "updated_at": "2026-05-05T17:03:05.912548+00:00",
     "next_episode": 2,
     "last_matchup": "로마 군단 vs 중세 기사",
     "last_winner": "로마 군단",
     "next_matchup": "바이킹 vs 스파르타",
     "last_channel": "askanything",
     "last_title": "로마 군단 vs 중세 기사, 진짜 붙으면 누가 이길까?",
-    "last_view_count": 3000,
-    "continue_min_views": 10000,
-    "continuation_status": "hold_low_views",
-    "should_continue": false,
-    "continuation_reason": "조회수 3,000 < 연속 기준 10,000"
+    "last_view_count": 2975,
+    "continue_min_views": 2500,
+    "continuation_status": "continue_relative",
+    "should_continue": true,
+    "continuation_reason": "조회수 2,975 >= 채널 연속 기준 2,500 (평균 1.55배, 중앙값 1.88배, 상위 20%)"
   }
 }

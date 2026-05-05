@@ -16,6 +16,7 @@ from typing import Any
 
 
 SERIES_DIR = Path(os.getenv("SERIES_STATE_DIR", os.path.join("data", "series")))
+STATS_DIR = Path(os.getenv("YOUTUBE_STATS_DIR", os.path.join("assets", "_stats")))
 
 _DIRECT_VS_RE = re.compile(
     r"(?P<a>[0-9A-Za-z가-힣À-ÿ·'’\-\s]{1,48}?)\s+"
@@ -240,9 +241,30 @@ def _has_who_wins(format_type: str | None, cuts: Any) -> bool:
 
 def _continue_min_views() -> int:
     try:
-        return max(1, int(os.getenv("VS_SERIES_CONTINUE_MIN_VIEWS", "10000")))
+        return max(1, int(os.getenv("VS_SERIES_CONTINUE_MIN_VIEWS", "2500")))
     except Exception:
-        return 10000
+        return 2500
+
+
+def _continue_avg_multiplier() -> float:
+    try:
+        return max(0.1, float(os.getenv("VS_SERIES_CONTINUE_AVG_MULTIPLIER", "1.25")))
+    except Exception:
+        return 1.25
+
+
+def _continue_median_multiplier() -> float:
+    try:
+        return max(0.1, float(os.getenv("VS_SERIES_CONTINUE_MEDIAN_MULTIPLIER", "1.5")))
+    except Exception:
+        return 1.5
+
+
+def _continue_top_percentile() -> float:
+    try:
+        return min(1.0, max(0.01, float(os.getenv("VS_SERIES_CONTINUE_TOP_PERCENTILE", "0.25"))))
+    except Exception:
+        return 0.25
 
 
 def _coerce_int(value: Any) -> int | None:
@@ -254,23 +276,133 @@ def _coerce_int(value: Any) -> int | None:
         return None
 
 
+def _extract_video_id(value: str | None) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    patterns = [
+        r"(?:shorts/|watch\?v=|youtu\.be/)([A-Za-z0-9_-]{6,})",
+        r"^[A-Za-z0-9_-]{6,}$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1) if match.groups() else match.group(0)
+    return ""
+
+
+def _median(values: list[int]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return float(ordered[mid])
+    return (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def _load_channel_baseline(channel: str, video_url: str = "", title: str = "") -> dict[str, Any]:
+    channel = str(channel or "").strip()
+    if not channel:
+        return {}
+    path = STATS_DIR / f"{channel}_stats.json"
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    videos = payload.get("videos") if isinstance(payload, dict) else []
+    if not isinstance(videos, list):
+        return {}
+
+    values: list[int] = []
+    target_views: int | None = None
+    video_id = _extract_video_id(video_url)
+    normalized_title = str(title or "").strip()
+    for video in videos:
+        if not isinstance(video, dict):
+            continue
+        views = _coerce_int(video.get("views"))
+        if views is None:
+            continue
+        values.append(views)
+        if video_id and str(video.get("video_id") or "").strip() == video_id:
+            target_views = views
+        elif normalized_title and str(video.get("title") or "").strip() == normalized_title:
+            target_views = views
+
+    if not values:
+        return {}
+    ordered_desc = sorted(values, reverse=True)
+    rank = None
+    if target_views is not None:
+        try:
+            rank = ordered_desc.index(target_views) + 1
+        except ValueError:
+            rank = None
+    return {
+        "channel": channel,
+        "count": len(values),
+        "avg": sum(values) / len(values),
+        "median": _median(values),
+        "target_views": target_views,
+        "rank": rank,
+        "top_ratio": (rank / len(values)) if rank else None,
+    }
+
+
 def _classify_continuation(
     view_count: int | None,
     continue_min_views: int,
+    channel_baseline: dict[str, Any] | None = None,
     force_continue: bool = False,
 ) -> tuple[str, bool, str]:
     if force_continue:
         return "continue_forced", True, "수동 강제 연속"
     if view_count is None:
         return "pending_views", False, "성과 조회 전까지 필수 편성 금지"
-    if view_count >= continue_min_views:
-        return "continue", True, f"조회수 {view_count:,} >= 연속 기준 {continue_min_views:,}"
-    return "hold_low_views", False, f"조회수 {view_count:,} < 연속 기준 {continue_min_views:,}"
+
+    baseline = channel_baseline or {}
+    avg = float(baseline.get("avg") or 0)
+    median = float(baseline.get("median") or 0)
+    top_ratio = baseline.get("top_ratio")
+    top_cut = _continue_top_percentile()
+    dynamic_threshold = continue_min_views
+    if avg > 0:
+        dynamic_threshold = max(dynamic_threshold, int(round(avg * _continue_avg_multiplier())))
+    if median > 0:
+        dynamic_threshold = max(dynamic_threshold, int(round(median * _continue_median_multiplier())))
+
+    avg_ratio = (view_count / avg) if avg > 0 else None
+    median_ratio = (view_count / median) if median > 0 else None
+    top_pass = isinstance(top_ratio, (float, int)) and float(top_ratio) <= top_cut
+    score_parts = []
+    if avg_ratio is not None:
+        score_parts.append(f"평균 {avg_ratio:.2f}배")
+    if median_ratio is not None:
+        score_parts.append(f"중앙값 {median_ratio:.2f}배")
+    if top_ratio is not None:
+        score_parts.append(f"상위 {float(top_ratio) * 100:.0f}%")
+    score_text = ", ".join(score_parts)
+
+    if view_count >= dynamic_threshold or top_pass:
+        reason = f"조회수 {view_count:,} >= 채널 연속 기준 {dynamic_threshold:,}"
+        if top_pass and view_count < dynamic_threshold:
+            reason = f"조회수 {view_count:,}, 채널 상위 {float(top_ratio) * 100:.0f}%"
+        if score_text:
+            reason += f" ({score_text})"
+        return "continue_relative", True, reason
+
+    reason = f"조회수 {view_count:,} < 채널 연속 기준 {dynamic_threshold:,}"
+    if score_text:
+        reason += f" ({score_text})"
+    return "hold_low_views", False, reason
 
 
 def _runtime_allows_required(runtime: dict[str, Any]) -> bool:
     status = str(runtime.get("continuation_status") or "").strip()
-    if status in {"continue", "continue_forced"}:
+    if status in {"continue", "continue_relative", "continue_forced"}:
         return True
     if status:
         return False
@@ -327,15 +459,19 @@ def record_who_wins_episode(
                 break
     next_matchup = extract_next_matchup_from_cuts(cuts)
     winner = extract_winner_from_cuts(cuts, matchup)
+    normalized_url = str(video_url or "").strip()
+    baseline = _load_channel_baseline(channel, normalized_url, title)
     normalized_view_count = _coerce_int(view_count)
+    if normalized_view_count is None:
+        normalized_view_count = _coerce_int(baseline.get("target_views"))
     normalized_min_views = continue_min_views or _continue_min_views()
     continuation_status, should_continue, continuation_reason = _classify_continuation(
         normalized_view_count,
         normalized_min_views,
+        channel_baseline=baseline,
         force_continue=force_continue,
     )
 
-    normalized_url = str(video_url or "").strip()
     now = _now_iso()
     existing_idx = None
     for idx, episode in enumerate(episodes):
@@ -482,7 +618,7 @@ def build_active_series_context(max_items: int = 5) -> str:
                 )
             else:
                 held.append(
-                    f"{base_line} 조회수 {view_count:,} < 연속 기준 {min_views:,}. "
+                    f"{base_line} 조회수 {view_count:,} < 채널 연속 기준 {min_views:,}. "
                     "필수 편성 금지, 다른 강한 소재 우선."
                 )
             continue
