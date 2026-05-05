@@ -40,6 +40,31 @@ class MainOrchestrator:
 
     async def run(self, ctx: AgentContext) -> AsyncGenerator[str, None]:
         tracker = TokenTracker(ctx)
+        cost_recorded = False
+
+        def _record_cost_once(success: bool) -> dict | None:
+            nonlocal cost_recorded
+            if cost_recorded:
+                return None
+            cost_recorded = True
+            try:
+                from modules.utils.cost_tracker import record_generation_cost
+
+                return record_generation_cost(
+                    channel=ctx.channel or "unknown",
+                    success=success,
+                    llm_usd=ctx.total_cost(),
+                    image_count=ctx.image_count,
+                    video_count=ctx.video_count,
+                    video_model=ctx.video_model,
+                    tts_chars=ctx.tts_chars,
+                    image_cache_hits=ctx.image_cache_hits,
+                    qwen_tts_chars=ctx.tts_chars_by_engine.get("qwen3", 0),
+                    tts_engine_counts=ctx.tts_engine_counts,
+                )
+            except Exception as exc:
+                print(f"[Orchestrator] 비용 기록 실패: {exc}")
+                return None
 
         # 에이전트 인스턴스 생성
         script_agent = ScriptAgent(self._router, tracker)
@@ -70,6 +95,7 @@ class MainOrchestrator:
             async for msg in script_agent.execute(ctx):
                 yield msg
         except Exception as exc:
+            _record_cost_once(False)
             yield f"ERROR|[ScriptAgent] {self._safe_error(exc)}\n"
             return
 
@@ -94,6 +120,7 @@ class MainOrchestrator:
 
         if ctx.is_cancelled():
             yield "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"
+            _record_cost_once(False)
             return
 
         # Phase 2: 검증/비주얼/폴리시를 독립 에이전트로 실행 (각자 다른 모델 사용)
@@ -145,6 +172,7 @@ class MainOrchestrator:
                 yield f"ERROR|[QualityGate] 최종 HARD FAIL {len(final_hard_fails)}개 — 렌더 중단\n"
                 for failure in final_hard_fails[:8]:
                     yield f"ERROR|  - {failure}\n"
+                _record_cost_once(False)
                 return
             if final_region_warns:
                 yield f"WARN|[QualityGate] 최종 지역 스타일 경고 {len(final_region_warns)}개\n"
@@ -156,6 +184,7 @@ class MainOrchestrator:
         # ── Stage 2: Asset Production (병렬) ──
         if ctx.is_cancelled():
             yield "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"
+            _record_cost_once(False)
             return
 
         yield "[Orchestrator] 이미지 + TTS 병렬 생성 시작...\n"
@@ -175,6 +204,7 @@ class MainOrchestrator:
                 for msg in msgs:
                     yield msg
             except Exception as exc:
+                _record_cost_once(False)
                 yield f"ERROR|[Asset] {self._safe_error(exc)}\n"
                 return
 
@@ -201,6 +231,7 @@ class MainOrchestrator:
 
             if not ctx.cuts:
                 yield f"ERROR|[소스 생성 오류] 전체 컷 실패 — 렌더링 불가\n"
+                _record_cost_once(False)
                 return
             ctx.scripts = [c.get("script", "") for c in ctx.cuts]
 
@@ -209,6 +240,7 @@ class MainOrchestrator:
                 yield f"ERROR|[AssetGate] 실패 컷 제거 후 포맷 구조 붕괴 {len(post_asset_fails)}개 — 렌더 중단\n"
                 for failure in post_asset_fails[:8]:
                     yield f"ERROR|  - {failure}\n"
+                _record_cost_once(False)
                 return
 
         yield "PROG|75\n"
@@ -235,6 +267,7 @@ class MainOrchestrator:
 
         if ctx.is_cancelled():
             yield "WARN|[취소됨] 사용자에 의해 생성이 취소되었습니다.\n"
+            _record_cost_once(False)
             return
 
         # ── Stage 3: Render ──
@@ -242,10 +275,12 @@ class MainOrchestrator:
             async for msg in render_agent.execute(ctx):
                 yield msg
         except Exception as exc:
+            _record_cost_once(False)
             yield f"ERROR|[RenderAgent] {self._safe_error(exc)}\n"
             return
 
         if not ctx.video_paths:
+            _record_cost_once(False)
             yield "ERROR|[RenderAgent] 렌더링 결과가 없습니다.\n"
             return
 
@@ -277,6 +312,14 @@ class MainOrchestrator:
         if summary["calls"] > 0:
             yield (f"[Orchestrator] 토큰: {summary['total_tokens']:,} | "
                    f"비용: ${summary['total_cost_usd']}\n")
+
+        cost_entry = _record_cost_once(True)
+        if cost_entry:
+            yield (
+                f"[Orchestrator] 비용집계: LLM ${cost_entry['llm_usd']:.4f} | "
+                f"이미지 {ctx.image_count}장(cache {ctx.image_cache_hits}) | "
+                f"비디오 {ctx.video_count}컷 | TTS {ctx.tts_engine_counts}\n"
+            )
 
         # 썸네일 경로
         thumb_relative = ""

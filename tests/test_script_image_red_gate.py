@@ -1,6 +1,7 @@
 from modules.gpt.cutter.quality import _validate_hard_fail
-from modules.orchestrator.base import AgentContext
+from modules.orchestrator.base import AgentContext, ModelRouter
 from modules.orchestrator.orchestrator import MainOrchestrator
+from modules.orchestrator.tracker import TokenTracker
 
 
 def _cut(script: str, tag: str, fmt: str) -> dict:
@@ -126,3 +127,76 @@ def test_post_asset_gate_fails_when_removed_cut_breaks_format_count():
     failures = MainOrchestrator._validate_post_asset_cuts(ctx)
 
     assert any(f.startswith("FORMAT_CUT_COUNT_AFTER_ASSET: FACT 7컷") for f in failures)
+
+
+def test_quality_agent_runs_structure_fact_and_subject_layers(monkeypatch):
+    import asyncio
+
+    import modules.gpt.cutter as cutter_module
+    import modules.gpt.cutter.generator as generator_module
+    import modules.utils.keys as keys_module
+    from modules.orchestrator.agents.quality import QualityAgent
+
+    calls = []
+
+    def mark(name):
+        def _inner(cuts, *args, **kwargs):
+            calls.append(name)
+            return cuts
+        return _inner
+
+    monkeypatch.setattr(keys_module, "get_google_key", lambda *args, **kwargs: "test-key")
+    monkeypatch.setattr(generator_module, "_should_run_fact_verify", lambda *args, **kwargs: True)
+    monkeypatch.setattr(cutter_module, "_verify_highness_structure", mark("structure"))
+    monkeypatch.setattr(cutter_module, "_verify_facts", mark("facts"))
+    monkeypatch.setattr(cutter_module, "_verify_subject_match", mark("subject"))
+
+    cuts = [
+        _cut(f"Cut {i} has {i} concrete numbers", "TENSION", "FACT")
+        for i in range(1, 8)
+    ]
+    cuts[0]["description"] = "[SHOCK]"
+    cuts[5]["description"] = "[REVEAL]"
+    cuts[-1]["description"] = "[LOOP]"
+    ctx = AgentContext(
+        topic="quality topic",
+        channel="wonderdrop",
+        format_type="FACT",
+        fact_context="verified reference facts",
+        cuts=cuts,
+        gemini_keys_override="test-key",
+    )
+    agent = QualityAgent(ModelRouter(), TokenTracker(ctx))
+
+    async def run_agent():
+        return [msg async for msg in agent.execute(ctx)]
+
+    messages = asyncio.run(run_agent())
+
+    assert calls == ["structure", "facts", "subject"]
+    assert any("전문가 검증 시작" in msg for msg in messages)
+    assert len(ctx.token_log) == 3
+
+
+def test_cost_tracker_separates_cache_hits_and_qwen_chars(tmp_path, monkeypatch):
+    from modules.utils import cost_tracker
+
+    monkeypatch.setattr(cost_tracker, "_DAILY_FILE", str(tmp_path / "daily_cost.json"))
+
+    entry = cost_tracker.record_generation_cost(
+        channel="wonderdrop",
+        success=True,
+        llm_usd=0.01,
+        image_count=2,
+        image_cache_hits=3,
+        tts_chars=0,
+        qwen_tts_chars=1200,
+        tts_engine_counts={"qwen3": 4},
+    )
+    daily = cost_tracker.get_daily_summary()
+
+    assert entry["image_usd"] == cost_tracker.calc_image_cost(2)
+    assert entry["tts_usd"] == 0
+    assert daily["wonderdrop"]["image_cache_hits"] == 3
+    assert daily["wonderdrop"]["qwen_tts_chars"] == 1200
+    assert daily["wonderdrop"]["tts_engine_counts"]["qwen3"] == 4

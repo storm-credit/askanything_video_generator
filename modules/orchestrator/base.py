@@ -106,8 +106,11 @@ class AgentContext:
 
     # ── 비용 카운팅 (ImageAgent/VideoAgent/TTSAgent 기록) ──
     image_count: int = 0
+    image_cache_hits: int = 0
     video_count: int = 0
     tts_chars: int = 0
+    tts_engine_counts: dict[str, int] = field(default_factory=dict)
+    tts_chars_by_engine: dict[str, int] = field(default_factory=dict)
 
     # ── 취소 ──
     _cancelled: bool = False

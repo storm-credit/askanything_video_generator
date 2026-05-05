@@ -107,7 +107,12 @@ class TTSAgent(BaseAgent):
             ctx.audio_paths[i] = aud_path
             ctx.word_timestamps[i] = timestamps
             if aud_path and i < len(ctx.cuts):
-                ctx.tts_chars += len(ctx.cuts[i].get("script", ""))
+                chars = len(ctx.cuts[i].get("script", ""))
+                engine = self._get_tts_engine(aud_path) or "unknown"
+                ctx.tts_engine_counts[engine] = ctx.tts_engine_counts.get(engine, 0) + 1
+                ctx.tts_chars_by_engine[engine] = ctx.tts_chars_by_engine.get(engine, 0) + chars
+                if engine in {"elevenlabs", "unknown"}:
+                    ctx.tts_chars += chars
             status = "OK" if aud_path else "FAILED"
             yield f"  -> 컷 {i+1} TTS {status}\n"
 
@@ -118,3 +123,11 @@ class TTSAgent(BaseAgent):
             yield f"WARN|[TTSAgent] TTS 실패: 컷 {failed}\n"
         else:
             yield f"[TTSAgent] 전체 {len(ctx.cuts)}컷 TTS 완료\n"
+
+    @staticmethod
+    def _get_tts_engine(path: str) -> str:
+        try:
+            from modules.tts.elevenlabs import get_tts_engine_for_path
+            return get_tts_engine_for_path(path)
+        except Exception:
+            return ""

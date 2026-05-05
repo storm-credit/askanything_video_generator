@@ -170,9 +170,16 @@ class ImageAgent(BaseAgent):
             i, path, ab_vars = await coro
             ctx.visual_paths[i] = path
             if path:
-                ctx.image_count += 1
+                if self._is_cached_image(path):
+                    ctx.image_cache_hits += 1
+                else:
+                    ctx.image_count += 1
             if i == 0 and ab_vars:
-                ctx.image_count += len(ab_vars)
+                for variant_path in ab_vars:
+                    if self._is_cached_image(variant_path):
+                        ctx.image_cache_hits += 1
+                    else:
+                        ctx.image_count += 1
                 ctx.cut1_ab_variants = ab_vars
                 # Vision API로 스크롤멈추기 점수 측정 → 최선 선택
                 best = _pick_best_cut1(path, ab_vars, ctx.cuts[0].get("script", ""),
@@ -207,6 +214,24 @@ class ImageAgent(BaseAgent):
             yield f"WARN|[ImageAgent] 이미지 실패: 컷 {failed}\n"
         else:
             yield f"[ImageAgent] 전체 {len(ctx.cuts)}컷 이미지 생성 완료\n"
+
+    @staticmethod
+    def _is_cached_image(path: str) -> bool:
+        try:
+            from modules.image.imagen import get_image_generation_meta as _imagen_meta
+            meta = _imagen_meta(path)
+            if meta:
+                return bool(meta.get("from_cache"))
+        except Exception:
+            pass
+        try:
+            from modules.image.dalle import get_image_generation_meta as _dalle_meta
+            meta = _dalle_meta(path)
+            if meta:
+                return bool(meta.get("from_cache"))
+        except Exception:
+            pass
+        return False
 
 
 def _score_scroll_stop(image_path: str, script: str, api_key: str) -> float:

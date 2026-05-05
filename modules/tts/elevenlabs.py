@@ -189,6 +189,18 @@ EMOTION_SPEED_FACTOR: dict[str, float] = {e: 1.10 for e in _FAST_EMOTIONS}
 # NORMAL 감정은 기본 1.00 (dict에 없으면 .get(emotion, 1.0)으로 폴백)
 
 QWEN3_TTS_URL = os.getenv("QWEN3_TTS_URL", "http://localhost:8010")
+_TTS_ENGINE_BY_PATH: dict[str, str] = {}
+
+
+def _remember_tts_engine(path: str, engine: str) -> None:
+    if path:
+        _TTS_ENGINE_BY_PATH[os.path.abspath(path)] = engine
+
+
+def get_tts_engine_for_path(path: str | None) -> str:
+    if not path:
+        return ""
+    return _TTS_ENGINE_BY_PATH.get(os.path.abspath(path), "")
 
 
 def _candidate_qwen3_urls() -> list[str]:
@@ -296,6 +308,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         os.makedirs(output_dir, exist_ok=True)
         silent_path = os.path.join(output_dir, f"cut_{index:02d}.wav")
         _write_silent_wav(silent_path, duration_sec=1.0)
+        _remember_tts_engine(silent_path, "silent")
         return silent_path
 
     if not already_prepared:
@@ -306,6 +319,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
         os.makedirs(output_dir, exist_ok=True)
         silent_path = os.path.join(output_dir, f"cut_{index:02d}.wav")
         _write_silent_wav(silent_path, duration_sec=1.0)
+        _remember_tts_engine(silent_path, "silent")
         return silent_path
 
     # speed 미지정 시 channel_config에서 자동 로드
@@ -344,6 +358,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
 
         result = _generate_qwen3(text, wav_path, language, emotion=emotion, channel=channel, speed=speed)
         if result:
+            _remember_tts_engine(result, "qwen3")
             return result
         # Qwen3 실패 → ElevenLabs 폴백 시도 (키 있을 때만)
         _el_key = api_key_override or os.getenv("ELEVENLABS_API_KEY", "")
@@ -436,6 +451,7 @@ def generate_tts(text: str, index: int, topic_folder: str, api_key_override: str
                     return None
                 # LUFS 정규화는 호출자(TTSAgent/generate.py)에서 단일 지점으로 처리
                 print(f"OK [초호화 성우 엔진 (ElevenLabs)] 컷 {index+1} 음성 생성 완료!")
+                _remember_tts_engine(audio_path, "elevenlabs")
                 return audio_path
 
             elif response.status_code == 401:

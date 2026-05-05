@@ -78,8 +78,20 @@ class PolishAgent(BaseAgent):
 
         # 스크립트 동기화
         ctx.scripts = [c.get("script", "") for c in ctx.cuts]
+        self._record_estimated_llm(ctx, spec.model_id)
 
         yield f"[PolishAgent] 폴리시 완료. {len(ctx.cuts)}컷\n"
+
+    def _record_estimated_llm(self, ctx: AgentContext, model_id: str) -> None:
+        text_size = len(ctx.topic or "")
+        for cut in ctx.cuts:
+            text_size += len(cut.get("script", "") or "")
+        self._tracker.record(
+            self.name,
+            model_id,
+            input_tokens=max(1, (text_size + 3000) // 4),
+            output_tokens=max(120, text_size // 4),
+        )
 
     @staticmethod
     def _filter_forbidden(cuts: list[dict], forbidden: list[str]):

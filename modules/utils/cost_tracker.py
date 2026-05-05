@@ -445,6 +445,11 @@ class DailyCost:
         ch["video_count"] += entry.get("video_count", 0)
         ch["tts_chars"] += entry.get("tts_chars", 0)
         ch["whisper_secs"] = ch.get("whisper_secs", 0.0) + entry.get("whisper_secs", 0.0)
+        ch["image_cache_hits"] = ch.get("image_cache_hits", 0) + entry.get("image_cache_hits", 0)
+        ch["qwen_tts_chars"] = ch.get("qwen_tts_chars", 0) + entry.get("qwen_tts_chars", 0)
+        for engine, count in (entry.get("tts_engine_counts") or {}).items():
+            counts = ch.setdefault("tts_engine_counts", {})
+            counts[engine] = counts.get(engine, 0) + count
 
     def total_usd(self) -> float:
         return sum(
@@ -462,6 +467,9 @@ def record_generation_cost(
     video_model: str | None = None,
     tts_chars: int = 0,
     whisper_secs: float = 0.0,
+    image_cache_hits: int = 0,
+    qwen_tts_chars: int = 0,
+    tts_engine_counts: dict | None = None,
 ) -> dict:
     """한 영상 생성 결과를 일별 집계에 저장. 해당 영상의 비용 dict 반환."""
     video_model_key = _video_model_key(video_model)
@@ -484,6 +492,9 @@ def record_generation_cost(
         "video_model": video_model_key,
         "tts_chars": tts_chars,
         "whisper_secs": whisper_secs,
+        "image_cache_hits": image_cache_hits,
+        "qwen_tts_chars": qwen_tts_chars,
+        "tts_engine_counts": dict(tts_engine_counts or {}),
         "total_usd": total_usd,
     }
 
@@ -497,12 +508,18 @@ def record_generation_cost(
                 "success": 0, "failed": 0,
                 "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0, "whisper_usd": 0.0,
                 "image_count": 0, "video_count": 0, "tts_chars": 0, "whisper_secs": 0.0,
+                "image_cache_hits": 0, "qwen_tts_chars": 0, "tts_engine_counts": {},
                 "video_models": {},
             }
         ch = data[today][channel]
         for k in ("success", "failed", "image_count", "video_count", "tts_chars"):
             ch[k] += entry[k]
         ch["whisper_secs"] = ch.get("whisper_secs", 0.0) + entry["whisper_secs"]
+        ch["image_cache_hits"] = ch.get("image_cache_hits", 0) + entry["image_cache_hits"]
+        ch["qwen_tts_chars"] = ch.get("qwen_tts_chars", 0) + entry["qwen_tts_chars"]
+        for engine, count in entry["tts_engine_counts"].items():
+            counts = ch.setdefault("tts_engine_counts", {})
+            counts[engine] = counts.get(engine, 0) + count
         for k in ("llm_usd", "image_usd", "video_usd", "tts_usd", "whisper_usd"):
             ch[k] += entry.get(k, 0.0)
         if video_count:
@@ -522,6 +539,9 @@ def record_asset_cost(
     video_model: str | None = None,
     tts_chars: int = 0,
     whisper_secs: float = 0.0,
+    image_cache_hits: int = 0,
+    qwen_tts_chars: int = 0,
+    tts_engine_counts: dict | None = None,
 ) -> dict:
     """실제 생성된 자산 비용만 일별 집계에 저장. 영상 성공/실패 카운트는 바꾸지 않는다."""
     video_model_key = _video_model_key(video_model)
@@ -544,6 +564,9 @@ def record_asset_cost(
         "video_model": video_model_key,
         "tts_chars": tts_chars,
         "whisper_secs": whisper_secs,
+        "image_cache_hits": image_cache_hits,
+        "qwen_tts_chars": qwen_tts_chars,
+        "tts_engine_counts": dict(tts_engine_counts or {}),
         "total_usd": total_usd,
     }
 
@@ -557,12 +580,18 @@ def record_asset_cost(
                 "success": 0, "failed": 0,
                 "llm_usd": 0.0, "image_usd": 0.0, "video_usd": 0.0, "tts_usd": 0.0, "whisper_usd": 0.0,
                 "image_count": 0, "video_count": 0, "tts_chars": 0, "whisper_secs": 0.0,
+                "image_cache_hits": 0, "qwen_tts_chars": 0, "tts_engine_counts": {},
                 "video_models": {},
             }
         ch = data[today][channel]
         for k in ("image_count", "video_count", "tts_chars"):
             ch[k] += entry[k]
         ch["whisper_secs"] = ch.get("whisper_secs", 0.0) + entry["whisper_secs"]
+        ch["image_cache_hits"] = ch.get("image_cache_hits", 0) + entry["image_cache_hits"]
+        ch["qwen_tts_chars"] = ch.get("qwen_tts_chars", 0) + entry["qwen_tts_chars"]
+        for engine, count in entry["tts_engine_counts"].items():
+            counts = ch.setdefault("tts_engine_counts", {})
+            counts[engine] = counts.get(engine, 0) + count
         for k in ("llm_usd", "image_usd", "video_usd", "tts_usd", "whisper_usd"):
             ch[k] += entry.get(k, 0.0)
         if video_count:
@@ -618,7 +647,12 @@ def get_billing_overview(date: Optional[str] = None) -> dict:
             "failed": int(info.get("failed", 0) or 0),
             "total_usd": round(total_usd, 4),
             "total_krw": usd_to_krw(total_usd),
+            "image_count": int(info.get("image_count", 0) or 0),
+            "image_cache_hits": int(info.get("image_cache_hits", 0) or 0),
             "video_count": int(info.get("video_count", 0) or 0),
+            "tts_chars": int(info.get("tts_chars", 0) or 0),
+            "qwen_tts_chars": int(info.get("qwen_tts_chars", 0) or 0),
+            "tts_engine_counts": dict(info.get("tts_engine_counts") or {}),
             "video_usd": round(float(info.get("video_usd", 0.0) or 0.0), 4),
             "video_krw": usd_to_krw(float(info.get("video_usd", 0.0) or 0.0)),
             "video_models": video_models,
@@ -643,11 +677,13 @@ def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
     total_krw = usd_to_krw(entry["total_usd"])
 
     img_cnt = entry["image_count"]
+    img_cache_hits = int(entry.get("image_cache_hits", 0) or 0)
     vid_cnt = entry["video_count"]
     vid_model = entry.get("video_model") or _video_model_key(None)
     vid_model_label = get_model_label("veo3", vid_model) or describe_video_model("veo3", vid_model)
     vid_unit_krw = usd_to_krw(_video_price_for_model(vid_model)) if vid_cnt else 0
     tts_c   = entry["tts_chars"]
+    qwen_c = int(entry.get("qwen_tts_chars", 0) or 0)
     wh_secs = entry.get("whisper_secs", 0.0)
 
     lines = [
@@ -658,10 +694,12 @@ def build_cost_table_text(entry: dict, channel: str, title: str) -> str:
         "─────────────────────",
         f"{'LLM':<10}{'':<8}{llm_krw:>6,}원",
         f"{'Imagen4':<10}{img_cnt}장{'':<4}{img_krw:>6,}원",
+        f"{'Img cache':<10}{img_cache_hits}hit{'':<3}{0:>6,}원",
         f"{'Veo':<10}{vid_cnt}클립{'':<3}{vid_krw:>6,}원",
         f"Veo 모델: {vid_model_label} ({vid_model})",
         f"Veo 단가: {vid_unit_krw:,}원/clip",
         f"{'ElevenLabs':<10}{tts_c}자{'':<3}{tts_krw:>6,}원",
+        f"{'Qwen TTS':<10}{qwen_c}자{'':<3}{0:>6,}원",
         f"{'Whisper':<10}{wh_secs:.0f}초{'':<3}{whisper_krw:>6,}원",
         "─────────────────────",
         f"{'합계':<10}{'':<8}{total_krw:>6,}원",

@@ -59,5 +59,19 @@ class VisualDirectorAgent(BaseAgent):
                 ))
 
             yield f"[VisualDirectorAgent] 이미지 프롬프트 강화 완료\n"
+            self._record_estimated_llm(ctx, spec.model_id)
         except Exception as exc:
             yield f"WARN|[VisualDirectorAgent] 스킵 (원본 유지): {exc}\n"
+
+    def _record_estimated_llm(self, ctx: AgentContext, model_id: str) -> None:
+        text_size = len(ctx.topic or "")
+        for cut in ctx.cuts:
+            text_size += len(cut.get("script", "") or "")
+            text_size += len(cut.get("prompt", "") or "")
+            text_size += len(cut.get("description", "") or cut.get("text", "") or "")
+        self._tracker.record(
+            self.name,
+            model_id,
+            input_tokens=max(1, (text_size * 2 + 5000) // 4),
+            output_tokens=max(200, text_size // 5),
+        )

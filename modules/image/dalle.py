@@ -14,6 +14,19 @@ from modules.utils.cache import get_cached_image, save_to_cache
 from modules.utils.safety import is_safety_error, get_safety_fallback_prompt
 from modules.utils.provider_policy import get_openai_api_key, is_openai_api_disabled
 
+_IMAGE_GENERATION_META: dict[str, dict] = {}
+
+
+def _remember_image_meta(path: str, **meta) -> None:
+    if path:
+        _IMAGE_GENERATION_META[os.path.abspath(path)] = meta
+
+
+def get_image_generation_meta(path: str | None) -> dict:
+    if not path:
+        return {}
+    return _IMAGE_GENERATION_META.get(os.path.abspath(path), {})
+
 def generate_image(prompt: str, index: int, topic_folder: str = "default_topic", api_key: str | None = None, topic: str = "") -> str:
     final_api_key = get_openai_api_key(api_key)
     if not final_api_key:
@@ -35,6 +48,7 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
         os.makedirs(image_dir, exist_ok=True)
         filename = os.path.join(image_dir, f"cut_{index:02}.png")
         shutil.copy2(cached, filename)
+        _remember_image_meta(filename, engine="dalle", from_cache=True, model="cache")
         print(f"[이미지 캐시] 히트 — 재생성 스킵 (컷 {index+1})")
         return filename
 
@@ -79,6 +93,7 @@ def generate_image(prompt: str, index: int, topic_folder: str = "default_topic",
                 raise
 
             save_to_cache(enhanced_prompt, filename)
+            _remember_image_meta(filename, engine="dalle", from_cache=False, model="dall-e-3")
             return filename
 
         except Exception as e:

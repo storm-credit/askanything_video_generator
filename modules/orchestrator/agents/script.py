@@ -72,5 +72,19 @@ class ScriptAgent(BaseAgent):
         ctx.description = desc
         ctx.fact_context = fact_context
         ctx.scripts = [c.get("script", "") for c in cuts]
+        self._record_estimated_llm(ctx, spec.model_id)
 
         yield f"[ScriptAgent] {len(cuts)}컷 기획 완료. '{title}'\n"
+
+    def _record_estimated_llm(self, ctx: AgentContext, model_id: str) -> None:
+        text_size = len(ctx.topic or "") + len(ctx.fact_context or "") + len(ctx.title or "") + len(ctx.description or "")
+        for cut in ctx.cuts:
+            text_size += len(cut.get("script", "") or "")
+            text_size += len(cut.get("prompt", "") or "")
+            text_size += len(cut.get("description", "") or cut.get("text", "") or "")
+        self._tracker.record(
+            self.name,
+            model_id,
+            input_tokens=max(1, (len(ctx.topic or "") + 14000) // 4),
+            output_tokens=max(300, text_size // 4),
+        )

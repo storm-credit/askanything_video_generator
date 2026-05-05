@@ -15,6 +15,19 @@ from modules.utils.project_quota import quota_manager
 MAX_KEY_RETRIES = 10  # 키 전환 최대 횟수
 MAX_PROJECT_RETRIES = 5  # 프로젝트 전환 최대 횟수
 
+_IMAGE_GENERATION_META: dict[str, dict] = {}
+
+
+def _remember_image_meta(path: str, **meta) -> None:
+    if path:
+        _IMAGE_GENERATION_META[os.path.abspath(path)] = meta
+
+
+def get_image_generation_meta(path: str | None) -> dict:
+    if not path:
+        return {}
+    return _IMAGE_GENERATION_META.get(os.path.abspath(path), {})
+
 
 
 def generate_image_with_quota(prompt: str, index: int, topic_folder: str = "default_topic",
@@ -80,6 +93,7 @@ def generate_image_imagen(
             os.makedirs(image_dir, exist_ok=True)
             filename = os.path.join(image_dir, f"cut_{index:02}.png")
             shutil.copy2(cached, filename)
+            _remember_image_meta(filename, engine="imagen", from_cache=True, model="cache")
             print(f"[이미지 캐시] 히트 — 재생성 스킵 (컷 {index+1})")
             return filename
     else:
@@ -165,6 +179,7 @@ def generate_image_imagen(
                     record_key_usage(final_api_key, service_tag)
                     record_rpm_usage(final_api_key, service_tag)
                 save_to_cache(cache_key_prompt, filename)
+                _remember_image_meta(filename, engine="imagen", from_cache=False, model=model_id)
                 print(f"OK [아트 디렉터] 컷 {index+1} {model_label} 렌더링 완료!")
                 return filename
 
@@ -301,6 +316,7 @@ def generate_image_nano_banana(prompt: str, index: int, topic_folder: str, api_k
                     raise
 
                 save_to_cache(enhanced_prompt, filename)
+                _remember_image_meta(filename, engine="nano_banana", from_cache=False, model=model_name)
                 if final_key and not is_vertex_backend:
                     print(f"  [Nano Banana] 컷 {index+1} 생성 완료 ({model_name}, 키: {mask_key(final_key)})")
                 else:
