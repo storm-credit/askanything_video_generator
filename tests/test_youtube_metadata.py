@@ -20,18 +20,34 @@ def test_youtube_metadata_appends_public_hashtag_footer():
     assert description.count("#") == 5
 
 
-def test_youtube_metadata_requires_exactly_five_tags():
+def test_youtube_metadata_requires_at_least_five_tags_and_trims_extras():
     with pytest.raises(ValueError, match="정확히 5개"):
         _prepare_youtube_metadata(
             "Why sea otters hold hands while sleeping.\n\n#SeaOtter #OceanLife",
             [],
         )
 
-    with pytest.raises(ValueError, match="정확히 5개"):
-        _prepare_youtube_metadata(
-            "귀여워 보이지만, 사실은 생존을 위한 약속입니다.",
-            ["#해달", "#동물", "#심해", "#생존전략", "#과학", "#초과태그"],
-        )
+    description, tags = _prepare_youtube_metadata(
+        "귀여워 보이지만, 사실은 생존을 위한 약속입니다.",
+        ["#해달", "#동물", "#심해", "#생존전략", "#과학", "#초과태그"],
+    )
+    assert tags == ["해달", "동물", "심해", "생존전략", "과학"]
+    assert "#초과태그" not in description
+
+
+def test_youtube_metadata_trims_day_and_preview_tag_union_to_five():
+    description, tags = _prepare_youtube_metadata(
+        "Sharks do not hunt humans like movies say.",
+        [
+            "#Sharks #Ocean #Animals #Myth #Science",
+            "#Predators",
+            "#Nature",
+        ],
+    )
+
+    assert tags == ["Sharks", "Ocean", "Animals", "Myth", "Science"]
+    assert description.count("#") == 5
+    assert "#Predators" not in description
 
 
 def test_schedule_keeps_day_file_public_metadata():

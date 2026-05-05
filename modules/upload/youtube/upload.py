@@ -1,13 +1,6 @@
 import os
 import re
 import time
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
-
-from .auth import _get_credentials
-from .playlists import add_to_playlist, add_to_format_playlist, add_to_series_playlist
-from .engagement import _build_related_comment, _post_pinned_comment
 
 
 _FORBIDDEN_YOUTUBE_TAGS = {"shorts", "short", "쇼츠"}
@@ -84,7 +77,7 @@ def _prepare_youtube_metadata(description: str | None, tags: list[str] | None) -
     프론트/자동배포/수동 API 어느 경로로 들어와도 같은 규칙을 적용한다.
     """
     description_tags = _extract_youtube_hashtags(description)
-    cleaned_tags = _sanitize_youtube_tags([*(tags or []), *description_tags])
+    cleaned_tags = _sanitize_youtube_tags([*(tags or []), *description_tags])[:5]
     cleaned_description = _sanitize_youtube_description(description)
     public_hashtags = _format_public_hashtags(cleaned_tags)
     if public_hashtags:
@@ -129,6 +122,13 @@ def upload_video(
                설정 시 privacyStatus가 자동으로 "private"으로 변경됩니다.
     """
     from datetime import datetime, timezone
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+    from googleapiclient.http import MediaFileUpload
+
+    from .auth import _get_credentials
+    from .engagement import _build_related_comment, _post_pinned_comment
+    from .playlists import add_to_playlist, add_to_format_playlist, add_to_series_playlist
 
     creds = _get_credentials(channel_id)
     if not creds:

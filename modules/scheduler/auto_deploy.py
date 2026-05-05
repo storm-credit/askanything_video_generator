@@ -64,6 +64,10 @@ MAX_CONSECUTIVE_TTS_FAILS = 2
 CATCHUP_MIN_LEAD_MINUTES = 60
 UPLOAD_MIN_LEAD_MINUTES = 60
 DEPLOY_LOCK_TTL_SECONDS = 12 * 60 * 60
+try:
+    DEPLOY_LOCK_IDLE_SECONDS = max(60, int(os.getenv("DEPLOY_LOCK_IDLE_SECONDS", str(90 * 60))))
+except Exception:
+    DEPLOY_LOCK_IDLE_SECONDS = 90 * 60
 SLOT_SEARCH_DAYS = 14
 _COUNTDOWN_CUE_PATTERN = re.compile(
     r"(?i)\btop\s*\d+\b|#\d+\b|\b(?:ranking|ranked|tier list|clasificación|랭킹|순위)\b"
@@ -598,6 +602,11 @@ def _acquire_deploy_lock(target_date_str: str) -> tuple[bool, str | None]:
                 os.kill(pid, 0)
         except Exception:
             is_stale = True
+        try:
+            if int(existing.get("pid") or 0) == os.getpid() and not _deploy_status.get("running"):
+                is_stale = True
+        except Exception:
+            pass
         if created_at:
             try:
                 created_dt = datetime.fromisoformat(created_at)
@@ -607,6 +616,13 @@ def _acquire_deploy_lock(target_date_str: str) -> tuple[bool, str | None]:
                     is_stale = True
             except Exception:
                 is_stale = True
+        try:
+            if os.path.exists(STATE_FILE):
+                state_mtime = datetime.fromtimestamp(os.path.getmtime(STATE_FILE), tz=KST)
+                if (datetime.now(KST) - state_mtime).total_seconds() > DEPLOY_LOCK_IDLE_SECONDS:
+                    is_stale = True
+        except Exception:
+            pass
         if is_stale:
             try:
                 os.unlink(DEPLOY_LOCK_FILE)

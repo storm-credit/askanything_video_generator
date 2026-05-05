@@ -241,9 +241,9 @@ def _has_who_wins(format_type: str | None, cuts: Any) -> bool:
 
 def _continue_min_views() -> int:
     try:
-        return max(1, int(os.getenv("VS_SERIES_CONTINUE_MIN_VIEWS", "2500")))
+        return max(1, int(os.getenv("VS_SERIES_CONTINUE_MIN_VIEWS", "1000")))
     except Exception:
-        return 2500
+        return 1000
 
 
 def _continue_avg_multiplier() -> float:
@@ -386,9 +386,13 @@ def _classify_continuation(
         score_parts.append(f"상위 {float(top_ratio) * 100:.0f}%")
     score_text = ", ".join(score_parts)
 
-    if view_count >= dynamic_threshold or top_pass:
-        reason = f"조회수 {view_count:,} >= 채널 연속 기준 {dynamic_threshold:,}"
-        if top_pass and view_count < dynamic_threshold:
+    floor_pass = view_count >= continue_min_views
+    if floor_pass or view_count >= dynamic_threshold or top_pass:
+        if view_count >= dynamic_threshold:
+            reason = f"조회수 {view_count:,} >= 채널 연속 기준 {dynamic_threshold:,}"
+        elif floor_pass:
+            reason = f"조회수 {view_count:,} >= 최소 연속 기준 {continue_min_views:,}"
+        else:
             reason = f"조회수 {view_count:,}, 채널 상위 {float(top_ratio) * 100:.0f}%"
         if score_text:
             reason += f" ({score_text})"

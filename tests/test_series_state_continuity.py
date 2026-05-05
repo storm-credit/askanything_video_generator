@@ -98,6 +98,29 @@ def test_active_series_context_holds_low_view_teaser(tmp_path, monkeypatch):
     assert "반드시 다음 Day 후보" not in context
 
 
+def test_active_series_context_promotes_one_thousand_view_teaser(tmp_path, monkeypatch):
+    monkeypatch.setattr(series_state, "SERIES_DIR", tmp_path)
+    series_state.record_who_wins_episode(
+        series_title="최강역사대전",
+        topic="로마 군단 vs 중세 기사",
+        title="로마 군단 vs 중세 기사",
+        cuts=[
+            {"script": "승자는 로마 군단.", "format_type": "WHO_WINS"},
+            {"script": "다음엔 바이킹이랑 스파르타가 붙으면 누가 이길까?", "format_type": "WHO_WINS"},
+        ],
+        channel="askanything",
+        format_type="WHO_WINS",
+        view_count=1000,
+    )
+
+    context = series_state.build_active_series_context()
+
+    assert "[필수 후속 VS]" in context
+    assert "바이킹 vs 스파르타" in context
+    assert "조회수 1,000 >= 최소 연속 기준 1,000" in context
+    assert "반드시 다음 Day 후보" in context
+
+
 def test_channel_relative_views_can_promote_three_thousand_views(tmp_path, monkeypatch):
     series_dir = tmp_path / "series"
     stats_dir = tmp_path / "stats"
