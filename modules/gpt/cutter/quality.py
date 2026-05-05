@@ -381,13 +381,13 @@ def _validate_hard_fail(cuts: list[dict], channel: str | None = None) -> list[st
         has_reveal = any("REVEAL" in (c.get("description", "") or c.get("text", "")).upper() for c in cuts)
         if not has_reveal:
             failures.append("FORMAT_FACT: [REVEAL] 태그 없음 — 핵심 사실 공개 컷 필수")
-        # 수치 밀도 — 프롬프트 HARD FAIL과 일치
+        # 수치 밀도 — 숫자형 FACT가 아니면 과도한 중단이 되므로 soft guard로만 기록한다.
         cuts_without_numbers = sum(
             1 for c in cuts
             if not re.search(r'\d', c.get("script", ""))
         )
         if cuts_without_numbers >= 3:
-            failures.append(f"FORMAT_FACT: 수치 없는 컷 {cuts_without_numbers}개 — 3개 이상은 실패")
+            warnings.append(f"FORMAT_FACT_SOFT: 수치 없는 컷 {cuts_without_numbers}개 — 가능하면 숫자/고유명사/측정값 보강")
 
     elif fmt_type == "MYSTERY":
         # 컷1 [SHOCK] — 권장 (warning)

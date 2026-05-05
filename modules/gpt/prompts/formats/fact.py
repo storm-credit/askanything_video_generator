@@ -54,10 +54,12 @@ FRAGMENT: dict[str, str] = {
 
 HARD FAIL:
 ✗ 컷1이 질문으로 시작 → 실패
-✗ 수치 없는 컷 3개 이상 → 실패
 ✗ escalation 없음 (컷4가 컷3보다 약하면) → 실패
 ✗ 주제 이탈 (토픽 팩트 범위 외) → 실패
 ✗ 같은 대사 2번 이상 등장 → 실패
+
+SOFT GUARD:
+△ 수치/고유명사/측정값 없는 컷 3개 이상 → 경고. 검증된 수치가 없으면 지어내지 말 것.
 """,
 
     "en": """
@@ -113,10 +115,12 @@ Consistency rules (mandatory):
 
 HARD FAIL:
 ✗ Cut 1 starts with a question → FAIL
-✗ 3+ cuts without statistics → FAIL
 ✗ No escalation (cut 4 weaker than cut 3) → FAIL
 ✗ Subject deviation (outside topic fact scope) → FAIL
 ✗ Same line appears in 2+ cuts → FAIL
+
+SOFT GUARD:
+△ 3+ cuts without statistics/proper nouns/measurements → warning. Do not invent numbers when verified data is unavailable.
 """,
 
     "es": """
@@ -172,9 +176,11 @@ Reglas de consistencia (obligatorio):
 
 HARD FAIL:
 ✗ Corte 1 empieza con pregunta → FALLO
-✗ 3+ cortes sin estadísticas → FALLO
 ✗ Sin escalada → FALLO
 ✗ Desviación del sujeto (fuera del alcance del hecho del tema) → FALLO
 ✗ La misma línea aparece en 2+ cortes → FALLO
+
+SOFT GUARD:
+△ 3+ cortes sin estadísticas/nombres propios/medidas → advertencia. No inventes números si no hay datos verificados.
 """,
 }

@@ -15,7 +15,7 @@ def _cut(script: str, tag: str, fmt: str) -> dict:
     }
 
 
-def test_fact_numbers_prompt_hard_fail_is_code_hard_fail():
+def test_fact_numbers_density_is_soft_guard_not_code_hard_fail():
     cuts = [
         _cut("Mars has 2 moons and a hidden storm", "SHOCK", "FACT"),
         _cut("Phobos keeps silent pressure over the rocks", "WONDER", "FACT"),
@@ -29,7 +29,7 @@ def test_fact_numbers_prompt_hard_fail_is_code_hard_fail():
 
     failures = _validate_hard_fail(cuts)
 
-    assert any(f.startswith("FORMAT_FACT: 수치 없는 컷 3개") for f in failures)
+    assert not any(f.startswith("FORMAT_FACT: 수치 없는 컷") for f in failures)
 
 
 def test_scale_numbers_prompt_hard_fail_is_code_hard_fail():
