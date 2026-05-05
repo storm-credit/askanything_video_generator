@@ -288,6 +288,6 @@ def upload_video(
             _post_pinned_comment(video_id, comment_text, channel_id)
             result["pinned_comment"] = True
     except Exception as e:
-        print(f"   [고정 댓글] 실패 (업로드는 성공): {e}")
+        print(f"   [고정 댓글] 스킵 (권한/댓글 설정 문제, 업로드는 성공): {e}")
 
     return result
