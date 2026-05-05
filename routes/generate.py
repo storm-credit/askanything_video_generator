@@ -633,9 +633,12 @@ async def generate_video_endpoint(req: GenerateRequest):
                             from modules.transcription.whisper import align_words_with_script
                             whisper_result[0] = align_words_with_script(_raw_timestamps, cut.get("script", ""))
                         except Exception as exc:
-                            with errors_lock:
-                                errors.append(f"타임스탬프: {exc}")
-                            print(f"[컷 {i+1} 타임스탬프 추출 실패] {exc}")
+                            if "OpenAI API가 비활성화" in str(exc):
+                                print(f"[컷 {i+1} 타임스탬프 스킵] OpenAI API 비활성화 — 렌더 폴백 사용")
+                            else:
+                                with errors_lock:
+                                    errors.append(f"타임스탬프: {exc}")
+                                print(f"[컷 {i+1} 타임스탬프 추출 경고] 렌더 폴백 사용: {exc}")
 
                 threads = []
                 # 비디오 생성 여부 결정

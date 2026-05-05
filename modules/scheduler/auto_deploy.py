@@ -1675,6 +1675,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
             publish_at = item["publish_at_iso"]
 
             _deploy_status["current_task"] = f"{channel}: {topic}"
+            _save_state()
             print(f"\n[자동 배포] {channel} — '{topic}' 생성 시작 (예약: {item['publish_at_kst']})")
 
             job = item  # alias for clarity
@@ -1832,6 +1833,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                     print(f"  [비용 추적] 기록 실패(무시): {cost_exc}")
                 _deploy_status["completed"] += 1
                 _deploy_status["results"].append(task_result)
+                _deploy_status["current_task"] = None
                 _save_state()
                 _display_title = flow_result.get("title") or topic
                 print(f"  ✅ 완료: {channel} — '{_display_title}'")
@@ -1938,6 +1940,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                 except Exception as task_db_exc:
                     print(f"  [오늘할일 DB] 실패 기록 실패(무시): {task_db_exc}")
                 _deploy_status["results"].append(task_result)
+                _deploy_status["current_task"] = None
             _save_state()
 
     finally:

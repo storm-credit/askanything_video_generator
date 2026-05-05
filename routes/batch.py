@@ -264,7 +264,10 @@ async def batch_start():
                                 words = await loop.run_in_executor(None, lambda a=_aud, l=_lang: generate_word_timestamps(a, language=l))
                                 words = align_words_with_script(words, _script_for_align, lang=_lang)
                             except Exception as _ts_exc:
-                                print(f"[배치] 컷 {i+1} 타임스탬프 실패 — 렌더 폴백 사용: {_ts_exc}")
+                                if "OpenAI API가 비활성화" in str(_ts_exc):
+                                    print(f"[배치] 컷 {i+1} 타임스탬프 스킵 — OpenAI API 비활성화, 렌더 폴백 사용")
+                                else:
+                                    print(f"[배치] 컷 {i+1} 타임스탬프 경고 — 렌더 폴백 사용: {_ts_exc}")
                         word_ts_list.append(words)
                         scripts.append(cut["script"])
 

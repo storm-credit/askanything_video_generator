@@ -820,7 +820,10 @@ async def render_endpoint(req: RenderRequest):
                         )
                         words = align_words_with_script(words, script, lang=language)
                     except Exception as exc:
-                        print(f"[컷 {i+1} Whisper 실패] {exc}")
+                        if "OpenAI API가 비활성화" in str(exc):
+                            print(f"[컷 {i+1} Whisper 스킵] OpenAI API 비활성화 — 렌더 폴백 타임스탬프 사용")
+                        else:
+                            print(f"[컷 {i+1} Whisper 타임스탬프 경고] 렌더 폴백 사용: {exc}")
                 word_timestamps_list.append(words or [])
 
                 prog = 10 + int(50 * ((i + 1) / len(scripts)))
