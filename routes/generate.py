@@ -378,6 +378,13 @@ async def generate_video_endpoint(req: GenerateRequest):
             else:
                 llm_key_for_request = get_google_key(llm_key_override, extra_keys=gemini_keys_override) if llm_provider == "gemini" else llm_key_override
             loop = asyncio.get_running_loop()
+            try:
+                from modules.utils.series_state import build_series_episode_context
+
+                series_context = build_series_episode_context(req.seriesTitle, _topic, req.formatType)
+            except Exception as series_exc:
+                print(f"[시리즈 상태] 생성 컨텍스트 로드 실패(무시): {series_exc}")
+                series_context = None
             cuts, topic_folder, video_title, video_tags, video_desc, _fact_ctx = await loop.run_in_executor(
                 None,
                 lambda: generate_cuts(
@@ -391,6 +398,7 @@ async def generate_video_endpoint(req: GenerateRequest):
                     reference_url=ref_url,
                     format_type=req.formatType,
                     series_title=req.seriesTitle,
+                    series_context=series_context,
                 ),
             )
 
@@ -904,6 +912,29 @@ async def generate_video_endpoint(req: GenerateRequest):
                                 sched_info = f" (예약: {yt_publish_at})" if yt_publish_at else ""
                                 yield {"data": f"UPLOAD_DONE|youtube|{url}{sched_info}\n"}
                                 upload_results.append({"platform": "youtube", "url": url})
+                                is_who_wins = (req.formatType or "").upper() == "WHO_WINS" or any(
+                                    str(c.get("format_type") or "").upper() == "WHO_WINS" for c in cuts if isinstance(c, dict)
+                                )
+                                if is_who_wins:
+                                    try:
+                                        from modules.utils.series_state import record_who_wins_episode
+
+                                        series_state = record_who_wins_episode(
+                                            series_title=req.seriesTitle,
+                                            topic=_topic,
+                                            title=video_title,
+                                            cuts=cuts,
+                                            channel=req.channel or "",
+                                            video_url=url,
+                                            publish_at=yt_publish_at,
+                                            format_type=req.formatType,
+                                        )
+                                        if series_state:
+                                            next_matchup = (series_state.get("runtime") or {}).get("next_matchup") or ""
+                                            yield {"data": f"[VS 시리즈] 후속 기록 완료: {next_matchup or '다음 대결 미추출'}\n"}
+                                    except Exception as series_err:
+                                        safe_series_err = re.sub(r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}", r"\1***", str(series_err)[:150])
+                                        yield {"data": f"WARN|VS 시리즈 후속 기록 실패: {safe_series_err}\n"}
                             else:
                                 yield {"data": f"WARN|YouTube 업로드 실패: {yt_result.get('error', 'unknown')}\n"}
                         elif plat == "tiktok":

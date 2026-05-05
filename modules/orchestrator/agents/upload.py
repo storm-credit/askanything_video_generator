@@ -94,6 +94,31 @@ class UploadAgent(BaseAgent):
                         sched_info = f" (예약: {yt_publish_at})" if yt_publish_at else ""
                         yield f"UPLOAD_DONE|youtube|{url}{sched_info}\n"
                         ctx.upload_results.append({"platform": "youtube", "url": url})
+                        is_who_wins = (ctx.format_type or "").upper() == "WHO_WINS" or any(
+                            str(c.get("format_type") or "").upper() == "WHO_WINS" for c in ctx.cuts if isinstance(c, dict)
+                        )
+                        if is_who_wins:
+                            try:
+                                from modules.utils.series_state import record_who_wins_episode
+
+                                series_state = record_who_wins_episode(
+                                    series_title=ctx.series_title,
+                                    topic=ctx.topic,
+                                    title=ctx.title,
+                                    cuts=ctx.cuts,
+                                    channel=ctx.channel or "",
+                                    video_url=url,
+                                    publish_at=yt_publish_at,
+                                    format_type=ctx.format_type,
+                                )
+                                if series_state:
+                                    next_matchup = (series_state.get("runtime") or {}).get("next_matchup") or ""
+                                    yield f"[UploadAgent] VS 시리즈 후속 기록: {next_matchup or '다음 대결 미추출'}\n"
+                            except Exception as series_err:
+                                safe_series_err = re.sub(
+                                    r"(AIza|sk-|key=|token=|Bearer )[A-Za-z0-9_\-]{4,}",
+                                    r"\1***", str(series_err)[:150])
+                                yield f"WARN|VS 시리즈 후속 기록 실패: {safe_series_err}\n"
                     else:
                         yield f"WARN|YouTube 업로드 실패: {yt_result.get('error', 'unknown')}\n"
 

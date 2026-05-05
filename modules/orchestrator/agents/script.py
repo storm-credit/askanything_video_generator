@@ -89,6 +89,14 @@ class ScriptAgent(BaseAgent):
             lines.insert(0, f"series_title: {ctx.series_title}")
         if ctx.series_id:
             lines.append(f"series_id: {ctx.series_id}")
+        try:
+            from modules.utils.series_state import build_series_episode_context
+
+            state_context = build_series_episode_context(ctx.series_title, ctx.topic, ctx.format_type)
+            if state_context:
+                lines.append(state_context)
+        except Exception:
+            pass
         lines.append(
             "continuity_rule: keep the VS/tournament running; use this matchup as the current episode and tease the next challenger in the final cut."
         )

@@ -205,6 +205,13 @@ async def prepare_endpoint(req: PrepareRequest):
                 yield {"data": f"[레퍼런스 분석] YouTube 주제 추출 완료: '{prep_topic.split(chr(10))[0]}'\n"}
 
             yield {"data": f"[기획] '{prep_topic.split(chr(10))[0]}' 스크립트 생성 중...\n"}
+            try:
+                from modules.utils.series_state import build_series_episode_context
+
+                series_context = build_series_episode_context(req.seriesTitle, prep_topic, req.formatType)
+            except Exception as series_exc:
+                print(f"[시리즈 상태] 생성 컨텍스트 로드 실패(무시): {series_exc}")
+                series_context = None
 
             cuts, topic_folder, video_title, video_tags, video_desc, _fact_ctx = await loop.run_in_executor(
                 None,
@@ -215,6 +222,7 @@ async def prepare_endpoint(req: PrepareRequest):
                     reference_url=prep_ref_url,
                     format_type=req.formatType,
                     series_title=req.seriesTitle,
+                    series_context=series_context,
                 ),
             )
 
@@ -1145,6 +1153,13 @@ async def generate_scripts(req: GenerateScriptsRequest):
 
     try:
         from modules.gpt.cutter import generate_cuts
+        try:
+            from modules.utils.series_state import build_series_episode_context
+
+            series_context = build_series_episode_context(req.seriesTitle, topic, req.formatType)
+        except Exception as series_exc:
+            print(f"[시리즈 상태] 스크립트 재생성 컨텍스트 로드 실패(무시): {series_exc}")
+            series_context = None
         cuts_list, _folder, title, tags, _desc, _fact_ctx = generate_cuts(
             topic,
             lang=req.lang,
@@ -1152,6 +1167,7 @@ async def generate_scripts(req: GenerateScriptsRequest):
             llm_provider="gemini",
             format_type=req.formatType,
             series_title=req.seriesTitle,
+            series_context=series_context,
         )
 
         # 이미지 수에 맞춤

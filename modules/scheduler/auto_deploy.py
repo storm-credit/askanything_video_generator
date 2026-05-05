@@ -1007,6 +1007,7 @@ async def process_rollout_expansions(limit: int = 6) -> dict[str, Any]:
                         series_title=str(candidate.get("series_title") or "").strip() or None,
                         task_date=lead_task_date,
                         topic_group=topic_group,
+                        source_file=source_file,
                         metadata_title=title,
                         metadata_description=metadata_description,
                         metadata_hashtags=metadata_hashtags,
@@ -1114,6 +1115,7 @@ async def _prepare_render_upload_via_preview_flow(
     series_title: str | None,
     task_date: str | None = None,
     topic_group: str | None = None,
+    source_file: str | None = None,
     video_engine_override: str | None = None,
     metadata_title: str | None = None,
     metadata_description: str | None = None,
@@ -1265,6 +1267,33 @@ async def _prepare_render_upload_via_preview_flow(
     if not yt_result.get("success"):
         raise RuntimeError(f"YouTube 업로드 실패: {yt_result.get('error', 'unknown')}")
 
+    series_state: dict[str, Any] | None = None
+    is_who_wins = (format_type or "").upper() == "WHO_WINS" or any(
+        str(c.get("format_type") or "").upper() == "WHO_WINS" for c in cuts if isinstance(c, dict)
+    )
+    if is_who_wins:
+        try:
+            from modules.utils.series_state import record_who_wins_episode
+
+            series_state = record_who_wins_episode(
+                series_title=series_title,
+                topic=topic,
+                title=title,
+                cuts=cuts,
+                channel=channel,
+                video_url=yt_result.get("url", ""),
+                publish_at=yt_publish_at,
+                task_date=task_date,
+                topic_group=topic_group,
+                source_file=source_file,
+                format_type=format_type,
+            )
+            if series_state:
+                next_matchup = (series_state.get("runtime") or {}).get("next_matchup") or ""
+                print(f"  [VS 시리즈] {series_state.get('series_title')} 후속 기록 완료: {next_matchup or '다음 대결 미추출'}")
+        except Exception as series_exc:
+            print(f"  [VS 시리즈] 후속 기록 실패(무시): {series_exc}")
+
     return {
         "video_path": video_path,
         "youtube_url": f"{yt_result.get('url', '')} (예약: {yt_publish_at})",
@@ -1273,6 +1302,7 @@ async def _prepare_render_upload_via_preview_flow(
         "metadata_audit": {"title": title_audit},
         "cut_count": len(cuts),
         "tts_chars": sum(len(str(c.get("script", ""))) for c in cuts),
+        "series_state": series_state,
     }
 
 
@@ -1714,6 +1744,7 @@ async def run_auto_deploy(target_date: datetime | None = None,
                         series_title=job.get("series_title"),
                         task_date=date_str,
                         topic_group=job.get("topic_group") or topic,
+                        source_file=job.get("source_file") or job.get("day_file"),
                         video_engine_override=video_engine,
                         metadata_title=job.get("title"),
                         metadata_description=job.get("description"),

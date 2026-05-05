@@ -755,6 +755,53 @@ def _get_hard_validation_errors(block: str, expected_day: int) -> list[str]:
     return errors
 
 
+def _validate_who_wins_series_tags(raw_content: str) -> list[str]:
+    """WHO_WINS is only allowed as a tagged, explicit VS series."""
+    errors: list[str] = []
+    for match in re.finditer(r"^## \d+\..*$", raw_content, re.MULTILINE):
+        line = match.group(0).strip()
+        if "[포맷:WHO_WINS]" not in line:
+            continue
+        if "[시리즈:" not in line:
+            errors.append(f"WHO_WINS 시리즈 태그 누락: {line[:120]}")
+        if not re.search(r"(?i)\bvs\.?\b", line):
+            errors.append(f"WHO_WINS 제목 vs 누락: {line[:120]}")
+    return errors
+
+
+def _extract_required_series_followups(active_series_context: str) -> list[tuple[str, str]]:
+    """Parse required next-matchup lines from series_state context."""
+    followups: list[tuple[str, str]] = []
+    if not active_series_context:
+        return followups
+    for line in active_series_context.splitlines():
+        if "다음 에피소드" not in line or "[시리즈:" not in line:
+            continue
+        series_match = re.search(r"\[시리즈:([^\]]+)\]", line)
+        matchup_match = re.search(r"다음 에피소드(?:\s+EP[^:：]*)?[:：]\s*([^.\n]+)", line)
+        if not series_match or not matchup_match:
+            continue
+        series = series_match.group(1).strip()
+        matchup = matchup_match.group(1).strip()
+        if series and matchup:
+            followups.append((series, matchup))
+    return followups
+
+
+def _validate_required_series_followups(raw_content: str, active_series_context: str) -> list[str]:
+    """Fail generation if a previously teased VS matchup is omitted."""
+    errors: list[str] = []
+    normalized_output = _normalize_topic_for_duplicate(raw_content)
+    for series, matchup in _extract_required_series_followups(active_series_context):
+        normalized_matchup = _normalize_topic_for_duplicate(matchup)
+        if f"[시리즈:{series}]" not in raw_content:
+            errors.append(f"필수 VS 후속 시리즈 누락: [시리즈:{series}] {matchup}")
+            continue
+        if normalized_matchup and normalized_matchup not in normalized_output:
+            errors.append(f"필수 VS 후속 대결 누락: [시리즈:{series}] {matchup}")
+    return errors
+
+
 def _build_category_allocation_rules(days: int) -> str:
     """요청 일수에 맞는 카테고리 최소 할당 문구를 만든다."""
     if days >= 7:
@@ -878,11 +925,14 @@ def _collect_generation_validation(
     raw_content: str,
     used_topics: list[str],
     date_range: list[str],
+    active_series_context: str = "",
 ) -> tuple[list[str], list[str]]:
     """전체 생성 결과의 경고/하드 오류를 모은다."""
     validation_errors: list[str] = []
     hard_errors = _validate_requested_day_headers(raw_content, date_range)
     hard_errors.extend(_validate_topic_uniqueness(raw_content, used_topics))
+    hard_errors.extend(_validate_who_wins_series_tags(raw_content))
+    hard_errors.extend(_validate_required_series_followups(raw_content, active_series_context))
     day_blocks = re.split(r"(?=# Day \d+)", raw_content)
 
     for block in day_blocks:
@@ -1256,6 +1306,7 @@ def _build_topic_generation_request(
     last_day: int,
     fresh_discovery_context: str = "",
     global_topic_signals_context: str = "",
+    active_series_context: str = "",
 ) -> tuple[str, list[str]]:
     """주간 토픽 생성 공통 요청문과 날짜 범위를 만든다."""
     date_range = []
@@ -1278,6 +1329,8 @@ def _build_topic_generation_request(
 
 ## 외부 나라별/글로벌 벤치마크 신호
 {global_topic_signals_context or "외부 벤치마크 신호 없음 — 내부 4채널 성과를 우선"}
+
+{active_series_context or "## VS 시리즈 연속성 상태\n[필수 후속 VS]\n- 현재 업로드가 예고한 필수 후속 VS 없음."}
 
 ## 오케스트라 전문가 총괄 실행 규칙
 {_build_topic_orchestra_governance(days)}
@@ -1308,6 +1361,7 @@ def _build_topic_generation_request(
 - 하루 3토픽은 서로 다른 포맷 사용. 같은 포맷이 하루에 2개 이상이면 저장 실패
 - 토픽이 포맷 필수 슬롯을 못 채우면 카테고리/성과가 좋아도 탈락
 - WHO_WINS는 askanything 전용 연속 VS 시리즈 레인이다. WHO_WINS를 출력하면 [시리즈:...] 태그, A vs B, 승부축, 다음 상대 예고 가능성이 모두 있어야 한다.
+- VS 시리즈 연속성 상태에 [필수 후속 VS]가 있으면 그것은 선택 후보가 아니라 반드시 포함해야 하는 다음 에피소드다.
 - 외부 벤치마크 신호는 channel benchmark market 섹션을 우선한다. askanything=KR, wonderdrop=US, exploratodo=MX/LATAM, prismtale=US_HISPANIC 기준을 섞지 마라.
 - 오케스트라 expert directives의 push/test/avoid 판정은 최종 선발 게이트다. 단순 참고로 처리하면 실패
 - Signal Analyst → Weekly Strategist → Quality Critic → Final Editor 순서로 전문가 지시가 누락 없이 반영되어야 한다.
@@ -2141,6 +2195,13 @@ def generate_weekly_topics(start_date: datetime, days: int = 7,
     last_day = _get_last_day_number()
     fresh_discovery_context = _get_fresh_discovery_context()
     global_topic_signals_context = _get_global_topic_signals_context()
+    try:
+        from modules.utils.series_state import build_active_series_context
+
+        active_series_context = build_active_series_context()
+    except Exception as series_exc:
+        print(f"[토픽 생성] VS 시리즈 상태 로드 실패(무시): {series_exc}")
+        active_series_context = "## VS 시리즈 연속성 상태\n[필수 후속 VS]\n- 현재 업로드가 예고한 필수 후속 VS 없음."
 
     # 2. LLM 프롬프트 구성
     user_prompt, date_range = _build_topic_generation_request(
@@ -2152,6 +2213,7 @@ def generate_weekly_topics(start_date: datetime, days: int = 7,
         last_day,
         fresh_discovery_context=fresh_discovery_context,
         global_topic_signals_context=global_topic_signals_context,
+        active_series_context=active_series_context,
     )
 
     # 3. LLM 호출
@@ -2236,7 +2298,12 @@ def generate_weekly_topics(start_date: datetime, days: int = 7,
     # 4. 출력 검증 + 하드게이트 자동 수리 + Day 파일 저장
     repair_attempts = int(os.getenv("TOPIC_HARD_REPAIR_ATTEMPTS", "3"))
     repair_model = os.getenv("TOPIC_REPAIR_LLM_MODEL", _topic_model)
-    validation_errors, hard_errors = _collect_generation_validation(raw_content, used_topics, date_range)
+    validation_errors, hard_errors = _collect_generation_validation(
+        raw_content,
+        used_topics,
+        date_range,
+        active_series_context,
+    )
     for attempt in range(repair_attempts):
         if not hard_errors:
             break
@@ -2307,7 +2374,12 @@ def generate_weekly_topics(start_date: datetime, days: int = 7,
                         f"[토픽 생성] RepairHarness {attempt + 1} 실패 → "
                         f"직전 유효 수리본 유지: {harness_exc}"
                     )
-            validation_errors, hard_errors = _collect_generation_validation(raw_content, used_topics, date_range)
+            validation_errors, hard_errors = _collect_generation_validation(
+                raw_content,
+                used_topics,
+                date_range,
+                active_series_context,
+            )
         except Exception as e:
             hard_errors.append(f"하드게이트 자동 수리 실패: {e}")
             break
