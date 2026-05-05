@@ -238,6 +238,48 @@ def _has_who_wins(format_type: str | None, cuts: Any) -> bool:
     return any(str(cut.get("format_type") or "").upper() == "WHO_WINS" for cut in _iter_cuts(cuts))
 
 
+def _continue_min_views() -> int:
+    try:
+        return max(1, int(os.getenv("VS_SERIES_CONTINUE_MIN_VIEWS", "10000")))
+    except Exception:
+        return 10000
+
+
+def _coerce_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(str(value).replace(",", "").strip())
+    except Exception:
+        return None
+
+
+def _classify_continuation(
+    view_count: int | None,
+    continue_min_views: int,
+    force_continue: bool = False,
+) -> tuple[str, bool, str]:
+    if force_continue:
+        return "continue_forced", True, "수동 강제 연속"
+    if view_count is None:
+        return "pending_views", False, "성과 조회 전까지 필수 편성 금지"
+    if view_count >= continue_min_views:
+        return "continue", True, f"조회수 {view_count:,} >= 연속 기준 {continue_min_views:,}"
+    return "hold_low_views", False, f"조회수 {view_count:,} < 연속 기준 {continue_min_views:,}"
+
+
+def _runtime_allows_required(runtime: dict[str, Any]) -> bool:
+    status = str(runtime.get("continuation_status") or "").strip()
+    if status in {"continue", "continue_forced"}:
+        return True
+    if status:
+        return False
+
+    view_count = _coerce_int(runtime.get("last_view_count"))
+    min_views = _coerce_int(runtime.get("continue_min_views")) or _continue_min_views()
+    return view_count is not None and view_count >= min_views
+
+
 def record_who_wins_episode(
     *,
     series_title: str | None = None,
@@ -251,6 +293,9 @@ def record_who_wins_episode(
     topic_group: str | None = None,
     source_file: str | None = None,
     format_type: str | None = None,
+    view_count: int | None = None,
+    continue_min_views: int | None = None,
+    force_continue: bool = False,
 ) -> dict[str, Any] | None:
     """Persist one successful WHO_WINS episode and its final-cut next teaser."""
     if not _has_who_wins(format_type, cuts):
@@ -282,6 +327,13 @@ def record_who_wins_episode(
                 break
     next_matchup = extract_next_matchup_from_cuts(cuts)
     winner = extract_winner_from_cuts(cuts, matchup)
+    normalized_view_count = _coerce_int(view_count)
+    normalized_min_views = continue_min_views or _continue_min_views()
+    continuation_status, should_continue, continuation_reason = _classify_continuation(
+        normalized_view_count,
+        normalized_min_views,
+        force_continue=force_continue,
+    )
 
     normalized_url = str(video_url or "").strip()
     now = _now_iso()
@@ -323,6 +375,11 @@ def record_who_wins_episode(
         "youtube_url": normalized_url,
         "publish_at": publish_at or "",
         "source_file": source_file or "",
+        "view_count": normalized_view_count,
+        "continue_min_views": normalized_min_views,
+        "continuation_status": continuation_status,
+        "should_continue": should_continue,
+        "continuation_reason": continuation_reason,
         "recorded_at": now,
     }
     if existing_idx is None:
@@ -339,6 +396,11 @@ def record_who_wins_episode(
         "next_matchup": next_matchup or runtime.get("next_matchup") or "",
         "last_channel": channel or runtime.get("last_channel") or "",
         "last_title": title or runtime.get("last_title") or "",
+        "last_view_count": normalized_view_count,
+        "continue_min_views": normalized_min_views,
+        "continuation_status": continuation_status,
+        "should_continue": should_continue,
+        "continuation_reason": continuation_reason,
     })
     payload["status"] = payload.get("status") or "active"
     payload["format"] = payload.get("format") or "WHO_WINS"
@@ -386,6 +448,8 @@ def iter_series_payloads() -> list[tuple[Path, dict[str, Any]]]:
 def build_active_series_context(max_items: int = 5) -> str:
     """Build a compact planner prompt block from runtime series state."""
     required: list[str] = []
+    held: list[str] = []
+    pending: list[str] = []
     optional: list[str] = []
 
     for _path, payload in iter_series_payloads():
@@ -400,11 +464,27 @@ def build_active_series_context(max_items: int = 5) -> str:
             previous = str(runtime.get("last_matchup") or "").strip()
             winner = str(runtime.get("last_winner") or "").strip()
             episode = runtime.get("next_episode") or "?"
-            required.append(
+            view_count = _coerce_int(runtime.get("last_view_count"))
+            min_views = _coerce_int(runtime.get("continue_min_views")) or _continue_min_views()
+            reason = str(runtime.get("continuation_reason") or "").strip()
+            base_line = (
                 f"- [시리즈:{series_title}] 다음 에피소드 EP{episode}: {next_matchup}. "
-                f"이전편: {previous or '미기록'}. 이전 승자: {winner or '미기록'}. "
-                "반드시 다음 Day 후보에 [포맷:WHO_WINS]로 편성."
+                f"이전편: {previous or '미기록'}. 이전 승자: {winner or '미기록'}."
             )
+            if _runtime_allows_required(runtime):
+                required.append(
+                    f"{base_line} {reason or f'조회수 기준 {min_views:,} 이상 통과'}. "
+                    "반드시 다음 Day 후보에 [포맷:WHO_WINS]로 편성."
+                )
+            elif view_count is None:
+                pending.append(
+                    f"{base_line} 조회수 미확인. 성과 확인 전까지 필수 편성 금지, 리테스트 후보로만 보관."
+                )
+            else:
+                held.append(
+                    f"{base_line} 조회수 {view_count:,} < 연속 기준 {min_views:,}. "
+                    "필수 편성 금지, 다른 강한 소재 우선."
+                )
             continue
 
         static_matchup = _static_next_matchup(payload)
@@ -420,10 +500,16 @@ def build_active_series_context(max_items: int = 5) -> str:
         lines.extend(required[:max_items])
     else:
         lines.append("[필수 후속 VS]")
-        lines.append("- 현재 업로드가 예고한 필수 후속 VS 없음.")
+        lines.append("- 현재 업로드 성과 기준을 통과한 필수 후속 VS 없음.")
 
+    if held:
+        lines.append("[성과 보류 VS]")
+        lines.extend(held[:max_items])
+    if pending:
+        lines.append("[성과 확인 대기 VS]")
+        lines.extend(pending[:max_items])
     if optional:
-        remaining = max(0, max_items - len(required))
+        remaining = max(0, max_items - len(required) - len(held) - len(pending))
         if remaining:
             lines.append("[선택 가능한 기존 토너먼트]")
             lines.extend(optional[:remaining])
@@ -451,8 +537,14 @@ def build_series_episode_context(
             lines.append(f"previous_matchup: {runtime.get('last_matchup')}")
         if runtime.get("last_winner"):
             lines.append(f"previous_winner: {runtime.get('last_winner')}")
-        if runtime.get("next_matchup"):
+        if runtime.get("next_matchup") and _runtime_allows_required(runtime):
             lines.append(f"required_current_matchup_from_last_teaser: {runtime.get('next_matchup')}")
+        elif runtime.get("next_matchup"):
+            lines.append(f"last_teased_matchup_for_reference: {runtime.get('next_matchup')}")
+            lines.append(
+                f"continuation_status: {runtime.get('continuation_status') or 'pending_views'} "
+                f"({runtime.get('continuation_reason') or 'not promoted to required follow-up'})"
+            )
         if runtime.get("next_episode"):
             lines.append(f"episode_number: {runtime.get('next_episode')}")
     lines.append(

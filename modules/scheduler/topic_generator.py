@@ -774,7 +774,17 @@ def _extract_required_series_followups(active_series_context: str) -> list[tuple
     followups: list[tuple[str, str]] = []
     if not active_series_context:
         return followups
+    in_required_section = False
     for line in active_series_context.splitlines():
+        stripped = line.strip()
+        if stripped == "[필수 후속 VS]":
+            in_required_section = True
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_required_section = False
+            continue
+        if not in_required_section:
+            continue
         if "다음 에피소드" not in line or "[시리즈:" not in line:
             continue
         series_match = re.search(r"\[시리즈:([^\]]+)\]", line)
@@ -1362,6 +1372,7 @@ def _build_topic_generation_request(
 - 토픽이 포맷 필수 슬롯을 못 채우면 카테고리/성과가 좋아도 탈락
 - WHO_WINS는 askanything 전용 연속 VS 시리즈 레인이다. WHO_WINS를 출력하면 [시리즈:...] 태그, A vs B, 승부축, 다음 상대 예고 가능성이 모두 있어야 한다.
 - VS 시리즈 연속성 상태에 [필수 후속 VS]가 있으면 그것은 선택 후보가 아니라 반드시 포함해야 하는 다음 에피소드다.
+- VS 시리즈 연속성 상태의 [성과 보류 VS]와 [성과 확인 대기 VS]는 강제 편성하지 않는다. 조회수 게이트를 통과한 것만 연속 편성한다.
 - 외부 벤치마크 신호는 channel benchmark market 섹션을 우선한다. askanything=KR, wonderdrop=US, exploratodo=MX/LATAM, prismtale=US_HISPANIC 기준을 섞지 마라.
 - 오케스트라 expert directives의 push/test/avoid 판정은 최종 선발 게이트다. 단순 참고로 처리하면 실패
 - Signal Analyst → Weekly Strategist → Quality Critic → Final Editor 순서로 전문가 지시가 누락 없이 반영되어야 한다.
